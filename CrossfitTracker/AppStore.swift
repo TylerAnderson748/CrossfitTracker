@@ -2,7 +2,7 @@
 //  AppStore.swift
 //  CrossfitTracker
 //
-//  Created by Tyler Anderson on 10/17/25.
+//  Created by Tyler Anderson on 10/17/25
 //
 
 // AppStore.swift
