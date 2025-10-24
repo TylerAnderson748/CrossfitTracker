@@ -7,8 +7,8 @@
 
 import Foundation
 
-struct WOD: Identifiable {
-    let id = UUID()
-    let title: String
-    let description: String
+struct WOD: Identifiable, Codable {
+    var id = UUID()
+    var title: String
+    var description: String
 }

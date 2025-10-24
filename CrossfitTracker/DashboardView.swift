@@ -2,8 +2,6 @@
 //  DashboardView.swift
 //  CrossfitTracker
 //
-//  Created by Tyler Anderson on 10/17/25.
-//
 
 import SwiftUI
 
@@ -12,37 +10,46 @@ struct DashboardView: View {
 
     var body: some View {
         NavigationView {
-            VStack(spacing: 20) {
+            VStack(spacing: 16) {
                 Text("Welcome, \(store.userName)")
                     .font(.title.bold())
                     .padding(.top)
 
-                List(SampleData.wods) { wod in
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(wod.title)
-                            .font(.headline)
-                        Text(wod.description)
-                            .font(.subheadline)
-                            .foregroundColor(.gray)
-                        
-                        HStack {
-                            NavigationLink("Start Timer") {
-                                WODTimerView(wod: wod)
-                                    .environmentObject(store)
+                List {
+                    ForEach(SampleData.wods) { wod in
+                        VStack(alignment: .leading, spacing: 8) {
+                            // ✅ Tap the WOD title to open the timer
+                            NavigationLink(destination: WODTimerView(wod: wod)
+                                .environmentObject(store)) {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(wod.title)
+                                        .font(.headline)
+                                    Text(wod.description)
+                                        .font(.subheadline)
+                                        .foregroundColor(.gray)
+                                }
                             }
-                            .buttonStyle(.borderedProminent)
 
-                            NavigationLink("Leaderboard") {
-                                LeaderboardView(wod: wod)
-                                    .environmentObject(store)
+                            // ✅ Separate buttons below
+                            HStack {
+                                NavigationLink(destination: WODTimerView(wod: wod)
+                                    .environmentObject(store)) {
+                                    Text("Start Timer")
+                                }
+                                .buttonStyle(.borderedProminent)
+
+                                NavigationLink(destination: LeaderboardView(wod: wod)
+                                    .environmentObject(store)) {
+                                    Text("Leaderboard")
+                                }
+                                .buttonStyle(.bordered)
                             }
-                            .buttonStyle(.bordered)
+                            .padding(.top, 6)
                         }
+                        .padding(.vertical, 8)
                     }
-                    .padding(.vertical, 8)
                 }
-
-                Spacer()
+                .listStyle(.insetGrouped)
             }
             .navigationTitle("Dashboard")
         }

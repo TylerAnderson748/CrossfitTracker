@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		CD11C60A2EAC0B83009C3D3F /* WODHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD11C6092EAC0B83009C3D3F /* WODHistoryView.swift */; };
 		CDB1A6AD2EA34E8F00B13136 /* CrossfitTrackerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A6AC2EA34E8F00B13136 /* CrossfitTrackerApp.swift */; };
 		CDB1A6AF2EA34E8F00B13136 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A6AE2EA34E8F00B13136 /* ContentView.swift */; };
 		CDB1A6B12EA34E9000B13136 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CDB1A6B02EA34E9000B13136 /* Assets.xcassets */; };
@@ -106,6 +107,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		CD11C6092EAC0B83009C3D3F /* WODHistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WODHistoryView.swift; sourceTree = "<group>"; };
 		CDB1A6A92EA34E8F00B13136 /* CrossfitTracker.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CrossfitTracker.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		CDB1A6AC2EA34E8F00B13136 /* CrossfitTrackerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CrossfitTrackerApp.swift; sourceTree = "<group>"; };
 		CDB1A6AE2EA34E8F00B13136 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -230,6 +232,7 @@
 		CDB1A6AB2EA34E8F00B13136 /* CrossfitTracker */ = {
 			isa = PBXGroup;
 			children = (
+				CD11C6092EAC0B83009C3D3F /* WODHistoryView.swift */,
 				CDB1A6AC2EA34E8F00B13136 /* CrossfitTrackerApp.swift */,
 				CDB1A6AE2EA34E8F00B13136 /* ContentView.swift */,
 				CDB1A6B02EA34E9000B13136 /* Assets.xcassets */,
@@ -552,6 +555,7 @@
 				CDB1A6D72EA350C700B13136 /* AppStore.swift in Sources */,
 				CDB1A72A2EA366B400B13136 /* CompletedWOD.swift in Sources */,
 				CDB1A6AF2EA34E8F00B13136 /* ContentView.swift in Sources */,
+				CD11C60A2EAC0B83009C3D3F /* WODHistoryView.swift in Sources */,
 				CDB1A6DF2EA3522100B13136 /* DashboardView.swift in Sources */,
 				CDB1A6DB2EA3519D00B13136 /* LoginView.swift in Sources */,
 				CDB1A7262EA3613D00B13136 /* Extentions.swift in Sources */,

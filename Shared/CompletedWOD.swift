@@ -7,10 +7,11 @@
 
 import Foundation
 
-struct CompletedWOD: Identifiable {
-    let id = UUID()
-    let wod: WOD
-    let userName: String
-    let time: TimeInterval
-    let category: WODCategory
+struct CompletedWOD: Identifiable, Codable {
+    var id = UUID()
+    var wod: WOD
+    var userName: String
+    var time: TimeInterval
+    var category: WODCategory
+    var date: Date = Date() // ✅ Used in history graphs and sorting
 }

@@ -2,110 +2,175 @@
 //  WODTimerView.swift
 //  CrossfitTracker
 //
-//  Created by Tyler Anderson on 10/17/25.
-//
 
 import SwiftUI
 
 struct WODTimerView: View {
     @EnvironmentObject var store: AppStore
-    @State private var timer: Timer? = nil
-    @State private var elapsed: TimeInterval = 0
-    @State private var showCategorySheet = false
-    @State private var manualTimeInput: String = ""
-
     var wod: WOD
 
+    @State private var timer: Timer? = nil
+    @State private var elapsed: TimeInterval = 0
+    @State private var isRunning = false
+
+    @State private var minutesInput = ""
+    @State private var secondsInput = ""
+    @State private var showSavedMessage = false
+    @State private var selectedCategory: WODCategory = .scaled
+
     var body: some View {
-        VStack(spacing: 20) {
-            Text(wod.title)
-                .font(.title.bold())
-
-            Text(wod.description)
-                .font(.body)
-                .multilineTextAlignment(.center)
-                .padding()
-
-            Text("Time: \(formatTime(elapsed))")
-                .font(.largeTitle.monospacedDigit())
-
-            if store.activeWOD == nil {
-                Button("Start WOD") {
-                    store.startWOD(wod)
-                    startTimer()
-                }
-                .buttonStyle(.borderedProminent)
-            } else {
-                Button("Stop WOD") {
-                    stopTimer()
-                    showCategorySheet = true
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(.red)
-            }
-
-            // Manual time entry
-            if store.activeWOD == nil {
-                TextField("Enter time in seconds", text: $manualTimeInput)
-                    .keyboardType(.numberPad)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
-                    .padding(.horizontal)
-                Button("Submit Manual Score") {
-                    if let seconds = TimeInterval(manualTimeInput) {
-                        store.stopWOD(category: .scaled)
-                        manualTimeInput = ""
+        ScrollView {
+            VStack(spacing: 20) {
+                Text(wod.title)
+                    .font(.largeTitle.bold())
+                    .padding(.top)
+                
+                // TIMER DISPLAY
+                Text(formatTime(elapsed))
+                    .font(.system(size: 60, weight: .bold, design: .monospaced))
+                
+                // TIMER BUTTONS
+                HStack {
+                    Button(isRunning ? "Pause" : "Start") {
+                        toggleTimer()
                     }
+                    .buttonStyle(.borderedProminent)
+                    
+                    Button("Reset") {
+                        resetTimer()
+                    }
+                    .buttonStyle(.bordered)
+                }
+                
+                Divider().padding(.vertical, 10)
+                
+                // MANUAL ENTRY
+                VStack(spacing: 8) {
+                    Text("Manual Time Entry")
+                        .font(.headline)
+                    
+                    HStack {
+                        TextField("Min", text: $minutesInput)
+                            .keyboardType(.numberPad)
+                            .textFieldStyle(RoundedBorderTextFieldStyle())
+                            .frame(width: 80)
+                        Text(":")
+                        TextField("Sec", text: $secondsInput)
+                            .keyboardType(.numberPad)
+                            .textFieldStyle(RoundedBorderTextFieldStyle())
+                            .frame(width: 80)
+                    }
+                    
+                    Picker("Category", selection: $selectedCategory) {
+                        ForEach(WODCategory.allCases) { category in
+                            Text(category.rawValue).tag(category)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .padding(.top, 5)
+                    
+                    Button("Submit Manual Score") {
+                        submitManualScore()
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+                
+                Divider().padding(.vertical, 10)
+                
+                // SAVE CURRENT TIMER
+                Button("Save Timer Result") {
+                    saveTimerResult()
                 }
                 .buttonStyle(.borderedProminent)
-            }
-
-            NavigationLink("View Leaderboard", destination: LeaderboardView(wod: wod))
-                .padding()
+                
+                if showSavedMessage {
+                    Text("✅ Saved Successfully")
+                        .foregroundColor(.green)
+                        .transition(.opacity)
+                }
+                
+                Divider().padding(.vertical, 10)
+                
+                NavigationLink(
+                    "View Leaderboard",
+                    destination: LeaderboardView(wod: wod).environmentObject(store)
+                )
                 .buttonStyle(.bordered)
-
+            
+            }
             Spacer()
+            .padding()
         }
-        .padding()
+        .navigationTitle("WOD Timer")
         .onDisappear {
             timer?.invalidate()
         }
-        .sheet(isPresented: $showCategorySheet) {
-            VStack(spacing: 20) {
-                Text("Select Category")
-                    .font(.headline)
-                ForEach(WODCategory.allCases.reversed(), id: \.self) { category in
-                    Button(category.rawValue) {
-                        store.stopWOD(category: category)
-                        showCategorySheet = false
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .frame(maxWidth: .infinity)
-                }
-                Button("Cancel") {
-                    showCategorySheet = false
-                }
-                .tint(.gray)
-            }
-            .padding()
-        }
     }
 
-    // MARK: Timer Functions
+    // MARK: - Helpers
+
+    func toggleTimer() {
+        if isRunning {
+            timer?.invalidate()
+        } else {
+            startTimer()
+        }
+        isRunning.toggle()
+    }
+
     func startTimer() {
-        elapsed = 0
-        timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
             elapsed += 1
         }
     }
 
-    func stopTimer() {
+    func resetTimer() {
         timer?.invalidate()
+        elapsed = 0
+        isRunning = false
     }
 
-    func formatTime(_ interval: TimeInterval) -> String {
-        let minutes = Int(interval) / 60
-        let seconds = Int(interval) % 60
+    // MARK: - Save Timer Result
+    func saveTimerResult() {
+        // Ensure we have a valid elapsed time
+        guard elapsed > 0 else { return }
+
+        // Save directly — no need for activeWOD
+        store.addManualWODResult(
+            wod: wod,
+            category: selectedCategory,
+            time: elapsed
+        )
+
+        showSavedMessage = true
+        resetTimer()
+
+        // Auto-hide confirmation
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            withAnimation { showSavedMessage = false }
+        }
+    }
+
+
+    func submitManualScore() {
+        let minutes = Int(minutesInput) ?? 0
+        let seconds = Int(secondsInput) ?? 0
+        let totalTime = Double(minutes * 60 + seconds)
+        guard totalTime > 0 else { return }
+
+        store.addManualWODResult(wod: wod, category: selectedCategory, time: totalTime)
+        minutesInput = ""
+        secondsInput = ""
+        showSavedMessage = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            withAnimation { showSavedMessage = false }
+        }
+    }
+
+    func formatTime(_ time: TimeInterval) -> String {
+        let minutes = Int(time) / 60
+        let seconds = Int(time) % 60
         return String(format: "%02d:%02d", minutes, seconds)
     }
 }
+

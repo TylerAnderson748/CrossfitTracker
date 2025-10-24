@@ -12,27 +12,27 @@ struct ContentView: View {
 
     var body: some View {
         TabView {
-            // WODs Tab
             DashboardView()
                 .tabItem {
-                    Image(systemName: "flame.fill")
-                    Text("WODs")
+                    Label("Dashboard", systemImage: "flame.fill")
                 }
 
-            // Lifts Tab
             LiftsView()
                 .tabItem {
-                    Image(systemName: "dumbbell.fill")
-                    Text("Lifts")
+                    Label("Lifts", systemImage: "dumbbell.fill")
                 }
 
-            // Profile Tab
+            WODHistoryView()
+                .tabItem {
+                    Label("History", systemImage: "clock.fill")
+                }
+
             ProfileView()
                 .tabItem {
-                    Image(systemName: "person.fill")
-                    Text("Profile")
+                    Label("Profile", systemImage: "person.fill")
                 }
         }
+
     }
 }
 
