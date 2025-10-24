@@ -38,13 +38,13 @@
 		CDB1A7232EA35B1F00B13136 /* SampleData.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A7192EA3565100B13136 /* SampleData.swift */; };
 		CDB1A7242EA35B7C00B13136 /* WatchSessionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A71F2EA359DA00B13136 /* WatchSessionManager.swift */; };
 		CDB1A7262EA3613D00B13136 /* Extentions.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A7252EA3613D00B13136 /* Extentions.swift */; };
-		CDB1A7282EA364AA00B13136 /* WODCatagory.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A7272EA364AA00B13136 /* WODCatagory.swift */; };
+		CDB1A7282EA364AA00B13136 /* WODCategory.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A7272EA364AA00B13136 /* WODCategory.swift */; };
 		CDB1A72A2EA366B400B13136 /* CompletedWOD.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A7292EA366B400B13136 /* CompletedWOD.swift */; };
 		CDB1A72C2EA366CF00B13136 /* WOD.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A72B2EA366CF00B13136 /* WOD.swift */; };
 		CDB1A72E2EA36CE100B13136 /* Notifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A72D2EA36CE100B13136 /* Notifications.swift */; };
 		CDB1A72F2EA36CF500B13136 /* Notifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A72D2EA36CE100B13136 /* Notifications.swift */; };
 		CDB1A7302EA3751400B13136 /* WOD.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A72B2EA366CF00B13136 /* WOD.swift */; };
-		CDB1A7312EA3751800B13136 /* WODCatagory.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A7272EA364AA00B13136 /* WODCatagory.swift */; };
+		CDB1A7312EA3751800B13136 /* WODCategory.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A7272EA364AA00B13136 /* WODCategory.swift */; };
 		CDB1A7322EA3752100B13136 /* CompletedWOD.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A7292EA366B400B13136 /* CompletedWOD.swift */; };
 		CDB1A7342EA3772D00B13136 /* Lift.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A7332EA3772D00B13136 /* Lift.swift */; };
 		CDB1A7362EA3775100B13136 /* CompletedLift.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A7352EA3775100B13136 /* CompletedLift.swift */; };
@@ -141,7 +141,7 @@
 		CDB1A71D2EA3597700B13136 /* LeaderboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LeaderboardView.swift; sourceTree = "<group>"; };
 		CDB1A71F2EA359DA00B13136 /* WatchSessionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchSessionManager.swift; sourceTree = "<group>"; };
 		CDB1A7252EA3613D00B13136 /* Extentions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Extentions.swift; sourceTree = "<group>"; };
-		CDB1A7272EA364AA00B13136 /* WODCatagory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WODCatagory.swift; sourceTree = "<group>"; };
+		CDB1A7272EA364AA00B13136 /* WODCategory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WODCategory.swift; sourceTree = "<group>"; };
 		CDB1A7292EA366B400B13136 /* CompletedWOD.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompletedWOD.swift; sourceTree = "<group>"; };
 		CDB1A72B2EA366CF00B13136 /* WOD.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WOD.swift; sourceTree = "<group>"; };
 		CDB1A72D2EA36CE100B13136 /* Notifications.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Notifications.swift; sourceTree = "<group>"; };
@@ -317,7 +317,7 @@
 				CDB1A7332EA3772D00B13136 /* Lift.swift */,
 				CDB1A7292EA366B400B13136 /* CompletedWOD.swift */,
 				CDB1A72B2EA366CF00B13136 /* WOD.swift */,
-				CDB1A7272EA364AA00B13136 /* WODCatagory.swift */,
+				CDB1A7272EA364AA00B13136 /* WODCategory.swift */,
 				CDB1A71F2EA359DA00B13136 /* WatchSessionManager.swift */,
 				CDB1A7172EA3563C00B13136 /* Models.swift */,
 				CDB1A7192EA3565100B13136 /* SampleData.swift */,
@@ -549,7 +549,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				CDB1A7282EA364AA00B13136 /* WODCatagory.swift in Sources */,
+				CDB1A7282EA364AA00B13136 /* WODCategory.swift in Sources */,
 				CDB1A6D92EA3515D00B13136 /* RootView.swift in Sources */,
 				CDB1A6E32EA3527A00B13136 /* ProfileView.swift in Sources */,
 				CDB1A6D72EA350C700B13136 /* AppStore.swift in Sources */,
@@ -597,7 +597,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				CDB1A7312EA3751800B13136 /* WODCatagory.swift in Sources */,
+				CDB1A7312EA3751800B13136 /* WODCategory.swift in Sources */,
 				CDB1A72F2EA36CF500B13136 /* Notifications.swift in Sources */,
 				CDB1A7222EA35B1500B13136 /* Models.swift in Sources */,
 				CDB1A6ED2EA353CC00B13136 /* ContentView.swift in Sources */,
