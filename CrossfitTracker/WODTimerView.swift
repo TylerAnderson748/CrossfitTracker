@@ -26,135 +26,14 @@ struct WODTimerView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
-                // GROUP 1: Title and Timer (2 items)
-                Group {
-                    Text(wod.title)
-                        .font(.title)
-                        .padding(.top)
-
-                    Text(elapsed.formatTime())
-                        .font(.system(size: 64, weight: .semibold, design: .monospaced))
-                        .padding(.bottom, 8)
-                }
-
-                // GROUP 2: Buttons (2 items)
-                Group {
-                    HStack(spacing: 16) {
-                        Button(isRunning ? "Pause" : "Start") { toggleTimer() }
-                            .buttonStyle(.borderedProminent)
-
-                        Button("Reset") { resetTimer() }
-                            .buttonStyle(.bordered)
-                    }
-
-                    Divider().padding(.vertical, 8)
-                }
-
-                // GROUP 3: Category and Save (3 items)
-                Group {
-                    Picker("Category", selection: $selectedCategory) {
-                        Text("RX+").tag(WODCategory.rxPlus)
-                        Text("RX").tag(WODCategory.rx)
-                        Text("Scaled").tag(WODCategory.scaled)
-                        Text("Just Happy To Be Here").tag(WODCategory.happy)
-                    }
-                    .pickerStyle(.segmented)
-
-                    Button("Save Timer Result") { saveTimerResult() }
-                        .buttonStyle(.borderedProminent)
-
-                    if showSavedMessage {
-                        Text("✅ Saved Successfully")
-                            .foregroundColor(.green)
-                    }
-                }
-
+                titleSection
+                timerControlsSection
+                categorySection
                 Divider().padding(.vertical, 8)
-
-                // GROUP 4: Manual Entry (1 item)
-                VStack(spacing: 10) {
-                    Text("Manual Time Entry").font(.headline)
-
-                    HStack(spacing: 8) {
-                        TextField("Min", text: $manualMinutes)
-                            .keyboardType(.numberPad)
-                            .textFieldStyle(.roundedBorder)
-                            .frame(width: 80)
-
-                        Text(":").font(.title2)
-
-                        TextField("Sec", text: $manualSeconds)
-                            .keyboardType(.numberPad)
-                            .textFieldStyle(.roundedBorder)
-                            .frame(width: 80)
-
-                        Button("Save") { saveManualTime() }
-                            .buttonStyle(.borderedProminent)
-                    }
-
-                    if let errorMessage = errorMessage {
-                        Text(errorMessage)
-                            .foregroundColor(.red)
-                            .font(.caption)
-                    }
-                }
-
+                manualEntrySection
                 Divider().padding(.vertical, 8)
-
-                // GROUP 5: Progress Chart
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Your Progress - All Categories")
-                        .font(.headline)
-                        .padding(.horizontal)
-                    
-                    if allWodHistory().isEmpty {
-                        Text("No history yet")
-                            .foregroundColor(.gray)
-                            .padding()
-                    } else {
-                        Chart {
-                            ForEach(allWodHistory()) { entry in
-                                LineMark(
-                                    x: .value("Date", entry.date),
-                                    y: .value("Time (seconds)", entry.time),
-                                    series: .value("Category", entry.category.rawValue)
-                                )
-                                .foregroundStyle(by: .value("Category", entry.category.rawValue))
-                                .symbol(by: .value("Category", entry.category.rawValue))
-                                
-                                PointMark(
-                                    x: .value("Date", entry.date),
-                                    y: .value("Time (seconds)", entry.time)
-                                )
-                                .foregroundStyle(by: .value("Category", entry.category.rawValue))
-                            }
-                        }
-                        .chartForegroundStyleScale([
-                            "RX+": .orange,
-                            "RX": .blue,
-                            "Scaled": .gray,
-                            "Just Happy To Be Here": .green
-                        ])
-                        .chartYAxis {
-                            AxisMarks { value in
-                                AxisValueLabel {
-                                    if let seconds = value.as(Double.self) {
-                                        Text(seconds.formatTime())
-                                    }
-                                }
-                            }
-                        }
-                        .frame(height: 200)
-                        .padding()
-                    }
-                }
-
-                // GROUP 6: Leaderboard Link (1 item)
-                NavigationLink(destination: LeaderboardView(wod: wod).environmentObject(store)) {
-                    Text("View Leaderboard")
-                }
-                .buttonStyle(.bordered)
-
+                progressChartSection
+                leaderboardSection
                 Spacer(minLength: 40)
             }
             .padding()
@@ -164,6 +43,143 @@ struct WODTimerView: View {
             timer?.invalidate()
             timer = nil
         }
+    }
+
+    // MARK: - View Components
+
+    private var titleSection: some View {
+        Group {
+            Text(wod.title)
+                .font(.title)
+                .padding(.top)
+
+            Text(elapsed.formatTime())
+                .font(.system(size: 64, weight: .semibold, design: .monospaced))
+                .padding(.bottom, 8)
+        }
+    }
+
+    private var timerControlsSection: some View {
+        Group {
+            HStack(spacing: 16) {
+                Button(isRunning ? "Pause" : "Start") { toggleTimer() }
+                    .buttonStyle(.borderedProminent)
+
+                Button("Reset") { resetTimer() }
+                    .buttonStyle(.bordered)
+            }
+
+            Divider().padding(.vertical, 8)
+        }
+    }
+
+    private var categorySection: some View {
+        Group {
+            Picker("Category", selection: $selectedCategory) {
+                Text("RX+").tag(WODCategory.rxPlus)
+                Text("RX").tag(WODCategory.rx)
+                Text("Scaled").tag(WODCategory.scaled)
+                Text("Just Happy To Be Here").tag(WODCategory.happy)
+            }
+            .pickerStyle(.segmented)
+
+            Button("Save Timer Result") { saveTimerResult() }
+                .buttonStyle(.borderedProminent)
+
+            if showSavedMessage {
+                Text("✅ Saved Successfully")
+                    .foregroundColor(.green)
+            }
+        }
+    }
+
+    private var manualEntrySection: some View {
+        VStack(spacing: 10) {
+            Text("Manual Time Entry").font(.headline)
+
+            HStack(spacing: 8) {
+                TextField("Min", text: $manualMinutes)
+                    .keyboardType(.numberPad)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 80)
+
+                Text(":").font(.title2)
+
+                TextField("Sec", text: $manualSeconds)
+                    .keyboardType(.numberPad)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 80)
+
+                Button("Save") { saveManualTime() }
+                    .buttonStyle(.borderedProminent)
+            }
+
+            if let errorMessage = errorMessage {
+                Text(errorMessage)
+                    .foregroundColor(.red)
+                    .font(.caption)
+            }
+        }
+    }
+
+    private var progressChartSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Your Progress - All Categories")
+                .font(.headline)
+                .padding(.horizontal)
+
+            if allWodHistory().isEmpty {
+                Text("No history yet")
+                    .foregroundColor(.gray)
+                    .padding()
+            } else {
+                progressChart
+            }
+        }
+    }
+
+    private var progressChart: some View {
+        Chart {
+            ForEach(allWodHistory()) { entry in
+                LineMark(
+                    x: .value("Date", entry.date),
+                    y: .value("Time (seconds)", entry.time),
+                    series: .value("Category", entry.category.rawValue)
+                )
+                .foregroundStyle(by: .value("Category", entry.category.rawValue))
+                .symbol(by: .value("Category", entry.category.rawValue))
+
+                PointMark(
+                    x: .value("Date", entry.date),
+                    y: .value("Time (seconds)", entry.time)
+                )
+                .foregroundStyle(by: .value("Category", entry.category.rawValue))
+            }
+        }
+        .chartForegroundStyleScale([
+            "RX+": .orange,
+            "RX": .blue,
+            "Scaled": .gray,
+            "Just Happy To Be Here": .green
+        ])
+        .chartYAxis {
+            AxisMarks { value in
+                AxisValueLabel {
+                    if let seconds = value.as(Double.self) {
+                        Text(seconds.formatTime())
+                    }
+                }
+            }
+        }
+        .frame(height: 200)
+        .padding()
+    }
+
+    private var leaderboardSection: some View {
+        NavigationLink(destination: LeaderboardView(wod: wod).environmentObject(store)) {
+            Text("View Leaderboard")
+        }
+        .buttonStyle(.bordered)
     }
 
     // MARK: - Timer helpers
