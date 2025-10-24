@@ -83,4 +83,40 @@ final class AppStore: ObservableObject {
         let entries = entries(for: lift, reps: reps).sorted { $0.date > $1.date }
         return entries.first?.weight
     }
+    
+    // MARK: - Authentication methods
+        func logIn(name: String) {
+            self.userName = name
+            self.isLoggedIn = true
+        }
+
+        func logOut() {
+            self.userName = "Guest"
+            self.isLoggedIn = false
+            self.activeWOD = nil
+            self.wodStartTime = nil
+        }
+    
+    // MARK: - WOD Methods
+
+    func startWOD(_ wod: WOD) {
+        activeWOD = wod
+        wodStartTime = Date()
+    }
+
+    func stopWOD(category: WODCategory, time: TimeInterval? = nil) {
+        guard let wod = activeWOD else { return }
+        let elapsed = time ?? (wodStartTime.map { Date().timeIntervalSince($0) } ?? 0)
+        let completed = CompletedWOD(
+            wod: wod,
+            userName: userName,
+            time: elapsed,
+            category: category
+        )
+        completedWODs.append(completed)
+        activeWOD = nil
+        wodStartTime = nil
+    }
+
+
 }

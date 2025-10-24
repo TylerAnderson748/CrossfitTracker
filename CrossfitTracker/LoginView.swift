@@ -25,7 +25,7 @@ struct LoginView: View {
                     .padding(.horizontal, 40)
 
                 Button {
-                    // ✅ Call the function directly on store, not $store
+                    // all the function directly on store, not $store
                     store.logIn(name: usernameInput)
                 } label: {
                     Text("Login")

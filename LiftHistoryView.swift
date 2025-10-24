@@ -12,9 +12,10 @@ struct LiftHistoryView: View {
     @EnvironmentObject var store: AppStore
     var lift: Lift
 
-    var liftHistory: [CompletedLift] {
-        store.completedLifts
-            .filter { $0.lift.id == lift.id }
+    // Computed property for history
+    var liftHistory: [LiftEntry] {
+        store.liftEntries
+            .filter { $0.liftID == lift.id }
             .sorted { $0.date < $1.date }
     }
 
@@ -23,7 +24,7 @@ struct LiftHistoryView: View {
             Text("\(lift.name) History")
                 .font(.title2.bold())
                 .padding(.top)
-            
+
             if liftHistory.isEmpty {
                 Text("No history yet")
                     .foregroundColor(.gray)
@@ -34,23 +35,23 @@ struct LiftHistoryView: View {
                             x: .value("Date", entry.date, unit: .day),
                             y: .value("Weight", entry.weight)
                         )
-                        .foregroundStyle(.blue)
                     }
+                    .foregroundStyle(.blue)
                 }
                 .frame(height: 200)
                 .padding()
-                
+
                 List(liftHistory) { entry in
                     HStack {
                         Text(entry.date, style: .date)
                         Spacer()
-                        Text("\(entry.weight, specifier: "%.1f") lbs x \(entry.reps) reps")
+                        Text(String(format: "%.1f lb", entry.weight))
+                            .font(.body.monospacedDigit())
                     }
                 }
             }
-            
-            Spacer()
         }
         .padding()
+        .navigationTitle("\(lift.name) History")
     }
 }

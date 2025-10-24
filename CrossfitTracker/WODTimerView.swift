@@ -52,7 +52,7 @@ struct WODTimerView: View {
                     .padding(.horizontal)
                 Button("Submit Manual Score") {
                     if let seconds = TimeInterval(manualTimeInput) {
-                        store.stopWOD(category: .scaled, time: seconds)
+                        store.stopWOD(category: .scaled)
                         manualTimeInput = ""
                     }
                 }
@@ -75,7 +75,7 @@ struct WODTimerView: View {
                     .font(.headline)
                 ForEach(WODCategory.allCases.reversed(), id: \.self) { category in
                     Button(category.rawValue) {
-                        store.stopWOD(category: category, time: elapsed)
+                        store.stopWOD(category: category)
                         showCategorySheet = false
                     }
                     .buttonStyle(.borderedProminent)
