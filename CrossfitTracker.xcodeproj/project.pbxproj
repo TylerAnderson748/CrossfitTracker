@@ -1,0 +1,1106 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		CDB1A6AD2EA34E8F00B13136 /* CrossfitTrackerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A6AC2EA34E8F00B13136 /* CrossfitTrackerApp.swift */; };
+		CDB1A6AF2EA34E8F00B13136 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A6AE2EA34E8F00B13136 /* ContentView.swift */; };
+		CDB1A6B12EA34E9000B13136 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CDB1A6B02EA34E9000B13136 /* Assets.xcassets */; };
+		CDB1A6B42EA34E9000B13136 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CDB1A6B32EA34E9000B13136 /* Preview Assets.xcassets */; };
+		CDB1A6BE2EA34E9100B13136 /* CrossfitTrackerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A6BD2EA34E9100B13136 /* CrossfitTrackerTests.swift */; };
+		CDB1A6C82EA34E9100B13136 /* CrossfitTrackerUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A6C72EA34E9100B13136 /* CrossfitTrackerUITests.swift */; };
+		CDB1A6CA2EA34E9100B13136 /* CrossfitTrackerUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A6C92EA34E9100B13136 /* CrossfitTrackerUITestsLaunchTests.swift */; };
+		CDB1A6D72EA350C700B13136 /* AppStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A6D62EA350C700B13136 /* AppStore.swift */; };
+		CDB1A6D92EA3515D00B13136 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A6D82EA3515D00B13136 /* RootView.swift */; };
+		CDB1A6DB2EA3519D00B13136 /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A6DA2EA3519D00B13136 /* LoginView.swift */; };
+		CDB1A6DD2EA351CB00B13136 /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A6DC2EA351CB00B13136 /* MainTabView.swift */; };
+		CDB1A6DF2EA3522100B13136 /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A6DE2EA3522100B13136 /* DashboardView.swift */; };
+		CDB1A6E12EA3525300B13136 /* WODListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A6E02EA3525300B13136 /* WODListView.swift */; };
+		CDB1A6E32EA3527A00B13136 /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A6E22EA3527A00B13136 /* ProfileView.swift */; };
+		CDB1A6EB2EA353CC00B13136 /* CrossfitTrackerWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A6EA2EA353CC00B13136 /* CrossfitTrackerWatchApp.swift */; };
+		CDB1A6ED2EA353CC00B13136 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A6EC2EA353CC00B13136 /* ContentView.swift */; };
+		CDB1A6EF2EA353CE00B13136 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CDB1A6EE2EA353CE00B13136 /* Assets.xcassets */; };
+		CDB1A6F22EA353CE00B13136 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CDB1A6F12EA353CE00B13136 /* Preview Assets.xcassets */; };
+		CDB1A6FC2EA353CF00B13136 /* CrossfitTrackerWatch_Watch_AppTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A6FB2EA353CE00B13136 /* CrossfitTrackerWatch_Watch_AppTests.swift */; };
+		CDB1A7062EA353CF00B13136 /* CrossfitTrackerWatch_Watch_AppUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A7052EA353CF00B13136 /* CrossfitTrackerWatch_Watch_AppUITests.swift */; };
+		CDB1A7082EA353CF00B13136 /* CrossfitTrackerWatch_Watch_AppUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A7072EA353CF00B13136 /* CrossfitTrackerWatch_Watch_AppUITestsLaunchTests.swift */; };
+		CDB1A70B2EA353CF00B13136 /* CrossfitTrackerWatch Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = CDB1A6E82EA353CC00B13136 /* CrossfitTrackerWatch Watch App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		CDB1A7182EA3563C00B13136 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A7172EA3563C00B13136 /* Models.swift */; };
+		CDB1A71A2EA3565100B13136 /* SampleData.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A7192EA3565100B13136 /* SampleData.swift */; };
+		CDB1A71C2EA357B800B13136 /* WODTimerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A71B2EA357B800B13136 /* WODTimerView.swift */; };
+		CDB1A71E2EA3597700B13136 /* LeaderboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A71D2EA3597700B13136 /* LeaderboardView.swift */; };
+		CDB1A7222EA35B1500B13136 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A7172EA3563C00B13136 /* Models.swift */; };
+		CDB1A7232EA35B1F00B13136 /* SampleData.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A7192EA3565100B13136 /* SampleData.swift */; };
+		CDB1A7242EA35B7C00B13136 /* WatchSessionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A71F2EA359DA00B13136 /* WatchSessionManager.swift */; };
+		CDB1A7262EA3613D00B13136 /* Extentions.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A7252EA3613D00B13136 /* Extentions.swift */; };
+		CDB1A7282EA364AA00B13136 /* WODCatagory.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A7272EA364AA00B13136 /* WODCatagory.swift */; };
+		CDB1A72A2EA366B400B13136 /* CompletedWOD.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A7292EA366B400B13136 /* CompletedWOD.swift */; };
+		CDB1A72C2EA366CF00B13136 /* WOD.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A72B2EA366CF00B13136 /* WOD.swift */; };
+		CDB1A72E2EA36CE100B13136 /* Notifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A72D2EA36CE100B13136 /* Notifications.swift */; };
+		CDB1A72F2EA36CF500B13136 /* Notifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A72D2EA36CE100B13136 /* Notifications.swift */; };
+		CDB1A7302EA3751400B13136 /* WOD.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A72B2EA366CF00B13136 /* WOD.swift */; };
+		CDB1A7312EA3751800B13136 /* WODCatagory.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A7272EA364AA00B13136 /* WODCatagory.swift */; };
+		CDB1A7322EA3752100B13136 /* CompletedWOD.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A7292EA366B400B13136 /* CompletedWOD.swift */; };
+		CDB1A7342EA3772D00B13136 /* Lift.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A7332EA3772D00B13136 /* Lift.swift */; };
+		CDB1A7362EA3775100B13136 /* CompletedLift.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A7352EA3775100B13136 /* CompletedLift.swift */; };
+		CDB1A7382EA3777B00B13136 /* LiftsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A7372EA3777B00B13136 /* LiftsView.swift */; };
+		CDB1A73A2EA3779900B13136 /* LiftDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A7392EA3779900B13136 /* LiftDetailView.swift */; };
+		CDB1A73C2EA377B000B13136 /* LiftHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A73B2EA377B000B13136 /* LiftHistoryView.swift */; };
+		CDB1A73D2EA377C900B13136 /* Lift.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A7332EA3772D00B13136 /* Lift.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		CDB1A6BA2EA34E9100B13136 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = CDB1A6A12EA34E8F00B13136 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = CDB1A6A82EA34E8F00B13136;
+			remoteInfo = CrossfitTracker;
+		};
+		CDB1A6C42EA34E9100B13136 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = CDB1A6A12EA34E8F00B13136 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = CDB1A6A82EA34E8F00B13136;
+			remoteInfo = CrossfitTracker;
+		};
+		CDB1A6F82EA353CE00B13136 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = CDB1A6A12EA34E8F00B13136 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = CDB1A6E72EA353CC00B13136;
+			remoteInfo = "CrossfitTrackerWatch Watch App";
+		};
+		CDB1A7022EA353CF00B13136 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = CDB1A6A12EA34E8F00B13136 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = CDB1A6E72EA353CC00B13136;
+			remoteInfo = "CrossfitTrackerWatch Watch App";
+		};
+		CDB1A7092EA353CF00B13136 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = CDB1A6A12EA34E8F00B13136 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = CDB1A6E72EA353CC00B13136;
+			remoteInfo = "CrossfitTrackerWatch Watch App";
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		CDB1A70F2EA353CF00B13136 /* Embed Watch Content */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "$(CONTENTS_FOLDER_PATH)/Watch";
+			dstSubfolderSpec = 16;
+			files = (
+				CDB1A70B2EA353CF00B13136 /* CrossfitTrackerWatch Watch App.app in Embed Watch Content */,
+			);
+			name = "Embed Watch Content";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		CDB1A6A92EA34E8F00B13136 /* CrossfitTracker.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CrossfitTracker.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		CDB1A6AC2EA34E8F00B13136 /* CrossfitTrackerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CrossfitTrackerApp.swift; sourceTree = "<group>"; };
+		CDB1A6AE2EA34E8F00B13136 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		CDB1A6B02EA34E9000B13136 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		CDB1A6B32EA34E9000B13136 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
+		CDB1A6B92EA34E9100B13136 /* CrossfitTrackerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CrossfitTrackerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		CDB1A6BD2EA34E9100B13136 /* CrossfitTrackerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CrossfitTrackerTests.swift; sourceTree = "<group>"; };
+		CDB1A6C32EA34E9100B13136 /* CrossfitTrackerUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CrossfitTrackerUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		CDB1A6C72EA34E9100B13136 /* CrossfitTrackerUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CrossfitTrackerUITests.swift; sourceTree = "<group>"; };
+		CDB1A6C92EA34E9100B13136 /* CrossfitTrackerUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CrossfitTrackerUITestsLaunchTests.swift; sourceTree = "<group>"; };
+		CDB1A6D62EA350C700B13136 /* AppStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStore.swift; sourceTree = "<group>"; };
+		CDB1A6D82EA3515D00B13136 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
+		CDB1A6DA2EA3519D00B13136 /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
+		CDB1A6DC2EA351CB00B13136 /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
+		CDB1A6DE2EA3522100B13136 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
+		CDB1A6E02EA3525300B13136 /* WODListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WODListView.swift; sourceTree = "<group>"; };
+		CDB1A6E22EA3527A00B13136 /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
+		CDB1A6E82EA353CC00B13136 /* CrossfitTrackerWatch Watch App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "CrossfitTrackerWatch Watch App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		CDB1A6EA2EA353CC00B13136 /* CrossfitTrackerWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CrossfitTrackerWatchApp.swift; sourceTree = "<group>"; };
+		CDB1A6EC2EA353CC00B13136 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		CDB1A6EE2EA353CE00B13136 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		CDB1A6F12EA353CE00B13136 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
+		CDB1A6F72EA353CE00B13136 /* CrossfitTrackerWatch Watch AppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "CrossfitTrackerWatch Watch AppTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		CDB1A6FB2EA353CE00B13136 /* CrossfitTrackerWatch_Watch_AppTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CrossfitTrackerWatch_Watch_AppTests.swift; sourceTree = "<group>"; };
+		CDB1A7012EA353CF00B13136 /* CrossfitTrackerWatch Watch AppUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "CrossfitTrackerWatch Watch AppUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		CDB1A7052EA353CF00B13136 /* CrossfitTrackerWatch_Watch_AppUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CrossfitTrackerWatch_Watch_AppUITests.swift; sourceTree = "<group>"; };
+		CDB1A7072EA353CF00B13136 /* CrossfitTrackerWatch_Watch_AppUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CrossfitTrackerWatch_Watch_AppUITestsLaunchTests.swift; sourceTree = "<group>"; };
+		CDB1A7172EA3563C00B13136 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
+		CDB1A7192EA3565100B13136 /* SampleData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SampleData.swift; sourceTree = "<group>"; };
+		CDB1A71B2EA357B800B13136 /* WODTimerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WODTimerView.swift; sourceTree = "<group>"; };
+		CDB1A71D2EA3597700B13136 /* LeaderboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LeaderboardView.swift; sourceTree = "<group>"; };
+		CDB1A71F2EA359DA00B13136 /* WatchSessionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchSessionManager.swift; sourceTree = "<group>"; };
+		CDB1A7252EA3613D00B13136 /* Extentions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Extentions.swift; sourceTree = "<group>"; };
+		CDB1A7272EA364AA00B13136 /* WODCatagory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WODCatagory.swift; sourceTree = "<group>"; };
+		CDB1A7292EA366B400B13136 /* CompletedWOD.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompletedWOD.swift; sourceTree = "<group>"; };
+		CDB1A72B2EA366CF00B13136 /* WOD.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WOD.swift; sourceTree = "<group>"; };
+		CDB1A72D2EA36CE100B13136 /* Notifications.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Notifications.swift; sourceTree = "<group>"; };
+		CDB1A7332EA3772D00B13136 /* Lift.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Lift.swift; sourceTree = "<group>"; };
+		CDB1A7352EA3775100B13136 /* CompletedLift.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompletedLift.swift; sourceTree = "<group>"; };
+		CDB1A7372EA3777B00B13136 /* LiftsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiftsView.swift; sourceTree = "<group>"; };
+		CDB1A7392EA3779900B13136 /* LiftDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiftDetailView.swift; sourceTree = "<group>"; };
+		CDB1A73B2EA377B000B13136 /* LiftHistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiftHistoryView.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		CDB1A6A62EA34E8F00B13136 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CDB1A6B62EA34E9100B13136 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CDB1A6C02EA34E9100B13136 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CDB1A6E52EA353CC00B13136 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CDB1A6F42EA353CE00B13136 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CDB1A6FE2EA353CF00B13136 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		CDB1A6A02EA34E8F00B13136 = {
+			isa = PBXGroup;
+			children = (
+				CDB1A73B2EA377B000B13136 /* LiftHistoryView.swift */,
+				CDB1A7392EA3779900B13136 /* LiftDetailView.swift */,
+				CDB1A7372EA3777B00B13136 /* LiftsView.swift */,
+				CDB1A7162EA3540C00B13136 /* Shared */,
+				CDB1A6AB2EA34E8F00B13136 /* CrossfitTracker */,
+				CDB1A6BC2EA34E9100B13136 /* CrossfitTrackerTests */,
+				CDB1A6C62EA34E9100B13136 /* CrossfitTrackerUITests */,
+				CDB1A6E92EA353CC00B13136 /* CrossfitTrackerWatch Watch App */,
+				CDB1A6FA2EA353CE00B13136 /* CrossfitTrackerWatch Watch AppTests */,
+				CDB1A7042EA353CF00B13136 /* CrossfitTrackerWatch Watch AppUITests */,
+				CDB1A7252EA3613D00B13136 /* Extentions.swift */,
+				CDB1A6AA2EA34E8F00B13136 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		CDB1A6AA2EA34E8F00B13136 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				CDB1A6A92EA34E8F00B13136 /* CrossfitTracker.app */,
+				CDB1A6B92EA34E9100B13136 /* CrossfitTrackerTests.xctest */,
+				CDB1A6C32EA34E9100B13136 /* CrossfitTrackerUITests.xctest */,
+				CDB1A6E82EA353CC00B13136 /* CrossfitTrackerWatch Watch App.app */,
+				CDB1A6F72EA353CE00B13136 /* CrossfitTrackerWatch Watch AppTests.xctest */,
+				CDB1A7012EA353CF00B13136 /* CrossfitTrackerWatch Watch AppUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		CDB1A6AB2EA34E8F00B13136 /* CrossfitTracker */ = {
+			isa = PBXGroup;
+			children = (
+				CDB1A6AC2EA34E8F00B13136 /* CrossfitTrackerApp.swift */,
+				CDB1A6AE2EA34E8F00B13136 /* ContentView.swift */,
+				CDB1A6B02EA34E9000B13136 /* Assets.xcassets */,
+				CDB1A6E22EA3527A00B13136 /* ProfileView.swift */,
+				CDB1A6E02EA3525300B13136 /* WODListView.swift */,
+				CDB1A6DE2EA3522100B13136 /* DashboardView.swift */,
+				CDB1A6DC2EA351CB00B13136 /* MainTabView.swift */,
+				CDB1A6DA2EA3519D00B13136 /* LoginView.swift */,
+				CDB1A6D82EA3515D00B13136 /* RootView.swift */,
+				CDB1A6D62EA350C700B13136 /* AppStore.swift */,
+				CDB1A71B2EA357B800B13136 /* WODTimerView.swift */,
+				CDB1A71D2EA3597700B13136 /* LeaderboardView.swift */,
+				CDB1A6B22EA34E9000B13136 /* Preview Content */,
+			);
+			path = CrossfitTracker;
+			sourceTree = "<group>";
+		};
+		CDB1A6B22EA34E9000B13136 /* Preview Content */ = {
+			isa = PBXGroup;
+			children = (
+				CDB1A6B32EA34E9000B13136 /* Preview Assets.xcassets */,
+			);
+			path = "Preview Content";
+			sourceTree = "<group>";
+		};
+		CDB1A6BC2EA34E9100B13136 /* CrossfitTrackerTests */ = {
+			isa = PBXGroup;
+			children = (
+				CDB1A6BD2EA34E9100B13136 /* CrossfitTrackerTests.swift */,
+			);
+			path = CrossfitTrackerTests;
+			sourceTree = "<group>";
+		};
+		CDB1A6C62EA34E9100B13136 /* CrossfitTrackerUITests */ = {
+			isa = PBXGroup;
+			children = (
+				CDB1A6C72EA34E9100B13136 /* CrossfitTrackerUITests.swift */,
+				CDB1A6C92EA34E9100B13136 /* CrossfitTrackerUITestsLaunchTests.swift */,
+			);
+			path = CrossfitTrackerUITests;
+			sourceTree = "<group>";
+		};
+		CDB1A6E92EA353CC00B13136 /* CrossfitTrackerWatch Watch App */ = {
+			isa = PBXGroup;
+			children = (
+				CDB1A6EA2EA353CC00B13136 /* CrossfitTrackerWatchApp.swift */,
+				CDB1A6EC2EA353CC00B13136 /* ContentView.swift */,
+				CDB1A6EE2EA353CE00B13136 /* Assets.xcassets */,
+				CDB1A6F02EA353CE00B13136 /* Preview Content */,
+			);
+			path = "CrossfitTrackerWatch Watch App";
+			sourceTree = "<group>";
+		};
+		CDB1A6F02EA353CE00B13136 /* Preview Content */ = {
+			isa = PBXGroup;
+			children = (
+				CDB1A6F12EA353CE00B13136 /* Preview Assets.xcassets */,
+			);
+			path = "Preview Content";
+			sourceTree = "<group>";
+		};
+		CDB1A6FA2EA353CE00B13136 /* CrossfitTrackerWatch Watch AppTests */ = {
+			isa = PBXGroup;
+			children = (
+				CDB1A6FB2EA353CE00B13136 /* CrossfitTrackerWatch_Watch_AppTests.swift */,
+			);
+			path = "CrossfitTrackerWatch Watch AppTests";
+			sourceTree = "<group>";
+		};
+		CDB1A7042EA353CF00B13136 /* CrossfitTrackerWatch Watch AppUITests */ = {
+			isa = PBXGroup;
+			children = (
+				CDB1A7052EA353CF00B13136 /* CrossfitTrackerWatch_Watch_AppUITests.swift */,
+				CDB1A7072EA353CF00B13136 /* CrossfitTrackerWatch_Watch_AppUITestsLaunchTests.swift */,
+			);
+			path = "CrossfitTrackerWatch Watch AppUITests";
+			sourceTree = "<group>";
+		};
+		CDB1A7162EA3540C00B13136 /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				CDB1A7332EA3772D00B13136 /* Lift.swift */,
+				CDB1A7292EA366B400B13136 /* CompletedWOD.swift */,
+				CDB1A72B2EA366CF00B13136 /* WOD.swift */,
+				CDB1A7272EA364AA00B13136 /* WODCatagory.swift */,
+				CDB1A71F2EA359DA00B13136 /* WatchSessionManager.swift */,
+				CDB1A7172EA3563C00B13136 /* Models.swift */,
+				CDB1A7192EA3565100B13136 /* SampleData.swift */,
+				CDB1A72D2EA36CE100B13136 /* Notifications.swift */,
+				CDB1A7352EA3775100B13136 /* CompletedLift.swift */,
+			);
+			path = Shared;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		CDB1A6A82EA34E8F00B13136 /* CrossfitTracker */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CDB1A6CD2EA34E9100B13136 /* Build configuration list for PBXNativeTarget "CrossfitTracker" */;
+			buildPhases = (
+				CDB1A6A52EA34E8F00B13136 /* Sources */,
+				CDB1A6A62EA34E8F00B13136 /* Frameworks */,
+				CDB1A6A72EA34E8F00B13136 /* Resources */,
+				CDB1A70F2EA353CF00B13136 /* Embed Watch Content */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				CDB1A70A2EA353CF00B13136 /* PBXTargetDependency */,
+			);
+			name = CrossfitTracker;
+			productName = CrossfitTracker;
+			productReference = CDB1A6A92EA34E8F00B13136 /* CrossfitTracker.app */;
+			productType = "com.apple.product-type.application";
+		};
+		CDB1A6B82EA34E9100B13136 /* CrossfitTrackerTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CDB1A6D02EA34E9100B13136 /* Build configuration list for PBXNativeTarget "CrossfitTrackerTests" */;
+			buildPhases = (
+				CDB1A6B52EA34E9100B13136 /* Sources */,
+				CDB1A6B62EA34E9100B13136 /* Frameworks */,
+				CDB1A6B72EA34E9100B13136 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				CDB1A6BB2EA34E9100B13136 /* PBXTargetDependency */,
+			);
+			name = CrossfitTrackerTests;
+			productName = CrossfitTrackerTests;
+			productReference = CDB1A6B92EA34E9100B13136 /* CrossfitTrackerTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		CDB1A6C22EA34E9100B13136 /* CrossfitTrackerUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CDB1A6D32EA34E9100B13136 /* Build configuration list for PBXNativeTarget "CrossfitTrackerUITests" */;
+			buildPhases = (
+				CDB1A6BF2EA34E9100B13136 /* Sources */,
+				CDB1A6C02EA34E9100B13136 /* Frameworks */,
+				CDB1A6C12EA34E9100B13136 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				CDB1A6C52EA34E9100B13136 /* PBXTargetDependency */,
+			);
+			name = CrossfitTrackerUITests;
+			productName = CrossfitTrackerUITests;
+			productReference = CDB1A6C32EA34E9100B13136 /* CrossfitTrackerUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+		CDB1A6E72EA353CC00B13136 /* CrossfitTrackerWatch Watch App */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CDB1A70C2EA353CF00B13136 /* Build configuration list for PBXNativeTarget "CrossfitTrackerWatch Watch App" */;
+			buildPhases = (
+				CDB1A6E42EA353CC00B13136 /* Sources */,
+				CDB1A6E52EA353CC00B13136 /* Frameworks */,
+				CDB1A6E62EA353CC00B13136 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "CrossfitTrackerWatch Watch App";
+			productName = "CrossfitTrackerWatch Watch App";
+			productReference = CDB1A6E82EA353CC00B13136 /* CrossfitTrackerWatch Watch App.app */;
+			productType = "com.apple.product-type.application";
+		};
+		CDB1A6F62EA353CE00B13136 /* CrossfitTrackerWatch Watch AppTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CDB1A7102EA353CF00B13136 /* Build configuration list for PBXNativeTarget "CrossfitTrackerWatch Watch AppTests" */;
+			buildPhases = (
+				CDB1A6F32EA353CE00B13136 /* Sources */,
+				CDB1A6F42EA353CE00B13136 /* Frameworks */,
+				CDB1A6F52EA353CE00B13136 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				CDB1A6F92EA353CE00B13136 /* PBXTargetDependency */,
+			);
+			name = "CrossfitTrackerWatch Watch AppTests";
+			productName = "CrossfitTrackerWatch Watch AppTests";
+			productReference = CDB1A6F72EA353CE00B13136 /* CrossfitTrackerWatch Watch AppTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		CDB1A7002EA353CF00B13136 /* CrossfitTrackerWatch Watch AppUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CDB1A7132EA353CF00B13136 /* Build configuration list for PBXNativeTarget "CrossfitTrackerWatch Watch AppUITests" */;
+			buildPhases = (
+				CDB1A6FD2EA353CF00B13136 /* Sources */,
+				CDB1A6FE2EA353CF00B13136 /* Frameworks */,
+				CDB1A6FF2EA353CF00B13136 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				CDB1A7032EA353CF00B13136 /* PBXTargetDependency */,
+			);
+			name = "CrossfitTrackerWatch Watch AppUITests";
+			productName = "CrossfitTrackerWatch Watch AppUITests";
+			productReference = CDB1A7012EA353CF00B13136 /* CrossfitTrackerWatch Watch AppUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		CDB1A6A12EA34E8F00B13136 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1420;
+				LastUpgradeCheck = 1420;
+				TargetAttributes = {
+					CDB1A6A82EA34E8F00B13136 = {
+						CreatedOnToolsVersion = 14.2;
+					};
+					CDB1A6B82EA34E9100B13136 = {
+						CreatedOnToolsVersion = 14.2;
+						TestTargetID = CDB1A6A82EA34E8F00B13136;
+					};
+					CDB1A6C22EA34E9100B13136 = {
+						CreatedOnToolsVersion = 14.2;
+						TestTargetID = CDB1A6A82EA34E8F00B13136;
+					};
+					CDB1A6E72EA353CC00B13136 = {
+						CreatedOnToolsVersion = 14.2;
+					};
+					CDB1A6F62EA353CE00B13136 = {
+						CreatedOnToolsVersion = 14.2;
+						TestTargetID = CDB1A6E72EA353CC00B13136;
+					};
+					CDB1A7002EA353CF00B13136 = {
+						CreatedOnToolsVersion = 14.2;
+						TestTargetID = CDB1A6E72EA353CC00B13136;
+					};
+				};
+			};
+			buildConfigurationList = CDB1A6A42EA34E8F00B13136 /* Build configuration list for PBXProject "CrossfitTracker" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = CDB1A6A02EA34E8F00B13136;
+			productRefGroup = CDB1A6AA2EA34E8F00B13136 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				CDB1A6A82EA34E8F00B13136 /* CrossfitTracker */,
+				CDB1A6B82EA34E9100B13136 /* CrossfitTrackerTests */,
+				CDB1A6C22EA34E9100B13136 /* CrossfitTrackerUITests */,
+				CDB1A6E72EA353CC00B13136 /* CrossfitTrackerWatch Watch App */,
+				CDB1A6F62EA353CE00B13136 /* CrossfitTrackerWatch Watch AppTests */,
+				CDB1A7002EA353CF00B13136 /* CrossfitTrackerWatch Watch AppUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		CDB1A6A72EA34E8F00B13136 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				CDB1A6B42EA34E9000B13136 /* Preview Assets.xcassets in Resources */,
+				CDB1A6B12EA34E9000B13136 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CDB1A6B72EA34E9100B13136 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CDB1A6C12EA34E9100B13136 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CDB1A6E62EA353CC00B13136 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				CDB1A6F22EA353CE00B13136 /* Preview Assets.xcassets in Resources */,
+				CDB1A6EF2EA353CE00B13136 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CDB1A6F52EA353CE00B13136 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CDB1A6FF2EA353CF00B13136 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		CDB1A6A52EA34E8F00B13136 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				CDB1A7282EA364AA00B13136 /* WODCatagory.swift in Sources */,
+				CDB1A6D92EA3515D00B13136 /* RootView.swift in Sources */,
+				CDB1A6E32EA3527A00B13136 /* ProfileView.swift in Sources */,
+				CDB1A6D72EA350C700B13136 /* AppStore.swift in Sources */,
+				CDB1A72A2EA366B400B13136 /* CompletedWOD.swift in Sources */,
+				CDB1A6AF2EA34E8F00B13136 /* ContentView.swift in Sources */,
+				CDB1A6DF2EA3522100B13136 /* DashboardView.swift in Sources */,
+				CDB1A6DB2EA3519D00B13136 /* LoginView.swift in Sources */,
+				CDB1A7262EA3613D00B13136 /* Extentions.swift in Sources */,
+				CDB1A6E12EA3525300B13136 /* WODListView.swift in Sources */,
+				CDB1A6AD2EA34E8F00B13136 /* CrossfitTrackerApp.swift in Sources */,
+				CDB1A71A2EA3565100B13136 /* SampleData.swift in Sources */,
+				CDB1A72E2EA36CE100B13136 /* Notifications.swift in Sources */,
+				CDB1A6DD2EA351CB00B13136 /* MainTabView.swift in Sources */,
+				CDB1A7182EA3563C00B13136 /* Models.swift in Sources */,
+				CDB1A7342EA3772D00B13136 /* Lift.swift in Sources */,
+				CDB1A71C2EA357B800B13136 /* WODTimerView.swift in Sources */,
+				CDB1A72C2EA366CF00B13136 /* WOD.swift in Sources */,
+				CDB1A73C2EA377B000B13136 /* LiftHistoryView.swift in Sources */,
+				CDB1A73A2EA3779900B13136 /* LiftDetailView.swift in Sources */,
+				CDB1A7362EA3775100B13136 /* CompletedLift.swift in Sources */,
+				CDB1A71E2EA3597700B13136 /* LeaderboardView.swift in Sources */,
+				CDB1A7382EA3777B00B13136 /* LiftsView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CDB1A6B52EA34E9100B13136 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				CDB1A6BE2EA34E9100B13136 /* CrossfitTrackerTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CDB1A6BF2EA34E9100B13136 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				CDB1A6CA2EA34E9100B13136 /* CrossfitTrackerUITestsLaunchTests.swift in Sources */,
+				CDB1A6C82EA34E9100B13136 /* CrossfitTrackerUITests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CDB1A6E42EA353CC00B13136 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				CDB1A7312EA3751800B13136 /* WODCatagory.swift in Sources */,
+				CDB1A72F2EA36CF500B13136 /* Notifications.swift in Sources */,
+				CDB1A7222EA35B1500B13136 /* Models.swift in Sources */,
+				CDB1A6ED2EA353CC00B13136 /* ContentView.swift in Sources */,
+				CDB1A73D2EA377C900B13136 /* Lift.swift in Sources */,
+				CDB1A6EB2EA353CC00B13136 /* CrossfitTrackerWatchApp.swift in Sources */,
+				CDB1A7232EA35B1F00B13136 /* SampleData.swift in Sources */,
+				CDB1A7322EA3752100B13136 /* CompletedWOD.swift in Sources */,
+				CDB1A7242EA35B7C00B13136 /* WatchSessionManager.swift in Sources */,
+				CDB1A7302EA3751400B13136 /* WOD.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CDB1A6F32EA353CE00B13136 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				CDB1A6FC2EA353CF00B13136 /* CrossfitTrackerWatch_Watch_AppTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CDB1A6FD2EA353CF00B13136 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				CDB1A7082EA353CF00B13136 /* CrossfitTrackerWatch_Watch_AppUITestsLaunchTests.swift in Sources */,
+				CDB1A7062EA353CF00B13136 /* CrossfitTrackerWatch_Watch_AppUITests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		CDB1A6BB2EA34E9100B13136 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = CDB1A6A82EA34E8F00B13136 /* CrossfitTracker */;
+			targetProxy = CDB1A6BA2EA34E9100B13136 /* PBXContainerItemProxy */;
+		};
+		CDB1A6C52EA34E9100B13136 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = CDB1A6A82EA34E8F00B13136 /* CrossfitTracker */;
+			targetProxy = CDB1A6C42EA34E9100B13136 /* PBXContainerItemProxy */;
+		};
+		CDB1A6F92EA353CE00B13136 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = CDB1A6E72EA353CC00B13136 /* CrossfitTrackerWatch Watch App */;
+			targetProxy = CDB1A6F82EA353CE00B13136 /* PBXContainerItemProxy */;
+		};
+		CDB1A7032EA353CF00B13136 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = CDB1A6E72EA353CC00B13136 /* CrossfitTrackerWatch Watch App */;
+			targetProxy = CDB1A7022EA353CF00B13136 /* PBXContainerItemProxy */;
+		};
+		CDB1A70A2EA353CF00B13136 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = CDB1A6E72EA353CC00B13136 /* CrossfitTrackerWatch Watch App */;
+			targetProxy = CDB1A7092EA353CF00B13136 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		CDB1A6CB2EA34E9100B13136 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.2;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		CDB1A6CC2EA34E9100B13136 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.2;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		CDB1A6CE2EA34E9100B13136 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "\"CrossfitTracker/Preview Content\"";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = TylerAnderson.CrossfitTracker;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		CDB1A6CF2EA34E9100B13136 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "\"CrossfitTracker/Preview Content\"";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = TylerAnderson.CrossfitTracker;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		CDB1A6D12EA34E9100B13136 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.2;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = TylerAnderson.CrossfitTrackerTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/CrossfitTracker.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/CrossfitTracker";
+			};
+			name = Debug;
+		};
+		CDB1A6D22EA34E9100B13136 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.2;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = TylerAnderson.CrossfitTrackerTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/CrossfitTracker.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/CrossfitTracker";
+			};
+			name = Release;
+		};
+		CDB1A6D42EA34E9100B13136 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = TylerAnderson.CrossfitTrackerUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = CrossfitTracker;
+			};
+			name = Debug;
+		};
+		CDB1A6D52EA34E9100B13136 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = TylerAnderson.CrossfitTrackerUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = CrossfitTracker;
+			};
+			name = Release;
+		};
+		CDB1A70D2EA353CF00B13136 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "\"CrossfitTrackerWatch Watch App/Preview Content\"";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = CrossfitTrackerWatch;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = TylerAnderson.CrossfitTracker;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = TylerAnderson.CrossfitTracker.watchkitapp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 9.1;
+			};
+			name = Debug;
+		};
+		CDB1A70E2EA353CF00B13136 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "\"CrossfitTrackerWatch Watch App/Preview Content\"";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = CrossfitTrackerWatch;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = TylerAnderson.CrossfitTracker;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = TylerAnderson.CrossfitTracker.watchkitapp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 9.1;
+			};
+			name = Release;
+		};
+		CDB1A7112EA353CF00B13136 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "TylerAnderson.CrossfitTrackerWatch-Watch-AppTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/CrossfitTrackerWatch Watch App.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/CrossfitTrackerWatch Watch App";
+				WATCHOS_DEPLOYMENT_TARGET = 9.1;
+			};
+			name = Debug;
+		};
+		CDB1A7122EA353CF00B13136 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "TylerAnderson.CrossfitTrackerWatch-Watch-AppTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/CrossfitTrackerWatch Watch App.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/CrossfitTrackerWatch Watch App";
+				WATCHOS_DEPLOYMENT_TARGET = 9.1;
+			};
+			name = Release;
+		};
+		CDB1A7142EA353CF00B13136 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "TylerAnderson.CrossfitTrackerWatch-Watch-AppUITests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				TEST_TARGET_NAME = "CrossfitTrackerWatch Watch App";
+				WATCHOS_DEPLOYMENT_TARGET = 9.1;
+			};
+			name = Debug;
+		};
+		CDB1A7152EA353CF00B13136 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "TylerAnderson.CrossfitTrackerWatch-Watch-AppUITests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				TEST_TARGET_NAME = "CrossfitTrackerWatch Watch App";
+				WATCHOS_DEPLOYMENT_TARGET = 9.1;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		CDB1A6A42EA34E8F00B13136 /* Build configuration list for PBXProject "CrossfitTracker" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CDB1A6CB2EA34E9100B13136 /* Debug */,
+				CDB1A6CC2EA34E9100B13136 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		CDB1A6CD2EA34E9100B13136 /* Build configuration list for PBXNativeTarget "CrossfitTracker" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CDB1A6CE2EA34E9100B13136 /* Debug */,
+				CDB1A6CF2EA34E9100B13136 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		CDB1A6D02EA34E9100B13136 /* Build configuration list for PBXNativeTarget "CrossfitTrackerTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CDB1A6D12EA34E9100B13136 /* Debug */,
+				CDB1A6D22EA34E9100B13136 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		CDB1A6D32EA34E9100B13136 /* Build configuration list for PBXNativeTarget "CrossfitTrackerUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CDB1A6D42EA34E9100B13136 /* Debug */,
+				CDB1A6D52EA34E9100B13136 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		CDB1A70C2EA353CF00B13136 /* Build configuration list for PBXNativeTarget "CrossfitTrackerWatch Watch App" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CDB1A70D2EA353CF00B13136 /* Debug */,
+				CDB1A70E2EA353CF00B13136 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		CDB1A7102EA353CF00B13136 /* Build configuration list for PBXNativeTarget "CrossfitTrackerWatch Watch AppTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CDB1A7112EA353CF00B13136 /* Debug */,
+				CDB1A7122EA353CF00B13136 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		CDB1A7132EA353CF00B13136 /* Build configuration list for PBXNativeTarget "CrossfitTrackerWatch Watch AppUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CDB1A7142EA353CF00B13136 /* Debug */,
+				CDB1A7152EA353CF00B13136 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = CDB1A6A12EA34E8F00B13136 /* Project object */;
+}
