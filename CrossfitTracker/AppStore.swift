@@ -2,6 +2,8 @@
 //  AppStore.swift
 //  CrossfitTracker
 //
+//  Created by Tyler Anderson on 10/17/25.
+//
 
 import Foundation
 import SwiftUI
@@ -10,7 +12,7 @@ import Combine
 final class AppStore: ObservableObject {
     static let shared = AppStore()
 
-    // MARK: - User Info
+    // MARK: - User info
     @Published var isLoggedIn: Bool = false
     @Published var userName: String = "Guest"
 
@@ -28,24 +30,25 @@ final class AppStore: ObservableObject {
         Lift(name: "Clean"),
         Lift(name: "Overhead Press")
     ]
-    @Published var liftEntries: [LiftEntry] = []
+
+    @Published var liftEntries: [LiftEntry] = [] // all lift history entries
 
     private init() {}
 
-    // MARK: - Login
+    // MARK: - User Actions
     func logIn(name: String) {
-        userName = name
-        isLoggedIn = true
+        self.userName = name
+        self.isLoggedIn = true
     }
 
     func logOut() {
-        userName = "Guest"
-        isLoggedIn = false
-        activeWOD = nil
-        wodStartTime = nil
+        self.userName = "Guest"
+        self.isLoggedIn = false
+        self.activeWOD = nil
+        self.wodStartTime = nil
     }
 
-    // MARK: - WOD Handling
+    // MARK: - WOD Actions
     func startWOD(_ wod: WOD) {
         activeWOD = wod
         wodStartTime = Date()
@@ -54,27 +57,21 @@ final class AppStore: ObservableObject {
     func stopWOD(category: WODCategory) {
         guard let wod = activeWOD, let start = wodStartTime else { return }
         let elapsed = Date().timeIntervalSince(start)
-        let completed = CompletedWOD(wod: wod, userName: userName, time: elapsed, category: category, date: Date())
+        let completed = CompletedWOD(
+            wod: wod,
+            userName: userName,
+            time: elapsed,
+            category: category
+        )
         completedWODs.append(completed)
         activeWOD = nil
         wodStartTime = nil
     }
 
-    func addManualWODResult(wod: WOD, category: WODCategory, time: TimeInterval) {
-        let completed = CompletedWOD(wod: wod, userName: userName, time: time, category: category, date: Date())
-        completedWODs.append(completed)
-    }
-
-    func results(for wod: WOD) -> [CompletedWOD] {
-        completedWODs
-            .filter { $0.wod.id == wod.id }
-            .sorted { $0.time < $1.time }
-    }
-
-    // MARK: - Lift Handling
+    // MARK: - Lift Actions
     func addLift(name: String) {
-        let newLift = Lift(name: name)
-        lifts.append(newLift)
+        let new = Lift(name: name)
+        lifts.append(new)
     }
 
     func addLiftEntry(lift: Lift, weight: Double, reps: Int, date: Date = Date()) {
@@ -96,14 +93,28 @@ final class AppStore: ObservableObject {
 
     func entries(for lift: Lift, reps: Int? = nil) -> [LiftEntry] {
         var filtered = liftEntries.filter { $0.liftID == lift.id }
-        if let reps = reps {
-            filtered = filtered.filter { $0.reps == reps }
-        }
+        if let reps = reps { filtered = filtered.filter { $0.reps == reps } }
         return filtered.sorted { $0.date < $1.date }
     }
 
     func mostRecentWeight(for lift: Lift, reps: Int) -> Double? {
-        let recent = entries(for: lift, reps: reps).sorted { $0.date > $1.date }
-        return recent.first?.weight
+        let entries = liftEntries.filter { $0.liftID == lift.id && $0.reps == reps }
+        return entries.sorted(by: { $0.date > $1.date }).first?.weight
+    }
+    
+    // MARK: - Manual WOD Result
+    func addManualWODResult(wod: WOD, time: TimeInterval, category: WODCategory) {
+        let completed = CompletedWOD(
+            wod: wod,
+            userName: userName,
+            time: time,
+            category: category
+        )
+        completedWODs.append(completed)
+    }
+
+    // MARK: - WOD Results Query
+    func results(for wod: WOD) -> [CompletedWOD] {
+        return completedWODs.filter { $0.wod.id == wod.id }
     }
 }

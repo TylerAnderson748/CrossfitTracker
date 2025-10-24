@@ -7,7 +7,7 @@
 
 import Foundation
 
-struct WOD: Identifiable, Codable {
+struct WOD: Identifiable, Codable, Hashable {
     var id = UUID()
     var title: String
     var description: String

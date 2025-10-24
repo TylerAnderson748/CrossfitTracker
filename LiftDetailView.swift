@@ -5,8 +5,6 @@
 //  Created by Tyler Anderson on 10/18/25.
 //
 
-// LiftDetailView.swift
-
 import SwiftUI
 import Charts
 
@@ -17,9 +15,6 @@ struct LiftDetailView: View {
     @State private var selectedReps: Int = 1
     @State private var inputWeight: String = ""
     @State private var entryDate: Date = Date()
-    @State private var showingAddSheet = false
-
-    // editing state
     @State private var editingEntry: LiftEntry? = nil
     @State private var showingEditSheet = false
 
@@ -30,7 +25,6 @@ struct LiftDetailView: View {
                     .font(.largeTitle.bold())
                     .padding(.top)
 
-                // Reps picker (1-3)
                 Picker("Reps", selection: $selectedReps) {
                     Text("1 rep").tag(1)
                     Text("2 reps").tag(2)
@@ -39,7 +33,6 @@ struct LiftDetailView: View {
                 .pickerStyle(.segmented)
                 .padding(.horizontal)
 
-                // Most recent base weight
                 if let recent = store.mostRecentWeight(for: lift, reps: selectedReps) {
                     Text("Most recent for \(selectedReps) rep(s): \(formatWeight(recent))")
                         .font(.subheadline)
@@ -50,16 +43,15 @@ struct LiftDetailView: View {
                         .foregroundColor(.secondary)
                 }
 
-                // INPUT area
                 VStack(spacing: 8) {
                     HStack {
                         TextField("Enter max weight (lbs)", text: $inputWeight)
                             .keyboardType(.decimalPad)
                             .textFieldStyle(RoundedBorderTextFieldStyle())
-
                         DatePicker("", selection: $entryDate, displayedComponents: .date)
                             .labelsHidden()
                     }
+
                     Button("Add / Log") {
                         submitManualEntry()
                     }
@@ -68,10 +60,10 @@ struct LiftDetailView: View {
                 }
                 .padding(.horizontal)
 
-                // Percent table (115% -> 60% step -10)
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Percent Calculator")
                         .font(.headline)
+
                     ForEach(percentages(), id: \.self) { pct in
                         HStack {
                             Text("\(Int(pct))%")
@@ -89,11 +81,11 @@ struct LiftDetailView: View {
                 .cornerRadius(12)
                 .padding(.horizontal)
 
-                // Chart - history for selected reps
                 VStack(alignment: .leading) {
                     Text("Progress Over Time (\(selectedReps) rep(s))")
                         .font(.headline)
                         .padding(.horizontal)
+
                     if entriesForSelectedReps().isEmpty {
                         Text("No entries yet")
                             .foregroundColor(.gray)
@@ -116,7 +108,6 @@ struct LiftDetailView: View {
                         .padding()
                     }
 
-                    // List of entries with edit & delete
                     List {
                         ForEach(entriesForSelectedReps().reversed()) { entry in
                             HStack {
@@ -135,39 +126,31 @@ struct LiftDetailView: View {
                             }
                         }
                         .onDelete { idxSet in
-                            // find id for deletion
-                            let entries = entriesForSelectedReps().reversed()
-                            let all = Array(entries)
+                            let all = Array(entriesForSelectedReps().reversed())
                             for idx in idxSet {
-                                let entryToDelete = all[idx]
-                                store.deleteLiftEntry(entryID: entryToDelete.id)
+                                store.deleteLiftEntry(entryID: all[idx].id)
                             }
                         }
                     }
                     .frame(height: 260)
                 }
-            } // VStack
+            }
             .padding(.bottom)
-        } // ScrollView
+        }
         .navigationTitle(lift.name)
         .sheet(isPresented: $showingEditSheet, onDismiss: { editingEntry = nil }) {
             if let edit = editingEntry {
-                EditLiftEntrySheet(entry: edit) { updatedWeight, updatedReps, updatedDate in
-                    store.editLiftEntry(entryID: edit.id, newWeight: updatedWeight, newReps: updatedReps, newDate: updatedDate)
+                EditLiftEntrySheet(entry: edit) { newWeight, newReps, newDate in
+                    store.editLiftEntry(entryID: edit.id, newWeight: newWeight, newReps: newReps, newDate: newDate)
                     showingEditSheet = false
                 } onCancel: {
                     showingEditSheet = false
                 }
             }
         }
-        .onAppear {
-            // default selected reps could use most recent reps if desired
-            // keep as-is (1)
-        }
     }
 
-    // MARK: helpers
-
+    // MARK: - Helpers
     func submitManualEntry() {
         guard let w = Double(inputWeight) else { return }
         store.addLiftEntry(lift: lift, weight: w, reps: selectedReps, date: entryDate)
@@ -180,7 +163,7 @@ struct LiftDetailView: View {
     }
 
     func percentages() -> [Double] {
-        Array(stride(from: 115, through: 60, by: -10)).map { Double($0) } // 115,105,95,85,75,65
+        Array(stride(from: 115, through: 60, by: -10))
     }
 
     func formatWeight(_ w: Double) -> String {
@@ -190,7 +173,7 @@ struct LiftDetailView: View {
     func chartYDomain() -> ClosedRange<Double> {
         let vals = entriesForSelectedReps().map { $0.weight }
         if let max = vals.max(), let min = vals.min() {
-            let padding = (max - min) * 0.1
+            let padding = max * 0.1
             return (min - padding)...(max + padding)
         } else {
             return 0...100
@@ -198,7 +181,7 @@ struct LiftDetailView: View {
     }
 }
 
-// MARK: Edit sheet
+// MARK: - Edit Sheet
 struct EditLiftEntrySheet: View {
     var entry: LiftEntry
     var onSave: (Double, Int, Date) -> Void
