@@ -43,7 +43,7 @@ struct LeaderboardView: View {
                                             .foregroundColor(.gray)
                                     }
                                     Spacer()
-                                    Text(formatTime(entry.time))
+                                    Text(entry.time.formatTime())
                                         .font(.headline.monospacedDigit())
                                 }
                                 .padding(.vertical, 4)
@@ -72,11 +72,5 @@ struct LeaderboardView: View {
         return WODCategory.allCases.map { cat in
             (cat, grouped[cat]?.sorted { $0.time < $1.time } ?? [])
         }
-    }
-
-    private func formatTime(_ t: TimeInterval) -> String {
-        let m = Int(t) / 60
-        let s = Int(t) % 60
-        return String(format: "%02d:%02d", m, s)
     }
 }

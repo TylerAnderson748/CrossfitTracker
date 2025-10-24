@@ -47,7 +47,7 @@ struct LiftDetailView: View {
                     HStack {
                         TextField("Enter max weight (lbs)", text: $inputWeight)
                             .keyboardType(.decimalPad)
-                            .textFieldStyle(RoundedBorderTextFieldStyle())
+                            .textFieldStyle(.roundedBorder)
                         DatePicker("", selection: $entryDate, displayedComponents: .date)
                             .labelsHidden()
                     }
@@ -201,7 +201,7 @@ struct EditLiftEntrySheet: View {
     }
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             Form {
                 Section(header: Text("Edit Entry")) {
                     TextField("Weight", text: $weightText)

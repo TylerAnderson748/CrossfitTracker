@@ -8,10 +8,19 @@
 import Foundation
 
 struct CompletedWOD: Identifiable, Codable {
-    var id = UUID()
+    let id: UUID
     var wod: WOD
     var userName: String
     var time: TimeInterval
     var category: WODCategory
-    var date: Date = Date() // ✅ Used in history graphs and sorting
+    var date: Date
+
+    init(id: UUID = UUID(), wod: WOD, userName: String, time: TimeInterval, category: WODCategory, date: Date = Date()) {
+        self.id = id
+        self.wod = wod
+        self.userName = userName
+        self.time = time
+        self.category = category
+        self.date = date
+    }
 }

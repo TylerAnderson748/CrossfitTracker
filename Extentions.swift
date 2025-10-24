@@ -6,9 +6,14 @@
 //
 
 import Foundation
-/*
-extension Notification.Name {
-    static let watchStartWOD = Notification.Name("watchStartWOD")
-    static let watchStopWOD  = Notification.Name("watchStopWOD")
+
+extension TimeInterval {
+    /// Formats a TimeInterval (in seconds) as MM:SS
+    func formatTime() -> String {
+        let m = Int(self) / 60
+        let s = Int(self) % 60
+        let mm = String(format: "%02d", m)
+        let ss = String(format: "%02d", s)
+        return "\(mm):\(ss)"
+    }
 }
-*/

@@ -11,7 +11,7 @@ struct ProfileView: View {
     @EnvironmentObject var store: AppStore
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             VStack(spacing: 24) {
                 Image(systemName: "person.circle.fill")
                     .resizable()

@@ -14,7 +14,7 @@ struct WODListView: View {
     let workouts = SampleData.wods
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             List(workouts) { wod in
                 NavigationLink(destination: WODTimerView(wod: wod)) {
                     Text(wod.title)

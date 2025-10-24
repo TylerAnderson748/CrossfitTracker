@@ -21,7 +21,7 @@ struct ContentView: View {
                 .font(.footnote)
                 .multilineTextAlignment(.center)
 
-            Text("Time: \(formatTime(elapsed))")
+            Text("Time: \(elapsed.formatTime())")
                 .font(.title2.monospacedDigit())
 
             if timer == nil {
@@ -42,6 +42,10 @@ struct ContentView: View {
             }
         }
         .padding()
+        .onDisappear {
+            timer?.invalidate()
+            timer = nil
+        }
         .sheet(isPresented: $showCategorySheet) {
             VStack(spacing: 12) {
                 Text("Select Category")
@@ -68,11 +72,5 @@ struct ContentView: View {
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
             elapsed += 1
         }
-    }
-
-    func formatTime(_ interval: TimeInterval) -> String {
-        let minutes = Int(interval) / 60
-        let seconds = Int(interval) % 60
-        return String(format: "%02d:%02d", minutes, seconds)
     }
 }

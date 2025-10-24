@@ -12,7 +12,7 @@ struct LoginView: View {
     @State private var usernameInput: String = ""
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             VStack(spacing: 32) {
                 Image(systemName: "flame.fill")
                     .resizable()
@@ -21,22 +21,23 @@ struct LoginView: View {
                     .foregroundColor(.orange)
 
                 TextField("Enter your name", text: $usernameInput)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                    .textFieldStyle(.roundedBorder)
                     .padding(.horizontal, 40)
 
                 Button {
-                    // all the function directly on store, not $store
-                    store.logIn(name: usernameInput)
+                    let trimmedName = usernameInput.trimmingCharacters(in: .whitespaces)
+                    guard !trimmedName.isEmpty else { return }
+                    store.logIn(name: trimmedName)
                 } label: {
                     Text("Login")
                         .frame(maxWidth: .infinity)
                         .padding()
-                        .background(usernameInput.isEmpty ? Color.gray : Color.blue)
+                        .background(usernameInput.trimmingCharacters(in: .whitespaces).isEmpty ? Color.gray : Color.blue)
                         .foregroundColor(.white)
                         .cornerRadius(12)
                         .padding(.horizontal, 40)
                 }
-                .disabled(usernameInput.isEmpty)
+                .disabled(usernameInput.trimmingCharacters(in: .whitespaces).isEmpty)
 
                 Spacer()
             }

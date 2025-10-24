@@ -15,7 +15,7 @@ struct LiftsView: View {
     @State private var newLiftName = ""
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             VStack {
                 List {
                     ForEach(store.lifts) { lift in
@@ -58,7 +58,7 @@ struct LiftsView: View {
             }
             .navigationTitle("Lifts")
             .sheet(isPresented: $showingAddLift) {
-                NavigationView {
+                NavigationStack {
                     Form {
                         Section(header: Text("New Lift")) {
                             TextField("Lift name", text: $newLiftName)

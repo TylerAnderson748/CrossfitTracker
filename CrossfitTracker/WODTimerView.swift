@@ -21,6 +21,7 @@ struct WODTimerView: View {
     @State private var manualSeconds: String = ""
     @State private var selectedCategory: WODCategory = .rx
     @State private var showSavedMessage = false
+    @State private var errorMessage: String?
 
     var body: some View {
         ScrollView {
@@ -31,7 +32,7 @@ struct WODTimerView: View {
                         .font(.title)
                         .padding(.top)
 
-                    Text(formatTime(elapsed))
+                    Text(elapsed.formatTime())
                         .font(.system(size: 64, weight: .semibold, design: .monospaced))
                         .padding(.bottom, 8)
                 }
@@ -90,6 +91,12 @@ struct WODTimerView: View {
                         Button("Save") { saveManualTime() }
                             .buttonStyle(.borderedProminent)
                     }
+
+                    if let errorMessage = errorMessage {
+                        Text(errorMessage)
+                            .foregroundColor(.red)
+                            .font(.caption)
+                    }
                 }
 
                 Divider().padding(.vertical, 8)
@@ -132,7 +139,7 @@ struct WODTimerView: View {
                             AxisMarks { value in
                                 AxisValueLabel {
                                     if let seconds = value.as(Double.self) {
-                                        Text(formatTime(seconds))
+                                        Text(seconds.formatTime())
                                     }
                                 }
                             }
@@ -153,24 +160,39 @@ struct WODTimerView: View {
             .padding()
         }
         .navigationTitle("WOD Timer")
-        .onDisappear { timer?.invalidate() }
+        .onDisappear {
+            timer?.invalidate()
+            timer = nil
+        }
     }
 
     // MARK: - Timer helpers
 
     private func toggleTimer() {
-        if isRunning { timer?.invalidate() } else { startTimer() }
+        if isRunning {
+            stopTimer()
+        } else {
+            startTimer()
+        }
         isRunning.toggle()
     }
 
     private func startTimer() {
+        // Ensure any existing timer is cleaned up first
+        timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
             elapsed += 1
         }
     }
 
+    private func stopTimer() {
+        timer?.invalidate()
+        timer = nil
+    }
+
     private func resetTimer() {
         timer?.invalidate()
+        timer = nil
         elapsed = 0
         isRunning = false
     }
@@ -183,10 +205,29 @@ struct WODTimerView: View {
     }
 
     private func saveManualTime() {
-        let m = Int(manualMinutes) ?? 0
-        let s = Int(manualSeconds) ?? 0
+        // Clear any previous error
+        errorMessage = nil
+
+        // Validate minutes
+        let minutesStr = manualMinutes.trimmingCharacters(in: .whitespaces)
+        let secondsStr = manualSeconds.trimmingCharacters(in: .whitespaces)
+
+        guard let m = Int(minutesStr), m >= 0 else {
+            errorMessage = "Please enter valid minutes (0 or greater)"
+            return
+        }
+
+        guard let s = Int(secondsStr), s >= 0, s < 60 else {
+            errorMessage = "Please enter valid seconds (0-59)"
+            return
+        }
+
         let total = Double(m * 60 + s)
-        guard total > 0 else { return }
+        guard total > 0 else {
+            errorMessage = "Total time must be greater than 0"
+            return
+        }
+
         store.addManualWODResult(wod: wod, time: total, category: selectedCategory)
         manualMinutes = ""
         manualSeconds = ""
@@ -200,16 +241,6 @@ struct WODTimerView: View {
         }
     }
 
-    // MARK: - Formatting
-
-    private func formatTime(_ t: TimeInterval) -> String {
-        let m = Int(t) / 60
-        let s = Int(t) % 60
-        let mm = String(format: "%02d", m)
-        let ss = String(format: "%02d", s)
-        return "\(mm):\(ss)"
-    }
-    
     // MARK: - History Helper
     
     private func allWodHistory() -> [CompletedWOD] {

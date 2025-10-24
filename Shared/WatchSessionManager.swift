@@ -44,8 +44,10 @@ class WatchSessionManager: NSObject, WCSessionDelegate, ObservableObject {
             if let stopID = message["stopWOD"] as? String,
                let time = message["time"] as? TimeInterval,
                let categoryStr = message["category"] as? String,
-               let category = WODCategory(rawValue: categoryStr) {
-                NotificationCenter.default.post(name: .watchStopWOD, object: CompletedWOD(wod: SampleData.wods.first(where: {$0.id.uuidString == stopID})!, userName: "OtherUser", time: time, category: category))
+               let category = WODCategory(rawValue: categoryStr),
+               let wod = SampleData.wods.first(where: { $0.id.uuidString == stopID }) {
+                let completedWOD = CompletedWOD(wod: wod, userName: "OtherUser", time: time, category: category)
+                NotificationCenter.default.post(name: .watchStopWOD, object: completedWOD)
             }
         }
     }
