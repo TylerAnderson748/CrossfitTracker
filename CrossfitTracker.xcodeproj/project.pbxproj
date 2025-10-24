@@ -52,6 +52,7 @@
 		CDB1A73A2EA3779900B13136 /* LiftDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A7392EA3779900B13136 /* LiftDetailView.swift */; };
 		CDB1A73C2EA377B000B13136 /* LiftHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A73B2EA377B000B13136 /* LiftHistoryView.swift */; };
 		CDB1A73D2EA377C900B13136 /* Lift.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A7332EA3772D00B13136 /* Lift.swift */; };
+		CDB1A73E2EA3780000B13136 /* Extentions.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A7252EA3613D00B13136 /* Extentions.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -607,6 +608,7 @@
 				CDB1A7322EA3752100B13136 /* CompletedWOD.swift in Sources */,
 				CDB1A7242EA35B7C00B13136 /* WatchSessionManager.swift in Sources */,
 				CDB1A7302EA3751400B13136 /* WOD.swift in Sources */,
+				CDB1A73E2EA3780000B13136 /* Extentions.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
