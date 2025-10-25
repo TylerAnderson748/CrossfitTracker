@@ -13,7 +13,7 @@ struct RootView: View {
 
     var body: some View {
         Group {
-            if store.isLoggedIn {
+            if store.currentUser != nil {
                 MainTabView()
             } else {
                 LoginView()

@@ -17,13 +17,72 @@ struct ProfileView: View {
                     .resizable()
                     .scaledToFit()
                     .frame(width: 100)
-                    .foregroundColor(.gray)
+                    .foregroundColor(.blue)
 
-                Text(store.userName)
-                    .font(.title2.bold())
+                if let user = store.currentUser {
+                    VStack(spacing: 8) {
+                        Text(user.name)
+                            .font(.title2.bold())
+
+                        Text(user.role.rawValue)
+                            .font(.subheadline)
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 6)
+                            .background(roleColor(for: user.role))
+                            .cornerRadius(12)
+
+                        if !user.email.isEmpty {
+                            Text(user.email)
+                                .font(.subheadline)
+                                .foregroundColor(.gray)
+                        }
+                    }
+
+                    // User stats
+                    VStack(spacing: 16) {
+                        Divider()
+                            .padding(.horizontal, 40)
+
+                        HStack(spacing: 40) {
+                            VStack {
+                                Text("\(store.completedWODs.count)")
+                                    .font(.title2.bold())
+                                Text("WODs")
+                                    .font(.caption)
+                                    .foregroundColor(.gray)
+                            }
+
+                            VStack {
+                                Text("\(store.liftEntries.count)")
+                                    .font(.title2.bold())
+                                Text("Lifts")
+                                    .font(.caption)
+                                    .foregroundColor(.gray)
+                            }
+
+                            if user.role.canManageGyms {
+                                VStack {
+                                    Text("\(myGymsCount)")
+                                        .font(.title2.bold())
+                                    Text("Gyms")
+                                        .font(.caption)
+                                        .foregroundColor(.gray)
+                                }
+                            }
+                        }
+
+                        Divider()
+                            .padding(.horizontal, 40)
+                    }
+                    .padding(.top, 16)
+                } else {
+                    Text("Guest")
+                        .font(.title2.bold())
+                }
 
                 Button {
-                    store.logOut() // ✅ Call directly on store
+                    store.logOut()
                 } label: {
                     Text("Sign Out")
                         .frame(maxWidth: .infinity)
@@ -38,6 +97,22 @@ struct ProfileView: View {
             }
             .padding(.top, 80)
             .navigationTitle("Profile")
+        }
+    }
+
+    private var myGymsCount: Int {
+        guard let user = store.currentUser else { return 0 }
+        return store.gyms.filter { $0.ownerUserId == user.id }.count
+    }
+
+    private func roleColor(for role: UserRole) -> Color {
+        switch role {
+        case .member:
+            return .green
+        case .coach:
+            return .blue
+        case .admin:
+            return .purple
         }
     }
 }

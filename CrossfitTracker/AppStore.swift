@@ -131,6 +131,7 @@ final class AppStore: ObservableObject {
     func logOut() {
         self.userName = "Guest"
         self.isLoggedIn = false
+        self.currentUser = nil
         self.activeWOD = nil
         self.wodStartTime = nil
     }
