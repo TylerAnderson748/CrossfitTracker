@@ -139,40 +139,56 @@ struct WODTimerView: View {
     }
 
     private var progressChart: some View {
-        Chart {
-            ForEach(allWodHistory()) { entry in
-                LineMark(
-                    x: .value("Date", entry.date),
-                    y: .value("Time (seconds)", entry.time),
-                    series: .value("Category", entry.category.rawValue)
-                )
-                .foregroundStyle(by: .value("Category", entry.category.rawValue))
-                .symbol(by: .value("Category", entry.category.rawValue))
+        let history = allWodHistory()
 
-                PointMark(
-                    x: .value("Date", entry.date),
-                    y: .value("Time (seconds)", entry.time)
-                )
-                .foregroundStyle(by: .value("Category", entry.category.rawValue))
+        return Chart {
+            ForEach(history) { entry in
+                createLineMark(for: entry)
+                createPointMark(for: entry)
             }
         }
-        .chartForegroundStyleScale([
+        .chartForegroundStyleScale(categoryColorScale)
+        .chartYAxis { chartYAxisContent }
+        .frame(height: 200)
+        .padding()
+    }
+
+    private func createLineMark(for entry: HistoryEntry) -> some ChartContent {
+        LineMark(
+            x: .value("Date", entry.date),
+            y: .value("Time (seconds)", entry.time),
+            series: .value("Category", entry.category.rawValue)
+        )
+        .foregroundStyle(by: .value("Category", entry.category.rawValue))
+        .symbol(by: .value("Category", entry.category.rawValue))
+    }
+
+    private func createPointMark(for entry: HistoryEntry) -> some ChartContent {
+        PointMark(
+            x: .value("Date", entry.date),
+            y: .value("Time (seconds)", entry.time)
+        )
+        .foregroundStyle(by: .value("Category", entry.category.rawValue))
+    }
+
+    private var categoryColorScale: [String: Color] {
+        [
             "RX+": .orange,
             "RX": .blue,
             "Scaled": .gray,
             "Just Happy To Be Here": .green
-        ])
-        .chartYAxis {
-            AxisMarks { value in
-                AxisValueLabel {
-                    if let seconds = value.as(Double.self) {
-                        Text(seconds.formatTime())
-                    }
+        ]
+    }
+
+    @AxisContentBuilder
+    private var chartYAxisContent: some AxisContent {
+        AxisMarks { value in
+            AxisValueLabel {
+                if let seconds = value.as(Double.self) {
+                    Text(seconds.formatTime())
                 }
             }
         }
-        .frame(height: 200)
-        .padding()
     }
 
     private var leaderboardSection: some View {
