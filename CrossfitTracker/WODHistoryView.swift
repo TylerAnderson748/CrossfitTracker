@@ -9,6 +9,7 @@ import SwiftUI
 
 struct WODHistoryView: View {
     @EnvironmentObject var store: AppStore
+    @State private var editingEntry: CompletedWOD?
 
     var body: some View {
         NavigationStack {
@@ -24,9 +25,31 @@ struct WODHistoryView: View {
                             .foregroundColor(.gray)
                     }
                     .padding(.vertical, 4)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        editingEntry = entry
+                    }
+                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                        Button(role: .destructive) {
+                            store.deleteCompletedWOD(entryID: entry.id)
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+
+                        Button {
+                            editingEntry = entry
+                        } label: {
+                            Label("Edit", systemImage: "pencil")
+                        }
+                        .tint(.blue)
+                    }
                 }
             }
             .navigationTitle("Workout History")
+            .sheet(item: $editingEntry) { entry in
+                EditWODResultView(wodResult: entry)
+                    .environmentObject(store)
+            }
         }
     }
 }

@@ -151,6 +151,18 @@ final class AppStore: ObservableObject {
         completedWODs.append(completed)
     }
 
+    func editCompletedWOD(entryID: UUID, newTime: TimeInterval, newDate: Date, newCategory: WODCategory) {
+        if let idx = completedWODs.firstIndex(where: { $0.id == entryID }) {
+            completedWODs[idx].time = newTime
+            completedWODs[idx].date = newDate
+            completedWODs[idx].category = newCategory
+        }
+    }
+
+    func deleteCompletedWOD(entryID: UUID) {
+        completedWODs.removeAll { $0.id == entryID }
+    }
+
     // MARK: - WOD Results Query
     func results(for wod: WOD) -> [CompletedWOD] {
         return completedWODs.filter { $0.wod.id == wod.id }
