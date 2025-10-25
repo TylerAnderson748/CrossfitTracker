@@ -370,6 +370,11 @@ final class AppStore: ObservableObject {
             // Include coach-posted workouts from user's gyms/groups
             if workout.source == .coachPosted {
                 if let gymId = workout.gymId {
+                    // Check if user owns this gym (coaches can see their own programmed workouts)
+                    if gyms.contains(where: { $0.id == gymId && $0.ownerUserId == user.id }) {
+                        return true
+                    }
+
                     // Check if user is a member of this gym
                     guard gymMemberships.contains(where: { $0.userId == user.id && $0.gymId == gymId }) else {
                         return false
