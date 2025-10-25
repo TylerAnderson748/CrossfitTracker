@@ -78,9 +78,11 @@ struct WeeklyPlanView: View {
     private func updateWeekDates() {
         let calendar = Calendar.current
         let weekday = calendar.component(.weekday, from: selectedDate)
-        let daysFromSunday = (weekday + 6) % 7 // Convert to Monday-based week
+        // Calendar weekday: 1=Sunday, 2=Monday, 3=Tuesday, etc.
+        // For Monday-based week, calculate days back to Monday
+        let daysFromMonday = (weekday + 5) % 7 // 0 for Monday, 1 for Tuesday, ..., 6 for Sunday
 
-        guard let monday = calendar.date(byAdding: .day, value: -daysFromSunday, to: selectedDate) else {
+        guard let monday = calendar.date(byAdding: .day, value: -daysFromMonday, to: selectedDate) else {
             return
         }
 

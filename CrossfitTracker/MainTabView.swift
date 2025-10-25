@@ -18,33 +18,38 @@ struct MainTabView: View {
                 .tabItem {
                     Label("Weekly Plan", systemImage: "calendar")
                 }
+                .tag(0)
 
             // WODs list
             WODListView()
                 .tabItem {
                     Label("WODs", systemImage: "list.bullet.rectangle")
                 }
+                .tag(1)
 
             // Lifts
             LiftsView()
                 .tabItem {
                     Label("Lifts", systemImage: "figure.strengthtraining.traditional")
                 }
+                .tag(2)
 
             // Coach Programming - only for coaches and admins
-            if store.currentUser?.role.canProgramWorkouts == true {
+            if let user = store.currentUser, user.role.canProgramWorkouts {
                 CoachProgrammingView()
                     .tabItem {
                         Label("Programming", systemImage: "calendar.badge.plus")
                     }
+                    .tag(3)
             }
 
             // Gym Management - only for coaches and admins
-            if store.currentUser?.role.canManageGyms == true {
+            if let user = store.currentUser, user.role.canManageGyms {
                 GymManagementView()
                     .tabItem {
                         Label("Manage", systemImage: "building.2.fill")
                     }
+                    .tag(4)
             }
 
             // Profile
@@ -52,6 +57,7 @@ struct MainTabView: View {
                 .tabItem {
                     Label("Profile", systemImage: "person.circle.fill")
                 }
+                .tag(5)
         }
     }
 }
