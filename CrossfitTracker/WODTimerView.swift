@@ -95,52 +95,7 @@ struct WODTimerView: View {
                 Divider().padding(.vertical, 8)
 
                 // GROUP 5: Progress Chart
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Your Progress - All Categories")
-                        .font(.headline)
-                        .padding(.horizontal)
-                    
-                    if allWodHistory().isEmpty {
-                        Text("No history yet")
-                            .foregroundColor(.gray)
-                            .padding()
-                    } else {
-                        Chart {
-                            ForEach(allWodHistory()) { entry in
-                                LineMark(
-                                    x: .value("Date", entry.date),
-                                    y: .value("Time (seconds)", entry.time),
-                                    series: .value("Category", entry.category.rawValue)
-                                )
-                                .foregroundStyle(by: .value("Category", entry.category.rawValue))
-                                .symbol(by: .value("Category", entry.category.rawValue))
-                                
-                                PointMark(
-                                    x: .value("Date", entry.date),
-                                    y: .value("Time (seconds)", entry.time)
-                                )
-                                .foregroundStyle(by: .value("Category", entry.category.rawValue))
-                            }
-                        }
-                        .chartForegroundStyleScale([
-                            "RX+": .orange,
-                            "RX": .blue,
-                            "Scaled": .gray,
-                            "Just Happy To Be Here": .green
-                        ])
-                        .chartYAxis {
-                            AxisMarks { value in
-                                AxisValueLabel {
-                                    if let seconds = value.as(Double.self) {
-                                        Text(formatTime(seconds))
-                                    }
-                                }
-                            }
-                        }
-                        .frame(height: 200)
-                        .padding()
-                    }
-                }
+                progressChartView()
 
                 // GROUP 6: Leaderboard Link (1 item)
                 NavigationLink(destination: LeaderboardView(wod: wod).environmentObject(store)) {
@@ -211,10 +166,66 @@ struct WODTimerView: View {
     }
     
     // MARK: - History Helper
-    
+
     private func allWodHistory() -> [CompletedWOD] {
         store.completedWODs
             .filter { $0.wod.id == wod.id }
             .sorted { $0.date < $1.date }
+    }
+
+    // MARK: - Chart View
+
+    @ViewBuilder
+    private func progressChartView() -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Your Progress - All Categories")
+                .font(.headline)
+                .padding(.horizontal)
+
+            let history = allWodHistory()
+
+            if history.isEmpty {
+                Text("No history yet")
+                    .foregroundColor(.gray)
+                    .padding()
+            } else {
+                Chart(history) { entry in
+                    LineMark(
+                        x: .value("Date", entry.date),
+                        y: .value("Time (seconds)", entry.time),
+                        series: .value("Category", entry.category.rawValue)
+                    )
+                    .foregroundStyle(by: .value("Category", entry.category.rawValue))
+                    .symbol(by: .value("Category", entry.category.rawValue))
+
+                    PointMark(
+                        x: .value("Date", entry.date),
+                        y: .value("Time (seconds)", entry.time)
+                    )
+                    .foregroundStyle(by: .value("Category", entry.category.rawValue))
+                }
+                .chartForegroundStyleScale(chartColors())
+                .chartYAxis {
+                    AxisMarks { value in
+                        AxisValueLabel {
+                            if let seconds = value.as(Double.self) {
+                                Text(formatTime(seconds))
+                            }
+                        }
+                    }
+                }
+                .frame(height: 200)
+                .padding()
+            }
+        }
+    }
+
+    private func chartColors() -> [String: Color] {
+        return [
+            "RX+": .orange,
+            "RX": .blue,
+            "Scaled": .gray,
+            "Just Happy To Be Here": .green
+        ]
     }
 }
