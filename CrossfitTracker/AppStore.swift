@@ -144,6 +144,38 @@ final class AppStore: ObservableObject {
         self.wodStartTime = nil
     }
 
+    func clearAllData() {
+        // Clear all UserDefaults
+        let domain = Bundle.main.bundleIdentifier!
+        UserDefaults.standard.removePersistentDomain(forName: domain)
+        UserDefaults.standard.synchronize()
+
+        // Reset all published properties
+        isLoading = true // Prevent saves during reset
+        isLoggedIn = false
+        userName = "Guest"
+        currentUser = nil
+        activeWOD = nil
+        wodStartTime = nil
+        completedWODs = []
+        lifts = [
+            Lift(name: "Back Squat"),
+            Lift(name: "Front Squat"),
+            Lift(name: "Deadlift"),
+            Lift(name: "Snatch"),
+            Lift(name: "Clean"),
+            Lift(name: "Overhead Press")
+        ]
+        liftEntries = []
+        users = []
+        gyms = []
+        programmingGroups = []
+        gymMemberships = []
+        scheduledWorkouts = []
+        gymJoinRequests = []
+        isLoading = false
+    }
+
     // MARK: - WOD Actions
     func startWOD(_ wod: WOD) {
         activeWOD = wod

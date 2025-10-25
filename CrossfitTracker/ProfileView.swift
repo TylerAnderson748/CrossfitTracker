@@ -10,6 +10,7 @@ import SwiftUI
 struct ProfileView: View {
     @EnvironmentObject var store: AppStore
     @State private var showingJoinGym = false
+    @State private var showingResetConfirmation = false
 
     var body: some View {
         NavigationStack {
@@ -107,6 +108,16 @@ struct ProfileView: View {
                         .padding(.horizontal, 40)
                 }
 
+                // Developer reset option
+                Button {
+                    showingResetConfirmation = true
+                } label: {
+                    Label("Reset All Data", systemImage: "trash.fill")
+                        .font(.caption)
+                        .foregroundColor(.red)
+                        .padding(.top, 20)
+                }
+
                 Spacer()
             }
             .padding(.top, 80)
@@ -114,6 +125,14 @@ struct ProfileView: View {
             .sheet(isPresented: $showingJoinGym) {
                 JoinGymView()
                     .environmentObject(store)
+            }
+            .alert("Reset All Data?", isPresented: $showingResetConfirmation) {
+                Button("Cancel", role: .cancel) { }
+                Button("Reset Everything", role: .destructive) {
+                    store.clearAllData()
+                }
+            } message: {
+                Text("This will permanently delete all users, gyms, workouts, and data. This cannot be undone!")
             }
         }
     }
