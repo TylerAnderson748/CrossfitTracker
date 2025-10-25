@@ -237,4 +237,279 @@ final class AppStore: ObservableObject {
     func results(for wod: WOD) -> [CompletedWOD] {
         return completedWODs.filter { $0.wod.id == wod.id }
     }
+
+    // MARK: - User Management
+    func loadUser(userId: String, completion: @escaping (AppUser?, String?) -> Void) {
+        db.collection("users").document(userId).getDocument { snapshot, error in
+            if let error = error {
+                DispatchQueue.main.async {
+                    completion(nil, error.localizedDescription)
+                }
+                return
+            }
+
+            guard let snapshot = snapshot, snapshot.exists else {
+                DispatchQueue.main.async {
+                    completion(nil, "User not found")
+                }
+                return
+            }
+
+            do {
+                let user = try snapshot.data(as: AppUser.self)
+                DispatchQueue.main.async {
+                    completion(user, nil)
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    completion(nil, error.localizedDescription)
+                }
+            }
+        }
+    }
+
+    func findUserByEmail(email: String, completion: @escaping (AppUser?, String?) -> Void) {
+        db.collection("users")
+            .whereField("email", isEqualTo: email)
+            .getDocuments { snapshot, error in
+                if let error = error {
+                    DispatchQueue.main.async {
+                        completion(nil, error.localizedDescription)
+                    }
+                    return
+                }
+
+                guard let document = snapshot?.documents.first else {
+                    DispatchQueue.main.async {
+                        completion(nil, "User with email '\(email)' not found")
+                    }
+                    return
+                }
+
+                do {
+                    let user = try document.data(as: AppUser.self)
+                    DispatchQueue.main.async {
+                        completion(user, nil)
+                    }
+                } catch {
+                    DispatchQueue.main.async {
+                        completion(nil, error.localizedDescription)
+                    }
+                }
+            }
+    }
+
+    // MARK: - Gym Management
+    func createGym(name: String, completion: @escaping (Gym?, String?) -> Void) {
+        guard let userId = currentUser?.uid else {
+            completion(nil, "No user logged in")
+            return
+        }
+
+        let gym = Gym(name: name, ownerId: userId)
+
+        do {
+            let docRef = db.collection("gyms").document()
+            var gymWithId = gym
+            gymWithId.id = docRef.documentID
+
+            try docRef.setData(from: gymWithId) { error in
+                DispatchQueue.main.async {
+                    if let error = error {
+                        completion(nil, error.localizedDescription)
+                    } else {
+                        print("✅ Gym created: \(name)")
+                        completion(gymWithId, nil)
+                    }
+                }
+            }
+        } catch {
+            DispatchQueue.main.async {
+                completion(nil, error.localizedDescription)
+            }
+        }
+    }
+
+    func loadGyms(completion: @escaping ([Gym], String?) -> Void) {
+        guard let userId = currentUser?.uid else {
+            completion([], "No user logged in")
+            return
+        }
+
+        // Load gyms where user is owner
+        db.collection("gyms")
+            .whereField("ownerId", isEqualTo: userId)
+            .getDocuments { snapshot, error in
+                if let error = error {
+                    DispatchQueue.main.async {
+                        completion([], error.localizedDescription)
+                    }
+                    return
+                }
+
+                let gyms = snapshot?.documents.compactMap { doc -> Gym? in
+                    try? doc.data(as: Gym.self)
+                } ?? []
+
+                DispatchQueue.main.async {
+                    print("✅ Loaded \(gyms.count) gyms")
+                    completion(gyms, nil)
+                }
+            }
+    }
+
+    func loadGym(gymId: String, completion: @escaping (Gym?, String?) -> Void) {
+        db.collection("gyms").document(gymId).getDocument { snapshot, error in
+            if let error = error {
+                DispatchQueue.main.async {
+                    completion(nil, error.localizedDescription)
+                }
+                return
+            }
+
+            guard let snapshot = snapshot, snapshot.exists else {
+                DispatchQueue.main.async {
+                    completion(nil, "Gym not found")
+                }
+                return
+            }
+
+            do {
+                let gym = try snapshot.data(as: Gym.self)
+                DispatchQueue.main.async {
+                    completion(gym, nil)
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    completion(nil, error.localizedDescription)
+                }
+            }
+        }
+    }
+
+    func addUserToGym(gymId: String, userId: String, role: UserRole, completion: @escaping (String?) -> Void) {
+        let fieldName = role == .coach ? "coachIds" : "memberIds"
+
+        db.collection("gyms").document(gymId).updateData([
+            fieldName: FieldValue.arrayUnion([userId])
+        ]) { error in
+            DispatchQueue.main.async {
+                if let error = error {
+                    completion(error.localizedDescription)
+                } else {
+                    print("✅ User added to gym as \(role.displayName)")
+                    completion(nil)
+                }
+            }
+        }
+    }
+
+    // MARK: - Scheduled Workouts
+    func saveScheduledWorkout(_ workout: ScheduledWorkout, completion: @escaping (ScheduledWorkout?, String?) -> Void) {
+        guard currentUser?.uid != nil else {
+            completion(nil, "No user logged in")
+            return
+        }
+
+        do {
+            if let workoutId = workout.id {
+                // Update existing workout
+                try db.collection("scheduledWorkouts").document(workoutId).setData(from: workout) { error in
+                    DispatchQueue.main.async {
+                        if let error = error {
+                            completion(nil, error.localizedDescription)
+                        } else {
+                            print("✅ Workout updated: \(workout.wodTitle)")
+                            completion(workout, nil)
+                        }
+                    }
+                }
+            } else {
+                // Create new workout
+                let docRef = db.collection("scheduledWorkouts").document()
+                var workoutWithId = workout
+                workoutWithId.id = docRef.documentID
+
+                try docRef.setData(from: workoutWithId) { error in
+                    DispatchQueue.main.async {
+                        if let error = error {
+                            completion(nil, error.localizedDescription)
+                        } else {
+                            print("✅ Workout scheduled: \(workout.wodTitle) for \(workout.date)")
+                            completion(workoutWithId, nil)
+                        }
+                    }
+                }
+            }
+        } catch {
+            DispatchQueue.main.async {
+                completion(nil, error.localizedDescription)
+            }
+        }
+    }
+
+    func loadScheduledWorkouts(startDate: Date, endDate: Date, gymId: String? = nil, completion: @escaping ([ScheduledWorkout], String?) -> Void) {
+        var query: Query = db.collection("scheduledWorkouts")
+            .whereField("date", isGreaterThanOrEqualTo: startDate)
+            .whereField("date", isLessThanOrEqualTo: endDate)
+
+        if let gymId = gymId {
+            query = query.whereField("gymId", isEqualTo: gymId)
+        }
+
+        query.getDocuments { snapshot, error in
+            if let error = error {
+                DispatchQueue.main.async {
+                    completion([], error.localizedDescription)
+                }
+                return
+            }
+
+            let workouts = snapshot?.documents.compactMap { doc -> ScheduledWorkout? in
+                try? doc.data(as: ScheduledWorkout.self)
+            } ?? []
+
+            DispatchQueue.main.async {
+                print("✅ Loaded \(workouts.count) scheduled workouts")
+                completion(workouts, nil)
+            }
+        }
+    }
+
+    func loadScheduledWorkoutsForUser(userId: String, startDate: Date, endDate: Date, completion: @escaping ([ScheduledWorkout], String?) -> Void) {
+        db.collection("scheduledWorkouts")
+            .whereField("assignedToUserIds", arrayContains: userId)
+            .whereField("date", isGreaterThanOrEqualTo: startDate)
+            .whereField("date", isLessThanOrEqualTo: endDate)
+            .getDocuments { snapshot, error in
+                if let error = error {
+                    DispatchQueue.main.async {
+                        completion([], error.localizedDescription)
+                    }
+                    return
+                }
+
+                let workouts = snapshot?.documents.compactMap { doc -> ScheduledWorkout? in
+                    try? doc.data(as: ScheduledWorkout.self)
+                } ?? []
+
+                DispatchQueue.main.async {
+                    print("✅ Loaded \(workouts.count) scheduled workouts for user")
+                    completion(workouts, nil)
+                }
+            }
+    }
+
+    func deleteScheduledWorkout(workoutId: String, completion: @escaping (String?) -> Void) {
+        db.collection("scheduledWorkouts").document(workoutId).delete { error in
+            DispatchQueue.main.async {
+                if let error = error {
+                    completion(error.localizedDescription)
+                } else {
+                    print("✅ Workout deleted")
+                    completion(nil)
+                }
+            }
+        }
+    }
 }
