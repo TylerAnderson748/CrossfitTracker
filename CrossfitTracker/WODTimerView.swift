@@ -147,7 +147,12 @@ struct WODTimerView: View {
                 createPointMark(for: entry)
             }
         }
-        .chartForegroundStyleScale(categoryColorScale)
+        .chartForegroundStyleScale([
+            "RX+": .orange,
+            "RX": .blue,
+            "Scaled": .gray,
+            "Just Happy To Be Here": .green
+        ])
         .chartYAxis { chartYAxisContent }
         .frame(height: 200)
         .padding()
@@ -169,15 +174,6 @@ struct WODTimerView: View {
             y: .value("Time (seconds)", entry.time)
         )
         .foregroundStyle(by: .value("Category", entry.category.rawValue))
-    }
-
-    private var categoryColorScale: [String: Color] {
-        [
-            "RX+": .orange,
-            "RX": .blue,
-            "Scaled": .gray,
-            "Just Happy To Be Here": .green
-        ]
     }
 
     @AxisContentBuilder
