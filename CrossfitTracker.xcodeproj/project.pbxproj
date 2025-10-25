@@ -13,6 +13,12 @@
 		CD11C60F2EAC0C20009C3D3F /* DayDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD11C6102EAC0C20009C3D3F /* DayDetailView.swift */; };
 		CD11C6112EAC0C30009C3D3F /* CoachProgrammingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD11C6122EAC0C30009C3D3F /* CoachProgrammingView.swift */; };
 		CD11C6132EAC0C40009C3D3F /* GymManagementView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD11C6142EAC0C40009C3D3F /* GymManagementView.swift */; };
+		CD11C6152EAC0C50009C3D3F /* UserRole.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD11C6162EAC0C50009C3D3F /* UserRole.swift */; };
+		CD11C6172EAC0C60009C3D3F /* User.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD11C6182EAC0C60009C3D3F /* User.swift */; };
+		CD11C6192EAC0C70009C3D3F /* Gym.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD11C61A2EAC0C70009C3D3F /* Gym.swift */; };
+		CD11C61B2EAC0C80009C3D3F /* ProgrammingGroup.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD11C61C2EAC0C80009C3D3F /* ProgrammingGroup.swift */; };
+		CD11C61D2EAC0C90009C3D3F /* GymMembership.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD11C61E2EAC0C90009C3D3F /* GymMembership.swift */; };
+		CD11C61F2EAC0CA0009C3D3F /* ScheduledWorkout.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD11C6202EAC0CA0009C3D3F /* ScheduledWorkout.swift */; };
 		CDB1A6AD2EA34E8F00B13136 /* CrossfitTrackerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A6AC2EA34E8F00B13136 /* CrossfitTrackerApp.swift */; };
 		CDB1A6AF2EA34E8F00B13136 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A6AE2EA34E8F00B13136 /* ContentView.swift */; };
 		CDB1A6B12EA34E9000B13136 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CDB1A6B02EA34E9000B13136 /* Assets.xcassets */; };
@@ -161,6 +167,12 @@
 		CDB1A7372EA3777B00B13136 /* LiftsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiftsView.swift; sourceTree = "<group>"; };
 		CDB1A7392EA3779900B13136 /* LiftDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiftDetailView.swift; sourceTree = "<group>"; };
 		CDB1A73B2EA377B000B13136 /* LiftHistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiftHistoryView.swift; sourceTree = "<group>"; };
+		CD11C6162EAC0C50009C3D3F /* UserRole.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserRole.swift; sourceTree = "<group>"; };
+		CD11C6182EAC0C60009C3D3F /* User.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = User.swift; sourceTree = "<group>"; };
+		CD11C61A2EAC0C70009C3D3F /* Gym.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gym.swift; sourceTree = "<group>"; };
+		CD11C61C2EAC0C80009C3D3F /* ProgrammingGroup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProgrammingGroup.swift; sourceTree = "<group>"; };
+		CD11C61E2EAC0C90009C3D3F /* GymMembership.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GymMembership.swift; sourceTree = "<group>"; };
+		CD11C6202EAC0CA0009C3D3F /* ScheduledWorkout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduledWorkout.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -339,6 +351,12 @@
 				CDB1A7192EA3565100B13136 /* SampleData.swift */,
 				CDB1A72D2EA36CE100B13136 /* Notifications.swift */,
 				CDB1A7352EA3775100B13136 /* CompletedLift.swift */,
+				CD11C6162EAC0C50009C3D3F /* UserRole.swift */,
+				CD11C6182EAC0C60009C3D3F /* User.swift */,
+				CD11C61A2EAC0C70009C3D3F /* Gym.swift */,
+				CD11C61C2EAC0C80009C3D3F /* ProgrammingGroup.swift */,
+				CD11C61E2EAC0C90009C3D3F /* GymMembership.swift */,
+				CD11C6202EAC0CA0009C3D3F /* ScheduledWorkout.swift */,
 			);
 			path = Shared;
 			sourceTree = "<group>";
@@ -594,6 +612,12 @@
 				CDB1A7362EA3775100B13136 /* CompletedLift.swift in Sources */,
 				CDB1A71E2EA3597700B13136 /* LeaderboardView.swift in Sources */,
 				CDB1A7382EA3777B00B13136 /* LiftsView.swift in Sources */,
+				CD11C6152EAC0C50009C3D3F /* UserRole.swift in Sources */,
+				CD11C6172EAC0C60009C3D3F /* User.swift in Sources */,
+				CD11C6192EAC0C70009C3D3F /* Gym.swift in Sources */,
+				CD11C61B2EAC0C80009C3D3F /* ProgrammingGroup.swift in Sources */,
+				CD11C61D2EAC0C90009C3D3F /* GymMembership.swift in Sources */,
+				CD11C61F2EAC0CA0009C3D3F /* ScheduledWorkout.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
