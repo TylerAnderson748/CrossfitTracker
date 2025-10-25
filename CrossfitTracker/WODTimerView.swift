@@ -204,7 +204,12 @@ struct WODTimerView: View {
                     )
                     .foregroundStyle(by: .value("Category", entry.category.rawValue))
                 }
-                .chartForegroundStyleScale(chartColors())
+                .chartForegroundStyleScale([
+                    "RX+": .orange,
+                    "RX": .blue,
+                    "Scaled": .gray,
+                    "Just Happy To Be Here": .green
+                ])
                 .chartYAxis {
                     AxisMarks { value in
                         AxisValueLabel {
@@ -218,14 +223,5 @@ struct WODTimerView: View {
                 .padding()
             }
         }
-    }
-
-    private func chartColors() -> [String: Color] {
-        return [
-            "RX+": .orange,
-            "RX": .blue,
-            "Scaled": .gray,
-            "Just Happy To Be Here": .green
-        ]
     }
 }
