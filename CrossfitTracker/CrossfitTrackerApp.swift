@@ -13,13 +13,8 @@ struct CrossfitTrackerApp: App {
 
     var body: some Scene {
         WindowGroup {
-            if store.isLoggedIn {
-                ContentView() // TabView with WODs, Lifts, Profile
-                    .environmentObject(store)
-            } else {
-                LoginView()
-                    .environmentObject(store)
-            }
+            RootView()
+                .environmentObject(store)
         }
     }
 }
