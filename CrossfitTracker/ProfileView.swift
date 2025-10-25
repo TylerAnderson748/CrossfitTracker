@@ -9,6 +9,7 @@ import SwiftUI
 
 struct ProfileView: View {
     @EnvironmentObject var store: AppStore
+    @State private var showingJoinGym = false
 
     var body: some View {
         NavigationStack {
@@ -81,6 +82,19 @@ struct ProfileView: View {
                         .font(.title2.bold())
                 }
 
+                // Join Gym button for all users
+                Button {
+                    showingJoinGym = true
+                } label: {
+                    Label("Join a Gym", systemImage: "building.2")
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.blue)
+                        .foregroundColor(.white)
+                        .cornerRadius(12)
+                        .padding(.horizontal, 40)
+                }
+
                 Button {
                     store.logOut()
                 } label: {
@@ -97,6 +111,10 @@ struct ProfileView: View {
             }
             .padding(.top, 80)
             .navigationTitle("Profile")
+            .sheet(isPresented: $showingJoinGym) {
+                JoinGymView()
+                    .environmentObject(store)
+            }
         }
     }
 

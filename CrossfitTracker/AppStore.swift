@@ -25,6 +25,7 @@ final class AppStore: ObservableObject {
         static let programmingGroups = "programmingGroups"
         static let gymMemberships = "gymMemberships"
         static let scheduledWorkouts = "scheduledWorkouts"
+        static let gymJoinRequests = "gymJoinRequests"
     }
 
     private var isLoading = false
@@ -107,6 +108,12 @@ final class AppStore: ObservableObject {
         }
     }
 
+    @Published var gymJoinRequests: [GymJoinRequest] = [] {
+        didSet {
+            if !isLoading { saveGymJoinRequests() }
+        }
+    }
+
     private init() {
         isLoading = true
         loadUserInfo()
@@ -119,6 +126,7 @@ final class AppStore: ObservableObject {
         loadProgrammingGroups()
         loadGymMemberships()
         loadScheduledWorkouts()
+        loadGymJoinRequests()
         isLoading = false
     }
 
@@ -261,6 +269,89 @@ final class AppStore: ObservableObject {
 
     func getGroup(byId id: UUID) -> ProgrammingGroup? {
         programmingGroups.first(where: { $0.id == id })
+    }
+
+    func createProgrammingGroup(name: String, gymId: UUID) -> ProgrammingGroup? {
+        guard let user = currentUser else { return nil }
+
+        // Verify user owns the gym
+        guard let gym = gyms.first(where: { $0.id == gymId && $0.ownerUserId == user.id }) else {
+            return nil
+        }
+
+        let group = ProgrammingGroup(name: name, gymId: gymId)
+        programmingGroups.append(group)
+
+        // Add group to gym
+        if let idx = gyms.firstIndex(where: { $0.id == gymId }) {
+            gyms[idx].groupIds.append(group.id)
+        }
+
+        return group
+    }
+
+    func getAvailableGyms() -> [Gym] {
+        // Return all gyms that the user is not already a member of
+        guard let user = currentUser else { return [] }
+        let userGymIds = gymMemberships.filter { $0.userId == user.id }.map { $0.gymId }
+        return gyms.filter { !userGymIds.contains($0.id) && $0.ownerUserId != user.id }
+    }
+
+    // MARK: - Join Request Management
+    func requestToJoinGym(_ gym: Gym) {
+        guard let user = currentUser else { return }
+
+        // Check if already a member or already requested
+        if gymMemberships.contains(where: { $0.userId == user.id && $0.gymId == gym.id }) {
+            return
+        }
+
+        if gymJoinRequests.contains(where: { $0.userId == user.id && $0.gymId == gym.id && $0.status == .pending }) {
+            return
+        }
+
+        let request = GymJoinRequest(userId: user.id, gymId: gym.id)
+        gymJoinRequests.append(request)
+    }
+
+    func getPendingRequests(for gym: Gym) -> [GymJoinRequest] {
+        gymJoinRequests.filter { $0.gymId == gym.id && $0.status == .pending }
+    }
+
+    func approveJoinRequest(_ request: GymJoinRequest) {
+        guard let idx = gymJoinRequests.firstIndex(where: { $0.id == request.id }) else { return }
+        guard let user = currentUser else { return }
+        guard let gym = gyms.first(where: { $0.id == request.gymId && $0.ownerUserId == user.id }) else { return }
+
+        // Update request status
+        gymJoinRequests[idx].status = .approved
+        gymJoinRequests[idx].respondedAt = Date()
+
+        // Get the Normal group for this gym
+        let normalGroup = programmingGroups.first(where: { $0.gymId == gym.id && $0.name == "Normal" })
+        let groupIds = normalGroup != nil ? [normalGroup!.id] : []
+
+        // Create membership with Normal group
+        let membership = GymMembership(userId: request.userId, gymId: request.gymId, groupIds: groupIds)
+        gymMemberships.append(membership)
+
+        // Add user to Normal group
+        if let normalGroup = normalGroup,
+           let groupIdx = programmingGroups.firstIndex(where: { $0.id == normalGroup.id }) {
+            if !programmingGroups[groupIdx].memberIds.contains(request.userId) {
+                programmingGroups[groupIdx].memberIds.append(request.userId)
+            }
+        }
+    }
+
+    func denyJoinRequest(_ request: GymJoinRequest) {
+        guard let idx = gymJoinRequests.firstIndex(where: { $0.id == request.id }) else { return }
+        gymJoinRequests[idx].status = .denied
+        gymJoinRequests[idx].respondedAt = Date()
+    }
+
+    func getUser(byId id: UUID) -> User? {
+        users.first(where: { $0.id == id })
     }
 
     // MARK: - Membership Management
@@ -524,6 +615,19 @@ final class AppStore: ObservableObject {
         if let data = UserDefaults.standard.data(forKey: Keys.scheduledWorkouts),
            let decoded = try? JSONDecoder().decode([ScheduledWorkout].self, from: data) {
             scheduledWorkouts = decoded
+        }
+    }
+
+    private func saveGymJoinRequests() {
+        if let encoded = try? JSONEncoder().encode(gymJoinRequests) {
+            UserDefaults.standard.set(encoded, forKey: Keys.gymJoinRequests)
+        }
+    }
+
+    private func loadGymJoinRequests() {
+        if let data = UserDefaults.standard.data(forKey: Keys.gymJoinRequests),
+           let decoded = try? JSONDecoder().decode([GymJoinRequest].self, from: data) {
+            gymJoinRequests = decoded
         }
     }
 }
