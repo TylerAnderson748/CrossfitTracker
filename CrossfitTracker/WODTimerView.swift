@@ -153,7 +153,7 @@ struct WODTimerView: View {
         .padding()
     }
 
-    private func createLineMark(for entry: HistoryEntry) -> some ChartContent {
+    private func createLineMark(for entry: CompletedWOD) -> some ChartContent {
         LineMark(
             x: .value("Date", entry.date),
             y: .value("Time (seconds)", entry.time),
@@ -163,7 +163,7 @@ struct WODTimerView: View {
         .symbol(by: .value("Category", entry.category.rawValue))
     }
 
-    private func createPointMark(for entry: HistoryEntry) -> some ChartContent {
+    private func createPointMark(for entry: CompletedWOD) -> some ChartContent {
         PointMark(
             x: .value("Date", entry.date),
             y: .value("Time (seconds)", entry.time)
