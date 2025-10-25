@@ -8,6 +8,7 @@
 import Foundation
 import SwiftUI
 import Combine
+import FirebaseAuth
 
 final class AppStore: ObservableObject {
     static let shared = AppStore()
@@ -15,6 +16,7 @@ final class AppStore: ObservableObject {
     // MARK: - User info
     @Published var isLoggedIn: Bool = false
     @Published var userName: String = "Guest"
+    @Published var currentUser: FirebaseAuth.User?
 
     // MARK: - WODs
     @Published var activeWOD: WOD? = nil
@@ -33,19 +35,53 @@ final class AppStore: ObservableObject {
 
     @Published var liftEntries: [LiftEntry] = [] // all lift history entries
 
-    private init() {}
+    private init() {
+        // Listen for Firebase auth state changes
+        Auth.auth().addStateDidChangeListener { [weak self] _, user in
+            DispatchQueue.main.async {
+                self?.currentUser = user
+                self?.isLoggedIn = user != nil
+                self?.userName = user?.email ?? "Guest"
+            }
+        }
+    }
 
-    // MARK: - User Actions
-    func logIn(name: String) {
-        self.userName = name
-        self.isLoggedIn = true
+    // MARK: - Firebase Authentication
+    func signUp(email: String, password: String, completion: @escaping (String?) -> Void) {
+        Auth.auth().createUser(withEmail: email, password: password) { result, error in
+            DispatchQueue.main.async {
+                if let error = error {
+                    completion(error.localizedDescription)
+                } else {
+                    print("✅ User signed up successfully: \(email)")
+                    completion(nil)
+                }
+            }
+        }
+    }
+
+    func signIn(email: String, password: String, completion: @escaping (String?) -> Void) {
+        Auth.auth().signIn(withEmail: email, password: password) { result, error in
+            DispatchQueue.main.async {
+                if let error = error {
+                    completion(error.localizedDescription)
+                } else {
+                    print("✅ User signed in successfully: \(email)")
+                    completion(nil)
+                }
+            }
+        }
     }
 
     func logOut() {
-        self.userName = "Guest"
-        self.isLoggedIn = false
-        self.activeWOD = nil
-        self.wodStartTime = nil
+        do {
+            try Auth.auth().signOut()
+            print("✅ User signed out successfully")
+            self.activeWOD = nil
+            self.wodStartTime = nil
+        } catch {
+            print("❌ Error signing out: \(error.localizedDescription)")
+        }
     }
 
     // MARK: - WOD Actions

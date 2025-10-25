@@ -9,38 +9,97 @@ import SwiftUI
 
 struct LoginView: View {
     @EnvironmentObject var store: AppStore
-    @State private var usernameInput: String = ""
+    @State private var email: String = ""
+    @State private var password: String = ""
+    @State private var isSignUpMode: Bool = false
+    @State private var errorMessage: String = ""
+    @State private var showError: Bool = false
 
     var body: some View {
         NavigationView {
-            VStack(spacing: 32) {
+            VStack(spacing: 24) {
                 Image(systemName: "flame.fill")
                     .resizable()
                     .scaledToFit()
                     .frame(width: 100)
                     .foregroundColor(.orange)
+                    .padding(.top, 60)
 
-                TextField("Enter your name", text: $usernameInput)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
-                    .padding(.horizontal, 40)
+                Text(isSignUpMode ? "Create Account" : "Welcome Back")
+                    .font(.title)
+                    .bold()
+
+                VStack(spacing: 16) {
+                    TextField("Email", text: $email)
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                        .textInputAutocapitalization(.never)
+                        .keyboardType(.emailAddress)
+                        .autocorrectionDisabled()
+                        .padding(.horizontal, 40)
+
+                    SecureField("Password", text: $password)
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                        .padding(.horizontal, 40)
+                }
+
+                if showError {
+                    Text(errorMessage)
+                        .foregroundColor(.red)
+                        .font(.caption)
+                        .padding(.horizontal, 40)
+                }
 
                 Button {
-                    // all the function directly on store, not $store
-                    store.logIn(name: usernameInput)
+                    handleAuthAction()
                 } label: {
-                    Text("Login")
+                    Text(isSignUpMode ? "Sign Up" : "Log In")
                         .frame(maxWidth: .infinity)
                         .padding()
-                        .background(usernameInput.isEmpty ? Color.gray : Color.blue)
+                        .background(isFormValid ? Color.blue : Color.gray)
                         .foregroundColor(.white)
                         .cornerRadius(12)
                         .padding(.horizontal, 40)
                 }
-                .disabled(usernameInput.isEmpty)
+                .disabled(!isFormValid)
+
+                Button {
+                    isSignUpMode.toggle()
+                    showError = false
+                    errorMessage = ""
+                } label: {
+                    Text(isSignUpMode ? "Already have an account? Log In" : "Don't have an account? Sign Up")
+                        .font(.subheadline)
+                        .foregroundColor(.blue)
+                }
 
                 Spacer()
             }
-            .padding(.top, 100)
+            .padding(.top, 40)
+        }
+    }
+
+    private var isFormValid: Bool {
+        !email.isEmpty && !password.isEmpty && password.count >= 6
+    }
+
+    private func handleAuthAction() {
+        showError = false
+        errorMessage = ""
+
+        if isSignUpMode {
+            store.signUp(email: email, password: password) { error in
+                if let error = error {
+                    errorMessage = error
+                    showError = true
+                }
+            }
+        } else {
+            store.signIn(email: email, password: password) { error in
+                if let error = error {
+                    errorMessage = error
+                    showError = true
+                }
+            }
         }
     }
 }
