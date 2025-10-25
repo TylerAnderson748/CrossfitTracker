@@ -6,10 +6,17 @@
 //
 
 import SwiftUI
+import FirebaseCore
 
 @main
 struct CrossfitTrackerApp: App {
     @StateObject private var store = AppStore.shared
+
+    init() {
+        // Initialize Firebase when app starts
+        FirebaseApp.configure()
+        print("🔥 Firebase initialized successfully!")
+    }
 
     var body: some Scene {
         WindowGroup {
