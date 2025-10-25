@@ -51,11 +51,22 @@ struct CoachProgrammingView: View {
                         }
                     }
                 } else {
-                    ContentUnavailableView(
-                        "No Gyms",
-                        systemImage: "building.2",
-                        description: Text("Create a gym in the Manage tab to start programming workouts")
-                    )
+                    VStack(spacing: 16) {
+                        Image(systemName: "building.2")
+                            .font(.system(size: 60))
+                            .foregroundColor(.gray)
+
+                        Text("No Gyms")
+                            .font(.title2)
+                            .fontWeight(.semibold)
+
+                        Text("Create a gym in the Manage tab to start programming workouts")
+                            .font(.body)
+                            .foregroundColor(.gray)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 40)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
             .navigationTitle("Programming")
