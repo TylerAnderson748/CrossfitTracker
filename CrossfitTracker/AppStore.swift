@@ -19,6 +19,12 @@ final class AppStore: ObservableObject {
         static let completedWODs = "completedWODs"
         static let lifts = "lifts"
         static let liftEntries = "liftEntries"
+        static let currentUser = "currentUser"
+        static let users = "users"
+        static let gyms = "gyms"
+        static let programmingGroups = "programmingGroups"
+        static let gymMemberships = "gymMemberships"
+        static let scheduledWorkouts = "scheduledWorkouts"
     }
 
     private var isLoading = false
@@ -64,12 +70,55 @@ final class AppStore: ObservableObject {
         }
     }
 
+    // MARK: - User & Gym Management
+    @Published var currentUser: User? = nil {
+        didSet {
+            if !isLoading { saveCurrentUser() }
+        }
+    }
+
+    @Published var users: [User] = [] {
+        didSet {
+            if !isLoading { saveUsers() }
+        }
+    }
+
+    @Published var gyms: [Gym] = [] {
+        didSet {
+            if !isLoading { saveGyms() }
+        }
+    }
+
+    @Published var programmingGroups: [ProgrammingGroup] = [] {
+        didSet {
+            if !isLoading { saveProgrammingGroups() }
+        }
+    }
+
+    @Published var gymMemberships: [GymMembership] = [] {
+        didSet {
+            if !isLoading { saveGymMemberships() }
+        }
+    }
+
+    @Published var scheduledWorkouts: [ScheduledWorkout] = [] {
+        didSet {
+            if !isLoading { saveScheduledWorkouts() }
+        }
+    }
+
     private init() {
         isLoading = true
         loadUserInfo()
         loadCompletedWODs()
         loadLifts()
         loadLiftEntries()
+        loadCurrentUser()
+        loadUsers()
+        loadGyms()
+        loadProgrammingGroups()
+        loadGymMemberships()
+        loadScheduledWorkouts()
         isLoading = false
     }
 
@@ -168,6 +217,180 @@ final class AppStore: ObservableObject {
         return completedWODs.filter { $0.wod.id == wod.id }
     }
 
+    // MARK: - User Management
+    func createUser(name: String, email: String, role: UserRole) -> User {
+        let user = User(name: name, email: email, role: role)
+        users.append(user)
+        return user
+    }
+
+    func setCurrentUser(_ user: User) {
+        currentUser = user
+        userName = user.name
+        isLoggedIn = true
+    }
+
+    // MARK: - Gym Management
+    func createGym(name: String) -> Gym {
+        guard let user = currentUser else { fatalError("Must have current user to create gym") }
+        let gym = Gym(name: name, ownerUserId: user.id)
+        gyms.append(gym)
+
+        // Create default programming groups for this gym
+        let normalGroup = ProgrammingGroup(name: "Normal", gymId: gym.id)
+        let compGroup = ProgrammingGroup(name: "Comp", gymId: gym.id)
+        programmingGroups.append(normalGroup)
+        programmingGroups.append(compGroup)
+
+        // Update gym with group IDs
+        if let idx = gyms.firstIndex(where: { $0.id == gym.id }) {
+            gyms[idx].groupIds = [normalGroup.id, compGroup.id]
+        }
+
+        return gym
+    }
+
+    func getGym(byId id: UUID) -> Gym? {
+        gyms.first(where: { $0.id == id })
+    }
+
+    func getGroups(for gym: Gym) -> [ProgrammingGroup] {
+        programmingGroups.filter { gym.groupIds.contains($0.id) }
+    }
+
+    func getGroup(byId id: UUID) -> ProgrammingGroup? {
+        programmingGroups.first(where: { $0.id == id })
+    }
+
+    // MARK: - Membership Management
+    func joinGym(_ gym: Gym, groupIds: [UUID] = []) {
+        guard let user = currentUser else { return }
+
+        // Check if already a member
+        if gymMemberships.contains(where: { $0.userId == user.id && $0.gymId == gym.id }) {
+            return
+        }
+
+        let membership = GymMembership(userId: user.id, gymId: gym.id, groupIds: groupIds)
+        gymMemberships.append(membership)
+
+        // Add user to programming groups
+        for groupId in groupIds {
+            if let idx = programmingGroups.firstIndex(where: { $0.id == groupId }) {
+                if !programmingGroups[idx].memberIds.contains(user.id) {
+                    programmingGroups[idx].memberIds.append(user.id)
+                }
+            }
+        }
+    }
+
+    func addUserToGroup(userId: UUID, groupId: UUID) {
+        // Find the membership
+        guard let membershipIdx = gymMemberships.firstIndex(where: { $0.userId == userId }),
+              let groupIdx = programmingGroups.firstIndex(where: { $0.id == groupId }) else {
+            return
+        }
+
+        // Add group to membership
+        if !gymMemberships[membershipIdx].groupIds.contains(groupId) {
+            gymMemberships[membershipIdx].groupIds.append(groupId)
+        }
+
+        // Add user to group
+        if !programmingGroups[groupIdx].memberIds.contains(userId) {
+            programmingGroups[groupIdx].memberIds.append(userId)
+        }
+    }
+
+    func getUserGyms() -> [Gym] {
+        guard let user = currentUser else { return [] }
+        let userGymIds = gymMemberships.filter { $0.userId == user.id }.map { $0.gymId }
+        return gyms.filter { userGymIds.contains($0.id) }
+    }
+
+    func getUserGroups(in gym: Gym) -> [ProgrammingGroup] {
+        guard let user = currentUser else { return [] }
+        guard let membership = gymMemberships.first(where: { $0.userId == user.id && $0.gymId == gym.id }) else {
+            return []
+        }
+        return programmingGroups.filter { membership.groupIds.contains($0.id) }
+    }
+
+    // MARK: - Workout Scheduling
+    func scheduleWOD(_ wod: WOD, for date: Date, gymId: UUID? = nil, groupId: UUID? = nil) {
+        guard let user = currentUser else { return }
+
+        let source: WorkoutSource = gymId != nil ? .coachPosted : .personal
+        let scheduled = ScheduledWorkout(
+            type: .wod,
+            wodId: wod.id,
+            date: date,
+            source: source,
+            createdByUserId: user.id,
+            gymId: gymId,
+            groupId: groupId
+        )
+        scheduledWorkouts.append(scheduled)
+    }
+
+    func scheduleLift(_ lift: Lift, for date: Date, gymId: UUID? = nil, groupId: UUID? = nil) {
+        guard let user = currentUser else { return }
+
+        let source: WorkoutSource = gymId != nil ? .coachPosted : .personal
+        let scheduled = ScheduledWorkout(
+            type: .lift,
+            liftId: lift.id,
+            date: date,
+            source: source,
+            createdByUserId: user.id,
+            gymId: gymId,
+            groupId: groupId
+        )
+        scheduledWorkouts.append(scheduled)
+    }
+
+    func deleteScheduledWorkout(_ workout: ScheduledWorkout) {
+        scheduledWorkouts.removeAll { $0.id == workout.id }
+    }
+
+    // MARK: - Workout Queries
+    func getScheduledWorkouts(for date: Date) -> [ScheduledWorkout] {
+        guard let user = currentUser else { return [] }
+
+        return scheduledWorkouts.filter { workout in
+            // Check if scheduled for this date
+            guard workout.isScheduledFor(date: date) else { return false }
+
+            // Include personal workouts
+            if workout.source == .personal && workout.createdByUserId == user.id {
+                return true
+            }
+
+            // Include coach-posted workouts from user's gyms/groups
+            if workout.source == .coachPosted {
+                if let gymId = workout.gymId {
+                    // Check if user is a member of this gym
+                    guard gymMemberships.contains(where: { $0.userId == user.id && $0.gymId == gymId }) else {
+                        return false
+                    }
+
+                    // If it's for a specific group, check if user is in that group
+                    if let groupId = workout.groupId {
+                        return programmingGroups.contains(where: { $0.id == groupId && $0.memberIds.contains(user.id) })
+                    }
+
+                    return true
+                }
+            }
+
+            return false
+        }.sorted { $0.date < $1.date }
+    }
+
+    func getCompletedWorkouts(for date: Date) -> [CompletedWOD] {
+        completedWODs.filter { Calendar.current.isDate($0.date, inSameDayAs: date) }
+    }
+
     // MARK: - Persistence
     private func saveUserInfo() {
         UserDefaults.standard.set(isLoggedIn, forKey: Keys.isLoggedIn)
@@ -217,6 +440,84 @@ final class AppStore: ObservableObject {
         if let data = UserDefaults.standard.data(forKey: Keys.liftEntries),
            let decoded = try? JSONDecoder().decode([LiftEntry].self, from: data) {
             liftEntries = decoded
+        }
+    }
+
+    private func saveCurrentUser() {
+        if let encoded = try? JSONEncoder().encode(currentUser) {
+            UserDefaults.standard.set(encoded, forKey: Keys.currentUser)
+        }
+    }
+
+    private func loadCurrentUser() {
+        if let data = UserDefaults.standard.data(forKey: Keys.currentUser),
+           let decoded = try? JSONDecoder().decode(User.self, from: data) {
+            currentUser = decoded
+        }
+    }
+
+    private func saveUsers() {
+        if let encoded = try? JSONEncoder().encode(users) {
+            UserDefaults.standard.set(encoded, forKey: Keys.users)
+        }
+    }
+
+    private func loadUsers() {
+        if let data = UserDefaults.standard.data(forKey: Keys.users),
+           let decoded = try? JSONDecoder().decode([User].self, from: data) {
+            users = decoded
+        }
+    }
+
+    private func saveGyms() {
+        if let encoded = try? JSONEncoder().encode(gyms) {
+            UserDefaults.standard.set(encoded, forKey: Keys.gyms)
+        }
+    }
+
+    private func loadGyms() {
+        if let data = UserDefaults.standard.data(forKey: Keys.gyms),
+           let decoded = try? JSONDecoder().decode([Gym].self, from: data) {
+            gyms = decoded
+        }
+    }
+
+    private func saveProgrammingGroups() {
+        if let encoded = try? JSONEncoder().encode(programmingGroups) {
+            UserDefaults.standard.set(encoded, forKey: Keys.programmingGroups)
+        }
+    }
+
+    private func loadProgrammingGroups() {
+        if let data = UserDefaults.standard.data(forKey: Keys.programmingGroups),
+           let decoded = try? JSONDecoder().decode([ProgrammingGroup].self, from: data) {
+            programmingGroups = decoded
+        }
+    }
+
+    private func saveGymMemberships() {
+        if let encoded = try? JSONEncoder().encode(gymMemberships) {
+            UserDefaults.standard.set(encoded, forKey: Keys.gymMemberships)
+        }
+    }
+
+    private func loadGymMemberships() {
+        if let data = UserDefaults.standard.data(forKey: Keys.gymMemberships),
+           let decoded = try? JSONDecoder().decode([GymMembership].self, from: data) {
+            gymMemberships = decoded
+        }
+    }
+
+    private func saveScheduledWorkouts() {
+        if let encoded = try? JSONEncoder().encode(scheduledWorkouts) {
+            UserDefaults.standard.set(encoded, forKey: Keys.scheduledWorkouts)
+        }
+    }
+
+    private func loadScheduledWorkouts() {
+        if let data = UserDefaults.standard.data(forKey: Keys.scheduledWorkouts),
+           let decoded = try? JSONDecoder().decode([ScheduledWorkout].self, from: data) {
+            scheduledWorkouts = decoded
         }
     }
 }

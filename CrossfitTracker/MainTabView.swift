@@ -13,16 +13,41 @@ struct MainTabView: View {
 
     var body: some View {
         TabView {
-            DashboardView()
+            // Weekly Plan - main tab for all users
+            WeeklyPlanView()
                 .tabItem {
-                    Label("Dashboard", systemImage: "chart.bar.fill")
+                    Label("Weekly Plan", systemImage: "calendar")
                 }
 
+            // WODs list
             WODListView()
                 .tabItem {
                     Label("WODs", systemImage: "list.bullet.rectangle")
                 }
 
+            // Lifts
+            LiftsView()
+                .tabItem {
+                    Label("Lifts", systemImage: "figure.strengthtraining.traditional")
+                }
+
+            // Coach Programming - only for coaches and admins
+            if store.currentUser?.role.canProgramWorkouts == true {
+                CoachProgrammingView()
+                    .tabItem {
+                        Label("Programming", systemImage: "calendar.badge.plus")
+                    }
+            }
+
+            // Gym Management - only for coaches and admins
+            if store.currentUser?.role.canManageGyms == true {
+                GymManagementView()
+                    .tabItem {
+                        Label("Manage", systemImage: "building.2.fill")
+                    }
+            }
+
+            // Profile
             ProfileView()
                 .tabItem {
                     Label("Profile", systemImage: "person.circle.fill")

@@ -14,13 +14,15 @@ struct CompletedWOD: Identifiable, Codable {
     var time: TimeInterval
     var category: WODCategory
     var date: Date
+    var scheduledWorkoutId: UUID? // Link to the scheduled workout, if completed from schedule
 
-    init(id: UUID = UUID(), wod: WOD, userName: String, time: TimeInterval, category: WODCategory, date: Date = Date()) {
+    init(id: UUID = UUID(), wod: WOD, userName: String, time: TimeInterval, category: WODCategory, date: Date = Date(), scheduledWorkoutId: UUID? = nil) {
         self.id = id
         self.wod = wod
         self.userName = userName
         self.time = time
         self.category = category
         self.date = date
+        self.scheduledWorkoutId = scheduledWorkoutId
     }
 }

@@ -10,6 +10,8 @@ import SwiftUI
 struct LoginView: View {
     @EnvironmentObject var store: AppStore
     @State private var usernameInput: String = ""
+    @State private var selectedRole: UserRole = .member
+    @State private var emailInput: String = ""
 
     var body: some View {
         NavigationStack {
@@ -20,14 +22,45 @@ struct LoginView: View {
                     .frame(width: 100)
                     .foregroundColor(.orange)
 
-                TextField("Enter your name", text: $usernameInput)
-                    .textFieldStyle(.roundedBorder)
-                    .padding(.horizontal, 40)
+                VStack(spacing: 16) {
+                    TextField("Enter your name", text: $usernameInput)
+                        .textFieldStyle(.roundedBorder)
+                        .padding(.horizontal, 40)
+
+                    TextField("Email (optional)", text: $emailInput)
+                        .textFieldStyle(.roundedBorder)
+                        .padding(.horizontal, 40)
+                        .keyboardType(.emailAddress)
+                        .autocapitalization(.none)
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Select Role")
+                            .font(.headline)
+                            .padding(.horizontal, 40)
+
+                        Picker("Role", selection: $selectedRole) {
+                            ForEach(UserRole.allCases, id: \.self) { role in
+                                Text(role.rawValue).tag(role)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .padding(.horizontal, 40)
+
+                        Text(roleDescription)
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                            .padding(.horizontal, 40)
+                    }
+                }
 
                 Button {
                     let trimmedName = usernameInput.trimmingCharacters(in: .whitespaces)
+                    let trimmedEmail = emailInput.trimmingCharacters(in: .whitespaces)
                     guard !trimmedName.isEmpty else { return }
-                    store.logIn(name: trimmedName)
+
+                    // Create user with selected role
+                    let user = store.createUser(name: trimmedName, email: trimmedEmail, role: selectedRole)
+                    store.setCurrentUser(user)
                 } label: {
                     Text("Login")
                         .frame(maxWidth: .infinity)
@@ -42,6 +75,17 @@ struct LoginView: View {
                 Spacer()
             }
             .padding(.top, 100)
+        }
+    }
+
+    private var roleDescription: String {
+        switch selectedRole {
+        case .member:
+            return "View assigned workouts and track your progress"
+        case .coach:
+            return "Create workout programs and manage members"
+        case .admin:
+            return "Full access to all features"
         }
     }
 }
