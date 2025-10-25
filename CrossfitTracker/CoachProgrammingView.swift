@@ -67,6 +67,7 @@ struct CoachProgrammingView: View {
                 AddWorkoutSheet(selectedDate: selectedDate) { workout in
                     saveWorkout(workout)
                 }
+                .environmentObject(store)
             }
             .onAppear {
                 loadScheduledWorkouts()
@@ -119,6 +120,8 @@ struct CoachProgrammingView: View {
         guard let start = weekDates.first,
               let end = weekDates.last else { return }
 
+        print("📅 Loading workouts from \(start) to \(end)")
+
         // Load all workouts for the current week (coaches see all workouts they created)
         store.loadScheduledWorkouts(startDate: start, endDate: end) { workouts, error in
             if let error = error {
@@ -126,16 +129,23 @@ struct CoachProgrammingView: View {
                 return
             }
 
+            print("📥 Received \(workouts.count) workouts from Firestore")
+
             // Filter to only show workouts created by current user
             if let userId = store.currentUser?.uid {
-                self.scheduledWorkouts = workouts.filter { $0.createdBy == userId }
+                let filtered = workouts.filter { $0.createdBy == userId }
+                print("🔍 Filtered to \(filtered.count) workouts for user \(userId)")
+                self.scheduledWorkouts = filtered
             } else {
                 self.scheduledWorkouts = workouts
             }
+
+            print("📊 Final scheduledWorkouts count: \(self.scheduledWorkouts.count)")
         }
     }
 
     private func saveWorkout(_ workout: ScheduledWorkout) {
+        print("💾 saveWorkout called for: \(workout.wodTitle)")
         store.saveScheduledWorkout(workout) { savedWorkout, error in
             if let error = error {
                 print("❌ Error saving workout: \(error)")
@@ -143,11 +153,15 @@ struct CoachProgrammingView: View {
             }
 
             if let savedWorkout = savedWorkout {
+                print("✅ Workout saved with ID: \(savedWorkout.id ?? "nil")")
                 // Add to local array if new, or update if existing
-                if let index = scheduledWorkouts.firstIndex(where: { $0.id == savedWorkout.id }) {
-                    scheduledWorkouts[index] = savedWorkout
+                if let index = self.scheduledWorkouts.firstIndex(where: { $0.id == savedWorkout.id }) {
+                    print("📝 Updating existing workout at index \(index)")
+                    self.scheduledWorkouts[index] = savedWorkout
                 } else {
-                    scheduledWorkouts.append(savedWorkout)
+                    print("➕ Adding new workout to array. Current count: \(self.scheduledWorkouts.count)")
+                    self.scheduledWorkouts.append(savedWorkout)
+                    print("📊 New count: \(self.scheduledWorkouts.count)")
                 }
             }
         }
@@ -224,6 +238,7 @@ struct CoachDayCard: View {
 
 struct AddWorkoutSheet: View {
     @Environment(\.dismiss) var dismiss
+    @EnvironmentObject var store: AppStore
     let selectedDate: Date
     let onSave: (ScheduledWorkout) -> Void
 
@@ -257,14 +272,25 @@ struct AddWorkoutSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
-                        // TODO: Get actual user ID
+                        guard let userId = store.currentUser?.uid else {
+                            print("❌ No user logged in")
+                            dismiss()
+                            return
+                        }
+
+                        // Normalize date to start of day for consistent filtering
+                        let calendar = Calendar.current
+                        let normalizedDate = calendar.startOfDay(for: date)
+
                         let workout = ScheduledWorkout(
                             wodId: UUID().uuidString,
                             wodTitle: title,
                             wodDescription: description,
-                            date: date,
-                            createdBy: "coach123"
+                            date: normalizedDate,
+                            createdBy: userId
                         )
+
+                        print("💾 Saving workout: \(workout.wodTitle) for \(normalizedDate)")
                         onSave(workout)
                         dismiss()
                     }
