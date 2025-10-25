@@ -9,14 +9,18 @@ import Foundation
 import SwiftUI
 import Combine
 import FirebaseAuth
+import FirebaseFirestore
 
 final class AppStore: ObservableObject {
     static let shared = AppStore()
+    private let db = Firestore.firestore()
 
     // MARK: - User info
     @Published var isLoggedIn: Bool = false
     @Published var userName: String = "Guest"
     @Published var currentUser: FirebaseAuth.User?
+    @Published var userRole: UserRole = .athlete
+    @Published var appUser: AppUser?
 
     // MARK: - WODs
     @Published var activeWOD: WOD? = nil
@@ -42,19 +46,45 @@ final class AppStore: ObservableObject {
                 self?.currentUser = user
                 self?.isLoggedIn = user != nil
                 self?.userName = user?.email ?? "Guest"
+
+                // Fetch user role from Firestore
+                if let userId = user?.uid {
+                    self?.fetchUserRole(userId: userId)
+                } else {
+                    self?.userRole = .athlete
+                    self?.appUser = nil
+                }
             }
         }
     }
 
     // MARK: - Firebase Authentication
     func signUp(email: String, password: String, completion: @escaping (String?) -> Void) {
-        Auth.auth().createUser(withEmail: email, password: password) { result, error in
-            DispatchQueue.main.async {
-                if let error = error {
+        Auth.auth().createUser(withEmail: email, password: password) { [weak self] result, error in
+            if let error = error {
+                DispatchQueue.main.async {
                     completion(error.localizedDescription)
-                } else {
-                    print("✅ User signed up successfully: \(email)")
-                    completion(nil)
+                }
+                return
+            }
+
+            guard let userId = result?.user.uid else {
+                DispatchQueue.main.async {
+                    completion("Failed to get user ID")
+                }
+                return
+            }
+
+            // Create user document in Firestore with athlete role by default
+            let newUser = AppUser(id: userId, email: email, role: .athlete)
+            self?.createUserDocument(user: newUser) { firestoreError in
+                DispatchQueue.main.async {
+                    if let firestoreError = firestoreError {
+                        completion("Account created but profile setup failed: \(firestoreError)")
+                    } else {
+                        print("✅ User signed up successfully: \(email)")
+                        completion(nil)
+                    }
                 }
             }
         }
@@ -79,8 +109,62 @@ final class AppStore: ObservableObject {
             print("✅ User signed out successfully")
             self.activeWOD = nil
             self.wodStartTime = nil
+            self.userRole = .athlete
+            self.appUser = nil
         } catch {
             print("❌ Error signing out: \(error.localizedDescription)")
+        }
+    }
+
+    // MARK: - Firestore User Management
+    private func createUserDocument(user: AppUser, completion: @escaping (String?) -> Void) {
+        guard let userId = user.id else {
+            completion("No user ID provided")
+            return
+        }
+
+        do {
+            try db.collection("users").document(userId).setData(from: user) { error in
+                if let error = error {
+                    completion(error.localizedDescription)
+                } else {
+                    print("✅ User document created in Firestore")
+                    completion(nil)
+                }
+            }
+        } catch {
+            completion(error.localizedDescription)
+        }
+    }
+
+    private func fetchUserRole(userId: String) {
+        db.collection("users").document(userId).getDocument { [weak self] snapshot, error in
+            if let error = error {
+                print("❌ Error fetching user role: \(error.localizedDescription)")
+                return
+            }
+
+            guard let snapshot = snapshot, snapshot.exists else {
+                print("⚠️ User document doesn't exist, creating one...")
+                // Create user document if it doesn't exist (for existing Firebase Auth users)
+                if let email = self?.currentUser?.email {
+                    let newUser = AppUser(id: userId, email: email, role: .athlete)
+                    self?.createUserDocument(user: newUser) { _ in }
+                }
+                return
+            }
+
+            do {
+                let appUser = try snapshot.data(as: AppUser.self)
+                DispatchQueue.main.async {
+                    self?.appUser = appUser
+                    self?.userRole = appUser.role
+                    self?.userName = appUser.displayName ?? appUser.email
+                    print("✅ User role loaded: \(appUser.role.displayName)")
+                }
+            } catch {
+                print("❌ Error decoding user: \(error.localizedDescription)")
+            }
         }
     }
 
