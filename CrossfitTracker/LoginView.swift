@@ -11,6 +11,8 @@ struct LoginView: View {
     @EnvironmentObject var store: AppStore
     @State private var email: String = ""
     @State private var password: String = ""
+    @State private var firstName: String = ""
+    @State private var lastName: String = ""
     @State private var isSignUpMode: Bool = false
     @State private var errorMessage: String = ""
     @State private var showError: Bool = false
@@ -30,6 +32,18 @@ struct LoginView: View {
                     .bold()
 
                 VStack(spacing: 16) {
+                    if isSignUpMode {
+                        TextField("First Name", text: $firstName)
+                            .textFieldStyle(RoundedBorderTextFieldStyle())
+                            .textInputAutocapitalization(.words)
+                            .padding(.horizontal, 40)
+
+                        TextField("Last Name", text: $lastName)
+                            .textFieldStyle(RoundedBorderTextFieldStyle())
+                            .textInputAutocapitalization(.words)
+                            .padding(.horizontal, 40)
+                    }
+
                     TextField("Email", text: $email)
                         .textFieldStyle(RoundedBorderTextFieldStyle())
                         .textInputAutocapitalization(.never)
@@ -79,7 +93,11 @@ struct LoginView: View {
     }
 
     private var isFormValid: Bool {
-        !email.isEmpty && !password.isEmpty && password.count >= 6
+        if isSignUpMode {
+            return !email.isEmpty && !password.isEmpty && password.count >= 6 && !firstName.isEmpty && !lastName.isEmpty
+        } else {
+            return !email.isEmpty && !password.isEmpty && password.count >= 6
+        }
     }
 
     private func handleAuthAction() {
@@ -87,7 +105,7 @@ struct LoginView: View {
         errorMessage = ""
 
         if isSignUpMode {
-            store.signUp(email: email, password: password) { error in
+            store.signUp(email: email, password: password, firstName: firstName, lastName: lastName) { error in
                 if let error = error {
                     errorMessage = error
                     showError = true

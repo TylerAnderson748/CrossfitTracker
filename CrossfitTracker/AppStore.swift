@@ -59,7 +59,7 @@ final class AppStore: ObservableObject {
     }
 
     // MARK: - Firebase Authentication
-    func signUp(email: String, password: String, completion: @escaping (String?) -> Void) {
+    func signUp(email: String, password: String, firstName: String, lastName: String, completion: @escaping (String?) -> Void) {
         Auth.auth().createUser(withEmail: email, password: password) { [weak self] result, error in
             if let error = error {
                 DispatchQueue.main.async {
@@ -76,7 +76,7 @@ final class AppStore: ObservableObject {
             }
 
             // Create user document in Firestore with athlete role by default
-            let newUser = AppUser(id: userId, email: email, role: .athlete)
+            let newUser = AppUser(id: userId, email: email, role: .athlete, firstName: firstName, lastName: lastName)
             self?.createUserDocument(user: newUser) { firestoreError in
                 if let firestoreError = firestoreError {
                     DispatchQueue.main.async {

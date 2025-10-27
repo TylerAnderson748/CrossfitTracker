@@ -102,26 +102,35 @@ struct WeeklyPlanView: View {
     }
 
     private func loadScheduledWorkouts() {
-        guard let userId = store.currentUser?.uid else { return }
+        guard let userId = store.currentUser?.uid else {
+            print("❌ [WeeklyPlan] No user logged in")
+            return
+        }
 
         let calendar = Calendar.current
         guard let firstDay = weekDates.first,
-              let lastDay = weekDates.last else { return }
+              let lastDay = weekDates.last else {
+            print("❌ [WeeklyPlan] No week dates")
+            return
+        }
 
         // Ensure we're querying from start of first day to end of last day
         let start = calendar.startOfDay(for: firstDay)
         guard let end = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: lastDay)) else { return }
 
-        print("📅 [WeeklyPlan] Loading workouts from \(start) to \(end)")
+        print("📅 [WeeklyPlan] Loading workouts from \(start) to \(end) for user \(userId)")
 
         // Load workouts for the current week
         store.loadScheduledWorkoutsForUser(userId: userId, startDate: start, endDate: end) { workouts, error in
             if let error = error {
-                print("❌ Error loading scheduled workouts: \(error)")
+                print("❌ [WeeklyPlan] Error loading scheduled workouts: \(error)")
                 return
             }
 
             print("📥 [WeeklyPlan] Received \(workouts.count) workouts")
+            for workout in workouts {
+                print("   - \(workout.wodTitle): groupId=\(workout.groupId ?? "nil"), createdBy=\(workout.createdBy), date=\(workout.date)")
+            }
             self.scheduledWorkouts = workouts
         }
     }
