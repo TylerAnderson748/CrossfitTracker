@@ -251,6 +251,7 @@ struct AddWorkoutSheet: View {
     @State private var title: String = ""
     @State private var description: String = ""
     @State private var date: Date
+    @State private var assignToSelf: Bool = false
 
     init(selectedDate: Date, onSave: @escaping (ScheduledWorkout) -> Void) {
         self.selectedDate = selectedDate
@@ -266,6 +267,13 @@ struct AddWorkoutSheet: View {
                     TextField("Description", text: $description, axis: .vertical)
                         .lineLimit(3...6)
                     DatePicker("Date", selection: $date, displayedComponents: .date)
+                }
+
+                Section("Assignment") {
+                    Toggle("Assign to myself", isOn: $assignToSelf)
+                    Text("Toggle this on to see the workout in your Weekly Plan")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
                 }
             }
             .navigationTitle("Add Workout")
@@ -288,15 +296,19 @@ struct AddWorkoutSheet: View {
                         let calendar = Calendar.current
                         let normalizedDate = calendar.startOfDay(for: date)
 
+                        // Build assigned users array
+                        let assignedUsers = assignToSelf ? [userId] : []
+
                         let workout = ScheduledWorkout(
                             wodId: UUID().uuidString,
                             wodTitle: title,
                             wodDescription: description,
                             date: normalizedDate,
+                            assignedToUserIds: assignedUsers,
                             createdBy: userId
                         )
 
-                        print("💾 Saving workout: \(workout.wodTitle) for \(normalizedDate)")
+                        print("💾 Saving workout: \(workout.wodTitle) for \(normalizedDate), assigned to \(assignedUsers.count) users")
                         onSave(workout)
                         dismiss()
                     }
