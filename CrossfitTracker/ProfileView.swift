@@ -24,7 +24,7 @@ struct ProfileView: View {
                             .foregroundColor(.gray)
 
                         VStack(alignment: .leading, spacing: 4) {
-                            if let fullName = store.currentUserProfile?.fullName, !fullName.isEmpty {
+                            if let fullName = store.appUser?.fullName, !fullName.isEmpty {
                                 Text(fullName)
                                     .font(.title3.bold())
                             }
