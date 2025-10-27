@@ -420,18 +420,39 @@ struct AddMemberToGroupSheet: View {
     }
 
     private func loadGymUsers() {
-        // Load all gym members and coaches
-        let allUserIds = Set(gym.memberIds + gym.coachIds)
+        // Clear existing users to ensure fresh data
+        gymUsers = []
 
-        for userId in allUserIds {
-            store.loadUser(userId: userId) { user, error in
-                if let error = error {
-                    print("❌ Error loading user: \(error)")
-                    return
-                }
+        guard let gymId = gym.id else {
+            print("❌ No gym ID")
+            return
+        }
 
-                if let user = user, !self.gymUsers.contains(where: { $0.id == user.id }) {
-                    self.gymUsers.append(user)
+        // Reload gym from Firestore to get latest member list
+        store.loadGym(gymId: gymId) { loadedGym, error in
+            if let error = error {
+                print("❌ Error loading gym: \(error)")
+                return
+            }
+
+            guard let loadedGym = loadedGym else {
+                print("❌ Gym not found")
+                return
+            }
+
+            // Load all gym members and coaches
+            let allUserIds = Set(loadedGym.memberIds + loadedGym.coachIds)
+
+            for userId in allUserIds {
+                self.store.loadUser(userId: userId) { user, error in
+                    if let error = error {
+                        print("❌ Error loading user: \(error)")
+                        return
+                    }
+
+                    if let user = user, !self.gymUsers.contains(where: { $0.id == user.id }) {
+                        self.gymUsers.append(user)
+                    }
                 }
             }
         }

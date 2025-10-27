@@ -338,15 +338,51 @@ struct AddWorkoutSheet: View {
     private func loadGroups() {
         guard let userId = store.currentUser?.uid else { return }
 
-        // Load user's groups
-        store.loadGroupsForUser(userId: userId) { loadedGroups, error in
+        // Load all gyms where user is owner or coach
+        store.loadGyms { allGyms, error in
             if let error = error {
-                print("❌ Error loading groups: \(error)")
+                print("❌ Error loading gyms: \(error)")
                 return
             }
 
-            // Filter out personal group (it's the default nil option)
-            self.groups = loadedGroups.filter { $0.type != .personal }
+            // Filter to gyms where user is owner or coach
+            let userGyms = allGyms.filter { gym in
+                gym.ownerId == userId || gym.coachIds.contains(userId)
+            }
+
+            // Load groups from all user's gyms
+            var allGroups: [WorkoutGroup] = []
+            var gymsProcessed = 0
+
+            if userGyms.isEmpty {
+                print("⚠️ User is not owner/coach of any gyms")
+                self.groups = []
+                return
+            }
+
+            for gym in userGyms {
+                guard let gymId = gym.id else {
+                    gymsProcessed += 1
+                    continue
+                }
+
+                self.store.loadGroupsForGym(gymId: gymId) { loadedGroups, error in
+                    if let error = error {
+                        print("❌ Error loading groups for gym: \(error)")
+                    } else {
+                        // Filter out personal groups
+                        let gymGroups = loadedGroups.filter { $0.type != .personal }
+                        allGroups.append(contentsOf: gymGroups)
+                    }
+
+                    gymsProcessed += 1
+                    if gymsProcessed == userGyms.count {
+                        // All gyms processed, update UI
+                        self.groups = allGroups
+                        print("✅ Loaded \(allGroups.count) groups for programming")
+                    }
+                }
+            }
         }
     }
 }
