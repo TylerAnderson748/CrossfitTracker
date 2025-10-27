@@ -251,7 +251,7 @@ struct AddWorkoutSheet: View {
     @State private var title: String = ""
     @State private var description: String = ""
     @State private var date: Date
-    @State private var groups: [Group] = []
+    @State private var groups: [WorkoutGroup] = []
     @State private var selectedGroupId: String?
 
     init(selectedDate: Date, onSave: @escaping (ScheduledWorkout) -> Void) {

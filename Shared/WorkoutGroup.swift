@@ -1,5 +1,5 @@
 //
-//  Group.swift
+//  WorkoutGroup.swift
 //  CrossfitTracker
 //
 //  Created by Tyler Anderson on 10/26/25.
@@ -19,7 +19,7 @@ enum MembershipType: String, Codable {
     case inviteOnly = "invite-only"
 }
 
-struct Group: Codable, Identifiable {
+struct WorkoutGroup: Codable, Identifiable {
     @DocumentID var id: String?
     var gymId: String? // nil for personal groups
     var name: String

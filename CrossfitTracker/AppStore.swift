@@ -440,7 +440,7 @@ final class AppStore: ObservableObject {
     }
 
     // MARK: - Group Management
-    func createGroup(_ group: Group, completion: @escaping (Group?, String?) -> Void) {
+    func createGroup(_ group: WorkoutGroup, completion: @escaping (WorkoutGroup?, String?) -> Void) {
         do {
             let docRef = db.collection("groups").document()
             var groupWithId = group
@@ -466,7 +466,7 @@ final class AppStore: ObservableObject {
     func createDefaultGroupsForGym(gymId: String, ownerId: String, completion: @escaping (String?) -> Void) {
         // Create 3 default groups: Members (undeletable), Competition Athletes, Weight Training Athletes
         let defaultGroups = [
-            Group(
+            WorkoutGroup(
                 gymId: gymId,
                 name: "Members",
                 type: .defaultGroup,
@@ -474,14 +474,14 @@ final class AppStore: ObservableObject {
                 ownerId: ownerId,
                 isDeletable: false
             ),
-            Group(
+            WorkoutGroup(
                 gymId: gymId,
                 name: "Competition Athletes",
                 type: .defaultGroup,
                 membershipType: .inviteOnly,
                 ownerId: ownerId
             ),
-            Group(
+            WorkoutGroup(
                 gymId: gymId,
                 name: "Weight Training Athletes",
                 type: .defaultGroup,
@@ -509,8 +509,8 @@ final class AppStore: ObservableObject {
         }
     }
 
-    func createPersonalGroup(userId: String, completion: @escaping (Group?, String?) -> Void) {
-        let personalGroup = Group(
+    func createPersonalGroup(userId: String, completion: @escaping (WorkoutGroup?, String?) -> Void) {
+        let personalGroup = WorkoutGroup(
             gymId: nil,
             name: "Personal",
             type: .personal,
@@ -523,7 +523,7 @@ final class AppStore: ObservableObject {
         createGroup(personalGroup, completion: completion)
     }
 
-    func loadGroupsForGym(gymId: String, completion: @escaping ([Group], String?) -> Void) {
+    func loadGroupsForGym(gymId: String, completion: @escaping ([WorkoutGroup], String?) -> Void) {
         db.collection("groups")
             .whereField("gymId", isEqualTo: gymId)
             .getDocuments { snapshot, error in
@@ -534,8 +534,8 @@ final class AppStore: ObservableObject {
                     return
                 }
 
-                let groups = snapshot?.documents.compactMap { doc -> Group? in
-                    try? doc.data(as: Group.self)
+                let groups = snapshot?.documents.compactMap { doc -> WorkoutGroup? in
+                    try? doc.data(as: WorkoutGroup.self)
                 } ?? []
 
                 DispatchQueue.main.async {
@@ -545,7 +545,7 @@ final class AppStore: ObservableObject {
             }
     }
 
-    func loadGroupsForUser(userId: String, completion: @escaping ([Group], String?) -> Void) {
+    func loadGroupsForUser(userId: String, completion: @escaping ([WorkoutGroup], String?) -> Void) {
         db.collection("groups")
             .whereField("memberIds", arrayContains: userId)
             .getDocuments { snapshot, error in
@@ -556,8 +556,8 @@ final class AppStore: ObservableObject {
                     return
                 }
 
-                let groups = snapshot?.documents.compactMap { doc -> Group? in
-                    try? doc.data(as: Group.self)
+                let groups = snapshot?.documents.compactMap { doc -> WorkoutGroup? in
+                    try? doc.data(as: WorkoutGroup.self)
                 } ?? []
 
                 DispatchQueue.main.async {
@@ -607,7 +607,7 @@ final class AppStore: ObservableObject {
                 return
             }
 
-            guard let group = try? snapshot?.data(as: Group.self) else {
+            guard let group = try? snapshot?.data(as: WorkoutGroup.self) else {
                 DispatchQueue.main.async {
                     completion("Group not found")
                 }
