@@ -824,6 +824,96 @@ final class AppStore: ObservableObject {
         }
     }
 
+    // Save recurring workout - creates multiple instances
+    func saveRecurringWorkout(_ baseWorkout: ScheduledWorkout, completion: @escaping ([ScheduledWorkout], String?) -> Void) {
+        guard currentUser?.uid != nil else {
+            completion([], "No user logged in")
+            return
+        }
+
+        guard baseWorkout.isRecurring else {
+            // Not recurring, just save single workout
+            saveScheduledWorkout(baseWorkout) { workout, error in
+                if let error = error {
+                    completion([], error)
+                } else if let workout = workout {
+                    completion([workout], nil)
+                } else {
+                    completion([], nil)
+                }
+            }
+            return
+        }
+
+        // Generate recurring workout instances
+        let seriesId = UUID().uuidString
+        let calendar = Calendar.current
+        var workoutDates: [Date] = []
+        var currentDate = baseWorkout.date
+
+        // Determine end date (default to 1 year if no end date specified)
+        let endDate = baseWorkout.recurrenceEndDate ?? calendar.date(byAdding: .year, value: 1, to: currentDate)!
+
+        // Generate dates based on recurrence type
+        while currentDate <= endDate {
+            workoutDates.append(currentDate)
+
+            switch baseWorkout.recurrenceType {
+            case .daily:
+                guard let nextDate = calendar.date(byAdding: .day, value: 1, to: currentDate) else { break }
+                currentDate = nextDate
+            case .weekly:
+                guard let nextDate = calendar.date(byAdding: .weekOfYear, value: 1, to: currentDate) else { break }
+                currentDate = nextDate
+            case .monthly:
+                guard let nextDate = calendar.date(byAdding: .month, value: 1, to: currentDate) else { break }
+                currentDate = nextDate
+            case .none:
+                break
+            }
+
+            // Safety limit: don't create more than 365 instances
+            if workoutDates.count >= 365 {
+                print("⚠️ Reached maximum of 365 recurring instances")
+                break
+            }
+        }
+
+        print("📅 Creating \(workoutDates.count) recurring workout instances")
+
+        // Create workout instances
+        var createdWorkouts: [ScheduledWorkout] = []
+        var completedCount = 0
+
+        for date in workoutDates {
+            var workout = baseWorkout
+            workout.id = nil // Clear ID so new one is generated
+            workout.date = date
+            workout.seriesId = seriesId
+
+            saveScheduledWorkout(workout) { savedWorkout, error in
+                if let error = error {
+                    print("❌ Error saving recurring workout instance: \(error)")
+                } else if let savedWorkout = savedWorkout {
+                    createdWorkouts.append(savedWorkout)
+                }
+
+                completedCount += 1
+                if completedCount == workoutDates.count {
+                    DispatchQueue.main.async {
+                        print("✅ Created \(createdWorkouts.count) recurring workout instances")
+                        completion(createdWorkouts, nil)
+                    }
+                }
+            }
+        }
+
+        // Handle case where no dates were generated
+        if workoutDates.isEmpty {
+            completion([], "No valid dates for recurrence")
+        }
+    }
+
     func loadScheduledWorkouts(startDate: Date, endDate: Date, gymId: String? = nil, completion: @escaping ([ScheduledWorkout], String?) -> Void) {
         var query: Query = db.collection("scheduledWorkouts")
             .whereField("date", isGreaterThanOrEqualTo: startDate)

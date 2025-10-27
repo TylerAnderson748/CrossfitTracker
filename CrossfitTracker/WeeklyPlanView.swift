@@ -12,6 +12,8 @@ struct WeeklyPlanView: View {
     @State private var selectedDate = Date()
     @State private var scheduledWorkouts: [ScheduledWorkout] = []
     @State private var showDebugInfo = false
+    @State private var showAddWorkout = false
+    @State private var addWorkoutDate = Date()
 
     private let daysOfWeek = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
@@ -58,6 +60,14 @@ struct WeeklyPlanView: View {
             }
             .navigationTitle("Weekly Plan")
             .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button(action: {
+                        addWorkoutDate = Date()
+                        showAddWorkout = true
+                    }) {
+                        Image(systemName: "plus")
+                    }
+                }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: { showDebugInfo.toggle() }) {
                         Image(systemName: "info.circle")
@@ -67,6 +77,12 @@ struct WeeklyPlanView: View {
             .sheet(isPresented: $showDebugInfo) {
                 DebugInfoView()
                     .environmentObject(store)
+            }
+            .sheet(isPresented: $showAddWorkout) {
+                AddPersonalWorkoutSheet(selectedDate: addWorkoutDate) { workout in
+                    savePersonalWorkout(workout)
+                }
+                .environmentObject(store)
             }
             .onAppear {
                 loadScheduledWorkouts()
@@ -166,6 +182,30 @@ struct WeeklyPlanView: View {
             }
         }
     }
+
+    private func savePersonalWorkout(_ workout: ScheduledWorkout) {
+        if workout.isRecurring {
+            store.saveRecurringWorkout(workout) { workouts, error in
+                if let error = error {
+                    print("❌ Error saving recurring workouts: \(error)")
+                } else {
+                    print("✅ Saved \(workouts.count) recurring workout instances")
+                    // Add to local array
+                    self.scheduledWorkouts.append(contentsOf: workouts)
+                }
+            }
+        } else {
+            store.saveScheduledWorkout(workout) { savedWorkout, error in
+                if let error = error {
+                    print("❌ Error saving workout: \(error)")
+                } else if let savedWorkout = savedWorkout {
+                    print("✅ Workout saved")
+                    // Add to local array
+                    self.scheduledWorkouts.append(savedWorkout)
+                }
+            }
+        }
+    }
 }
 
 struct DayWorkoutCard: View {
@@ -225,10 +265,13 @@ struct DayWorkoutCard: View {
                 ForEach(workouts) { workout in
                     WorkoutSummaryRow(workout: workout)
                         .contextMenu {
-                            Button(role: .destructive) {
-                                onDelete(workout)
-                            } label: {
-                                Label("Delete Workout", systemImage: "trash")
+                            // Only allow deleting personal workouts that the user created
+                            if workout.isPersonalWorkout {
+                                Button(role: .destructive) {
+                                    onDelete(workout)
+                                } label: {
+                                    Label("Delete Workout", systemImage: "trash")
+                                }
                             }
                         }
                 }
@@ -374,6 +417,129 @@ struct DebugInfoView: View {
                 for workout in workouts {
                     print("   - \(workout.wodTitle): groupId=\(workout.groupId ?? "nil"), date=\(workout.date)")
                 }
+            }
+        }
+    }
+}
+
+struct AddPersonalWorkoutSheet: View {
+    @Environment(\.dismiss) var dismiss
+    @EnvironmentObject var store: AppStore
+    let selectedDate: Date
+    let onSave: (ScheduledWorkout) -> Void
+
+    @State private var title: String = ""
+    @State private var description: String = ""
+    @State private var date: Date
+    @State private var recurrenceType: RecurrenceType = .none
+    @State private var hasEndDate: Bool = false
+    @State private var recurrenceEndDate: Date
+
+    init(selectedDate: Date, onSave: @escaping (ScheduledWorkout) -> Void) {
+        self.selectedDate = selectedDate
+        self.onSave = onSave
+        _date = State(initialValue: selectedDate)
+        _recurrenceEndDate = State(initialValue: Calendar.current.date(byAdding: .month, value: 3, to: selectedDate) ?? selectedDate)
+    }
+
+    var body: some View {
+        NavigationView {
+            Form {
+                Section("Workout Details") {
+                    TextField("Title", text: $title)
+                    TextField("Description", text: $description, axis: .vertical)
+                        .lineLimit(3...6)
+                    DatePicker("Date", selection: $date, displayedComponents: .date)
+                }
+
+                Section("Recurrence") {
+                    Picker("Repeat", selection: $recurrenceType) {
+                        Text("Does not repeat").tag(RecurrenceType.none)
+                        Text("Daily").tag(RecurrenceType.daily)
+                        Text("Weekly").tag(RecurrenceType.weekly)
+                        Text("Monthly").tag(RecurrenceType.monthly)
+                    }
+
+                    if recurrenceType != .none {
+                        Toggle("Set end date", isOn: $hasEndDate)
+
+                        if hasEndDate {
+                            DatePicker("Ends on", selection: $recurrenceEndDate, in: date..., displayedComponents: .date)
+                        }
+
+                        Text(recurrenceSummary)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+            .navigationTitle("Add Personal Workout")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        guard let userId = store.currentUser?.uid else {
+                            print("❌ No user logged in")
+                            dismiss()
+                            return
+                        }
+
+                        let calendar = Calendar.current
+                        let normalizedDate = calendar.startOfDay(for: date)
+
+                        let workout = ScheduledWorkout(
+                            wodId: UUID().uuidString,
+                            wodTitle: title,
+                            wodDescription: description,
+                            date: normalizedDate,
+                            groupId: nil, // Personal workout
+                            timeSlots: [],
+                            createdBy: userId,
+                            recurrenceType: recurrenceType,
+                            recurrenceEndDate: hasEndDate ? recurrenceEndDate : nil
+                        )
+
+                        onSave(workout)
+                        dismiss()
+                    }
+                    .disabled(title.isEmpty || description.isEmpty)
+                }
+            }
+        }
+    }
+
+    private var recurrenceSummary: String {
+        let calendar = Calendar.current
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+
+        switch recurrenceType {
+        case .none:
+            return ""
+        case .daily:
+            if hasEndDate {
+                return "Repeats daily until \(formatter.string(from: recurrenceEndDate))"
+            } else {
+                return "Repeats daily for 1 year"
+            }
+        case .weekly:
+            if hasEndDate {
+                let weeks = calendar.dateComponents([.weekOfYear], from: date, to: recurrenceEndDate).weekOfYear ?? 0
+                return "Repeats weekly for \(weeks) weeks (until \(formatter.string(from: recurrenceEndDate)))"
+            } else {
+                return "Repeats weekly for 1 year (52 weeks)"
+            }
+        case .monthly:
+            if hasEndDate {
+                let months = calendar.dateComponents([.month], from: date, to: recurrenceEndDate).month ?? 0
+                return "Repeats monthly for \(months) months (until \(formatter.string(from: recurrenceEndDate)))"
+            } else {
+                return "Repeats monthly for 1 year (12 months)"
             }
         }
     }

@@ -8,6 +8,13 @@
 import Foundation
 import FirebaseFirestore
 
+enum RecurrenceType: String, Codable {
+    case none = "none"
+    case daily = "daily"
+    case weekly = "weekly"
+    case monthly = "monthly"
+}
+
 struct ScheduledWorkout: Codable, Identifiable {
     @DocumentID var id: String?
     var wodId: String
@@ -19,6 +26,11 @@ struct ScheduledWorkout: Codable, Identifiable {
     var createdBy: String
     var createdAt: Date
 
+    // Recurrence fields
+    var recurrenceType: RecurrenceType // how often this repeats
+    var recurrenceEndDate: Date? // when recurrence stops (nil = no end)
+    var seriesId: String? // links recurring workouts together
+
     init(
         id: String? = nil,
         wodId: String,
@@ -27,7 +39,10 @@ struct ScheduledWorkout: Codable, Identifiable {
         date: Date,
         groupId: String? = nil,
         timeSlots: [TimeSlot] = [],
-        createdBy: String
+        createdBy: String,
+        recurrenceType: RecurrenceType = .none,
+        recurrenceEndDate: Date? = nil,
+        seriesId: String? = nil
     ) {
         self.id = id
         self.wodId = wodId
@@ -38,10 +53,17 @@ struct ScheduledWorkout: Codable, Identifiable {
         self.timeSlots = timeSlots
         self.createdBy = createdBy
         self.createdAt = Date()
+        self.recurrenceType = recurrenceType
+        self.recurrenceEndDate = recurrenceEndDate
+        self.seriesId = seriesId
     }
 
     var isPersonalWorkout: Bool {
         return groupId == nil
+    }
+
+    var isRecurring: Bool {
+        return recurrenceType != .none
     }
 }
 

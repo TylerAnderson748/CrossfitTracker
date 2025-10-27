@@ -282,12 +282,17 @@ struct AddWorkoutSheet: View {
     @State private var date: Date
     @State private var groups: [WorkoutGroup] = []
     @State private var selectedGroupId: String?
+    @State private var recurrenceType: RecurrenceType = .none
+    @State private var hasEndDate: Bool = false
+    @State private var recurrenceEndDate: Date
 
     init(gym: Gym, selectedDate: Date, onSave: @escaping (ScheduledWorkout) -> Void) {
         self.gym = gym
         self.selectedDate = selectedDate
         self.onSave = onSave
         _date = State(initialValue: selectedDate)
+        // Set default end date to 3 months from selected date
+        _recurrenceEndDate = State(initialValue: Calendar.current.date(byAdding: .month, value: 3, to: selectedDate) ?? selectedDate)
     }
 
     var body: some View {
@@ -319,6 +324,27 @@ struct AddWorkoutSheet: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
+
+                Section("Recurrence") {
+                    Picker("Repeat", selection: $recurrenceType) {
+                        Text("Does not repeat").tag(RecurrenceType.none)
+                        Text("Daily").tag(RecurrenceType.daily)
+                        Text("Weekly").tag(RecurrenceType.weekly)
+                        Text("Monthly").tag(RecurrenceType.monthly)
+                    }
+
+                    if recurrenceType != .none {
+                        Toggle("Set end date", isOn: $hasEndDate)
+
+                        if hasEndDate {
+                            DatePicker("Ends on", selection: $recurrenceEndDate, in: date..., displayedComponents: .date)
+                        }
+
+                        Text(recurrenceSummary)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
             }
             .navigationTitle("Add Workout")
             .navigationBarTitleDisplayMode(.inline)
@@ -340,8 +366,6 @@ struct AddWorkoutSheet: View {
                         let calendar = Calendar.current
                         let normalizedDate = calendar.startOfDay(for: date)
 
-                        // For now, create basic workout without time slots
-                        // TODO: Add time slot creation UI
                         let workout = ScheduledWorkout(
                             wodId: UUID().uuidString,
                             wodTitle: title,
@@ -349,11 +373,28 @@ struct AddWorkoutSheet: View {
                             date: normalizedDate,
                             groupId: selectedGroupId,
                             timeSlots: [],
-                            createdBy: userId
+                            createdBy: userId,
+                            recurrenceType: recurrenceType,
+                            recurrenceEndDate: hasEndDate ? recurrenceEndDate : nil
                         )
 
-                        print("💾 Saving workout: \(workout.wodTitle) for \(normalizedDate), groupId: \(selectedGroupId ?? "nil (personal)")")
-                        onSave(workout)
+                        if workout.isRecurring {
+                            print("💾 Saving recurring workout: \(workout.wodTitle), recurrence: \(recurrenceType.rawValue)")
+                            store.saveRecurringWorkout(workout) { workouts, error in
+                                if let error = error {
+                                    print("❌ Error saving recurring workouts: \(error)")
+                                } else {
+                                    print("✅ Saved \(workouts.count) recurring workout instances")
+                                    // Add all workouts to the view
+                                    for savedWorkout in workouts {
+                                        onSave(savedWorkout)
+                                    }
+                                }
+                            }
+                        } else {
+                            print("💾 Saving workout: \(workout.wodTitle) for \(normalizedDate), groupId: \(selectedGroupId ?? "nil (personal)")")
+                            onSave(workout)
+                        }
                         dismiss()
                     }
                     .disabled(title.isEmpty || description.isEmpty)
@@ -361,6 +402,37 @@ struct AddWorkoutSheet: View {
             }
             .onAppear {
                 loadGroups()
+            }
+        }
+    }
+
+    private var recurrenceSummary: String {
+        let calendar = Calendar.current
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+
+        switch recurrenceType {
+        case .none:
+            return ""
+        case .daily:
+            if hasEndDate {
+                return "Repeats daily until \(formatter.string(from: recurrenceEndDate))"
+            } else {
+                return "Repeats daily for 1 year"
+            }
+        case .weekly:
+            if hasEndDate {
+                let weeks = calendar.dateComponents([.weekOfYear], from: date, to: recurrenceEndDate).weekOfYear ?? 0
+                return "Repeats weekly for \(weeks) weeks (until \(formatter.string(from: recurrenceEndDate)))"
+            } else {
+                return "Repeats weekly for 1 year (52 weeks)"
+            }
+        case .monthly:
+            if hasEndDate {
+                let months = calendar.dateComponents([.month], from: date, to: recurrenceEndDate).month ?? 0
+                return "Repeats monthly for \(months) months (until \(formatter.string(from: recurrenceEndDate)))"
+            } else {
+                return "Repeats monthly for 1 year (12 months)"
             }
         }
     }
