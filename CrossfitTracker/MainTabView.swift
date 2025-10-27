@@ -25,14 +25,6 @@ struct MainTabView: View {
                     Label("Weekly Plan", systemImage: "calendar")
                 }
 
-            // Coaches and above see Programming
-            if store.userRole.hasPermission(minimumRole: .coach) {
-                CoachProgrammingView()
-                    .tabItem {
-                        Label("Programming", systemImage: "calendar.badge.plus")
-                    }
-            }
-
             // Owners and above see Gym Management
             if store.userRole.hasPermission(minimumRole: .owner) {
                 GymManagementView()

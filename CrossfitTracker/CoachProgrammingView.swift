@@ -9,12 +9,13 @@ import SwiftUI
 
 struct CoachProgrammingView: View {
     @EnvironmentObject var store: AppStore
+    let gym: Gym
+
     @State private var showingAddWorkout = false
     @State private var selectedDate = Date()
     @State private var scheduledWorkouts: [ScheduledWorkout] = []
 
     var body: some View {
-        NavigationView {
             VStack(spacing: 0) {
                 // Week selector
                 HStack {
@@ -64,7 +65,7 @@ struct CoachProgrammingView: View {
                 }
             }
             .sheet(isPresented: $showingAddWorkout) {
-                AddWorkoutSheet(selectedDate: selectedDate) { workout in
+                AddWorkoutSheet(gym: gym, selectedDate: selectedDate) { workout in
                     saveWorkout(workout)
                 }
                 .environmentObject(store)
@@ -245,6 +246,7 @@ struct CoachDayCard: View {
 struct AddWorkoutSheet: View {
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var store: AppStore
+    let gym: Gym
     let selectedDate: Date
     let onSave: (ScheduledWorkout) -> Void
 
@@ -254,7 +256,8 @@ struct AddWorkoutSheet: View {
     @State private var groups: [WorkoutGroup] = []
     @State private var selectedGroupId: String?
 
-    init(selectedDate: Date, onSave: @escaping (ScheduledWorkout) -> Void) {
+    init(gym: Gym, selectedDate: Date, onSave: @escaping (ScheduledWorkout) -> Void) {
+        self.gym = gym
         self.selectedDate = selectedDate
         self.onSave = onSave
         _date = State(initialValue: selectedDate)
@@ -336,53 +339,21 @@ struct AddWorkoutSheet: View {
     }
 
     private func loadGroups() {
-        guard let userId = store.currentUser?.uid else { return }
+        guard let gymId = gym.id else {
+            print("❌ No gym ID")
+            return
+        }
 
-        // Load all gyms where user is owner or coach
-        store.loadGyms { allGyms, error in
+        // Load groups from this specific gym
+        store.loadGroupsForGym(gymId: gymId) { loadedGroups, error in
             if let error = error {
-                print("❌ Error loading gyms: \(error)")
+                print("❌ Error loading groups for gym: \(error)")
                 return
             }
 
-            // Filter to gyms where user is owner or coach
-            let userGyms = allGyms.filter { gym in
-                gym.ownerId == userId || gym.coachIds.contains(userId)
-            }
-
-            // Load groups from all user's gyms
-            var allGroups: [WorkoutGroup] = []
-            var gymsProcessed = 0
-
-            if userGyms.isEmpty {
-                print("⚠️ User is not owner/coach of any gyms")
-                self.groups = []
-                return
-            }
-
-            for gym in userGyms {
-                guard let gymId = gym.id else {
-                    gymsProcessed += 1
-                    continue
-                }
-
-                self.store.loadGroupsForGym(gymId: gymId) { loadedGroups, error in
-                    if let error = error {
-                        print("❌ Error loading groups for gym: \(error)")
-                    } else {
-                        // Filter out personal groups
-                        let gymGroups = loadedGroups.filter { $0.type != .personal }
-                        allGroups.append(contentsOf: gymGroups)
-                    }
-
-                    gymsProcessed += 1
-                    if gymsProcessed == userGyms.count {
-                        // All gyms processed, update UI
-                        self.groups = allGroups
-                        print("✅ Loaded \(allGroups.count) groups for programming")
-                    }
-                }
-            }
+            // Filter out personal groups (they're not for programming)
+            self.groups = loadedGroups.filter { $0.type != .personal }
+            print("✅ Loaded \(self.groups.count) groups for programming in gym: \(self.gym.name)")
         }
     }
 }

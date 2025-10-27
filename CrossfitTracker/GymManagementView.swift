@@ -272,6 +272,20 @@ struct GymDetailView: View {
                     }
                 }
             }
+
+            Section("Programming") {
+                NavigationLink(destination: CoachProgrammingView(gym: gym).environmentObject(store)) {
+                    HStack {
+                        Image(systemName: "calendar.badge.plus")
+                            .foregroundColor(.green)
+                        Text("Create Programming")
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
         }
         .navigationTitle("Gym Details")
         .onAppear {
