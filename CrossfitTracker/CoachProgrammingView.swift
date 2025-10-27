@@ -73,7 +73,6 @@ struct CoachProgrammingView: View {
             .onAppear {
                 loadScheduledWorkouts()
             }
-        }
     }
 
     private var weekDates: [Date] {
