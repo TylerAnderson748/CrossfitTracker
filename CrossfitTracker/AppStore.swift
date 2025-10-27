@@ -518,12 +518,14 @@ final class AppStore: ObservableObject {
 
     func createDefaultGroupsForGym(gymId: String, ownerId: String, completion: @escaping (String?) -> Void) {
         // Create 3 default groups: Members (undeletable), Competition Athletes, Weight Training Athletes
+        // Owner is automatically added to Members group so they can see programming they create
         let defaultGroups = [
             WorkoutGroup(
                 gymId: gymId,
                 name: "Members",
                 type: .defaultGroup,
                 membershipType: .autoAssignAll,
+                memberIds: [ownerId], // Add owner to Members group
                 ownerId: ownerId,
                 isDeletable: false
             ),
