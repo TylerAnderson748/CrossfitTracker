@@ -11,6 +11,7 @@ struct WeeklyPlanView: View {
     @EnvironmentObject var store: AppStore
     @State private var selectedDate = Date()
     @State private var scheduledWorkouts: [ScheduledWorkout] = []
+    @State private var showDebugInfo = false
 
     private let daysOfWeek = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
@@ -45,7 +46,10 @@ struct WeeklyPlanView: View {
                         ForEach(weekDates, id: \.self) { date in
                             DayWorkoutCard(
                                 date: date,
-                                workouts: workouts(for: date)
+                                workouts: workouts(for: date),
+                                onDelete: { workout in
+                                    deleteWorkout(workout)
+                                }
                             )
                         }
                     }
@@ -53,6 +57,17 @@ struct WeeklyPlanView: View {
                 }
             }
             .navigationTitle("Weekly Plan")
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: { showDebugInfo.toggle() }) {
+                        Image(systemName: "info.circle")
+                    }
+                }
+            }
+            .sheet(isPresented: $showDebugInfo) {
+                DebugInfoView()
+                    .environmentObject(store)
+            }
             .onAppear {
                 loadScheduledWorkouts()
             }
@@ -134,11 +149,29 @@ struct WeeklyPlanView: View {
             self.scheduledWorkouts = workouts
         }
     }
+
+    private func deleteWorkout(_ workout: ScheduledWorkout) {
+        guard let workoutId = workout.id else {
+            print("❌ Cannot delete workout without ID")
+            return
+        }
+
+        store.deleteScheduledWorkout(workoutId: workoutId) { error in
+            if let error = error {
+                print("❌ Error deleting workout: \(error)")
+            } else {
+                print("✅ Workout deleted")
+                // Remove from local array
+                self.scheduledWorkouts.removeAll { $0.id == workoutId }
+            }
+        }
+    }
 }
 
 struct DayWorkoutCard: View {
     let date: Date
     let workouts: [ScheduledWorkout]
+    let onDelete: (ScheduledWorkout) -> Void
 
     private var dayName: String {
         let formatter = DateFormatter()
@@ -191,6 +224,13 @@ struct DayWorkoutCard: View {
             } else {
                 ForEach(workouts) { workout in
                     WorkoutSummaryRow(workout: workout)
+                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                            Button(role: .destructive) {
+                                onDelete(workout)
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                        }
                 }
             }
         }
@@ -216,5 +256,125 @@ struct WorkoutSummaryRow: View {
                 .lineLimit(2)
         }
         .padding(.vertical, 4)
+    }
+}
+
+struct DebugInfoView: View {
+    @Environment(\.dismiss) var dismiss
+    @EnvironmentObject var store: AppStore
+    @State private var groups: [WorkoutGroup] = []
+    @State private var allWorkouts: [ScheduledWorkout] = []
+
+    var body: some View {
+        NavigationView {
+            List {
+                Section("User Info") {
+                    Text("User ID: \(store.currentUser?.uid ?? "Not logged in")")
+                        .font(.caption)
+                    Text("Email: \(store.currentUser?.email ?? "N/A")")
+                        .font(.caption)
+                }
+
+                Section("Groups I'm In") {
+                    if groups.isEmpty {
+                        Text("Loading groups...")
+                            .foregroundColor(.secondary)
+                    } else {
+                        ForEach(groups) { group in
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(group.name)
+                                    .font(.headline)
+                                Text("ID: \(group.id ?? "nil")")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                Text("Type: \(group.type.rawValue)")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                Text("Members: \(group.memberIds.count)")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding(.vertical, 4)
+                        }
+                    }
+                }
+
+                Section("All Scheduled Workouts (This Week)") {
+                    if allWorkouts.isEmpty {
+                        Text("No workouts found")
+                            .foregroundColor(.secondary)
+                    } else {
+                        ForEach(allWorkouts) { workout in
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(workout.wodTitle)
+                                    .font(.headline)
+                                Text("Group ID: \(workout.groupId ?? "nil (personal)")")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                Text("Created By: \(workout.createdBy)")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                Text("Date: \(workout.date, style: .date)")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding(.vertical, 4)
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Debug Info")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
+            }
+            .onAppear {
+                loadDebugInfo()
+            }
+        }
+    }
+
+    private func loadDebugInfo() {
+        guard let userId = store.currentUser?.uid else { return }
+
+        // Load groups
+        store.loadGroupsForUser(userId: userId) { loadedGroups, error in
+            if let error = error {
+                print("❌ Debug: Error loading groups: \(error)")
+            } else {
+                self.groups = loadedGroups
+                print("✅ Debug: Loaded \(loadedGroups.count) groups")
+                for group in loadedGroups {
+                    print("   - \(group.name) (id: \(group.id ?? "nil"))")
+                }
+            }
+        }
+
+        // Load all workouts for this week
+        let calendar = Calendar.current
+        let now = Date()
+        let weekday = calendar.component(.weekday, from: now)
+        let daysFromMonday = (weekday + 5) % 7
+        guard let monday = calendar.date(byAdding: .day, value: -daysFromMonday, to: calendar.startOfDay(for: now)),
+              let sunday = calendar.date(byAdding: .day, value: 6, to: monday),
+              let endDate = calendar.date(byAdding: .day, value: 1, to: sunday) else {
+            return
+        }
+
+        store.loadScheduledWorkoutsForUser(userId: userId, startDate: monday, endDate: endDate) { workouts, error in
+            if let error = error {
+                print("❌ Debug: Error loading workouts: \(error)")
+            } else {
+                self.allWorkouts = workouts
+                print("✅ Debug: Loaded \(workouts.count) workouts")
+                for workout in workouts {
+                    print("   - \(workout.wodTitle): groupId=\(workout.groupId ?? "nil"), date=\(workout.date)")
+                }
+            }
+        }
     }
 }

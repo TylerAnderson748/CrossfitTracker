@@ -49,6 +49,9 @@ struct CoachProgrammingView: View {
                                 onAddWorkout: {
                                     selectedDate = date
                                     showingAddWorkout = true
+                                },
+                                onDelete: { workout in
+                                    deleteWorkout(workout)
                                 }
                             )
                         }
@@ -172,12 +175,30 @@ struct CoachProgrammingView: View {
             }
         }
     }
+
+    private func deleteWorkout(_ workout: ScheduledWorkout) {
+        guard let workoutId = workout.id else {
+            print("❌ Cannot delete workout without ID")
+            return
+        }
+
+        store.deleteScheduledWorkout(workoutId: workoutId) { error in
+            if let error = error {
+                print("❌ Error deleting workout: \(error)")
+            } else {
+                print("✅ Workout deleted")
+                // Remove from local array
+                self.scheduledWorkouts.removeAll { $0.id == workoutId }
+            }
+        }
+    }
 }
 
 struct CoachDayCard: View {
     let date: Date
     let workouts: [ScheduledWorkout]
     let onAddWorkout: () -> Void
+    let onDelete: (ScheduledWorkout) -> Void
 
     private var dayName: String {
         let formatter = DateFormatter()
@@ -230,6 +251,13 @@ struct CoachDayCard: View {
                             .lineLimit(2)
                     }
                     .padding(.vertical, 4)
+                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                        Button(role: .destructive) {
+                            onDelete(workout)
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+                    }
                 }
             }
         }
