@@ -30,6 +30,7 @@ struct ScheduledWorkout: Codable, Identifiable {
     var recurrenceType: RecurrenceType // how often this repeats
     var recurrenceEndDate: Date? // when recurrence stops (nil = no end)
     var seriesId: String? // links recurring workouts together
+    var weekdays: [Int]? // for weekly recurrence: 1=Sun, 2=Mon, 3=Tue, 4=Wed, 5=Thu, 6=Fri, 7=Sat (Calendar.component weekday values)
 
     init(
         id: String? = nil,
@@ -42,7 +43,8 @@ struct ScheduledWorkout: Codable, Identifiable {
         createdBy: String,
         recurrenceType: RecurrenceType = .none,
         recurrenceEndDate: Date? = nil,
-        seriesId: String? = nil
+        seriesId: String? = nil,
+        weekdays: [Int]? = nil
     ) {
         self.id = id
         self.wodId = wodId
@@ -56,6 +58,7 @@ struct ScheduledWorkout: Codable, Identifiable {
         self.recurrenceType = recurrenceType
         self.recurrenceEndDate = recurrenceEndDate
         self.seriesId = seriesId
+        self.weekdays = weekdays
     }
 
     var isPersonalWorkout: Bool {

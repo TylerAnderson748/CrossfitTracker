@@ -855,28 +855,55 @@ final class AppStore: ObservableObject {
         let endDate = baseWorkout.recurrenceEndDate ?? calendar.date(byAdding: .year, value: 1, to: currentDate)!
 
         // Generate dates based on recurrence type
-        while currentDate <= endDate {
-            workoutDates.append(currentDate)
-
-            switch baseWorkout.recurrenceType {
-            case .daily:
+        switch baseWorkout.recurrenceType {
+        case .daily:
+            while currentDate <= endDate {
+                workoutDates.append(currentDate)
                 guard let nextDate = calendar.date(byAdding: .day, value: 1, to: currentDate) else { break }
                 currentDate = nextDate
-            case .weekly:
-                guard let nextDate = calendar.date(byAdding: .weekOfYear, value: 1, to: currentDate) else { break }
-                currentDate = nextDate
-            case .monthly:
-                guard let nextDate = calendar.date(byAdding: .month, value: 1, to: currentDate) else { break }
-                currentDate = nextDate
-            case .none:
-                break
+
+                if workoutDates.count >= 365 {
+                    print("⚠️ Reached maximum of 365 recurring instances")
+                    break
+                }
             }
 
-            // Safety limit: don't create more than 365 instances
-            if workoutDates.count >= 365 {
-                print("⚠️ Reached maximum of 365 recurring instances")
-                break
+        case .weekly:
+            // For weekly recurrence with specific weekdays
+            let selectedWeekdays = baseWorkout.weekdays ?? [calendar.component(.weekday, from: currentDate)]
+
+            while currentDate <= endDate {
+                let weekday = calendar.component(.weekday, from: currentDate)
+
+                // Check if this day is one of the selected weekdays
+                if selectedWeekdays.contains(weekday) {
+                    workoutDates.append(currentDate)
+                }
+
+                // Move to next day
+                guard let nextDate = calendar.date(byAdding: .day, value: 1, to: currentDate) else { break }
+                currentDate = nextDate
+
+                if workoutDates.count >= 365 {
+                    print("⚠️ Reached maximum of 365 recurring instances")
+                    break
+                }
             }
+
+        case .monthly:
+            while currentDate <= endDate {
+                workoutDates.append(currentDate)
+                guard let nextDate = calendar.date(byAdding: .month, value: 1, to: currentDate) else { break }
+                currentDate = nextDate
+
+                if workoutDates.count >= 365 {
+                    print("⚠️ Reached maximum of 365 recurring instances")
+                    break
+                }
+            }
+
+        case .none:
+            workoutDates.append(currentDate)
         }
 
         print("📅 Creating \(workoutDates.count) recurring workout instances")

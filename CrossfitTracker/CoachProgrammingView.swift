@@ -285,6 +285,7 @@ struct AddWorkoutSheet: View {
     @State private var recurrenceType: RecurrenceType = .none
     @State private var hasEndDate: Bool = false
     @State private var recurrenceEndDate: Date
+    @State private var selectedWeekdays: Set<Int> = []
 
     init(gym: Gym, selectedDate: Date, onSave: @escaping (ScheduledWorkout) -> Void) {
         self.gym = gym
@@ -293,6 +294,9 @@ struct AddWorkoutSheet: View {
         _date = State(initialValue: selectedDate)
         // Set default end date to 3 months from selected date
         _recurrenceEndDate = State(initialValue: Calendar.current.date(byAdding: .month, value: 3, to: selectedDate) ?? selectedDate)
+        // Initialize with current day of week
+        let weekday = Calendar.current.component(.weekday, from: selectedDate)
+        _selectedWeekdays = State(initialValue: [weekday])
     }
 
     var body: some View {
@@ -331,6 +335,16 @@ struct AddWorkoutSheet: View {
                         Text("Daily").tag(RecurrenceType.daily)
                         Text("Weekly").tag(RecurrenceType.weekly)
                         Text("Monthly").tag(RecurrenceType.monthly)
+                    }
+
+                    if recurrenceType == .weekly {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Repeat on")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+
+                            WeekdayPicker(selectedWeekdays: $selectedWeekdays)
+                        }
                     }
 
                     if recurrenceType != .none {
@@ -375,7 +389,8 @@ struct AddWorkoutSheet: View {
                             timeSlots: [],
                             createdBy: userId,
                             recurrenceType: recurrenceType,
-                            recurrenceEndDate: hasEndDate ? recurrenceEndDate : nil
+                            recurrenceEndDate: hasEndDate ? recurrenceEndDate : nil,
+                            weekdays: recurrenceType == .weekly ? Array(selectedWeekdays) : nil
                         )
 
                         if workout.isRecurring {
@@ -421,11 +436,16 @@ struct AddWorkoutSheet: View {
                 return "Repeats daily for 1 year"
             }
         case .weekly:
+            let weekdayNames = selectedWeekdays.sorted().map { weekday in
+                let dayFormatter = DateFormatter()
+                dayFormatter.weekdaySymbols = dayFormatter.shortWeekdaySymbols
+                return dayFormatter.weekdaySymbols[weekday - 1]
+            }.joined(separator: ", ")
+
             if hasEndDate {
-                let weeks = calendar.dateComponents([.weekOfYear], from: date, to: recurrenceEndDate).weekOfYear ?? 0
-                return "Repeats weekly for \(weeks) weeks (until \(formatter.string(from: recurrenceEndDate)))"
+                return "Repeats on \(weekdayNames) until \(formatter.string(from: recurrenceEndDate))"
             } else {
-                return "Repeats weekly for 1 year (52 weeks)"
+                return "Repeats on \(weekdayNames) for 1 year"
             }
         case .monthly:
             if hasEndDate {
@@ -453,6 +473,42 @@ struct AddWorkoutSheet: View {
             // Filter out personal groups (they're not for programming)
             self.groups = loadedGroups.filter { $0.type != .personal }
             print("✅ Loaded \(self.groups.count) groups for programming in gym: \(self.gym.name)")
+        }
+    }
+}
+
+struct WeekdayPicker: View {
+    @Binding var selectedWeekdays: Set<Int>
+
+    private let weekdays: [(name: String, value: Int)] = [
+        ("Sun", 1),
+        ("Mon", 2),
+        ("Tue", 3),
+        ("Wed", 4),
+        ("Thu", 5),
+        ("Fri", 6),
+        ("Sat", 7)
+    ]
+
+    var body: some View {
+        HStack(spacing: 8) {
+            ForEach(weekdays, id: \.value) { day in
+                Button(action: {
+                    if selectedWeekdays.contains(day.value) {
+                        selectedWeekdays.remove(day.value)
+                    } else {
+                        selectedWeekdays.insert(day.value)
+                    }
+                }) {
+                    Text(day.name)
+                        .font(.caption)
+                        .fontWeight(selectedWeekdays.contains(day.value) ? .bold : .regular)
+                        .frame(width: 40, height: 40)
+                        .background(selectedWeekdays.contains(day.value) ? Color.blue : Color(.systemGray5))
+                        .foregroundColor(selectedWeekdays.contains(day.value) ? .white : .primary)
+                        .clipShape(Circle())
+                }
+            }
         }
     }
 }
