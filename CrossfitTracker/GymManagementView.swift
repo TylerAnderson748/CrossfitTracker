@@ -47,6 +47,7 @@ struct GymManagementView: View {
                                 GymRow(gym: gym)
                             }
                         }
+                        .onDelete(perform: deleteGyms)
                     }
                 }
             }
@@ -91,6 +92,37 @@ struct GymManagementView: View {
 
             if let savedGym = savedGym {
                 self.gyms.append(savedGym)
+            }
+        }
+    }
+
+    private func deleteGyms(at offsets: IndexSet) {
+        // Collect gyms to delete
+        let gymsToDelete = offsets.map { gyms[$0] }
+
+        var deletedCount = 0
+        let totalToDelete = gymsToDelete.count
+
+        for gym in gymsToDelete {
+            guard let gymId = gym.id else {
+                deletedCount += 1
+                if deletedCount == totalToDelete {
+                    loadGyms() // Reload to refresh the list
+                }
+                continue
+            }
+
+            store.deleteGym(gymId: gymId) { error in
+                if let error = error {
+                    print("❌ Error deleting gym: \(error)")
+                } else {
+                    print("✅ Deleted gym: \(gym.name)")
+                }
+
+                deletedCount += 1
+                if deletedCount == totalToDelete {
+                    self.loadGyms() // Reload to refresh the list
+                }
             }
         }
     }

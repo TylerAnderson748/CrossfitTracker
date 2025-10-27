@@ -433,10 +433,57 @@ final class AppStore: ObservableObject {
                     completion(error.localizedDescription)
                 } else {
                     print("✅ User added to gym as \(role.displayName)")
+
+                    // Auto-add user to auto-assign groups
+                    if role == .athlete {
+                        self.addUserToAutoAssignGroups(gymId: gymId, userId: userId)
+                    }
+
                     completion(nil)
                 }
             }
         }
+    }
+
+    func deleteGym(gymId: String, completion: @escaping (String?) -> Void) {
+        // Delete all groups associated with this gym first
+        db.collection("groups")
+            .whereField("gymId", isEqualTo: gymId)
+            .getDocuments { snapshot, error in
+                if let error = error {
+                    DispatchQueue.main.async {
+                        completion(error.localizedDescription)
+                    }
+                    return
+                }
+
+                // Delete all groups
+                let batch = self.db.batch()
+                snapshot?.documents.forEach { doc in
+                    batch.deleteDocument(doc.reference)
+                }
+
+                batch.commit { error in
+                    if let error = error {
+                        DispatchQueue.main.async {
+                            completion(error.localizedDescription)
+                        }
+                        return
+                    }
+
+                    // Now delete the gym itself
+                    self.db.collection("gyms").document(gymId).delete { error in
+                        DispatchQueue.main.async {
+                            if let error = error {
+                                completion(error.localizedDescription)
+                            } else {
+                                print("✅ Gym and associated groups deleted")
+                                completion(nil)
+                            }
+                        }
+                    }
+                }
+            }
     }
 
     // MARK: - Group Management
@@ -452,6 +499,12 @@ final class AppStore: ObservableObject {
                         completion(nil, error.localizedDescription)
                     } else {
                         print("✅ Group created: \(group.name)")
+
+                        // If auto-assign, add all gym members to this group
+                        if groupWithId.membershipType == .autoAssignAll, let gymId = groupWithId.gymId {
+                            self.autoAssignGymMembersToGroup(gymId: gymId, groupId: docRef.documentID)
+                        }
+
                         completion(groupWithId, nil)
                     }
                 }
@@ -629,6 +682,61 @@ final class AppStore: ObservableObject {
                     } else {
                         print("✅ Group deleted")
                         completion(nil)
+                    }
+                }
+            }
+        }
+    }
+
+    // Helper function to add all gym members to a group
+    private func autoAssignGymMembersToGroup(gymId: String, groupId: String) {
+        loadGym(gymId: gymId) { gym, error in
+            if let error = error {
+                print("❌ Error loading gym for auto-assign: \(error)")
+                return
+            }
+
+            guard let gym = gym else {
+                print("❌ Gym not found for auto-assign")
+                return
+            }
+
+            // Add all members to the group
+            let batch = self.db.batch()
+            let groupRef = self.db.collection("groups").document(groupId)
+
+            for memberId in gym.memberIds {
+                batch.updateData(["memberIds": FieldValue.arrayUnion([memberId])], forDocument: groupRef)
+            }
+
+            batch.commit { error in
+                if let error = error {
+                    print("❌ Error auto-assigning members to group: \(error.localizedDescription)")
+                } else {
+                    print("✅ Auto-assigned \(gym.memberIds.count) members to group")
+                }
+            }
+        }
+    }
+
+    // Helper function to add a user to all auto-assign groups in a gym
+    private func addUserToAutoAssignGroups(gymId: String, userId: String) {
+        loadGroupsForGym(gymId: gymId) { groups, error in
+            if let error = error {
+                print("❌ Error loading groups for auto-assign: \(error)")
+                return
+            }
+
+            let autoAssignGroups = groups.filter { $0.membershipType == .autoAssignAll }
+
+            for group in autoAssignGroups {
+                guard let groupId = group.id else { continue }
+
+                self.addUserToGroup(groupId: groupId, userId: userId) { error in
+                    if let error = error {
+                        print("❌ Error adding user to auto-assign group: \(error)")
+                    } else {
+                        print("✅ Auto-assigned user to group: \(group.name)")
                     }
                 }
             }

@@ -69,23 +69,41 @@ struct GroupManagementView: View {
     }
 
     private func deleteGroups(at offsets: IndexSet) {
-        for index in offsets {
-            let group = groups[index]
+        // Collect groups to delete
+        let groupsToDelete = offsets.map { groups[$0] }
 
+        var deletedCount = 0
+        let totalToDelete = groupsToDelete.count
+
+        for group in groupsToDelete {
             if !group.isDeletable {
                 print("⚠️ Cannot delete \(group.name) - it's not deletable")
+                deletedCount += 1
+                if deletedCount == totalToDelete {
+                    loadGroups() // Reload to refresh the list
+                }
                 continue
             }
 
-            guard let groupId = group.id else { continue }
+            guard let groupId = group.id else {
+                deletedCount += 1
+                if deletedCount == totalToDelete {
+                    loadGroups() // Reload to refresh the list
+                }
+                continue
+            }
 
             store.deleteGroup(groupId: groupId) { error in
                 if let error = error {
                     print("❌ Error deleting group: \(error)")
-                    return
+                } else {
+                    print("✅ Deleted group: \(group.name)")
                 }
 
-                self.groups.remove(at: index)
+                deletedCount += 1
+                if deletedCount == totalToDelete {
+                    self.loadGroups() // Reload to refresh the list
+                }
             }
         }
     }
