@@ -816,11 +816,46 @@ final class AppStore: ObservableObject {
     }
 
     func loadScheduledWorkoutsForUser(userId: String, startDate: Date, endDate: Date, completion: @escaping ([ScheduledWorkout], String?) -> Void) {
-        // First, load all groups the user is a member of
+        var allWorkouts: [ScheduledWorkout] = []
+        var queriesCompleted = 0
+        let totalQueries = 2 // 1 for personal workouts, 1+ for group workouts
+
+        // Query 1: Load personal workouts (groupId == nil, createdBy == userId)
+        db.collection("scheduledWorkouts")
+            .whereField("createdBy", isEqualTo: userId)
+            .whereField("date", isGreaterThanOrEqualTo: startDate)
+            .whereField("date", isLessThanOrEqualTo: endDate)
+            .getDocuments { snapshot, error in
+                if let error = error {
+                    print("❌ Error loading personal workouts: \(error.localizedDescription)")
+                } else {
+                    let personalWorkouts = snapshot?.documents.compactMap { doc -> ScheduledWorkout? in
+                        guard let workout = try? doc.data(as: ScheduledWorkout.self) else { return nil }
+                        // Only include workouts with nil groupId (personal workouts)
+                        return workout.groupId == nil ? workout : nil
+                    } ?? []
+                    allWorkouts.append(contentsOf: personalWorkouts)
+                    print("✅ Loaded \(personalWorkouts.count) personal workouts")
+                }
+
+                queriesCompleted += 1
+                if queriesCompleted == totalQueries {
+                    DispatchQueue.main.async {
+                        print("✅ Total workouts loaded: \(allWorkouts.count)")
+                        completion(allWorkouts, nil)
+                    }
+                }
+            }
+
+        // Query 2: Load group workouts
         loadGroupsForUser(userId: userId) { groups, error in
             if let error = error {
-                DispatchQueue.main.async {
-                    completion([], error)
+                print("❌ Error loading groups: \(error)")
+                queriesCompleted += 1
+                if queriesCompleted == totalQueries {
+                    DispatchQueue.main.async {
+                        completion(allWorkouts, nil)
+                    }
                 }
                 return
             }
@@ -828,17 +863,22 @@ final class AppStore: ObservableObject {
             let groupIds = groups.compactMap { $0.id }
 
             if groupIds.isEmpty {
-                print("⚠️ User not in any groups, no workouts to load")
-                DispatchQueue.main.async {
-                    completion([], nil)
+                print("⚠️ User not in any groups")
+                queriesCompleted += 1
+                if queriesCompleted == totalQueries {
+                    DispatchQueue.main.async {
+                        print("✅ Total workouts loaded: \(allWorkouts.count)")
+                        completion(allWorkouts, nil)
+                    }
                 }
                 return
             }
 
+            print("📋 Loading workouts from \(groups.count) groups")
+
             // Load all workouts for user's groups within date range
             // Note: Firestore 'in' query supports max 10 items
             let batchSize = 10
-            var allWorkouts: [ScheduledWorkout] = []
             var processedBatches = 0
             let totalBatches = (groupIds.count + batchSize - 1) / batchSize
 
@@ -859,14 +899,18 @@ final class AppStore: ObservableObject {
                                 try? doc.data(as: ScheduledWorkout.self)
                             } ?? []
                             allWorkouts.append(contentsOf: batchWorkouts)
+                            print("✅ Loaded \(batchWorkouts.count) workouts from batch \(batchIndex + 1)")
                         }
 
                         processedBatches += 1
 
                         if processedBatches == totalBatches {
-                            DispatchQueue.main.async {
-                                print("✅ Loaded \(allWorkouts.count) scheduled workouts for user from \(groups.count) groups")
-                                completion(allWorkouts, nil)
+                            queriesCompleted += 1
+                            if queriesCompleted == totalQueries {
+                                DispatchQueue.main.async {
+                                    print("✅ Total workouts loaded: \(allWorkouts.count) (\(groups.count) groups)")
+                                    completion(allWorkouts, nil)
+                                }
                             }
                         }
                     }
