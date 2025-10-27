@@ -386,9 +386,44 @@ final class AppStore: ObservableObject {
                     try? doc.data(as: Gym.self)
                 } ?? []
 
+                // Auto-fix: Add owner to Members group if not already there
+                for gym in gyms {
+                    guard let gymId = gym.id else { continue }
+                    self.ensureOwnerInMembersGroup(gymId: gymId, ownerId: userId)
+                }
+
                 DispatchQueue.main.async {
                     print("✅ Loaded \(gyms.count) gyms")
                     completion(gyms, nil)
+                }
+            }
+    }
+
+    // Helper function to ensure owner is in the Members group
+    private func ensureOwnerInMembersGroup(gymId: String, ownerId: String) {
+        db.collection("groups")
+            .whereField("gymId", isEqualTo: gymId)
+            .whereField("name", isEqualTo: "Members")
+            .getDocuments { snapshot, error in
+                guard let doc = snapshot?.documents.first,
+                      let group = try? doc.data(as: WorkoutGroup.self),
+                      let groupId = group.id else {
+                    return
+                }
+
+                // Check if owner is already in the group
+                if group.memberIds.contains(ownerId) {
+                    print("✅ Owner already in Members group for gym")
+                    return
+                }
+
+                // Add owner to the group
+                self.addUserToGroup(groupId: groupId, userId: ownerId) { error in
+                    if let error = error {
+                        print("❌ Error adding owner to Members group: \(error)")
+                    } else {
+                        print("✅ Auto-fixed: Added owner to Members group")
+                    }
                 }
             }
     }
