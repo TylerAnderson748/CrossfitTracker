@@ -712,7 +712,7 @@ final class AppStore: ObservableObject {
         loadGroupsForUser(userId: userId) { groups, error in
             if let error = error {
                 DispatchQueue.main.async {
-                    completion([], error.localizedDescription)
+                    completion([], error)
                 }
                 return
             }
