@@ -77,10 +77,12 @@ struct CoachProgrammingView: View {
 
     private var weekDates: [Date] {
         let calendar = Calendar.current
-        let weekday = calendar.component(.weekday, from: selectedDate)
+        // Normalize selectedDate to start of day first
+        let normalizedDate = calendar.startOfDay(for: selectedDate)
+        let weekday = calendar.component(.weekday, from: normalizedDate)
         let daysFromMonday = (weekday + 5) % 7
 
-        guard let monday = calendar.date(byAdding: .day, value: -daysFromMonday, to: selectedDate) else {
+        guard let monday = calendar.date(byAdding: .day, value: -daysFromMonday, to: normalizedDate) else {
             return []
         }
 
@@ -117,8 +119,12 @@ struct CoachProgrammingView: View {
 
     private func loadScheduledWorkouts() {
         let calendar = Calendar.current
-        guard let start = weekDates.first,
-              let end = weekDates.last else { return }
+        guard let firstDay = weekDates.first,
+              let lastDay = weekDates.last else { return }
+
+        // Ensure we're querying from start of first day to end of last day
+        let start = calendar.startOfDay(for: firstDay)
+        guard let end = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: lastDay)) else { return }
 
         print("📅 Loading workouts from \(start) to \(end)")
 
