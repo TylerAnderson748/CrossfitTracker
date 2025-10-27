@@ -226,6 +226,20 @@ struct GymDetailView: View {
                     }
                 }
             }
+
+            Section("Groups") {
+                NavigationLink(destination: GroupManagementView(gym: gym).environmentObject(store)) {
+                    HStack {
+                        Image(systemName: "person.3.sequence")
+                            .foregroundColor(.purple)
+                        Text("Manage Groups")
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
         }
         .navigationTitle("Gym Details")
         .onAppear {
