@@ -251,11 +251,11 @@ struct CoachDayCard: View {
                             .lineLimit(2)
                     }
                     .padding(.vertical, 4)
-                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                    .contextMenu {
                         Button(role: .destructive) {
                             onDelete(workout)
                         } label: {
-                            Label("Delete", systemImage: "trash")
+                            Label("Delete Workout", systemImage: "trash")
                         }
                     }
                 }
