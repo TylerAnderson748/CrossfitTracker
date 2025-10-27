@@ -251,7 +251,8 @@ struct AddWorkoutSheet: View {
     @State private var title: String = ""
     @State private var description: String = ""
     @State private var date: Date
-    @State private var assignToSelf: Bool = false
+    @State private var groups: [Group] = []
+    @State private var selectedGroupId: String?
 
     init(selectedDate: Date, onSave: @escaping (ScheduledWorkout) -> Void) {
         self.selectedDate = selectedDate
@@ -270,8 +271,21 @@ struct AddWorkoutSheet: View {
                 }
 
                 Section("Assignment") {
-                    Toggle("Assign to myself", isOn: $assignToSelf)
-                    Text("Toggle this on to see the workout in your Weekly Plan")
+                    if groups.isEmpty {
+                        Text("Loading groups...")
+                            .foregroundColor(.secondary)
+                    } else {
+                        Picker("Assign to Group", selection: $selectedGroupId) {
+                            Text("Personal (only you)").tag(nil as String?)
+                            ForEach(groups) { group in
+                                if let groupId = group.id {
+                                    Text(group.name).tag(groupId as String?)
+                                }
+                            }
+                        }
+                    }
+
+                    Text("Select a group to assign this workout to")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
@@ -296,25 +310,43 @@ struct AddWorkoutSheet: View {
                         let calendar = Calendar.current
                         let normalizedDate = calendar.startOfDay(for: date)
 
-                        // Build assigned users array
-                        let assignedUsers = assignToSelf ? [userId] : []
-
+                        // For now, create basic workout without time slots
+                        // TODO: Add time slot creation UI
                         let workout = ScheduledWorkout(
                             wodId: UUID().uuidString,
                             wodTitle: title,
                             wodDescription: description,
                             date: normalizedDate,
-                            assignedToUserIds: assignedUsers,
+                            groupId: selectedGroupId,
+                            timeSlots: [],
                             createdBy: userId
                         )
 
-                        print("💾 Saving workout: \(workout.wodTitle) for \(normalizedDate), assigned to \(assignedUsers.count) users")
+                        print("💾 Saving workout: \(workout.wodTitle) for \(normalizedDate), groupId: \(selectedGroupId ?? "nil (personal)")")
                         onSave(workout)
                         dismiss()
                     }
                     .disabled(title.isEmpty || description.isEmpty)
                 }
             }
+            .onAppear {
+                loadGroups()
+            }
+        }
+    }
+
+    private func loadGroups() {
+        guard let userId = store.currentUser?.uid else { return }
+
+        // Load user's groups
+        store.loadGroupsForUser(userId: userId) { loadedGroups, error in
+            if let error = error {
+                print("❌ Error loading groups: \(error)")
+                return
+            }
+
+            // Filter out personal group (it's the default nil option)
+            self.groups = loadedGroups.filter { $0.type != .personal }
         }
     }
 }

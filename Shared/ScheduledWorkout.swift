@@ -14,20 +14,34 @@ struct ScheduledWorkout: Codable, Identifiable {
     var wodTitle: String
     var wodDescription: String
     var date: Date
-    var gymId: String?
-    var assignedToUserIds: [String]
+    var groupId: String? // which group this is for, nil = personal workout
+    var timeSlots: [TimeSlot] // available time slots for group workouts
     var createdBy: String
     var createdAt: Date
 
-    init(id: String? = nil, wodId: String, wodTitle: String, wodDescription: String, date: Date, gymId: String? = nil, assignedToUserIds: [String] = [], createdBy: String) {
+    init(
+        id: String? = nil,
+        wodId: String,
+        wodTitle: String,
+        wodDescription: String,
+        date: Date,
+        groupId: String? = nil,
+        timeSlots: [TimeSlot] = [],
+        createdBy: String
+    ) {
         self.id = id
         self.wodId = wodId
         self.wodTitle = wodTitle
         self.wodDescription = wodDescription
         self.date = date
-        self.gymId = gymId
-        self.assignedToUserIds = assignedToUserIds
+        self.groupId = groupId
+        self.timeSlots = timeSlots
         self.createdBy = createdBy
         self.createdAt = Date()
     }
+
+    var isPersonalWorkout: Bool {
+        return groupId == nil
+    }
 }
+

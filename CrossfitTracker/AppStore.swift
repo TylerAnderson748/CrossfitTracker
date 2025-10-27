@@ -78,11 +78,25 @@ final class AppStore: ObservableObject {
             // Create user document in Firestore with athlete role by default
             let newUser = AppUser(id: userId, email: email, role: .athlete)
             self?.createUserDocument(user: newUser) { firestoreError in
-                DispatchQueue.main.async {
-                    if let firestoreError = firestoreError {
+                if let firestoreError = firestoreError {
+                    DispatchQueue.main.async {
                         completion("Account created but profile setup failed: \(firestoreError)")
+                    }
+                    return
+                }
+
+                print("✅ User signed up successfully: \(email)")
+
+                // Create personal group for user
+                self?.createPersonalGroup(userId: userId) { personalGroup, groupError in
+                    if let groupError = groupError {
+                        print("⚠️ Error creating personal group: \(groupError)")
                     } else {
-                        print("✅ User signed up successfully: \(email)")
+                        print("✅ Personal group created for user")
+                    }
+
+                    // Return success even if personal group creation failed
+                    DispatchQueue.main.async {
                         completion(nil)
                     }
                 }
@@ -313,12 +327,33 @@ final class AppStore: ObservableObject {
             var gymWithId = gym
             gymWithId.id = docRef.documentID
 
-            try docRef.setData(from: gymWithId) { error in
-                DispatchQueue.main.async {
-                    if let error = error {
+            try docRef.setData(from: gymWithId) { [weak self] error in
+                if let error = error {
+                    DispatchQueue.main.async {
                         completion(nil, error.localizedDescription)
+                    }
+                    return
+                }
+
+                print("✅ Gym created: \(name)")
+
+                // Create default groups for the gym
+                guard let gymId = gymWithId.id else {
+                    DispatchQueue.main.async {
+                        completion(gymWithId, "Gym created but no ID returned")
+                    }
+                    return
+                }
+
+                self?.createDefaultGroupsForGym(gymId: gymId, ownerId: userId) { groupError in
+                    if let groupError = groupError {
+                        print("⚠️ Error creating default groups: \(groupError)")
                     } else {
-                        print("✅ Gym created: \(name)")
+                        print("✅ Default groups created for gym")
+                    }
+
+                    // Return gym even if group creation failed
+                    DispatchQueue.main.async {
                         completion(gymWithId, nil)
                     }
                 }
@@ -404,6 +439,202 @@ final class AppStore: ObservableObject {
         }
     }
 
+    // MARK: - Group Management
+    func createGroup(_ group: Group, completion: @escaping (Group?, String?) -> Void) {
+        do {
+            let docRef = db.collection("groups").document()
+            var groupWithId = group
+            groupWithId.id = docRef.documentID
+
+            try docRef.setData(from: groupWithId) { error in
+                DispatchQueue.main.async {
+                    if let error = error {
+                        completion(nil, error.localizedDescription)
+                    } else {
+                        print("✅ Group created: \(group.name)")
+                        completion(groupWithId, nil)
+                    }
+                }
+            }
+        } catch {
+            DispatchQueue.main.async {
+                completion(nil, error.localizedDescription)
+            }
+        }
+    }
+
+    func createDefaultGroupsForGym(gymId: String, ownerId: String, completion: @escaping (String?) -> Void) {
+        // Create 3 default groups: Members (undeletable), Competition Athletes, Weight Training Athletes
+        let defaultGroups = [
+            Group(
+                gymId: gymId,
+                name: "Members",
+                type: .defaultGroup,
+                membershipType: .autoAssignAll,
+                ownerId: ownerId,
+                isDeletable: false
+            ),
+            Group(
+                gymId: gymId,
+                name: "Competition Athletes",
+                type: .defaultGroup,
+                membershipType: .inviteOnly,
+                ownerId: ownerId
+            ),
+            Group(
+                gymId: gymId,
+                name: "Weight Training Athletes",
+                type: .defaultGroup,
+                membershipType: .inviteOnly,
+                ownerId: ownerId
+            )
+        ]
+
+        var createdCount = 0
+        var lastError: String?
+
+        for group in defaultGroups {
+            createGroup(group) { _, error in
+                if let error = error {
+                    lastError = error
+                }
+                createdCount += 1
+
+                if createdCount == defaultGroups.count {
+                    DispatchQueue.main.async {
+                        completion(lastError)
+                    }
+                }
+            }
+        }
+    }
+
+    func createPersonalGroup(userId: String, completion: @escaping (Group?, String?) -> Void) {
+        let personalGroup = Group(
+            gymId: nil,
+            name: "Personal",
+            type: .personal,
+            membershipType: .inviteOnly,
+            memberIds: [userId],
+            ownerId: userId,
+            isDeletable: false
+        )
+
+        createGroup(personalGroup, completion: completion)
+    }
+
+    func loadGroupsForGym(gymId: String, completion: @escaping ([Group], String?) -> Void) {
+        db.collection("groups")
+            .whereField("gymId", isEqualTo: gymId)
+            .getDocuments { snapshot, error in
+                if let error = error {
+                    DispatchQueue.main.async {
+                        completion([], error.localizedDescription)
+                    }
+                    return
+                }
+
+                let groups = snapshot?.documents.compactMap { doc -> Group? in
+                    try? doc.data(as: Group.self)
+                } ?? []
+
+                DispatchQueue.main.async {
+                    print("✅ Loaded \(groups.count) groups for gym")
+                    completion(groups, nil)
+                }
+            }
+    }
+
+    func loadGroupsForUser(userId: String, completion: @escaping ([Group], String?) -> Void) {
+        db.collection("groups")
+            .whereField("memberIds", arrayContains: userId)
+            .getDocuments { snapshot, error in
+                if let error = error {
+                    DispatchQueue.main.async {
+                        completion([], error.localizedDescription)
+                    }
+                    return
+                }
+
+                let groups = snapshot?.documents.compactMap { doc -> Group? in
+                    try? doc.data(as: Group.self)
+                } ?? []
+
+                DispatchQueue.main.async {
+                    print("✅ Loaded \(groups.count) groups for user")
+                    completion(groups, nil)
+                }
+            }
+    }
+
+    func addUserToGroup(groupId: String, userId: String, completion: @escaping (String?) -> Void) {
+        db.collection("groups").document(groupId).updateData([
+            "memberIds": FieldValue.arrayUnion([userId])
+        ]) { error in
+            DispatchQueue.main.async {
+                if let error = error {
+                    completion(error.localizedDescription)
+                } else {
+                    print("✅ User added to group")
+                    completion(nil)
+                }
+            }
+        }
+    }
+
+    func removeUserFromGroup(groupId: String, userId: String, completion: @escaping (String?) -> Void) {
+        db.collection("groups").document(groupId).updateData([
+            "memberIds": FieldValue.arrayRemove([userId])
+        ]) { error in
+            DispatchQueue.main.async {
+                if let error = error {
+                    completion(error.localizedDescription)
+                } else {
+                    print("✅ User removed from group")
+                    completion(nil)
+                }
+            }
+        }
+    }
+
+    func deleteGroup(groupId: String, completion: @escaping (String?) -> Void) {
+        // First check if it's deletable
+        db.collection("groups").document(groupId).getDocument { snapshot, error in
+            if let error = error {
+                DispatchQueue.main.async {
+                    completion(error.localizedDescription)
+                }
+                return
+            }
+
+            guard let group = try? snapshot?.data(as: Group.self) else {
+                DispatchQueue.main.async {
+                    completion("Group not found")
+                }
+                return
+            }
+
+            if !group.isDeletable {
+                DispatchQueue.main.async {
+                    completion("This group cannot be deleted")
+                }
+                return
+            }
+
+            // Delete the group
+            self.db.collection("groups").document(groupId).delete { error in
+                DispatchQueue.main.async {
+                    if let error = error {
+                        completion(error.localizedDescription)
+                    } else {
+                        print("✅ Group deleted")
+                        completion(nil)
+                    }
+                }
+            }
+        }
+    }
+
     // MARK: - Scheduled Workouts
     func saveScheduledWorkout(_ workout: ScheduledWorkout, completion: @escaping (ScheduledWorkout?, String?) -> Void) {
         guard currentUser?.uid != nil else {
@@ -477,27 +708,62 @@ final class AppStore: ObservableObject {
     }
 
     func loadScheduledWorkoutsForUser(userId: String, startDate: Date, endDate: Date, completion: @escaping ([ScheduledWorkout], String?) -> Void) {
-        db.collection("scheduledWorkouts")
-            .whereField("assignedToUserIds", arrayContains: userId)
-            .whereField("date", isGreaterThanOrEqualTo: startDate)
-            .whereField("date", isLessThanOrEqualTo: endDate)
-            .getDocuments { snapshot, error in
-                if let error = error {
-                    DispatchQueue.main.async {
-                        completion([], error.localizedDescription)
-                    }
-                    return
-                }
-
-                let workouts = snapshot?.documents.compactMap { doc -> ScheduledWorkout? in
-                    try? doc.data(as: ScheduledWorkout.self)
-                } ?? []
-
+        // First, load all groups the user is a member of
+        loadGroupsForUser(userId: userId) { groups, error in
+            if let error = error {
                 DispatchQueue.main.async {
-                    print("✅ Loaded \(workouts.count) scheduled workouts for user")
-                    completion(workouts, nil)
+                    completion([], error.localizedDescription)
                 }
+                return
             }
+
+            let groupIds = groups.compactMap { $0.id }
+
+            if groupIds.isEmpty {
+                print("⚠️ User not in any groups, no workouts to load")
+                DispatchQueue.main.async {
+                    completion([], nil)
+                }
+                return
+            }
+
+            // Load all workouts for user's groups within date range
+            // Note: Firestore 'in' query supports max 10 items
+            let batchSize = 10
+            var allWorkouts: [ScheduledWorkout] = []
+            var processedBatches = 0
+            let totalBatches = (groupIds.count + batchSize - 1) / batchSize
+
+            for batchIndex in 0..<totalBatches {
+                let start = batchIndex * batchSize
+                let end = min(start + batchSize, groupIds.count)
+                let batchGroupIds = Array(groupIds[start..<end])
+
+                self.db.collection("scheduledWorkouts")
+                    .whereField("groupId", in: batchGroupIds)
+                    .whereField("date", isGreaterThanOrEqualTo: startDate)
+                    .whereField("date", isLessThanOrEqualTo: endDate)
+                    .getDocuments { snapshot, error in
+                        if let error = error {
+                            print("❌ Error loading workouts batch: \(error.localizedDescription)")
+                        } else {
+                            let batchWorkouts = snapshot?.documents.compactMap { doc -> ScheduledWorkout? in
+                                try? doc.data(as: ScheduledWorkout.self)
+                            } ?? []
+                            allWorkouts.append(contentsOf: batchWorkouts)
+                        }
+
+                        processedBatches += 1
+
+                        if processedBatches == totalBatches {
+                            DispatchQueue.main.async {
+                                print("✅ Loaded \(allWorkouts.count) scheduled workouts for user from \(groups.count) groups")
+                                completion(allWorkouts, nil)
+                            }
+                        }
+                    }
+            }
+        }
     }
 
     func deleteScheduledWorkout(workoutId: String, completion: @escaping (String?) -> Void) {
