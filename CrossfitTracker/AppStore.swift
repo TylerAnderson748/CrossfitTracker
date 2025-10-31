@@ -1084,4 +1084,117 @@ final class AppStore: ObservableObject {
             }
         }
     }
+
+    // MARK: - Workout Logs
+    func saveWorkoutLog(_ log: WorkoutLog, completion: @escaping (WorkoutLog?, String?) -> Void) {
+        guard currentUser?.uid != nil else {
+            completion(nil, "No user logged in")
+            return
+        }
+
+        do {
+            let docRef = db.collection("workoutLogs").document()
+            var logWithId = log
+            logWithId.id = docRef.documentID
+
+            try docRef.setData(from: logWithId) { error in
+                DispatchQueue.main.async {
+                    if let error = error {
+                        completion(nil, error.localizedDescription)
+                    } else {
+                        print("✅ Workout logged: \(log.wodTitle)")
+                        completion(logWithId, nil)
+                    }
+                }
+            }
+        } catch {
+            DispatchQueue.main.async {
+                completion(nil, error.localizedDescription)
+            }
+        }
+    }
+
+    func loadWorkoutLogs(userId: String, limit: Int? = nil, completion: @escaping ([WorkoutLog], String?) -> Void) {
+        var query: Query = db.collection("workoutLogs")
+            .whereField("userId", isEqualTo: userId)
+            .order(by: "completedDate", descending: true)
+
+        if let limit = limit {
+            query = query.limit(to: limit)
+        }
+
+        query.getDocuments { snapshot, error in
+            if let error = error {
+                DispatchQueue.main.async {
+                    completion([], error.localizedDescription)
+                }
+                return
+            }
+
+            let logs = snapshot?.documents.compactMap { doc -> WorkoutLog? in
+                try? doc.data(as: WorkoutLog.self)
+            } ?? []
+
+            DispatchQueue.main.async {
+                print("✅ Loaded \(logs.count) workout logs")
+                completion(logs, nil)
+            }
+        }
+    }
+
+    func loadWorkoutLogsForWorkout(userId: String, wodTitle: String, completion: @escaping ([WorkoutLog], String?) -> Void) {
+        db.collection("workoutLogs")
+            .whereField("userId", isEqualTo: userId)
+            .whereField("wodTitle", isEqualTo: wodTitle)
+            .order(by: "completedDate", descending: true)
+            .getDocuments { snapshot, error in
+                if let error = error {
+                    DispatchQueue.main.async {
+                        completion([], error.localizedDescription)
+                    }
+                    return
+                }
+
+                let logs = snapshot?.documents.compactMap { doc -> WorkoutLog? in
+                    try? doc.data(as: WorkoutLog.self)
+                } ?? []
+
+                DispatchQueue.main.async {
+                    print("✅ Loaded \(logs.count) logs for \(wodTitle)")
+                    completion(logs, nil)
+                }
+            }
+    }
+
+    // Check if this result is a PR for this workout
+    func checkIfPR(userId: String, wodTitle: String, resultType: WorkoutResultType, value: Double, completion: @escaping (Bool) -> Void) {
+        loadWorkoutLogsForWorkout(userId: userId, wodTitle: wodTitle) { logs, error in
+            guard error == nil else {
+                completion(false)
+                return
+            }
+
+            let previousBest: Double?
+            switch resultType {
+            case .time:
+                // Lower is better for time
+                previousBest = logs.compactMap { $0.timeInSeconds }.min()
+                completion(previousBest == nil || value < previousBest!)
+            case .rounds:
+                // Higher is better for rounds
+                previousBest = logs.compactMap { $0.rounds }.map { Double($0) }.max()
+                completion(previousBest == nil || value > previousBest!)
+            case .weight:
+                // Higher is better for weight
+                previousBest = logs.compactMap { $0.weight }.max()
+                completion(previousBest == nil || value > previousBest!)
+            case .reps:
+                // Higher is better for reps
+                previousBest = logs.compactMap { $0.reps }.map { Double($0) }.max()
+                completion(previousBest == nil || value > previousBest!)
+            case .other:
+                completion(false)
+            }
+        }
+    }
 }
