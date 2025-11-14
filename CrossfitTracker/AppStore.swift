@@ -58,6 +58,60 @@ final class AppStore: ObservableObject {
         }
     }
 
+    // MARK: - Helper Functions
+
+    /// Find a specific occurrence of a weekday in a month (e.g., "first Monday", "last Friday")
+    /// - Parameters:
+    ///   - month: A date in the target month
+    ///   - weekPosition: 1=First, 2=Second, 3=Third, 4=Fourth, 5=Last
+    ///   - weekday: 1=Sun, 2=Mon, 3=Tue, 4=Wed, 5=Thu, 6=Fri, 7=Sat
+    ///   - calendar: Calendar to use
+    /// - Returns: The date of the specified weekday occurrence, or nil if not found
+    static func findDateInMonth(month: Date, weekPosition: Int, weekday: Int, calendar: Calendar) -> Date? {
+        guard let monthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: month)) else {
+            return nil
+        }
+
+        if weekPosition == 5 {
+            // Find last occurrence
+            guard let nextMonth = calendar.date(byAdding: .month, value: 1, to: monthStart),
+                  let monthEnd = calendar.date(byAdding: .day, value: -1, to: nextMonth) else {
+                return nil
+            }
+
+            // Start from the end of the month and work backwards
+            var currentDate = monthEnd
+            while calendar.component(.month, from: currentDate) == calendar.component(.month, from: monthStart) {
+                if calendar.component(.weekday, from: currentDate) == weekday {
+                    return currentDate
+                }
+                guard let previousDate = calendar.date(byAdding: .day, value: -1, to: currentDate) else {
+                    return nil
+                }
+                currentDate = previousDate
+            }
+        } else {
+            // Find nth occurrence (1st, 2nd, 3rd, 4th)
+            var currentDate = monthStart
+            var occurrenceCount = 0
+
+            while calendar.component(.month, from: currentDate) == calendar.component(.month, from: monthStart) {
+                if calendar.component(.weekday, from: currentDate) == weekday {
+                    occurrenceCount += 1
+                    if occurrenceCount == weekPosition {
+                        return currentDate
+                    }
+                }
+                guard let nextDate = calendar.date(byAdding: .day, value: 1, to: currentDate) else {
+                    return nil
+                }
+                currentDate = nextDate
+            }
+        }
+
+        return nil
+    }
+
     // MARK: - Firebase Authentication
     func signUp(email: String, password: String, firstName: String, lastName: String, completion: @escaping (String?) -> Void) {
         Auth.auth().createUser(withEmail: email, password: password) { [weak self] result, error in
@@ -910,14 +964,39 @@ final class AppStore: ObservableObject {
             }
 
         case .monthly:
-            while currentDate <= endDate {
-                workoutDates.append(currentDate)
-                guard let nextDate = calendar.date(byAdding: .month, value: 1, to: currentDate) else { break }
-                currentDate = nextDate
+            // Check if we have week-based monthly recurrence
+            if let weekPosition = baseWorkout.monthlyWeekPosition,
+               let weekday = baseWorkout.monthlyWeekday {
+                // Week-based monthly recurrence (e.g., "First Monday", "Last Friday")
+                var monthDate = currentDate
 
-                if workoutDates.count >= 365 {
-                    print("⚠️ Reached maximum of 365 recurring instances")
-                    break
+                while monthDate <= endDate {
+                    if let targetDate = Self.findDateInMonth(month: monthDate, weekPosition: weekPosition, weekday: weekday, calendar: calendar) {
+                        // Only add if the date is within our range
+                        if targetDate >= currentDate && targetDate <= endDate {
+                            workoutDates.append(targetDate)
+                        }
+                    }
+
+                    guard let nextMonth = calendar.date(byAdding: .month, value: 1, to: monthDate) else { break }
+                    monthDate = nextMonth
+
+                    if workoutDates.count >= 365 {
+                        print("⚠️ Reached maximum of 365 recurring instances")
+                        break
+                    }
+                }
+            } else {
+                // Original monthly recurrence (same day each month)
+                while currentDate <= endDate {
+                    workoutDates.append(currentDate)
+                    guard let nextDate = calendar.date(byAdding: .month, value: 1, to: currentDate) else { break }
+                    currentDate = nextDate
+
+                    if workoutDates.count >= 365 {
+                        print("⚠️ Reached maximum of 365 recurring instances")
+                        break
+                    }
                 }
             }
 

@@ -472,12 +472,41 @@ struct AddPersonalWorkoutSheet: View {
     @State private var recurrenceType: RecurrenceType = .none
     @State private var hasEndDate: Bool = false
     @State private var recurrenceEndDate: Date
+    @State private var monthlyWeekPosition: Int = 1 // 1=First, 2=Second, 3=Third, 4=Fourth, 5=Last
+    @State private var monthlyWeekday: Int = 2 // Default to Monday
 
     init(selectedDate: Date, onSave: @escaping (ScheduledWorkout) -> Void) {
         self.selectedDate = selectedDate
         self.onSave = onSave
         _date = State(initialValue: selectedDate)
         _recurrenceEndDate = State(initialValue: Calendar.current.date(byAdding: .month, value: 3, to: selectedDate) ?? selectedDate)
+
+        // Initialize monthly settings from selected date
+        let calendar = Calendar.current
+        _monthlyWeekday = State(initialValue: calendar.component(.weekday, from: selectedDate))
+        _monthlyWeekPosition = State(initialValue: Self.weekPositionInMonth(for: selectedDate))
+    }
+
+    // Helper to calculate which week of the month a date is in
+    static func weekPositionInMonth(for date: Date) -> Int {
+        let calendar = Calendar.current
+        let dayOfMonth = calendar.component(.day, from: date)
+
+        if dayOfMonth <= 7 {
+            return 1 // First week
+        } else if dayOfMonth <= 14 {
+            return 2 // Second week
+        } else if dayOfMonth <= 21 {
+            return 3 // Third week
+        } else {
+            // Check if this is the last occurrence of this weekday
+            let weekday = calendar.component(.weekday, from: date)
+            guard let nextWeek = calendar.date(byAdding: .weekOfMonth, value: 1, to: date),
+                  calendar.component(.month, from: nextWeek) != calendar.component(.month, from: date) else {
+                return 4 // Fourth week
+            }
+            return 5 // Last week (different from 4th if there are 5 occurrences)
+        }
     }
 
     var body: some View {
@@ -496,6 +525,27 @@ struct AddPersonalWorkoutSheet: View {
                         Text("Daily").tag(RecurrenceType.daily)
                         Text("Weekly").tag(RecurrenceType.weekly)
                         Text("Monthly").tag(RecurrenceType.monthly)
+                    }
+
+                    // Monthly recurrence options
+                    if recurrenceType == .monthly {
+                        Picker("Week", selection: $monthlyWeekPosition) {
+                            Text("First").tag(1)
+                            Text("Second").tag(2)
+                            Text("Third").tag(3)
+                            Text("Fourth").tag(4)
+                            Text("Last").tag(5)
+                        }
+
+                        Picker("Day", selection: $monthlyWeekday) {
+                            Text("Sunday").tag(1)
+                            Text("Monday").tag(2)
+                            Text("Tuesday").tag(3)
+                            Text("Wednesday").tag(4)
+                            Text("Thursday").tag(5)
+                            Text("Friday").tag(6)
+                            Text("Saturday").tag(7)
+                        }
                     }
 
                     if recurrenceType != .none {
@@ -539,7 +589,10 @@ struct AddPersonalWorkoutSheet: View {
                             timeSlots: [],
                             createdBy: userId,
                             recurrenceType: recurrenceType,
-                            recurrenceEndDate: hasEndDate ? recurrenceEndDate : nil
+                            recurrenceEndDate: hasEndDate ? recurrenceEndDate : nil,
+                            weekdays: nil,
+                            monthlyWeekPosition: recurrenceType == .monthly ? monthlyWeekPosition : nil,
+                            monthlyWeekday: recurrenceType == .monthly ? monthlyWeekday : nil
                         )
 
                         onSave(workout)
@@ -573,11 +626,14 @@ struct AddPersonalWorkoutSheet: View {
                 return "Repeats weekly for 1 year (52 weeks)"
             }
         case .monthly:
+            let weekPositionText = ["", "first", "second", "third", "fourth", "last"][min(monthlyWeekPosition, 5)]
+            let weekdayText = ["", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][min(monthlyWeekday, 7)]
+
             if hasEndDate {
                 let months = calendar.dateComponents([.month], from: date, to: recurrenceEndDate).month ?? 0
-                return "Repeats monthly for \(months) months (until \(formatter.string(from: recurrenceEndDate)))"
+                return "Repeats on the \(weekPositionText) \(weekdayText) of each month for \(months) months (until \(formatter.string(from: recurrenceEndDate)))"
             } else {
-                return "Repeats monthly for 1 year (12 months)"
+                return "Repeats on the \(weekPositionText) \(weekdayText) of each month for 1 year"
             }
         }
     }
