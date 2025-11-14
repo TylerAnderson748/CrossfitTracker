@@ -1219,11 +1219,11 @@ final class AppStore: ObservableObject {
 
     // MARK: - Dashboard Methods
 
-    /// Fetch today's scheduled workouts for the user's gym
+    /// Fetch today's scheduled workouts for the user (personal + group workouts)
     func loadTodaysWorkouts(completion: @escaping ([ScheduledWorkout], String?) -> Void) {
-        guard let gymId = appUser?.gymId else {
+        guard let userId = currentUser?.uid else {
             DispatchQueue.main.async {
-                completion([], "User not assigned to a gym")
+                completion([], "User not logged in")
             }
             return
         }
@@ -1232,38 +1232,78 @@ final class AppStore: ObservableObject {
         let startOfDay = calendar.startOfDay(for: Date())
         let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay)!
 
-        loadScheduledWorkouts(startDate: startOfDay, endDate: endOfDay, gymId: gymId) { workouts, error in
+        loadScheduledWorkoutsForUser(userId: userId, startDate: startOfDay, endDate: endOfDay) { workouts, error in
             completion(workouts, error)
         }
     }
 
-    /// Fetch recent workout logs from gym members for a specific workout
+    /// Fetch recent workout logs from group members for a specific workout
     func loadGymMemberLogs(for workout: ScheduledWorkout, limit: Int = 10, completion: @escaping ([WorkoutLog], [AppUser], String?) -> Void) {
-        guard let gymId = appUser?.gymId else {
+        // Get the group for this workout to find other members
+        guard let groupId = workout.groupId else {
+            // Personal workout - no group members
             DispatchQueue.main.async {
-                completion([], [], "User not assigned to a gym")
+                completion([], [], nil)
             }
             return
         }
 
-        // First, get all users from the gym
-        db.collection("users")
-            .whereField("gymId", isEqualTo: gymId)
-            .getDocuments { [weak self] snapshot, error in
-                guard let self = self else { return }
+        // First, get the group to find its members
+        db.collection("groups").document(groupId).getDocument { [weak self] document, error in
+            guard let self = self else { return }
 
-                if let error = error {
-                    DispatchQueue.main.async {
-                        completion([], [], error.localizedDescription)
-                    }
-                    return
+            if let error = error {
+                DispatchQueue.main.async {
+                    completion([], [], error.localizedDescription)
                 }
+                return
+            }
 
-                let gymUsers = snapshot?.documents.compactMap { doc -> AppUser? in
-                    try? doc.data(as: AppUser.self)
-                } ?? []
+            guard let group = try? document?.data(as: WorkoutGroup.self) else {
+                DispatchQueue.main.async {
+                    completion([], [], "Group not found")
+                }
+                return
+            }
 
-                // Then fetch workout logs for this workout from these users
+            let memberIds = group.memberIds
+
+            // Fetch users for these memberIds
+            if memberIds.isEmpty {
+                DispatchQueue.main.async {
+                    completion([], [], nil)
+                }
+                return
+            }
+
+            // Query users - Firestore has a limit of 10 items in 'in' queries, so we need to batch
+            let batchSize = 10
+            var allUsers: [AppUser] = []
+            let batches = stride(from: 0, to: memberIds.count, by: batchSize).map {
+                Array(memberIds[$0..<min($0 + batchSize, memberIds.count)])
+            }
+
+            let dispatchGroup = DispatchGroup()
+
+            for batch in batches {
+                dispatchGroup.enter()
+                self.db.collection("users")
+                    .whereField(FieldPath.documentID(), in: batch)
+                    .getDocuments { snapshot, error in
+                        if let error = error {
+                            print("❌ Error fetching users: \(error.localizedDescription)")
+                        } else {
+                            let users = snapshot?.documents.compactMap { doc -> AppUser? in
+                                try? doc.data(as: AppUser.self)
+                            } ?? []
+                            allUsers.append(contentsOf: users)
+                        }
+                        dispatchGroup.leave()
+                    }
+            }
+
+            dispatchGroup.notify(queue: .main) {
+                // Now fetch workout logs for this workout
                 self.db.collection("workoutLogs")
                     .whereField("wodTitle", isEqualTo: workout.wodTitle)
                     .order(by: "completedDate", descending: true)
@@ -1271,7 +1311,7 @@ final class AppStore: ObservableObject {
                     .getDocuments { snapshot, error in
                         if let error = error {
                             DispatchQueue.main.async {
-                                completion([], gymUsers, error.localizedDescription)
+                                completion([], allUsers, error.localizedDescription)
                             }
                             return
                         }
@@ -1280,15 +1320,16 @@ final class AppStore: ObservableObject {
                             try? doc.data(as: WorkoutLog.self)
                         } ?? []
 
-                        // Filter to only include logs from gym members
-                        let gymUserIds = Set(gymUsers.compactMap { $0.id })
-                        let gymMemberLogs = logs.filter { gymUserIds.contains($0.userId) }
+                        // Filter to only include logs from group members
+                        let memberIdSet = Set(memberIds)
+                        let groupMemberLogs = logs.filter { memberIdSet.contains($0.userId) }
 
                         DispatchQueue.main.async {
-                            print("✅ Loaded \(gymMemberLogs.count) gym member logs for \(workout.wodTitle)")
-                            completion(gymMemberLogs, gymUsers, nil)
+                            print("✅ Loaded \(groupMemberLogs.count) group member logs for \(workout.wodTitle)")
+                            completion(groupMemberLogs, allUsers, nil)
                         }
                     }
             }
+        }
     }
 }

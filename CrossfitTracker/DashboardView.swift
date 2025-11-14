@@ -22,11 +22,9 @@ struct DashboardView: View {
                     VStack(spacing: 8) {
                         Text("Today's Workouts")
                             .font(.title.bold())
-                        if let gymName = store.appUser?.gymId {
-                            Text("At your gym")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                        }
+                        Text("Your scheduled workouts and group programming")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
                     }
                     .padding(.top)
 
@@ -144,11 +142,8 @@ struct WorkoutCard: View {
                 Button(action: {
                     // Create WOD from ScheduledWorkout for timer
                     let wod = WOD(
-                        id: workout.id ?? UUID().uuidString,
                         title: workout.wodTitle,
-                        description: workout.wodDescription,
-                        type: .forTime,
-                        timeCap: 0
+                        description: workout.wodDescription
                     )
                     navigationPath.append(WODDestination.timer(wod))
                 }) {
@@ -161,11 +156,8 @@ struct WorkoutCard: View {
 
                 Button(action: {
                     let wod = WOD(
-                        id: workout.id ?? UUID().uuidString,
                         title: workout.wodTitle,
-                        description: workout.wodDescription,
-                        type: .forTime,
-                        timeCap: 0
+                        description: workout.wodDescription
                     )
                     navigationPath.append(WODDestination.leaderboard(wod))
                 }) {
