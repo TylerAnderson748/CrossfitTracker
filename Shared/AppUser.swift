@@ -16,8 +16,9 @@ struct AppUser: Codable, Identifiable {
     var lastName: String?
     var displayName: String? // Computed from firstName + lastName
     var createdAt: Date
+    var hideFromLeaderboards: Bool // User preference to opt out of leaderboards
 
-    init(id: String? = nil, email: String, role: UserRole = .athlete, firstName: String? = nil, lastName: String? = nil) {
+    init(id: String? = nil, email: String, role: UserRole = .athlete, firstName: String? = nil, lastName: String? = nil, hideFromLeaderboards: Bool = false) {
         self.id = id
         self.email = email
         self.role = role
@@ -25,6 +26,7 @@ struct AppUser: Codable, Identifiable {
         self.lastName = lastName
         self.displayName = [firstName, lastName].compactMap { $0 }.joined(separator: " ")
         self.createdAt = Date()
+        self.hideFromLeaderboards = hideFromLeaderboards
     }
 
     var fullName: String {

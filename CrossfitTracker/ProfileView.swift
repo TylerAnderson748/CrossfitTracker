@@ -108,6 +108,27 @@ struct ProfileView: View {
                     }
                 }
 
+                Section("Privacy Settings") {
+                    Toggle(isOn: Binding(
+                        get: { store.appUser?.hideFromLeaderboards ?? false },
+                        set: { newValue in
+                            store.updateLeaderboardVisibility(hideFromLeaderboards: newValue) { error in
+                                if let error = error {
+                                    print("❌ Error updating leaderboard visibility: \(error)")
+                                }
+                            }
+                        }
+                    )) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Hide from Leaderboards")
+                                .font(.body)
+                            Text("Your workout results won't be shown on public leaderboards")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+
                 Section {
                     Button(action: { store.logOut() }) {
                         HStack {

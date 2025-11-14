@@ -39,6 +39,9 @@ final class AppStore: ObservableObject {
 
     @Published var liftEntries: [LiftEntry] = [] // all lift history entries
 
+    // MARK: - Leaderboards
+    @Published var leaderboardEntries: [LeaderboardEntry] = []
+
     private init() {
         // Listen for Firebase auth state changes
         Auth.auth().addStateDidChangeListener { [weak self] _, user in
@@ -1195,12 +1198,20 @@ final class AppStore: ObservableObject {
             var logWithId = log
             logWithId.id = docRef.documentID
 
-            try docRef.setData(from: logWithId) { error in
+            try docRef.setData(from: logWithId) { [weak self] error in
                 DispatchQueue.main.async {
                     if let error = error {
                         completion(nil, error.localizedDescription)
                     } else {
                         print("✅ Workout logged: \(log.wodTitle)")
+
+                        // Create leaderboard entry automatically
+                        self?.createLeaderboardEntry(from: logWithId) { _, leaderboardError in
+                            if let leaderboardError = leaderboardError {
+                                print("⚠️ Workout logged but leaderboard entry failed: \(leaderboardError)")
+                            }
+                        }
+
                         completion(logWithId, nil)
                     }
                 }
@@ -1408,6 +1419,137 @@ final class AppStore: ObservableObject {
                             completion(groupMemberLogs, allUsers, nil)
                         }
                     }
+            }
+        }
+    }
+
+    // MARK: - Leaderboard Functions
+
+    /// Create a leaderboard entry from a workout log
+    func createLeaderboardEntry(from log: WorkoutLog, completion: @escaping (LeaderboardEntry?, String?) -> Void) {
+        guard let userId = currentUser?.uid,
+              let appUser = appUser else {
+            completion(nil, "No user logged in")
+            return
+        }
+
+        // Check if user has opted out of leaderboards
+        if appUser.hideFromLeaderboards {
+            print("ℹ️ User has opted out of leaderboards, skipping entry creation")
+            completion(nil, nil)
+            return
+        }
+
+        let userName = appUser.fullName.isEmpty ? appUser.email : appUser.fullName
+        let entry = LeaderboardEntry.from(workoutLog: log, userName: userName)
+
+        do {
+            let docRef = db.collection("leaderboardEntries").document()
+            var entryWithId = entry
+            entryWithId.id = docRef.documentID
+
+            try docRef.setData(from: entryWithId) { error in
+                DispatchQueue.main.async {
+                    if let error = error {
+                        print("❌ Error creating leaderboard entry: \(error.localizedDescription)")
+                        completion(nil, error.localizedDescription)
+                    } else {
+                        print("✅ Created leaderboard entry for \(log.wodTitle)")
+                        completion(entryWithId, nil)
+                    }
+                }
+            }
+        } catch {
+            DispatchQueue.main.async {
+                print("❌ Error encoding leaderboard entry: \(error.localizedDescription)")
+                completion(nil, error.localizedDescription)
+            }
+        }
+    }
+
+    /// Fetch leaderboard entries for a specific workout using fuzzy matching
+    func fetchLeaderboardEntries(for workoutName: String, limit: Int = 20, completion: @escaping ([LeaderboardEntry], String?) -> Void) {
+        let normalizedName = LeaderboardEntry.normalizeWorkoutName(workoutName)
+
+        db.collection("leaderboardEntries")
+            .whereField("normalizedWorkoutName", isEqualTo: normalizedName)
+            .order(by: "completedDate", descending: true)
+            .limit(to: limit)
+            .getDocuments { snapshot, error in
+                if let error = error {
+                    DispatchQueue.main.async {
+                        print("❌ Error fetching leaderboard entries: \(error.localizedDescription)")
+                        completion([], error.localizedDescription)
+                    }
+                    return
+                }
+
+                let entries = snapshot?.documents.compactMap { doc -> LeaderboardEntry? in
+                    try? doc.data(as: LeaderboardEntry.self)
+                } ?? []
+
+                DispatchQueue.main.async {
+                    print("✅ Loaded \(entries.count) leaderboard entries for '\(workoutName)'")
+                    self.leaderboardEntries = entries
+                    completion(entries, nil)
+                }
+            }
+    }
+
+    /// Fetch all leaderboard entries with fuzzy matching
+    /// Returns entries grouped by similar workout names
+    func fetchAllLeaderboards(completion: @escaping ([String: [LeaderboardEntry]], String?) -> Void) {
+        db.collection("leaderboardEntries")
+            .order(by: "completedDate", descending: true)
+            .limit(to: 500)
+            .getDocuments { snapshot, error in
+                if let error = error {
+                    DispatchQueue.main.async {
+                        print("❌ Error fetching all leaderboards: \(error.localizedDescription)")
+                        completion([:], error.localizedDescription)
+                    }
+                    return
+                }
+
+                let entries = snapshot?.documents.compactMap { doc -> LeaderboardEntry? in
+                    try? doc.data(as: LeaderboardEntry.self)
+                } ?? []
+
+                // Group by normalized workout name
+                var grouped: [String: [LeaderboardEntry]] = [:]
+                for entry in entries {
+                    if grouped[entry.normalizedWorkoutName] == nil {
+                        grouped[entry.normalizedWorkoutName] = []
+                    }
+                    grouped[entry.normalizedWorkoutName]?.append(entry)
+                }
+
+                DispatchQueue.main.async {
+                    print("✅ Loaded \(entries.count) total leaderboard entries across \(grouped.count) workouts")
+                    completion(grouped, nil)
+                }
+            }
+    }
+
+    /// Update user's leaderboard visibility preference
+    func updateLeaderboardVisibility(hideFromLeaderboards: Bool, completion: @escaping (String?) -> Void) {
+        guard let userId = currentUser?.uid else {
+            completion("No user logged in")
+            return
+        }
+
+        db.collection("users").document(userId).updateData([
+            "hideFromLeaderboards": hideFromLeaderboards
+        ]) { error in
+            DispatchQueue.main.async {
+                if let error = error {
+                    print("❌ Error updating leaderboard visibility: \(error.localizedDescription)")
+                    completion(error.localizedDescription)
+                } else {
+                    print("✅ Updated leaderboard visibility to: \(hideFromLeaderboards)")
+                    self.appUser?.hideFromLeaderboards = hideFromLeaderboards
+                    completion(nil)
+                }
             }
         }
     }
