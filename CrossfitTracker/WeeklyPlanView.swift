@@ -348,7 +348,11 @@ struct DebugInfoView: View {
                 Section("User Info") {
                     Text("User ID: \(store.currentUser?.uid ?? "Not logged in")")
                         .font(.caption)
-                    Text("Email: \(store.currentUser?.email ?? "N/A")")
+                    if let user = store.appUser {
+                        Text("Name: \(user.fullName.isEmpty ? user.email : user.fullName)")
+                    } else {
+                        Text("Email: \(store.currentUser?.email ?? "N/A")")
+                    }
                         .font(.caption)
                 }
 

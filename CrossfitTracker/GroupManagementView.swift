@@ -285,7 +285,15 @@ struct GroupDetailView: View {
                         HStack {
                             Image(systemName: "person.circle.fill")
                                 .foregroundColor(.blue)
-                            Text(member.email)
+                            VStack(alignment: .leading) {
+                                Text(member.fullName.isEmpty ? member.email : member.fullName)
+                                    .font(.body)
+                                if !member.fullName.isEmpty {
+                                    Text(member.email)
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
                             Spacer()
 
                             if group.membershipType == .inviteOnly && group.isDeletable {
@@ -394,8 +402,15 @@ struct AddMemberToGroupSheet: View {
                             HStack {
                                 Image(systemName: "person.circle")
                                     .foregroundColor(.blue)
-                                Text(user.email)
-                                    .foregroundColor(.primary)
+                                VStack(alignment: .leading) {
+                                    Text(user.fullName.isEmpty ? user.email : user.fullName)
+                                        .foregroundColor(.primary)
+                                    if !user.fullName.isEmpty {
+                                        Text(user.email)
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
                                 Spacer()
                                 Image(systemName: "plus.circle")
                                     .foregroundColor(.blue)

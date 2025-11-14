@@ -230,7 +230,15 @@ struct GymDetailView: View {
                         HStack {
                             Image(systemName: "person.circle.fill")
                                 .foregroundColor(.blue)
-                            Text(coach.email)
+                            VStack(alignment: .leading) {
+                                Text(coach.fullName.isEmpty ? coach.email : coach.fullName)
+                                    .font(.body)
+                                if !coach.fullName.isEmpty {
+                                    Text(coach.email)
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
                         }
                     }
                 }
@@ -253,7 +261,15 @@ struct GymDetailView: View {
                         HStack {
                             Image(systemName: "person.circle.fill")
                                 .foregroundColor(.gray)
-                            Text(member.email)
+                            VStack(alignment: .leading) {
+                                Text(member.fullName.isEmpty ? member.email : member.fullName)
+                                    .font(.body)
+                                if !member.fullName.isEmpty {
+                                    Text(member.email)
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
                         }
                     }
                 }
