@@ -11,6 +11,9 @@ struct ProfileView: View {
     @EnvironmentObject var store: AppStore
     @State private var gyms: [Gym] = []
     @State private var groups: [WorkoutGroup] = []
+    @State private var showingEditProfile = false
+    @State private var editFirstName = ""
+    @State private var editLastName = ""
 
     var body: some View {
         NavigationView {
@@ -33,6 +36,18 @@ struct ProfileView: View {
                                 .foregroundColor(.secondary)
                             Text(store.userRole.displayName)
                                 .font(.caption)
+                                .foregroundColor(.blue)
+                        }
+
+                        Spacer()
+
+                        Button(action: {
+                            editFirstName = store.appUser?.firstName ?? ""
+                            editLastName = store.appUser?.lastName ?? ""
+                            showingEditProfile = true
+                        }) {
+                            Image(systemName: "pencil.circle.fill")
+                                .font(.title2)
                                 .foregroundColor(.blue)
                         }
                     }
@@ -107,6 +122,13 @@ struct ProfileView: View {
             .onAppear {
                 loadUserData()
             }
+            .sheet(isPresented: $showingEditProfile) {
+                EditProfileSheet(
+                    firstName: $editFirstName,
+                    lastName: $editLastName,
+                    onSave: { saveProfile() }
+                )
+            }
         }
     }
 
@@ -134,6 +156,54 @@ struct ProfileView: View {
             }
 
             self.groups = loadedGroups
+        }
+    }
+
+    private func saveProfile() {
+        guard let userId = store.currentUser?.uid else { return }
+
+        store.updateUserProfile(userId: userId, firstName: editFirstName, lastName: editLastName) { error in
+            if let error = error {
+                print("❌ Error updating profile: \(error)")
+            } else {
+                print("✅ Profile updated successfully")
+                showingEditProfile = false
+            }
+        }
+    }
+}
+
+struct EditProfileSheet: View {
+    @Environment(\.dismiss) var dismiss
+    @Binding var firstName: String
+    @Binding var lastName: String
+    let onSave: () -> Void
+
+    var body: some View {
+        NavigationView {
+            Form {
+                Section("Personal Information") {
+                    TextField("First Name", text: $firstName)
+                        .textInputAutocapitalization(.words)
+                    TextField("Last Name", text: $lastName)
+                        .textInputAutocapitalization(.words)
+                }
+            }
+            .navigationTitle("Edit Profile")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        onSave()
+                    }
+                    .disabled(firstName.isEmpty || lastName.isEmpty)
+                }
+            }
         }
     }
 }

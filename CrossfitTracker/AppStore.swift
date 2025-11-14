@@ -182,6 +182,25 @@ final class AppStore: ObservableObject {
         }
     }
 
+    func updateUserProfile(userId: String, firstName: String, lastName: String, completion: @escaping (String?) -> Void) {
+        let displayName = [firstName, lastName].compactMap { $0.isEmpty ? nil : $0 }.joined(separator: " ")
+
+        db.collection("users").document(userId).updateData([
+            "firstName": firstName,
+            "lastName": lastName,
+            "displayName": displayName
+        ]) { [weak self] error in
+            if let error = error {
+                completion(error.localizedDescription)
+                return
+            }
+
+            // Reload user data to refresh UI
+            self?.fetchUserRole(userId: userId)
+            completion(nil)
+        }
+    }
+
     // MARK: - WOD Actions
     func startWOD(_ wod: WOD) {
         activeWOD = wod
