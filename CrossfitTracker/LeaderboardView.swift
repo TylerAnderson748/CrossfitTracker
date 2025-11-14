@@ -102,7 +102,6 @@ struct LeaderboardView: View {
                 }
             }
         }
-        }
     }
 
     private func loadLeaderboards() {
