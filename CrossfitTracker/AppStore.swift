@@ -1216,4 +1216,79 @@ final class AppStore: ObservableObject {
             }
         }
     }
+
+    // MARK: - Dashboard Methods
+
+    /// Fetch today's scheduled workouts for the user's gym
+    func loadTodaysWorkouts(completion: @escaping ([ScheduledWorkout], String?) -> Void) {
+        guard let gymId = appUser?.gymId else {
+            DispatchQueue.main.async {
+                completion([], "User not assigned to a gym")
+            }
+            return
+        }
+
+        let calendar = Calendar.current
+        let startOfDay = calendar.startOfDay(for: Date())
+        let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay)!
+
+        loadScheduledWorkouts(startDate: startOfDay, endDate: endOfDay, gymId: gymId) { workouts, error in
+            completion(workouts, error)
+        }
+    }
+
+    /// Fetch recent workout logs from gym members for a specific workout
+    func loadGymMemberLogs(for workout: ScheduledWorkout, limit: Int = 10, completion: @escaping ([WorkoutLog], [AppUser], String?) -> Void) {
+        guard let gymId = appUser?.gymId else {
+            DispatchQueue.main.async {
+                completion([], [], "User not assigned to a gym")
+            }
+            return
+        }
+
+        // First, get all users from the gym
+        db.collection("users")
+            .whereField("gymId", isEqualTo: gymId)
+            .getDocuments { [weak self] snapshot, error in
+                guard let self = self else { return }
+
+                if let error = error {
+                    DispatchQueue.main.async {
+                        completion([], [], error.localizedDescription)
+                    }
+                    return
+                }
+
+                let gymUsers = snapshot?.documents.compactMap { doc -> AppUser? in
+                    try? doc.data(as: AppUser.self)
+                } ?? []
+
+                // Then fetch workout logs for this workout from these users
+                self.db.collection("workoutLogs")
+                    .whereField("wodTitle", isEqualTo: workout.wodTitle)
+                    .order(by: "completedDate", descending: true)
+                    .limit(to: limit)
+                    .getDocuments { snapshot, error in
+                        if let error = error {
+                            DispatchQueue.main.async {
+                                completion([], gymUsers, error.localizedDescription)
+                            }
+                            return
+                        }
+
+                        let logs = snapshot?.documents.compactMap { doc -> WorkoutLog? in
+                            try? doc.data(as: WorkoutLog.self)
+                        } ?? []
+
+                        // Filter to only include logs from gym members
+                        let gymUserIds = Set(gymUsers.compactMap { $0.id })
+                        let gymMemberLogs = logs.filter { gymUserIds.contains($0.userId) }
+
+                        DispatchQueue.main.async {
+                            print("✅ Loaded \(gymMemberLogs.count) gym member logs for \(workout.wodTitle)")
+                            completion(gymMemberLogs, gymUsers, nil)
+                        }
+                    }
+            }
+    }
 }
