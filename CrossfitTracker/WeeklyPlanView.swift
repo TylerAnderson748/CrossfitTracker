@@ -350,10 +350,11 @@ struct DebugInfoView: View {
                         .font(.caption)
                     if let user = store.appUser {
                         Text("Name: \(user.fullName.isEmpty ? user.email : user.fullName)")
+                            .font(.caption)
                     } else {
                         Text("Email: \(store.currentUser?.email ?? "N/A")")
+                            .font(.caption)
                     }
-                        .font(.caption)
                 }
 
                 Section("Groups I'm In") {
@@ -784,8 +785,6 @@ struct LogWorkoutSheet: View {
 
         // Calculate values based on result type
         let timeInSeconds: Double? = resultType == .time ? Double(minutes * 60 + seconds) : nil
-        let roundsValue: Int? = resultType == .rounds ? rounds : nil
-        let repsValue: Int? = (resultType == .rounds || resultType == .reps) ? reps : nil
         let weightValue: Double? = resultType == .weight ? Double(weight) : nil
 
         // Check if this is a PR
