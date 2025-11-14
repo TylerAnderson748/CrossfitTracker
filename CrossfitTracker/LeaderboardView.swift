@@ -9,12 +9,37 @@ import SwiftUI
 
 struct LeaderboardView: View {
     @EnvironmentObject var store: AppStore
+    let wod: WOD?
     @State private var selectedWorkout: String?
     @State private var leaderboards: [String: [LeaderboardEntry]] = [:]
     @State private var isLoading = false
     @State private var errorMessage: String?
 
+    init(wod: WOD? = nil) {
+        self.wod = wod
+    }
+
     var body: some View {
+        Group {
+            if let wod = wod {
+                // Show leaderboard for specific workout
+                WorkoutLeaderboardDetailView(
+                    workoutName: wod.title,
+                    entries: leaderboards[wod.title] ?? []
+                )
+            } else {
+                // Show all leaderboards
+                leaderboardList
+            }
+        }
+        .onAppear {
+            if leaderboards.isEmpty {
+                loadLeaderboards()
+            }
+        }
+    }
+
+    private var leaderboardList: some View {
         NavigationView {
             VStack {
                 if isLoading {
@@ -76,11 +101,7 @@ struct LeaderboardView: View {
                     }
                 }
             }
-            .onAppear {
-                if leaderboards.isEmpty {
-                    loadLeaderboards()
-                }
-            }
+        }
         }
     }
 
