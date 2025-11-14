@@ -64,6 +64,8 @@
 		CDB1A7AD /* GymManagementView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A749 /* GymManagementView.swift */; };
 		CDB1A7AE /* GroupManagementView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A74A /* GroupManagementView.swift */; };
 		CDB1A7AF /* WeeklyPlanView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A74B /* WeeklyPlanView.swift */; };
+		CDB1A7B4EA00000000000000 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = CDB1A7B1EA00000000000000 /* FirebaseAuth */; };
+		CDB1A7B5EA00000000000000 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = CDB1A7B2EA00000000000000 /* FirebaseFirestore */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -181,6 +183,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				CDB1A7B4EA00000000000000 /* FirebaseAuth in Frameworks */,
+				CDB1A7B5EA00000000000000 /* FirebaseFirestore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -384,6 +388,10 @@
 			productName = CrossfitTracker;
 			productReference = CDB1A6A92EA34E8F00B13136 /* CrossfitTracker.app */;
 			productType = "com.apple.product-type.application";
+			packageProductDependencies = (
+				CDB1A7B1EA00000000000000 /* FirebaseAuth */,
+				CDB1A7B2EA00000000000000 /* FirebaseFirestore */,
+			);
 		};
 		CDB1A6B82EA34E9100B13136 /* CrossfitTrackerTests */ = {
 			isa = PBXNativeTarget;
@@ -1153,6 +1161,30 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		CDB1A7B0EA00000000000000 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 10.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		CDB1A7B1EA00000000000000 /* FirebaseAuth */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = CDB1A7B0EA00000000000000 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAuth;
+		};
+		CDB1A7B2EA00000000000000 /* FirebaseFirestore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = CDB1A7B0EA00000000000000 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseFirestore;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = CDB1A6A12EA34E8F00B13136 /* Project object */;
 }
