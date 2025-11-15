@@ -37,7 +37,6 @@
 		CDB1A7222EA35B1500B13136 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A7172EA3563C00B13136 /* Models.swift */; };
 		CDB1A7232EA35B1F00B13136 /* SampleData.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A7192EA3565100B13136 /* SampleData.swift */; };
 		CDB1A7242EA35B7C00B13136 /* WatchSessionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A71F2EA359DA00B13136 /* WatchSessionManager.swift */; };
-		CDB1A7262EA3613D00B13136 /* Extentions.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A7252EA3613D00B13136 /* Extentions.swift */; };
 		CDB1A7282EA364AA00B13136 /* WODCategory.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A7272EA364AA00B13136 /* WODCategory.swift */; };
 		CDB1A72A2EA366B400B13136 /* CompletedWOD.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A7292EA366B400B13136 /* CompletedWOD.swift */; };
 		CDB1A72C2EA366CF00B13136 /* WOD.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A72B2EA366CF00B13136 /* WOD.swift */; };
@@ -154,7 +153,6 @@
 		CDB1A71B2EA357B800B13136 /* WODTimerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WODTimerView.swift; sourceTree = "<group>"; };
 		CDB1A71D2EA3597700B13136 /* LeaderboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LeaderboardView.swift; sourceTree = "<group>"; };
 		CDB1A71F2EA359DA00B13136 /* WatchSessionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchSessionManager.swift; sourceTree = "<group>"; };
-		CDB1A7252EA3613D00B13136 /* Extentions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Extentions.swift; sourceTree = "<group>"; };
 		CDB1A7272EA364AA00B13136 /* WODCategory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WODCategory.swift; sourceTree = "<group>"; };
 		CDB1A7292EA366B400B13136 /* CompletedWOD.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompletedWOD.swift; sourceTree = "<group>"; };
 		CDB1A72B2EA366CF00B13136 /* WOD.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WOD.swift; sourceTree = "<group>"; };
@@ -229,9 +227,6 @@
 		CDB1A6A02EA34E8F00B13136 = {
 			isa = PBXGroup;
 			children = (
-				CDB1A73B2EA377B000B13136 /* LiftHistoryView.swift */,
-				CDB1A7392EA3779900B13136 /* LiftDetailView.swift */,
-				CDB1A7372EA3777B00B13136 /* LiftsView.swift */,
 				CDB1A7162EA3540C00B13136 /* Shared */,
 				CDB1A6AB2EA34E8F00B13136 /* CrossfitTracker */,
 				CDB1A6BC2EA34E9100B13136 /* CrossfitTrackerTests */,
@@ -239,7 +234,6 @@
 				CDB1A6E92EA353CC00B13136 /* CrossfitTrackerWatch Watch App */,
 				CDB1A6FA2EA353CE00B13136 /* CrossfitTrackerWatch Watch AppTests */,
 				CDB1A7042EA353CF00B13136 /* CrossfitTrackerWatch Watch AppUITests */,
-				CDB1A7252EA3613D00B13136 /* Extentions.swift */,
 				CDB1A6AA2EA34E8F00B13136 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -278,6 +272,9 @@
 				CDB1A749 /* GymManagementView.swift */,
 				CDB1A74A /* GroupManagementView.swift */,
 				CDB1A74B /* WeeklyPlanView.swift */,
+				CDB1A7372EA3777B00B13136 /* LiftsView.swift */,
+				CDB1A7392EA3779900B13136 /* LiftDetailView.swift */,
+				CDB1A73B2EA377B000B13136 /* LiftHistoryView.swift */,
 			);
 			path = CrossfitTracker;
 			sourceTree = "<group>";
@@ -605,7 +602,6 @@
 				CD11C60A2EAC0B83009C3D3F /* WODHistoryView.swift in Sources */,
 				CDB1A6DF2EA3522100B13136 /* DashboardView.swift in Sources */,
 				CDB1A6DB2EA3519D00B13136 /* LoginView.swift in Sources */,
-				CDB1A7262EA3613D00B13136 /* Extentions.swift in Sources */,
 				CDB1A6E12EA3525300B13136 /* WODListView.swift in Sources */,
 				CDB1A6AD2EA34E8F00B13136 /* CrossfitTrackerApp.swift in Sources */,
 				CDB1A71A2EA3565100B13136 /* SampleData.swift in Sources */,
