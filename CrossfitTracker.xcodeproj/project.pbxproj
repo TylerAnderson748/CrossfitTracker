@@ -52,6 +52,20 @@
 		CDB1A73A2EA3779900B13136 /* LiftDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A7392EA3779900B13136 /* LiftDetailView.swift */; };
 		CDB1A73C2EA377B000B13136 /* LiftHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A73B2EA377B000B13136 /* LiftHistoryView.swift */; };
 		CDB1A73D2EA377C900B13136 /* Lift.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A7332EA3772D00B13136 /* Lift.swift */; };
+		CDB1A7A4 /* AppUser.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A740 /* AppUser.swift */; };
+		CDB1A7A5 /* Gym.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A741 /* Gym.swift */; };
+		CDB1A7A6 /* WorkoutGroup.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A742 /* WorkoutGroup.swift */; };
+		CDB1A7A7 /* UserRole.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A743 /* UserRole.swift */; };
+		CDB1A7A8 /* LeaderboardEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A744 /* LeaderboardEntry.swift */; };
+		CDB1A7A9 /* ScheduledWorkout.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A745 /* ScheduledWorkout.swift */; };
+		CDB1A7AA /* WorkoutLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A746 /* WorkoutLog.swift */; };
+		CDB1A7AB /* TimeSlot.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A747 /* TimeSlot.swift */; };
+		CDB1A7AC /* CoachProgrammingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A748 /* CoachProgrammingView.swift */; };
+		CDB1A7AD /* GymManagementView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A749 /* GymManagementView.swift */; };
+		CDB1A7AE /* GroupManagementView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A74A /* GroupManagementView.swift */; };
+		CDB1A7AF /* WeeklyPlanView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A74B /* WeeklyPlanView.swift */; };
+		CDB1A7B02EA3789B00B13136 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = CDB1A73F2EA3789A00B13136 /* FirebaseAuth */; };
+		CDB1A7B12EA3789C00B13136 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = CDB1A7402EA378A200B13136 /* FirebaseFirestore */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -150,6 +164,18 @@
 		CDB1A7372EA3777B00B13136 /* LiftsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiftsView.swift; sourceTree = "<group>"; };
 		CDB1A7392EA3779900B13136 /* LiftDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiftDetailView.swift; sourceTree = "<group>"; };
 		CDB1A73B2EA377B000B13136 /* LiftHistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiftHistoryView.swift; sourceTree = "<group>"; };
+		CDB1A740 /* AppUser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppUser.swift; sourceTree = "<group>"; };
+		CDB1A741 /* Gym.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gym.swift; sourceTree = "<group>"; };
+		CDB1A742 /* WorkoutGroup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutGroup.swift; sourceTree = "<group>"; };
+		CDB1A743 /* UserRole.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserRole.swift; sourceTree = "<group>"; };
+		CDB1A744 /* LeaderboardEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LeaderboardEntry.swift; sourceTree = "<group>"; };
+		CDB1A745 /* ScheduledWorkout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduledWorkout.swift; sourceTree = "<group>"; };
+		CDB1A746 /* WorkoutLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutLog.swift; sourceTree = "<group>"; };
+		CDB1A747 /* TimeSlot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimeSlot.swift; sourceTree = "<group>"; };
+		CDB1A748 /* CoachProgrammingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoachProgrammingView.swift; sourceTree = "<group>"; };
+		CDB1A749 /* GymManagementView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GymManagementView.swift; sourceTree = "<group>"; };
+		CDB1A74A /* GroupManagementView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroupManagementView.swift; sourceTree = "<group>"; };
+		CDB1A74B /* WeeklyPlanView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeeklyPlanView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -157,6 +183,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				CDB1A7B02EA3789B00B13136 /* FirebaseAuth in Frameworks */,
+				CDB1A7B12EA3789C00B13136 /* FirebaseFirestore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -246,6 +274,10 @@
 				CDB1A71B2EA357B800B13136 /* WODTimerView.swift */,
 				CDB1A71D2EA3597700B13136 /* LeaderboardView.swift */,
 				CDB1A6B22EA34E9000B13136 /* Preview Content */,
+				CDB1A748 /* CoachProgrammingView.swift */,
+				CDB1A749 /* GymManagementView.swift */,
+				CDB1A74A /* GroupManagementView.swift */,
+				CDB1A74B /* WeeklyPlanView.swift */,
 			);
 			path = CrossfitTracker;
 			sourceTree = "<group>";
@@ -319,6 +351,14 @@
 				CDB1A72B2EA366CF00B13136 /* WOD.swift */,
 				CDB1A7272EA364AA00B13136 /* WODCatagory.swift */,
 				CDB1A71F2EA359DA00B13136 /* WatchSessionManager.swift */,
+				CDB1A740 /* AppUser.swift */,
+				CDB1A741 /* Gym.swift */,
+				CDB1A742 /* WorkoutGroup.swift */,
+				CDB1A743 /* UserRole.swift */,
+				CDB1A744 /* LeaderboardEntry.swift */,
+				CDB1A745 /* ScheduledWorkout.swift */,
+				CDB1A746 /* WorkoutLog.swift */,
+				CDB1A747 /* TimeSlot.swift */,
 				CDB1A7172EA3563C00B13136 /* Models.swift */,
 				CDB1A7192EA3565100B13136 /* SampleData.swift */,
 				CDB1A72D2EA36CE100B13136 /* Notifications.swift */,
@@ -348,6 +388,10 @@
 			productName = CrossfitTracker;
 			productReference = CDB1A6A92EA34E8F00B13136 /* CrossfitTracker.app */;
 			productType = "com.apple.product-type.application";
+			packageProductDependencies = (
+				CDB1A73F2EA3789A00B13136 /* FirebaseAuth */,
+				CDB1A7402EA378A200B13136 /* FirebaseFirestore */,
+			);
 		};
 		CDB1A6B82EA34E9100B13136 /* CrossfitTrackerTests */ = {
 			isa = PBXNativeTarget;
@@ -481,6 +525,9 @@
 				Base,
 			);
 			mainGroup = CDB1A6A02EA34E8F00B13136;
+			packageReferences = (
+				CDB1A73E2EA3789100B13136 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+			);
 			productRefGroup = CDB1A6AA2EA34E8F00B13136 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -573,6 +620,18 @@
 				CDB1A7362EA3775100B13136 /* CompletedLift.swift in Sources */,
 				CDB1A71E2EA3597700B13136 /* LeaderboardView.swift in Sources */,
 				CDB1A7382EA3777B00B13136 /* LiftsView.swift in Sources */,
+				CDB1A7A4 /* AppUser.swift in Sources */,
+				CDB1A7A5 /* Gym.swift in Sources */,
+				CDB1A7A6 /* WorkoutGroup.swift in Sources */,
+				CDB1A7A7 /* UserRole.swift in Sources */,
+				CDB1A7A8 /* LeaderboardEntry.swift in Sources */,
+				CDB1A7A9 /* ScheduledWorkout.swift in Sources */,
+				CDB1A7AA /* WorkoutLog.swift in Sources */,
+				CDB1A7AB /* TimeSlot.swift in Sources */,
+				CDB1A7AC /* CoachProgrammingView.swift in Sources */,
+				CDB1A7AD /* GymManagementView.swift in Sources */,
+				CDB1A7AE /* GroupManagementView.swift in Sources */,
+				CDB1A7AF /* WeeklyPlanView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1105,6 +1164,30 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		CDB1A73E2EA3789100B13136 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 10.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		CDB1A73F2EA3789A00B13136 /* FirebaseAuth */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = CDB1A73E2EA3789100B13136 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAuth;
+		};
+		CDB1A7402EA378A200B13136 /* FirebaseFirestore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = CDB1A73E2EA3789100B13136 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseFirestore;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = CDB1A6A12EA34E8F00B13136 /* Project object */;
 }

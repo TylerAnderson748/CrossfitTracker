@@ -6,20 +6,21 @@
 //
 
 import SwiftUI
+import FirebaseCore
 
 @main
 struct CrossfitTrackerApp: App {
     @StateObject private var store = AppStore.shared
 
+    init() {
+        FirebaseApp.configure()
+        print("🔥 Firebase initialized successfully!")
+    }
+
     var body: some Scene {
         WindowGroup {
-            if store.isLoggedIn {
-                ContentView() // TabView with WODs, Lifts, Profile
-                    .environmentObject(store)
-            } else {
-                LoginView()
-                    .environmentObject(store)
-            }
+            RootView()
+                .environmentObject(store)
         }
     }
 }
