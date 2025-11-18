@@ -55,10 +55,17 @@ struct WeeklyPlanView: View {
                                 },
                                 onLogWorkout: { workout in
                                     // Navigate to timer view (same as Dashboard)
+                                    print("📱 [WeeklyPlan] Navigating to timer for workout:")
+                                    print("   - Title: '\(workout.wodTitle)'")
+                                    print("   - Description: '\(workout.wodDescription)'")
+                                    print("   - Date: \(workout.date)")
+
                                     let wod = WOD(
                                         title: workout.wodTitle,
                                         description: workout.wodDescription
                                     )
+
+                                    print("   - Created WOD with title: '\(wod.title)'")
                                     navigationPath.append(WODDestination.timer(wod))
                                 }
                             )

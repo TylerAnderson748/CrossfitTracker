@@ -30,6 +30,18 @@ struct WODTimerView: View {
                     Text(wod.title)
                         .font(.title)
                         .padding(.top)
+                        .onAppear {
+                            print("🏋️‍♀️ [WODTimerView] Loaded with workout:")
+                            print("   - Title: '\(wod.title)'")
+                            print("   - Description: '\(wod.description)'")
+                            print("   - WOD ID: \(wod.id)")
+                        }
+
+                    Text(wod.description)
+                        .font(.body)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
 
                     Text(formatTime(elapsed))
                         .font(.system(size: 64, weight: .semibold, design: .monospaced))
