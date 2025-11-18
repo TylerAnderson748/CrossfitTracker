@@ -1300,7 +1300,15 @@ final class AppStore: ObservableObject {
 
     // MARK: - Workout Logs
     func saveWorkoutLog(_ log: WorkoutLog, completion: @escaping (WorkoutLog?, String?) -> Void) {
+        print("💾 Attempting to save workout log:")
+        print("   - WOD Title: \(log.wodTitle)")
+        print("   - User ID: \(log.userId)")
+        print("   - Category: \(log.category)")
+        print("   - Result: \(log.result ?? "nil")")
+        print("   - Completed Date: \(log.completedDate)")
+
         guard currentUser?.uid != nil else {
+            print("   ❌ No user logged in")
             completion(nil, "No user logged in")
             return
         }
@@ -1310,17 +1318,23 @@ final class AppStore: ObservableObject {
             var logWithId = log
             logWithId.id = docRef.documentID
 
+            print("   → Saving to Firestore with ID: \(docRef.documentID)")
+
             try docRef.setData(from: logWithId) { [weak self] error in
                 DispatchQueue.main.async {
                     if let error = error {
+                        print("   ❌ Firestore save failed: \(error.localizedDescription)")
                         completion(nil, error.localizedDescription)
                     } else {
-                        print("✅ Workout logged: \(log.wodTitle)")
+                        print("   ✅ Workout log saved to Firestore")
+                        print("   → Creating leaderboard entry...")
 
                         // Create leaderboard entry automatically
-                        self?.createLeaderboardEntry(from: logWithId) { _, leaderboardError in
+                        self?.createLeaderboardEntry(from: logWithId) { entry, leaderboardError in
                             if let leaderboardError = leaderboardError {
-                                print("⚠️ Workout logged but leaderboard entry failed: \(leaderboardError)")
+                                print("   ⚠️ Workout logged but leaderboard entry failed: \(leaderboardError)")
+                            } else if entry != nil {
+                                print("   ✅ Leaderboard entry created successfully")
                             }
                         }
 
@@ -1329,6 +1343,7 @@ final class AppStore: ObservableObject {
                 }
             }
         } catch {
+            print("   ❌ Encoding error: \(error.localizedDescription)")
             DispatchQueue.main.async {
                 completion(nil, error.localizedDescription)
             }
