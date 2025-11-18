@@ -1390,38 +1390,9 @@ final class AppStore: ObservableObject {
     }
 
     func loadWorkoutLogs(userId: String, limit: Int? = nil, completion: @escaping ([WorkoutLog], String?) -> Void) {
-        var query: Query = db.collection("workoutLogs")
-            .whereField("userId", isEqualTo: userId)
-            .order(by: "completedDate", descending: true)
-
-        if let limit = limit {
-            query = query.limit(to: limit)
-        }
-
-        query.getDocuments { snapshot, error in
-            if let error = error {
-                DispatchQueue.main.async {
-                    completion([], error.localizedDescription)
-                }
-                return
-            }
-
-            let logs = snapshot?.documents.compactMap { doc -> WorkoutLog? in
-                try? doc.data(as: WorkoutLog.self)
-            } ?? []
-
-            DispatchQueue.main.async {
-                print("✅ Loaded \(logs.count) workout logs")
-                completion(logs, nil)
-            }
-        }
-    }
-
-    func loadWorkoutLogsForWorkout(userId: String, wodTitle: String, completion: @escaping ([WorkoutLog], String?) -> Void) {
+        // Simple query - no ordering to avoid requiring composite index
         db.collection("workoutLogs")
             .whereField("userId", isEqualTo: userId)
-            .whereField("wodTitle", isEqualTo: wodTitle)
-            .order(by: "completedDate", descending: true)
             .getDocuments { snapshot, error in
                 if let error = error {
                     DispatchQueue.main.async {
@@ -1430,9 +1401,44 @@ final class AppStore: ObservableObject {
                     return
                 }
 
-                let logs = snapshot?.documents.compactMap { doc -> WorkoutLog? in
+                var logs = snapshot?.documents.compactMap { doc -> WorkoutLog? in
                     try? doc.data(as: WorkoutLog.self)
                 } ?? []
+
+                // Sort in memory instead of in Firestore query
+                logs.sort { $0.completedDate > $1.completedDate }
+
+                // Apply limit if specified
+                if let limit = limit, logs.count > limit {
+                    logs = Array(logs.prefix(limit))
+                }
+
+                DispatchQueue.main.async {
+                    print("✅ Loaded \(logs.count) workout logs")
+                    completion(logs, nil)
+                }
+            }
+    }
+
+    func loadWorkoutLogsForWorkout(userId: String, wodTitle: String, completion: @escaping ([WorkoutLog], String?) -> Void) {
+        // Simple query - no ordering to avoid requiring composite index
+        db.collection("workoutLogs")
+            .whereField("userId", isEqualTo: userId)
+            .whereField("wodTitle", isEqualTo: wodTitle)
+            .getDocuments { snapshot, error in
+                if let error = error {
+                    DispatchQueue.main.async {
+                        completion([], error.localizedDescription)
+                    }
+                    return
+                }
+
+                var logs = snapshot?.documents.compactMap { doc -> WorkoutLog? in
+                    try? doc.data(as: WorkoutLog.self)
+                } ?? []
+
+                // Sort in memory instead of in Firestore query
+                logs.sort { $0.completedDate > $1.completedDate }
 
                 DispatchQueue.main.async {
                     print("✅ Loaded \(logs.count) logs for \(wodTitle)")
