@@ -1303,8 +1303,8 @@ final class AppStore: ObservableObject {
         print("💾 Attempting to save workout log:")
         print("   - WOD Title: \(log.wodTitle)")
         print("   - User ID: \(log.userId)")
-        print("   - Category: \(log.category)")
-        print("   - Result: \(log.result ?? "nil")")
+        print("   - Result Type: \(log.resultType)")
+        print("   - Result Summary: \(log.resultSummary)")
         print("   - Completed Date: \(log.completedDate)")
 
         guard currentUser?.uid != nil else {
