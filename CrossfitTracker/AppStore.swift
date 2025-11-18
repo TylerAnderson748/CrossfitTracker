@@ -266,15 +266,26 @@ final class AppStore: ObservableObject {
             }
 
             do {
+                // Log raw data for debugging
+                if let data = snapshot.data() {
+                    print("📋 Raw user data: \(data)")
+                    if let roleValue = data["role"] as? String {
+                        print("📋 Raw role value: '\(roleValue)'")
+                    } else {
+                        print("⚠️ Role field missing or not a string")
+                    }
+                }
+
                 let appUser = try snapshot.data(as: AppUser.self)
                 DispatchQueue.main.async {
                     self?.appUser = appUser
                     self?.userRole = appUser.role
                     self?.userName = appUser.displayName ?? appUser.email
-                    print("✅ User role loaded: \(appUser.role.displayName)")
+                    print("✅ User role loaded: \(appUser.role.displayName) (raw: \(appUser.role.rawValue))")
                 }
             } catch {
                 print("❌ Error decoding user: \(error.localizedDescription)")
+                print("❌ Error details: \(error)")
             }
         }
     }
@@ -302,6 +313,30 @@ final class AppStore: ObservableObject {
             // Reload user data to refresh UI
             self?.fetchUserRole(userId: userId)
             completion(nil)
+        }
+    }
+
+    func updateUserRole(userId: String, role: UserRole, completion: @escaping (String?) -> Void) {
+        db.collection("users").document(userId).updateData([
+            "role": role.rawValue
+        ]) { [weak self] error in
+            if let error = error {
+                DispatchQueue.main.async {
+                    completion(error.localizedDescription)
+                }
+                return
+            }
+
+            print("✅ User role updated to: \(role.displayName)")
+
+            // Reload user data to refresh UI if it's the current user
+            if userId == self?.currentUser?.uid {
+                self?.fetchUserRole(userId: userId)
+            }
+
+            DispatchQueue.main.async {
+                completion(nil)
+            }
         }
     }
 

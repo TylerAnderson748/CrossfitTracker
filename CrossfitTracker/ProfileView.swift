@@ -164,6 +164,19 @@ struct ProfileView: View {
                     }
                 }
 
+                // Admin section - only visible to superAdmins
+                if store.userRole == .superAdmin {
+                    Section("Admin") {
+                        NavigationLink(destination: AdminView()) {
+                            HStack {
+                                Image(systemName: "shield.fill")
+                                    .foregroundColor(.purple)
+                                Text("User Role Management")
+                            }
+                        }
+                    }
+                }
+
                 Section {
                     Button(action: { store.logOut() }) {
                         HStack {
