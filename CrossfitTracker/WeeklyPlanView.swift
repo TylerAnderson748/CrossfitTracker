@@ -14,13 +14,12 @@ struct WeeklyPlanView: View {
     @State private var showDebugInfo = false
     @State private var showAddWorkout = false
     @State private var addWorkoutDate = Date()
-    @State private var showLogWorkout = false
-    @State private var workoutToLog: ScheduledWorkout?
+    @State private var navigationPath = NavigationPath()
 
     private let daysOfWeek = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
     var body: some View {
-        NavigationView {
+        NavigationStack(path: $navigationPath) {
             VStack(spacing: 0) {
                 // Week selector
                 HStack {
@@ -55,8 +54,12 @@ struct WeeklyPlanView: View {
                                     deleteWorkout(workout)
                                 },
                                 onLogWorkout: { workout in
-                                    workoutToLog = workout
-                                    showLogWorkout = true
+                                    // Navigate to timer view (same as Dashboard)
+                                    let wod = WOD(
+                                        title: workout.wodTitle,
+                                        description: workout.wodDescription
+                                    )
+                                    navigationPath.append(WODDestination.timer(wod))
                                 }
                             )
                         }
@@ -90,12 +93,14 @@ struct WeeklyPlanView: View {
                 }
                 .environmentObject(store)
             }
-            .sheet(isPresented: $showLogWorkout) {
-                if let workout = workoutToLog {
-                    LogWorkoutSheet(workout: workout) { log in
-                        saveWorkoutLog(log)
-                    }
-                    .environmentObject(store)
+            .navigationDestination(for: WODDestination.self) { destination in
+                switch destination {
+                case .timer(let wod):
+                    WODTimerView(wod: wod)
+                        .environmentObject(store)
+                case .leaderboard(let wod):
+                    LeaderboardView(wod: wod)
+                        .environmentObject(store)
                 }
             }
             .onAppear {
@@ -221,22 +226,6 @@ struct WeeklyPlanView: View {
         }
     }
 
-    private func saveWorkoutLog(_ log: WorkoutLog) {
-        print("📝 [WeeklyPlanView] saveWorkoutLog called")
-        print("   - WOD: \(log.wodTitle)")
-        print("   - Result Type: \(log.resultType)")
-        print("   - User ID: \(log.userId)")
-        store.saveWorkoutLog(log) { savedLog, error in
-            if let error = error {
-                print("❌ Error saving workout log: \(error)")
-            } else if let savedLog = savedLog {
-                print("✅ Workout logged: \(savedLog.wodTitle)")
-                if savedLog.isPersonalRecord {
-                    print("🎉 NEW PR!")
-                }
-            }
-        }
-    }
 }
 
 struct DayWorkoutCard: View {
@@ -641,221 +630,5 @@ struct AddPersonalWorkoutSheet: View {
                 return "Repeats on the \(weekPositionText) \(weekdayText) of each month for 1 year"
             }
         }
-    }
-}
-
-struct LogWorkoutSheet: View {
-    @Environment(\.dismiss) var dismiss
-    @EnvironmentObject var store: AppStore
-    let workout: ScheduledWorkout
-    let onSave: (WorkoutLog) -> Void
-
-    @State private var resultType: WorkoutResultType = .time
-    @State private var minutes: Int = 0
-    @State private var seconds: Int = 0
-    @State private var rounds: Int = 0
-    @State private var reps: Int = 0
-    @State private var weight: String = ""
-    @State private var notes: String = ""
-    @State private var showPRCelebration = false
-    @State private var isPR = false
-
-    var body: some View {
-        NavigationView {
-            Form {
-                Section("Workout") {
-                    Text(workout.wodTitle)
-                        .font(.headline)
-                    Text(workout.wodDescription)
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                }
-
-                Section("Result Type") {
-                    Picker("Type", selection: $resultType) {
-                        Text("Time").tag(WorkoutResultType.time)
-                        Text("Rounds (AMRAP)").tag(WorkoutResultType.rounds)
-                        Text("Weight").tag(WorkoutResultType.weight)
-                        Text("Reps").tag(WorkoutResultType.reps)
-                        Text("Other").tag(WorkoutResultType.other)
-                    }
-                    .pickerStyle(.menu)
-                }
-
-                Section("Your Result") {
-                    switch resultType {
-                    case .time:
-                        HStack {
-                            Picker("Minutes", selection: $minutes) {
-                                ForEach(0..<100) { min in
-                                    Text("\(min) min").tag(min)
-                                }
-                            }
-                            .pickerStyle(.wheel)
-                            .frame(maxWidth: .infinity)
-
-                            Picker("Seconds", selection: $seconds) {
-                                ForEach(0..<60) { sec in
-                                    Text("\(sec) sec").tag(sec)
-                                }
-                            }
-                            .pickerStyle(.wheel)
-                            .frame(maxWidth: .infinity)
-                        }
-                        .frame(height: 120)
-
-                    case .rounds:
-                        Stepper("Rounds: \(rounds)", value: $rounds, in: 0...1000)
-                        Stepper("Additional Reps: \(reps)", value: $reps, in: 0...1000)
-
-                    case .weight:
-                        HStack {
-                            TextField("Weight", text: $weight)
-                                .keyboardType(.decimalPad)
-                            Text("lbs")
-                                .foregroundColor(.secondary)
-                        }
-
-                    case .reps:
-                        Stepper("Reps: \(reps)", value: $reps, in: 0...1000)
-
-                    case .other:
-                        Text("Enter details in notes below")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                }
-
-                Section("Notes (Optional)") {
-                    TextField("How did it feel? Any scaling?", text: $notes, axis: .vertical)
-                        .lineLimit(3...6)
-                }
-
-                if showPRCelebration {
-                    Section {
-                        HStack {
-                            Spacer()
-                            VStack(spacing: 8) {
-                                Text("🎉")
-                                    .font(.system(size: 50))
-                                Text("NEW PERSONAL RECORD!")
-                                    .font(.headline)
-                                    .foregroundColor(.green)
-                            }
-                            Spacer()
-                        }
-                    }
-                }
-            }
-            .navigationTitle("Log Result")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        saveLog()
-                    }
-                    .disabled(!isValidResult)
-                }
-            }
-        }
-    }
-
-    private var isValidResult: Bool {
-        switch resultType {
-        case .time:
-            return minutes > 0 || seconds > 0
-        case .rounds:
-            return rounds > 0
-        case .weight:
-            return !weight.isEmpty && Double(weight) != nil
-        case .reps:
-            return reps > 0
-        case .other:
-            return !notes.isEmpty
-        }
-    }
-
-    private func saveLog() {
-        print("🔘 [LogWorkoutSheet] Save button clicked")
-        print("   - Result Type: \(resultType)")
-        print("   - Is Valid: \(isValidResult)")
-
-        guard let userId = store.currentUser?.uid else {
-            print("❌ No user logged in")
-            dismiss()
-            return
-        }
-
-        // Calculate values based on result type
-        let timeInSeconds: Double? = resultType == .time ? Double(minutes * 60 + seconds) : nil
-        let weightValue: Double? = resultType == .weight ? Double(weight) : nil
-
-        // Check if this is a PR
-        let comparisonValue: Double? = {
-            switch resultType {
-            case .time:
-                return timeInSeconds
-            case .rounds:
-                return Double(rounds) + (Double(reps) / 100.0) // Combine rounds and reps for comparison
-            case .weight:
-                return weightValue
-            case .reps:
-                return Double(reps)
-            case .other:
-                return nil
-            }
-        }()
-
-        if let value = comparisonValue {
-            store.checkIfPR(userId: userId, wodTitle: workout.wodTitle, resultType: resultType, value: value) { prStatus in
-                self.isPR = prStatus
-
-                if prStatus {
-                    // Show celebration
-                    showPRCelebration = true
-
-                    // Wait 1.5 seconds then save and dismiss
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                        createAndSaveLog(isPR: true)
-                    }
-                } else {
-                    createAndSaveLog(isPR: false)
-                }
-            }
-        } else {
-            createAndSaveLog(isPR: false)
-        }
-    }
-
-    private func createAndSaveLog(isPR: Bool) {
-        print("📋 [LogWorkoutSheet] Creating workout log")
-        print("   - Is PR: \(isPR)")
-
-        guard let userId = store.currentUser?.uid else { return }
-
-        let log = WorkoutLog(
-            userId: userId,
-            scheduledWorkoutId: workout.id,
-            wodTitle: workout.wodTitle,
-            wodDescription: workout.wodDescription,
-            workoutDate: workout.date,
-            completedDate: Date(),
-            resultType: resultType,
-            timeInSeconds: resultType == .time ? Double(minutes * 60 + seconds) : nil,
-            rounds: resultType == .rounds ? rounds : nil,
-            reps: (resultType == .rounds || resultType == .reps) ? reps : nil,
-            weight: resultType == .weight ? Double(weight) : nil,
-            notes: notes.isEmpty ? nil : notes,
-            isPersonalRecord: isPR
-        )
-
-        print("📤 [LogWorkoutSheet] Calling onSave callback")
-        onSave(log)
-        dismiss()
     }
 }
