@@ -118,7 +118,13 @@ final class AppStore: ObservableObject {
     // MARK: - Firebase Authentication
 
     /// Check if a username is available (not already taken)
+    /// Excludes the current user from the check (so they can save their own username)
     func checkUsernameAvailability(username: String, completion: @escaping (Bool, String?) -> Void) {
+        guard let currentUserId = currentUser?.uid else {
+            completion(true, nil)
+            return
+        }
+
         db.collection("users")
             .whereField("username", isEqualTo: username.lowercased())
             .getDocuments { snapshot, error in
@@ -129,7 +135,14 @@ final class AppStore: ObservableObject {
                     return
                 }
 
-                let isAvailable = snapshot?.documents.isEmpty ?? true
+                // Check if any documents match AND are not the current user
+                let otherUserHasUsername = snapshot?.documents.contains { doc in
+                    doc.documentID != currentUserId
+                } ?? false
+
+                let isAvailable = !otherUserHasUsername
+                print("   → Username '\(username)' available: \(isAvailable) (found \(snapshot?.documents.count ?? 0) total matches)")
+
                 DispatchQueue.main.async {
                     completion(isAvailable, nil)
                 }
@@ -274,6 +287,11 @@ final class AppStore: ObservableObject {
                     } else {
                         print("⚠️ Role field missing or not a string")
                     }
+                    if let usernameValue = data["username"] as? String {
+                        print("📋 Raw username value: '\(usernameValue)'")
+                    } else {
+                        print("⚠️ Username field missing or not a string")
+                    }
                 }
 
                 let appUser = try snapshot.data(as: AppUser.self)
@@ -281,7 +299,10 @@ final class AppStore: ObservableObject {
                     self?.appUser = appUser
                     self?.userRole = appUser.role
                     self?.userName = appUser.displayName ?? appUser.email
-                    print("✅ User role loaded: \(appUser.role.displayName) (raw: \(appUser.role.rawValue))")
+                    print("✅ User loaded successfully:")
+                    print("   - Role: \(appUser.role.displayName) (raw: \(appUser.role.rawValue))")
+                    print("   - Username: '\(appUser.username ?? "nil")'")
+                    print("   - Display Name: '\(appUser.displayName ?? "nil")'")
                 }
             } catch {
                 print("❌ Error decoding user: \(error.localizedDescription)")
