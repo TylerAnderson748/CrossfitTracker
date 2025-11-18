@@ -301,14 +301,23 @@ final class AppStore: ObservableObject {
 
         // Only update username if it's not empty
         if !username.isEmpty {
-            updateData["username"] = username.lowercased()
+            let lowercasedUsername = username.lowercased()
+            updateData["username"] = lowercasedUsername
+            print("   → Adding username to updateData: '\(lowercasedUsername)'")
+        } else {
+            print("   ⚠️ Username is empty, not updating username field")
         }
+
+        print("   → Firestore updateData: \(updateData)")
 
         db.collection("users").document(userId).updateData(updateData) { [weak self] error in
             if let error = error {
+                print("   ❌ Firestore update failed: \(error.localizedDescription)")
                 completion(error.localizedDescription)
                 return
             }
+
+            print("   ✅ Firestore update successful")
 
             // Reload user data to refresh UI
             self?.fetchUserRole(userId: userId)

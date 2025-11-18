@@ -237,36 +237,51 @@ struct ProfileView: View {
     private func saveProfile() {
         guard let userId = store.currentUser?.uid else { return }
 
-        // If username changed, validate it first
-        let currentUsername = store.appUser?.username
-        let usernameChanged = editUsername.lowercased() != currentUsername?.lowercased()
+        print("🔄 Saving profile...")
+        print("   First Name: \(editFirstName)")
+        print("   Last Name: \(editLastName)")
+        print("   Username: '\(editUsername)'")
+        print("   Current username: '\(store.appUser?.username ?? "nil")'")
 
-        if usernameChanged && !editUsername.isEmpty {
+        // If username changed, validate it first
+        let currentUsername = store.appUser?.username ?? ""
+        let newUsername = editUsername.trimmingCharacters(in: .whitespaces)
+        let usernameChanged = newUsername.lowercased() != currentUsername.lowercased()
+
+        print("   Username changed: \(usernameChanged)")
+
+        if usernameChanged && !newUsername.isEmpty {
+            print("   → Checking username availability...")
             // Check username availability
-            store.checkUsernameAvailability(username: editUsername) { isAvailable, error in
+            store.checkUsernameAvailability(username: newUsername) { [self] isAvailable, error in
                 if let error = error {
+                    print("   ❌ Error checking username: \(error)")
                     errorMessage = "Error checking username: \(error)"
                     showError = true
                     return
                 }
 
+                print("   → Username available: \(isAvailable)")
                 if !isAvailable {
-                    errorMessage = "Username '\(editUsername)' is already taken. Please choose a different username."
+                    errorMessage = "Username '\(newUsername)' is already taken. Please choose a different username."
                     showError = true
                     return
                 }
 
                 // Username is available, proceed with update
-                updateProfileInFirestore(userId: userId)
+                print("   → Updating profile in Firestore...")
+                updateProfileInFirestore(userId: userId, username: newUsername)
             }
         } else {
             // No username change, just update
-            updateProfileInFirestore(userId: userId)
+            print("   → No username change, updating profile...")
+            updateProfileInFirestore(userId: userId, username: currentUsername)
         }
     }
 
-    private func updateProfileInFirestore(userId: String) {
-        store.updateUserProfile(userId: userId, firstName: editFirstName, lastName: editLastName, username: editUsername) { error in
+    private func updateProfileInFirestore(userId: String, username: String) {
+        print("   → Calling updateUserProfile with username: '\(username)'")
+        store.updateUserProfile(userId: userId, firstName: editFirstName, lastName: editLastName, username: username) { error in
             if let error = error {
                 print("❌ Error updating profile: \(error)")
                 errorMessage = "Failed to update profile: \(error)"
