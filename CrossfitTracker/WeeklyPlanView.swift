@@ -222,6 +222,10 @@ struct WeeklyPlanView: View {
     }
 
     private func saveWorkoutLog(_ log: WorkoutLog) {
+        print("📝 [WeeklyPlanView] saveWorkoutLog called")
+        print("   - WOD: \(log.wodTitle)")
+        print("   - Result Type: \(log.resultType)")
+        print("   - User ID: \(log.userId)")
         store.saveWorkoutLog(log) { savedLog, error in
             if let error = error {
                 print("❌ Error saving workout log: \(error)")
@@ -777,6 +781,10 @@ struct LogWorkoutSheet: View {
     }
 
     private func saveLog() {
+        print("🔘 [LogWorkoutSheet] Save button clicked")
+        print("   - Result Type: \(resultType)")
+        print("   - Is Valid: \(isValidResult)")
+
         guard let userId = store.currentUser?.uid else {
             print("❌ No user logged in")
             dismiss()
@@ -825,6 +833,9 @@ struct LogWorkoutSheet: View {
     }
 
     private func createAndSaveLog(isPR: Bool) {
+        print("📋 [LogWorkoutSheet] Creating workout log")
+        print("   - Is PR: \(isPR)")
+
         guard let userId = store.currentUser?.uid else { return }
 
         let log = WorkoutLog(
@@ -843,6 +854,7 @@ struct LogWorkoutSheet: View {
             isPersonalRecord: isPR
         )
 
+        print("📤 [LogWorkoutSheet] Calling onSave callback")
         onSave(log)
         dismiss()
     }
