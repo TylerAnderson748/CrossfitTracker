@@ -21,6 +21,7 @@ struct WODTimerView: View {
     @State private var manualSeconds: String = ""
     @State private var selectedCategory: WODCategory = .rx
     @State private var showSavedMessage = false
+    @State private var workoutHistory: [WorkoutLog] = []
 
     var body: some View {
         ScrollView {
@@ -35,6 +36,7 @@ struct WODTimerView: View {
                             print("   - Title: '\(wod.title)'")
                             print("   - Description: '\(wod.description)'")
                             print("   - WOD ID: \(wod.id)")
+                            loadWorkoutHistory()
                         }
 
                     Text(wod.description)
@@ -147,6 +149,10 @@ struct WODTimerView: View {
         store.addManualWODResult(wod: wod, time: elapsed, category: selectedCategory)
         resetTimer()
         flashSaved()
+        // Reload history after saving
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            loadWorkoutHistory()
+        }
     }
 
     private func saveManualTime() {
@@ -158,6 +164,10 @@ struct WODTimerView: View {
         manualMinutes = ""
         manualSeconds = ""
         flashSaved()
+        // Reload history after saving
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            loadWorkoutHistory()
+        }
     }
 
     private func flashSaved() {
@@ -179,10 +189,25 @@ struct WODTimerView: View {
     
     // MARK: - History Helper
 
-    private func allWodHistory() -> [CompletedWOD] {
-        store.completedWODs
-            .filter { $0.wod.id == wod.id }
-            .sorted { $0.date < $1.date }
+    private func loadWorkoutHistory() {
+        guard let userId = store.currentUser?.uid else {
+            print("❌ [WODTimerView] No user logged in for history")
+            return
+        }
+
+        print("📊 [WODTimerView] Loading workout history for '\(wod.title)'")
+        store.loadWorkoutLogs(userId: userId) { logs, error in
+            if let error = error {
+                print("❌ [WODTimerView] Error loading history: \(error)")
+                return
+            }
+
+            // Filter to only this workout's logs (matching by title)
+            let filtered = logs.filter { $0.wodTitle == wod.title && $0.resultType == .time }
+            print("📊 [WODTimerView] Found \(filtered.count) history entries for '\(wod.title)'")
+
+            workoutHistory = filtered.sorted { $0.completedDate < $1.completedDate }
+        }
     }
 
     // MARK: - Chart View
@@ -190,38 +215,28 @@ struct WODTimerView: View {
     @ViewBuilder
     private func progressChartView() -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Your Progress - All Categories")
+            Text("Your Progress")
                 .font(.headline)
                 .padding(.horizontal)
 
-            let history = allWodHistory()
-
-            if history.isEmpty {
+            if workoutHistory.isEmpty {
                 Text("No history yet")
                     .foregroundColor(.gray)
                     .padding()
             } else {
-                Chart(history) { entry in
+                Chart(workoutHistory) { log in
                     LineMark(
-                        x: .value("Date", entry.date),
-                        y: .value("Time (seconds)", entry.time),
-                        series: .value("Category", entry.category.rawValue)
+                        x: .value("Date", log.completedDate),
+                        y: .value("Time (seconds)", log.timeInSeconds ?? 0)
                     )
-                    .foregroundStyle(by: .value("Category", entry.category.rawValue))
-                    .symbol(by: .value("Category", entry.category.rawValue))
+                    .foregroundStyle(.blue)
 
                     PointMark(
-                        x: .value("Date", entry.date),
-                        y: .value("Time (seconds)", entry.time)
+                        x: .value("Date", log.completedDate),
+                        y: .value("Time (seconds)", log.timeInSeconds ?? 0)
                     )
-                    .foregroundStyle(by: .value("Category", entry.category.rawValue))
+                    .foregroundStyle(.blue)
                 }
-                .chartForegroundStyleScale([
-                    "RX+": .orange,
-                    "RX": .blue,
-                    "Scaled": .gray,
-                    "Just Happy To Be Here": .green
-                ])
                 .chartYAxis {
                     AxisMarks { value in
                         AxisValueLabel {
