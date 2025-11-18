@@ -93,3 +93,6 @@ iOSInjectionProject/
 .DS_Store
 .AppleDouble
 .LSOverride
+
+# Firebase
+GoogleService-Info.plist
