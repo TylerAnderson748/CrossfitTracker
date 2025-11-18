@@ -191,16 +191,30 @@ struct WODTimerView: View {
             return
         }
 
-        print("📊 [WODTimerView] Loading workout history for '\(wod.title)'")
+        print("📊 [WODTimerView] Loading workout history")
+        print("   - Looking for WOD title: '\(wod.title)'")
+        print("   - WOD description: '\(wod.description)'")
+
         store.loadWorkoutLogs(userId: userId) { logs, error in
             if let error = error {
                 print("❌ [WODTimerView] Error loading history: \(error)")
                 return
             }
 
+            print("📊 [WODTimerView] Total logs loaded: \(logs.count)")
+
+            // Show all unique WOD titles in logs
+            let uniqueTitles = Set(logs.map { $0.wodTitle })
+            print("📊 [WODTimerView] Unique WOD titles in logs: \(uniqueTitles)")
+
             // Filter to only this workout's logs (matching by title)
             let filtered = logs.filter { $0.wodTitle == wod.title && $0.resultType == .time }
-            print("📊 [WODTimerView] Found \(filtered.count) history entries for '\(wod.title)'")
+            print("📊 [WODTimerView] Found \(filtered.count) matching entries for '\(wod.title)'")
+
+            // Show what we found
+            for (index, log) in filtered.enumerated() {
+                print("   [\(index)] \(log.wodTitle) - \(log.timeInSeconds ?? 0)s on \(log.completedDate)")
+            }
 
             workoutHistory = filtered.sorted { $0.completedDate < $1.completedDate }
         }
