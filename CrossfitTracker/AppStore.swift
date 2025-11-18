@@ -426,13 +426,52 @@ final class AppStore: ObservableObject {
     
     // MARK: - Manual WOD Result
     func addManualWODResult(wod: WOD, time: TimeInterval, category: WODCategory) {
-        let completed = CompletedWOD(
-            wod: wod,
-            userName: userName,
-            time: time,
-            category: category
+        guard let userId = currentUser?.uid else {
+            print("❌ [addManualWODResult] No user logged in")
+            return
+        }
+
+        print("🏋️ [addManualWODResult] Saving manual WOD result")
+        print("   - WOD: \(wod.title)")
+        print("   - Time: \(time) seconds")
+        print("   - Category: \(category.rawValue)")
+
+        // Create a WorkoutLog to save to Firestore
+        let log = WorkoutLog(
+            userId: userId,
+            scheduledWorkoutId: nil, // Manual entry doesn't have a scheduled workout
+            wodTitle: wod.title,
+            wodDescription: wod.description,
+            workoutDate: Date(), // Use today
+            completedDate: Date(),
+            resultType: .time,
+            timeInSeconds: time,
+            rounds: nil,
+            reps: nil,
+            weight: nil,
+            notes: category.rawValue, // Store category in notes for now
+            isPersonalRecord: false
         )
-        completedWODs.append(completed)
+
+        // Save to Firestore using the existing saveWorkoutLog function
+        saveWorkoutLog(log) { savedLog, error in
+            if let error = error {
+                print("❌ [addManualWODResult] Error saving: \(error)")
+            } else if let savedLog = savedLog {
+                print("✅ [addManualWODResult] Saved successfully")
+
+                // Also add to local array for backwards compatibility
+                DispatchQueue.main.async { [weak self] in
+                    let completed = CompletedWOD(
+                        wod: wod,
+                        userName: self?.userName ?? "",
+                        time: time,
+                        category: category
+                    )
+                    self?.completedWODs.append(completed)
+                }
+            }
+        }
     }
 
     // MARK: - WOD Results Query
