@@ -31,8 +31,13 @@ struct ProfileView: View {
                                 Text(fullName)
                                     .font(.title3.bold())
                             }
+                            if let username = store.appUser?.username {
+                                Text("@\(username)")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                            }
                             Text(store.userName)
-                                .font(.subheadline)
+                                .font(.caption)
                                 .foregroundColor(.secondary)
                             Text(store.userRole.displayName)
                                 .font(.caption)

@@ -13,6 +13,7 @@ struct LoginView: View {
     @State private var password: String = ""
     @State private var firstName: String = ""
     @State private var lastName: String = ""
+    @State private var username: String = ""
     @State private var isSignUpMode: Bool = false
     @State private var errorMessage: String = ""
     @State private var showError: Bool = false
@@ -41,6 +42,12 @@ struct LoginView: View {
                         TextField("Last Name", text: $lastName)
                             .textFieldStyle(RoundedBorderTextFieldStyle())
                             .textInputAutocapitalization(.words)
+                            .padding(.horizontal, 40)
+
+                        TextField("Username", text: $username)
+                            .textFieldStyle(RoundedBorderTextFieldStyle())
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
                             .padding(.horizontal, 40)
                     }
 
@@ -94,7 +101,7 @@ struct LoginView: View {
 
     private var isFormValid: Bool {
         if isSignUpMode {
-            return !email.isEmpty && !password.isEmpty && password.count >= 6 && !firstName.isEmpty && !lastName.isEmpty
+            return !email.isEmpty && !password.isEmpty && password.count >= 6 && !firstName.isEmpty && !lastName.isEmpty && !username.isEmpty
         } else {
             return !email.isEmpty && !password.isEmpty && password.count >= 6
         }
@@ -105,7 +112,7 @@ struct LoginView: View {
         errorMessage = ""
 
         if isSignUpMode {
-            store.signUp(email: email, password: password, firstName: firstName, lastName: lastName) { error in
+            store.signUp(email: email, password: password, username: username, firstName: firstName, lastName: lastName) { error in
                 if let error = error {
                     errorMessage = error
                     showError = true

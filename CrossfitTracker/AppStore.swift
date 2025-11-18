@@ -116,45 +116,83 @@ final class AppStore: ObservableObject {
     }
 
     // MARK: - Firebase Authentication
-    func signUp(email: String, password: String, firstName: String, lastName: String, completion: @escaping (String?) -> Void) {
-        Auth.auth().createUser(withEmail: email, password: password) { [weak self] result, error in
-            if let error = error {
-                DispatchQueue.main.async {
-                    completion(error.localizedDescription)
-                }
-                return
-            }
 
-            guard let userId = result?.user.uid else {
-                DispatchQueue.main.async {
-                    completion("Failed to get user ID")
-                }
-                return
-            }
-
-            // Create user document in Firestore with athlete role by default
-            let newUser = AppUser(id: userId, email: email, role: .athlete, firstName: firstName, lastName: lastName)
-            self?.createUserDocument(user: newUser) { firestoreError in
-                if let firestoreError = firestoreError {
+    /// Check if a username is available (not already taken)
+    func checkUsernameAvailability(username: String, completion: @escaping (Bool, String?) -> Void) {
+        db.collection("users")
+            .whereField("username", isEqualTo: username.lowercased())
+            .getDocuments { snapshot, error in
+                if let error = error {
                     DispatchQueue.main.async {
-                        completion("Account created but profile setup failed: \(firestoreError)")
+                        completion(false, error.localizedDescription)
                     }
                     return
                 }
 
-                print("✅ User signed up successfully: \(email)")
+                let isAvailable = snapshot?.documents.isEmpty ?? true
+                DispatchQueue.main.async {
+                    completion(isAvailable, nil)
+                }
+            }
+    }
 
-                // Create personal group for user
-                self?.createPersonalGroup(userId: userId) { personalGroup, groupError in
-                    if let groupError = groupError {
-                        print("⚠️ Error creating personal group: \(groupError)")
-                    } else {
-                        print("✅ Personal group created for user")
+    func signUp(email: String, password: String, username: String, firstName: String, lastName: String, completion: @escaping (String?) -> Void) {
+        // First, check if username is available
+        checkUsernameAvailability(username: username) { [weak self] isAvailable, error in
+            if let error = error {
+                DispatchQueue.main.async {
+                    completion("Error checking username availability: \(error)")
+                }
+                return
+            }
+
+            if !isAvailable {
+                DispatchQueue.main.async {
+                    completion("Username '\(username)' is already taken. Please choose a different username.")
+                }
+                return
+            }
+
+            // Username is available, proceed with account creation
+            Auth.auth().createUser(withEmail: email, password: password) { [weak self] result, error in
+                if let error = error {
+                    DispatchQueue.main.async {
+                        completion(error.localizedDescription)
+                    }
+                    return
+                }
+
+                guard let userId = result?.user.uid else {
+                    DispatchQueue.main.async {
+                        completion("Failed to get user ID")
+                    }
+                    return
+                }
+
+                // Create user document in Firestore with athlete role by default
+                let newUser = AppUser(id: userId, email: email, username: username.lowercased(), role: .athlete, firstName: firstName, lastName: lastName)
+                self?.createUserDocument(user: newUser) { firestoreError in
+                    if let firestoreError = firestoreError {
+                        DispatchQueue.main.async {
+                            completion("Account created but profile setup failed: \(firestoreError)")
+                        }
+                        return
                     }
 
-                    // Return success even if personal group creation failed
-                    DispatchQueue.main.async {
-                        completion(nil)
+                    print("✅ User signed up successfully: \(email) with username: \(username)")
+
+                    // Create personal group for user
+                    self?.createPersonalGroup(userId: userId) { personalGroup, groupError in
+                        if let groupError = groupError {
+                            print("⚠️ Error creating personal group: \(groupError)")
+                        } else {
+                            print("✅ Personal group created for user")
+                        }
+
+                        // Return success even if personal group creation failed
+                        DispatchQueue.main.async {
+                            completion(nil)
+                        }
                     }
                 }
             }
@@ -219,7 +257,9 @@ final class AppStore: ObservableObject {
                 print("⚠️ User document doesn't exist, creating one...")
                 // Create user document if it doesn't exist (for existing Firebase Auth users)
                 if let email = self?.currentUser?.email {
-                    let newUser = AppUser(id: userId, email: email, role: .athlete)
+                    // Generate a temporary username from email for legacy users
+                    let tempUsername = email.components(separatedBy: "@").first ?? UUID().uuidString
+                    let newUser = AppUser(id: userId, email: email, username: tempUsername.lowercased(), role: .athlete)
                     self?.createUserDocument(user: newUser) { _ in }
                 }
                 return
