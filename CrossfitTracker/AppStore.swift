@@ -279,14 +279,21 @@ final class AppStore: ObservableObject {
         }
     }
 
-    func updateUserProfile(userId: String, firstName: String, lastName: String, completion: @escaping (String?) -> Void) {
+    func updateUserProfile(userId: String, firstName: String, lastName: String, username: String, completion: @escaping (String?) -> Void) {
         let displayName = [firstName, lastName].compactMap { $0.isEmpty ? nil : $0 }.joined(separator: " ")
 
-        db.collection("users").document(userId).updateData([
+        var updateData: [String: Any] = [
             "firstName": firstName,
             "lastName": lastName,
             "displayName": displayName
-        ]) { [weak self] error in
+        ]
+
+        // Only update username if it's not empty
+        if !username.isEmpty {
+            updateData["username"] = username.lowercased()
+        }
+
+        db.collection("users").document(userId).updateData(updateData) { [weak self] error in
             if let error = error {
                 completion(error.localizedDescription)
                 return

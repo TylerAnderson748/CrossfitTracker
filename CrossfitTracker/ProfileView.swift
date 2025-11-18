@@ -14,10 +14,39 @@ struct ProfileView: View {
     @State private var showingEditProfile = false
     @State private var editFirstName = ""
     @State private var editLastName = ""
+    @State private var editUsername = ""
+    @State private var showError = false
+    @State private var errorMessage = ""
 
     var body: some View {
         NavigationView {
             List {
+                // Alert for users without username
+                if store.appUser?.username == nil || store.appUser?.username?.isEmpty == true {
+                    Section {
+                        HStack {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundColor(.orange)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Username Required")
+                                    .font(.headline)
+                                Text("Please set a username for your account")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            Spacer()
+                            Button("Set Now") {
+                                editFirstName = store.appUser?.firstName ?? ""
+                                editLastName = store.appUser?.lastName ?? ""
+                                editUsername = store.appUser?.username ?? ""
+                                showingEditProfile = true
+                            }
+                            .buttonStyle(.borderedProminent)
+                        }
+                        .padding(.vertical, 4)
+                    }
+                }
+
                 Section {
                     HStack {
                         Image(systemName: "person.circle.fill")
@@ -49,6 +78,7 @@ struct ProfileView: View {
                         Button(action: {
                             editFirstName = store.appUser?.firstName ?? ""
                             editLastName = store.appUser?.lastName ?? ""
+                            editUsername = store.appUser?.username ?? ""
                             showingEditProfile = true
                         }) {
                             Image(systemName: "pencil.circle.fill")
@@ -152,8 +182,14 @@ struct ProfileView: View {
                 EditProfileSheet(
                     firstName: $editFirstName,
                     lastName: $editLastName,
+                    username: $editUsername,
                     onSave: { saveProfile() }
                 )
+            }
+            .alert("Error", isPresented: $showError) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text(errorMessage)
             }
         }
     }
@@ -188,9 +224,40 @@ struct ProfileView: View {
     private func saveProfile() {
         guard let userId = store.currentUser?.uid else { return }
 
-        store.updateUserProfile(userId: userId, firstName: editFirstName, lastName: editLastName) { error in
+        // If username changed, validate it first
+        let currentUsername = store.appUser?.username
+        let usernameChanged = editUsername.lowercased() != currentUsername?.lowercased()
+
+        if usernameChanged && !editUsername.isEmpty {
+            // Check username availability
+            store.checkUsernameAvailability(username: editUsername) { isAvailable, error in
+                if let error = error {
+                    errorMessage = "Error checking username: \(error)"
+                    showError = true
+                    return
+                }
+
+                if !isAvailable {
+                    errorMessage = "Username '\(editUsername)' is already taken. Please choose a different username."
+                    showError = true
+                    return
+                }
+
+                // Username is available, proceed with update
+                updateProfileInFirestore(userId: userId)
+            }
+        } else {
+            // No username change, just update
+            updateProfileInFirestore(userId: userId)
+        }
+    }
+
+    private func updateProfileInFirestore(userId: String) {
+        store.updateUserProfile(userId: userId, firstName: editFirstName, lastName: editLastName, username: editUsername) { error in
             if let error = error {
                 print("❌ Error updating profile: \(error)")
+                errorMessage = "Failed to update profile: \(error)"
+                showError = true
             } else {
                 print("✅ Profile updated successfully")
                 showingEditProfile = false
@@ -203,6 +270,7 @@ struct EditProfileSheet: View {
     @Environment(\.dismiss) var dismiss
     @Binding var firstName: String
     @Binding var lastName: String
+    @Binding var username: String
     let onSave: () -> Void
 
     var body: some View {
@@ -213,6 +281,16 @@ struct EditProfileSheet: View {
                         .textInputAutocapitalization(.words)
                     TextField("Last Name", text: $lastName)
                         .textInputAutocapitalization(.words)
+                }
+
+                Section {
+                    TextField("Username", text: $username)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                } header: {
+                    Text("Username")
+                } footer: {
+                    Text("Your unique username. This cannot be changed once set.")
                 }
             }
             .navigationTitle("Edit Profile")
@@ -227,7 +305,7 @@ struct EditProfileSheet: View {
                     Button("Save") {
                         onSave()
                     }
-                    .disabled(firstName.isEmpty || lastName.isEmpty)
+                    .disabled(firstName.isEmpty || lastName.isEmpty || username.isEmpty)
                 }
             }
         }

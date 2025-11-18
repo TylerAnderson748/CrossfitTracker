@@ -11,7 +11,7 @@ import FirebaseFirestore
 struct AppUser: Codable, Identifiable {
     @DocumentID var id: String?
     var email: String
-    var username: String
+    var username: String?
     var role: UserRole
     var firstName: String?
     var lastName: String?
@@ -19,7 +19,7 @@ struct AppUser: Codable, Identifiable {
     var createdAt: Date
     var hideFromLeaderboards: Bool // User preference to opt out of leaderboards
 
-    init(id: String? = nil, email: String, username: String, role: UserRole = .athlete, firstName: String? = nil, lastName: String? = nil, hideFromLeaderboards: Bool = false) {
+    init(id: String? = nil, email: String, username: String? = nil, role: UserRole = .athlete, firstName: String? = nil, lastName: String? = nil, hideFromLeaderboards: Bool = false) {
         self.id = id
         self.email = email
         self.username = username
