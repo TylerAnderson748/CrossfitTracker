@@ -206,65 +206,68 @@ struct LiftEntryView: View {
                                 .fontWeight(.semibold)
                                 .padding(.horizontal, 10)
 
-                            ForEach(history) { entry in
-                                HStack(spacing: 6) {
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(entry.date, style: .date)
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
-                                        Text("\(entry.weight, specifier: "%.1f") × \(entry.reps)")
-                                            .font(.subheadline)
-                                            .fontWeight(.semibold)
-                                            .foregroundColor(.primary)
-                                        if let notes = entry.notes, !notes.isEmpty {
-                                            Text(notes)
+                            List {
+                                ForEach(history) { entry in
+                                    HStack(spacing: 6) {
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(entry.date, style: .date)
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                            Text("\(entry.weight, specifier: "%.1f") × \(entry.reps)")
+                                                .font(.subheadline)
+                                                .fontWeight(.semibold)
+                                                .foregroundColor(.primary)
+                                            if let notes = entry.notes, !notes.isEmpty {
+                                                Text(notes)
+                                                    .font(.caption2)
+                                                    .foregroundColor(.secondary)
+                                                    .lineLimit(1)
+                                            }
+                                        }
+
+                                        Spacer()
+
+                                        VStack(alignment: .trailing, spacing: 2) {
+                                            Text("1RM")
                                                 .font(.caption2)
                                                 .foregroundColor(.secondary)
-                                                .lineLimit(1)
+                                            Text(String(format: "%.0f", entry.estimatedOneRepMax))
+                                                .font(.subheadline)
+                                                .fontWeight(.bold)
+                                                .foregroundColor(.blue)
+                                        }
+
+                                        Button(action: {
+                                            editEntry(entry)
+                                        }) {
+                                            Image(systemName: "pencil.circle.fill")
+                                                .font(.title3)
+                                                .foregroundColor(.blue)
+                                        }
+                                        .buttonStyle(PlainButtonStyle())
+                                    }
+                                    .listRowInsets(EdgeInsets(top: 4, leading: 10, bottom: 4, trailing: 10))
+                                    .listRowBackground(Color(.systemGray6))
+                                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                        Button(role: .destructive) {
+                                            deleteEntry(entry)
+                                        } label: {
+                                            Label("Delete", systemImage: "trash")
                                         }
                                     }
-
-                                    Spacer()
-
-                                    VStack(alignment: .trailing, spacing: 2) {
-                                        Text("1RM")
-                                            .font(.caption2)
-                                            .foregroundColor(.secondary)
-                                        Text(String(format: "%.0f", entry.estimatedOneRepMax))
-                                            .font(.subheadline)
-                                            .fontWeight(.bold)
-                                            .foregroundColor(.blue)
+                                    .swipeActions(edge: .leading) {
+                                        Button {
+                                            editEntry(entry)
+                                        } label: {
+                                            Label("Edit", systemImage: "pencil")
+                                        }
+                                        .tint(.blue)
                                     }
-
-                                    Button(action: {
-                                        editEntry(entry)
-                                    }) {
-                                        Image(systemName: "pencil.circle.fill")
-                                            .font(.title3)
-                                            .foregroundColor(.blue)
-                                    }
-                                    .buttonStyle(PlainButtonStyle())
-                                }
-                                .padding(8)
-                                .background(Color(.systemBackground))
-                                .cornerRadius(6)
-                                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                    Button(role: .destructive) {
-                                        deleteEntry(entry)
-                                    } label: {
-                                        Label("Delete", systemImage: "trash")
-                                    }
-                                }
-                                .swipeActions(edge: .leading) {
-                                    Button {
-                                        editEntry(entry)
-                                    } label: {
-                                        Label("Edit", systemImage: "pencil")
-                                    }
-                                    .tint(.blue)
                                 }
                             }
-                            .padding(.horizontal, 10)
+                            .listStyle(.plain)
+                            .frame(height: CGFloat(history.count * 70))
+                            .scrollDisabled(true)
                         }
                         .padding(.vertical, 6)
                     }
@@ -527,28 +530,26 @@ struct LineChartView: View {
                             points.append(CGPoint(x: x, y: y))
                         }
 
-                        // Create smooth curve
+                        // Create smooth curve using cubic Bezier
+                        path.move(to: points[0])
+
                         if points.count == 2 {
-                            path.move(to: points[0])
                             path.addLine(to: points[1])
                         } else {
-                            path.move(to: points[0])
-                            for i in 1..<points.count {
-                                let currentPoint = points[i]
-                                let previousPoint = points[i - 1]
+                            for i in 0..<points.count - 1 {
+                                let current = points[i]
+                                let next = points[i + 1]
 
-                                let midX = (previousPoint.x + currentPoint.x) / 2
-                                let midY = (previousPoint.y + currentPoint.y) / 2
+                                // Calculate control points for smooth curve
+                                let controlPointX = (current.x + next.x) / 2
+                                let control1 = CGPoint(x: controlPointX, y: current.y)
+                                let control2 = CGPoint(x: controlPointX, y: next.y)
 
-                                let controlPoint1 = CGPoint(x: midX, y: previousPoint.y)
-                                let controlPoint2 = CGPoint(x: midX, y: currentPoint.y)
-
-                                path.addQuadCurve(to: CGPoint(x: midX, y: midY), control: controlPoint1)
-                                path.addQuadCurve(to: currentPoint, control: controlPoint2)
+                                path.addCurve(to: next, control1: control1, control2: control2)
                             }
                         }
                     }
-                    .stroke(Color.blue, lineWidth: 2.5)
+                    .stroke(Color.blue, lineWidth: 2)
 
                     // Data points
                     ForEach(Array(sortedEntries.enumerated()), id: \.element.id) { index, entry in
