@@ -143,7 +143,8 @@ struct WorkoutCard: View {
                     // Create WOD from ScheduledWorkout for timer
                     let wod = WOD(
                         title: workout.wodTitle,
-                        description: workout.wodDescription
+                        description: workout.wodDescription,
+                        type: .wod
                     )
                     navigationPath.append(WODDestination.timer(wod))
                 }) {
@@ -157,7 +158,8 @@ struct WorkoutCard: View {
                 Button(action: {
                     let wod = WOD(
                         title: workout.wodTitle,
-                        description: workout.wodDescription
+                        description: workout.wodDescription,
+                        type: .wod
                     )
                     navigationPath.append(WODDestination.leaderboard(wod))
                 }) {
