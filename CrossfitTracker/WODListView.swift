@@ -36,9 +36,12 @@ struct WODListView: View {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(wod.title)
                                 .font(.headline)
-                            Text(wod.description)
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
+                            // Only show description for WODs, not lifts
+                            if wod.type != .lift {
+                                Text(wod.description)
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                            }
                         }
                         .padding(.vertical, 4)
                     }

@@ -776,13 +776,61 @@ struct LiftEntryView: View {
                 }
             }
 
-            // Sort by weight descending
-            let sortedResults = bestLifts.values.sorted { $0.weight > $1.weight }
+            // Get all unique user IDs
+            let userIdsToCheck = Array(bestLifts.keys)
 
-            DispatchQueue.main.async { [self] in
-                self.leaderboardEntries = sortedResults
-                self.isLoadingLeaderboard = false
-                print("✅ Loaded \(sortedResults.count) leaderboard entries")
+            // Check if users have opted out of leaderboards
+            if userIdsToCheck.isEmpty {
+                DispatchQueue.main.async { [self] in
+                    self.leaderboardEntries = []
+                    self.isLoadingLeaderboard = false
+                    print("✅ Loaded 0 leaderboard entries")
+                }
+                return
+            }
+
+            // Query users in batches (Firestore 'in' query supports max 10 items)
+            let batchSize = 10
+            var usersToHide = Set<String>()
+            let totalBatches = (userIdsToCheck.count + batchSize - 1) / batchSize
+            var processedBatches = 0
+
+            for batchIndex in 0..<totalBatches {
+                let start = batchIndex * batchSize
+                let end = min(start + batchSize, userIdsToCheck.count)
+                let batchUserIds = Array(userIdsToCheck[start..<end])
+
+                db.collection("users")
+                    .whereField(FieldPath.documentID(), in: batchUserIds)
+                    .getDocuments { userSnapshot, userError in
+                        if let userError = userError {
+                            print("❌ Error fetching user visibility settings: \(userError.localizedDescription)")
+                        } else {
+                            let hiddenUsers = userSnapshot?.documents.compactMap { doc -> String? in
+                                if let user = try? doc.data(as: AppUser.self), user.hideFromLeaderboards {
+                                    return user.id
+                                }
+                                return nil
+                            } ?? []
+                            usersToHide.formUnion(hiddenUsers)
+                        }
+
+                        processedBatches += 1
+
+                        if processedBatches == totalBatches {
+                            // Filter out users who have opted out
+                            let filteredResults = bestLifts.values.filter { !usersToHide.contains($0.userId) }
+
+                            // Sort by weight descending
+                            let sortedResults = filteredResults.sorted { $0.weight > $1.weight }
+
+                            DispatchQueue.main.async { [self] in
+                                self.leaderboardEntries = sortedResults
+                                self.isLoadingLeaderboard = false
+                                print("✅ Loaded \(sortedResults.count) leaderboard entries (filtered \(usersToHide.count) hidden users)")
+                            }
+                        }
+                    }
             }
         }
     }
