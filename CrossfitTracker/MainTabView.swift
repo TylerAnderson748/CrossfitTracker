@@ -33,10 +33,10 @@ struct MainTabView: View {
                     }
             }
 
-            // All users see WODs
+            // All users see Workouts
             WODListView()
                 .tabItem {
-                    Label("WODs", systemImage: "list.bullet.rectangle")
+                    Label("Workouts", systemImage: "list.bullet.rectangle")
                 }
 
             // All users see Profile
