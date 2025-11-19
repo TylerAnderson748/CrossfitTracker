@@ -16,7 +16,6 @@ struct LiftEntryView: View {
 
     @State private var selectedReps: Int = 1
     @State private var weight: String = ""
-    @State private var notes: String = ""
     @State private var entryDate: Date = Date()
     @State private var isSaving = false
     @State private var history: [LiftResult] = []
@@ -26,7 +25,6 @@ struct LiftEntryView: View {
     @State private var editWeight: String = ""
     @State private var editReps: Int = 1
     @State private var editDate: Date = Date()
-    @State private var editNotes: String = ""
 
     // Leaderboard
     @State private var leaderboardFilter: LeaderboardFilter = .everyone
@@ -121,19 +119,6 @@ struct LiftEntryView: View {
                                     .disabled(weight.isEmpty || isSaving)
                                 }
                                 .frame(maxWidth: .infinity, alignment: .trailing)
-                            }
-
-                            // Notes
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Notes")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                TextEditor(text: $notes)
-                                    .frame(height: 50)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 6)
-                                            .stroke(Color.gray.opacity(0.3), lineWidth: 1)
-                                    )
                             }
                         }
                         .padding(8)
@@ -380,19 +365,6 @@ struct LiftEntryView: View {
                                                     .labelsHidden()
                                             }
 
-                                            // Notes
-                                            VStack(alignment: .leading, spacing: 2) {
-                                                Text("Notes")
-                                                    .font(.caption)
-                                                    .foregroundColor(.secondary)
-                                                TextEditor(text: $editNotes)
-                                                    .frame(height: 50)
-                                                    .overlay(
-                                                        RoundedRectangle(cornerRadius: 6)
-                                                            .stroke(Color.gray.opacity(0.3), lineWidth: 1)
-                                                    )
-                                            }
-
                                             // Update and Cancel buttons
                                             HStack(spacing: 8) {
                                                 Button(action: { updateEntry(entry) }) {
@@ -583,7 +555,7 @@ struct LiftEntryView: View {
             weight: weightValue,
             reps: selectedReps,
             date: entryDate,
-            notes: notes.isEmpty ? nil : notes
+            notes: nil
         )
 
         let db = Firestore.firestore()
@@ -593,7 +565,6 @@ struct LiftEntryView: View {
 
             // Clear form and reload history
             weight = ""
-            notes = ""
             entryDate = Date()
             selectedReps = 1
             loadHistory()
@@ -611,7 +582,6 @@ struct LiftEntryView: View {
         editWeight = String(entry.weight)
         editReps = entry.reps
         editDate = entry.date
-        editNotes = entry.notes ?? ""
     }
 
     private func cancelEdit() {
@@ -619,7 +589,6 @@ struct LiftEntryView: View {
         editWeight = ""
         editReps = 1
         editDate = Date()
-        editNotes = ""
     }
 
     private func updateEntry(_ entry: LiftResult) {
@@ -643,7 +612,7 @@ struct LiftEntryView: View {
             weight: weightValue,
             reps: editReps,
             date: editDate,
-            notes: editNotes.isEmpty ? nil : editNotes
+            notes: nil
         )
 
         let db = Firestore.firestore()
