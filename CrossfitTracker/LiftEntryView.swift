@@ -53,25 +53,24 @@ struct LiftEntryView: View {
                             .font(.headline)
                             .fontWeight(.bold)
 
-                            // Reps and Weight in one row
-                            HStack(spacing: 8) {
-                                // Reps Picker (1-5)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("Reps")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                    Picker("Reps", selection: $selectedReps) {
-                                        ForEach(1...5, id: \.self) { rep in
-                                            Text("\(rep)").tag(rep)
-                                        }
-                                    }
-                                    .pickerStyle(.segmented)
-                                    .onChange(of: selectedReps) { _ in
-                                        updateWeightForReps()
+                            // Reps Picker
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Reps")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                Picker("Reps", selection: $selectedReps) {
+                                    ForEach(1...5, id: \.self) { rep in
+                                        Text("\(rep)").tag(rep)
                                     }
                                 }
+                                .pickerStyle(.segmented)
+                                .onChange(of: selectedReps) { _ in
+                                    updateWeightForReps()
+                                }
+                            }
 
-                                // Weight Input
+                            // Weight and Save Button in one row
+                            HStack(spacing: 8) {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text("Weight")
                                         .font(.caption)
@@ -86,18 +85,31 @@ struct LiftEntryView: View {
                                             .foregroundColor(.secondary)
                                     }
                                 }
+
+                                Spacer()
+
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(" ")
+                                        .font(.caption)
+                                    Button(action: saveLift) {
+                                        Text("Save")
+                                            .frame(width: 100)
+                                            .padding(.vertical, 8)
+                                            .background(weight.isEmpty || isSaving ? Color.gray : Color.blue)
+                                            .foregroundColor(.white)
+                                            .cornerRadius(8)
+                                    }
+                                    .disabled(weight.isEmpty || isSaving)
+                                }
                             }
 
-                            // Date and Notes
-                            HStack(spacing: 8) {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("Date")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                    DatePicker("", selection: $entryDate, displayedComponents: .date)
-                                        .labelsHidden()
-                                        .frame(maxWidth: .infinity)
-                                }
+                            // Date
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Date")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                DatePicker("", selection: $entryDate, displayedComponents: .date)
+                                    .labelsHidden()
                             }
 
                             // Notes
@@ -112,17 +124,6 @@ struct LiftEntryView: View {
                                             .stroke(Color.gray.opacity(0.3), lineWidth: 1)
                                     )
                             }
-
-                            // Save Button
-                            Button(action: saveLift) {
-                                Text("Save")
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 8)
-                                    .background(weight.isEmpty || isSaving ? Color.gray : Color.blue)
-                                    .foregroundColor(.white)
-                                    .cornerRadius(8)
-                            }
-                            .disabled(weight.isEmpty || isSaving)
                         }
                         .padding(10)
                         .background(Color(.systemBackground))
@@ -161,9 +162,9 @@ struct LiftEntryView: View {
                                     }
                                 }
 
-                                // Right column - 95%, 85%, 75%, 65%, 55%
+                                // Right column - 95%, 85%, 75%, 65%, 55%, 45%
                                 VStack(spacing: 1) {
-                                    ForEach(Array(stride(from: 95, through: 55, by: -10)), id: \.self) { percentage in
+                                    ForEach(Array(stride(from: 95, through: 45, by: -10)), id: \.self) { percentage in
                                         let weight = baseWeight * (Double(percentage) / 100.0)
                                         HStack(spacing: 6) {
                                             Text("\(percentage)%")
@@ -382,7 +383,7 @@ struct LiftEntryView: View {
 
     private func colorForPercentage(_ percentage: Int) -> Color {
         switch percentage {
-        case 50...65:
+        case 45...65:
             return .green
         case 70...80:
             return .orange
