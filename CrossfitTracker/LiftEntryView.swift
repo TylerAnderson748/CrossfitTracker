@@ -34,63 +34,71 @@ struct LiftEntryView: View {
     var body: some View {
         NavigationView {
             ScrollView {
-                VStack(spacing: 20) {
+                VStack(spacing: 12) {
                     // Entry Form
-                    VStack(alignment: .leading, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 12) {
                         Text(lift.title)
-                            .font(.title2)
+                            .font(.headline)
                             .fontWeight(.bold)
 
-                        // Reps Picker (1-5)
-                        VStack(alignment: .leading) {
-                            Text("Reps")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                            Picker("Reps", selection: $selectedReps) {
-                                ForEach(1...5, id: \.self) { rep in
-                                    Text("\(rep)").tag(rep)
+                        // Reps and Weight in one row
+                        HStack(spacing: 12) {
+                            // Reps Picker (1-5)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Reps")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                Picker("Reps", selection: $selectedReps) {
+                                    ForEach(1...5, id: \.self) { rep in
+                                        Text("\(rep)").tag(rep)
+                                    }
+                                }
+                                .pickerStyle(.segmented)
+                            }
+
+                            // Weight Input
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Weight")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                HStack {
+                                    TextField("0", text: $weight)
+                                        .keyboardType(.decimalPad)
+                                        .textFieldStyle(.roundedBorder)
+                                        .frame(width: 80)
+                                    Text("lbs")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
                                 }
                             }
-                            .pickerStyle(.segmented)
                         }
 
-                        // Weight Input
-                        VStack(alignment: .leading) {
-                            Text("Weight (lbs)")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                            HStack {
-                                TextField("0", text: $weight)
-                                    .keyboardType(.decimalPad)
-                                    .textFieldStyle(.roundedBorder)
-                                    .frame(width: 100)
-                                Text("lbs")
+                        // Date and Notes
+                        HStack(spacing: 12) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Date")
+                                    .font(.caption)
                                     .foregroundColor(.secondary)
+                                DatePicker("", selection: $entryDate, displayedComponents: .date)
+                                    .labelsHidden()
+                                    .frame(maxWidth: .infinity)
                             }
-                        }
-
-                        // Date Picker
-                        VStack(alignment: .leading) {
-                            Text("Date")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                            DatePicker("", selection: $entryDate, displayedComponents: .date)
-                                .labelsHidden()
                         }
 
                         // Notes
-                        VStack(alignment: .leading) {
-                            Text("Notes (Optional)")
-                                .font(.subheadline)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Notes")
+                                .font(.caption)
                                 .foregroundColor(.secondary)
                             TextEditor(text: $notes)
-                                .frame(height: 80)
+                                .frame(height: 60)
                                 .overlay(
-                                    RoundedRectangle(cornerRadius: 8)
+                                    RoundedRectangle(cornerRadius: 6)
                                         .stroke(Color.gray.opacity(0.3), lineWidth: 1)
                                 )
                         }
 
+                        // Save/Update Button
                         Button(action: {
                             if isEditing {
                                 updateEntry()
@@ -98,12 +106,12 @@ struct LiftEntryView: View {
                                 saveLift()
                             }
                         }) {
-                            Text(isEditing ? "Update Entry" : "Save Entry")
+                            Text(isEditing ? "Update" : "Save")
                                 .frame(maxWidth: .infinity)
-                                .padding()
+                                .padding(.vertical, 10)
                                 .background(weight.isEmpty || isSaving ? Color.gray : Color.blue)
                                 .foregroundColor(.white)
-                                .cornerRadius(10)
+                                .cornerRadius(8)
                         }
                         .disabled(weight.isEmpty || isSaving)
 
@@ -111,104 +119,109 @@ struct LiftEntryView: View {
                             Button(action: {
                                 cancelEdit()
                             }) {
-                                Text("Cancel Edit")
+                                Text("Cancel")
                                     .frame(maxWidth: .infinity)
-                                    .padding()
+                                    .padding(.vertical, 8)
                                     .background(Color.gray.opacity(0.2))
                                     .foregroundColor(.blue)
-                                    .cornerRadius(10)
+                                    .cornerRadius(8)
                             }
                         }
                     }
-                    .padding()
+                    .padding(12)
                     .background(Color(.systemBackground))
 
                     // Percentage Chart (based on most recent history)
                     if let oneRM = mostRecent1RM {
-                        VStack(alignment: .leading, spacing: 12) {
+                        VStack(alignment: .leading, spacing: 8) {
                             HStack {
-                                Text("Training Percentages")
-                                    .font(.headline)
-                                Spacer()
-                                Text("1RM: \(String(format: "%.1f", oneRM)) lbs")
+                                Text("Training %")
                                     .font(.subheadline)
+                                    .fontWeight(.semibold)
+                                Spacer()
+                                Text("1RM: \(String(format: "%.0f", oneRM)) lbs")
+                                    .font(.caption)
                                     .foregroundColor(.blue)
                             }
-                            .padding(.horizontal)
+                            .padding(.horizontal, 12)
 
-                            VStack(spacing: 8) {
+                            VStack(spacing: 4) {
                                 ForEach(Array(stride(from: 100, through: 50, by: -5)), id: \.self) { percentage in
                                     let weight = oneRM * (Double(percentage) / 100.0)
-                                    HStack {
+                                    HStack(spacing: 8) {
                                         Text("\(percentage)%")
-                                            .font(.system(.body, design: .monospaced))
-                                            .frame(width: 50, alignment: .leading)
+                                            .font(.system(.caption, design: .monospaced))
+                                            .frame(width: 40, alignment: .leading)
                                             .foregroundColor(colorForPercentage(percentage))
 
                                         Rectangle()
                                             .fill(colorForPercentage(percentage).opacity(0.3))
-                                            .frame(width: CGFloat(percentage) * 1.5, height: 24)
+                                            .frame(width: CGFloat(percentage) * 1.2, height: 18)
 
                                         Spacer()
 
-                                        Text(String(format: "%.1f lbs", weight))
-                                            .font(.system(.body, design: .monospaced))
+                                        Text(String(format: "%.0f", weight))
+                                            .font(.system(.caption, design: .monospaced))
                                             .foregroundColor(.secondary)
                                     }
                                 }
                             }
-                            .padding(.horizontal)
+                            .padding(.horizontal, 12)
                         }
-                        .padding(.vertical)
+                        .padding(.vertical, 8)
                         .background(Color(.systemGray6))
-                        .cornerRadius(12)
-                        .padding(.horizontal)
+                        .cornerRadius(8)
+                        .padding(.horizontal, 12)
                     }
 
                     // History
                     if !history.isEmpty {
-                        VStack(alignment: .leading, spacing: 12) {
+                        VStack(alignment: .leading, spacing: 8) {
                             Text("History")
-                                .font(.headline)
-                                .padding(.horizontal)
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                                .padding(.horizontal, 12)
 
                             ForEach(history) { entry in
                                 Button(action: {
                                     editEntry(entry)
                                 }) {
-                                    HStack {
-                                        VStack(alignment: .leading, spacing: 4) {
+                                    HStack(spacing: 8) {
+                                        VStack(alignment: .leading, spacing: 2) {
                                             Text(entry.date, style: .date)
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                            Text("\(entry.weight, specifier: "%.1f") × \(entry.reps)")
                                                 .font(.subheadline)
-                                                .foregroundColor(.primary)
-                                            Text("\(entry.weight, specifier: "%.1f") lbs × \(entry.reps) rep\(entry.reps == 1 ? "" : "s")")
-                                                .font(.body)
                                                 .fontWeight(.semibold)
                                                 .foregroundColor(.primary)
                                             if let notes = entry.notes, !notes.isEmpty {
                                                 Text(notes)
-                                                    .font(.caption)
+                                                    .font(.caption2)
                                                     .foregroundColor(.secondary)
+                                                    .lineLimit(1)
                                             }
                                         }
 
                                         Spacer()
 
-                                        VStack(alignment: .trailing) {
+                                        VStack(alignment: .trailing, spacing: 2) {
                                             Text("1RM")
-                                                .font(.caption)
+                                                .font(.caption2)
                                                 .foregroundColor(.secondary)
-                                            Text(String(format: "%.1f", entry.estimatedOneRepMax))
-                                                .font(.headline)
+                                            Text(String(format: "%.0f", entry.estimatedOneRepMax))
+                                                .font(.subheadline)
+                                                .fontWeight(.bold)
                                                 .foregroundColor(.blue)
                                         }
 
                                         Image(systemName: "chevron.right")
+                                            .font(.caption)
                                             .foregroundColor(.secondary)
                                     }
-                                    .padding()
+                                    .padding(10)
                                     .background(Color(.systemBackground))
-                                    .cornerRadius(10)
+                                    .cornerRadius(8)
                                 }
                                 .buttonStyle(PlainButtonStyle())
                                 .contextMenu {
@@ -219,11 +232,12 @@ struct LiftEntryView: View {
                                     }
                                 }
                             }
-                            .padding(.horizontal)
+                            .padding(.horizontal, 12)
                         }
-                        .padding(.vertical)
+                        .padding(.vertical, 8)
                     }
                 }
+                .padding(.vertical, 8)
             }
             .navigationTitle(lift.title)
             .navigationBarTitleDisplayMode(.inline)
