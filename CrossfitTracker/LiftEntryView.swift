@@ -69,7 +69,7 @@ struct LiftEntryView: View {
                                 }
                             }
 
-                            // Weight and Save Button in one row
+                            // Weight, Date, and Save Button in one row
                             HStack(spacing: 8) {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text("Weight")
@@ -79,11 +79,20 @@ struct LiftEntryView: View {
                                         TextField("0", text: $weight)
                                             .keyboardType(.decimalPad)
                                             .textFieldStyle(.roundedBorder)
-                                            .frame(width: 80)
+                                            .frame(width: 70)
                                         Text("lbs")
                                             .font(.caption)
                                             .foregroundColor(.secondary)
                                     }
+                                }
+
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Date")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                    DatePicker("", selection: $entryDate, displayedComponents: .date)
+                                        .labelsHidden()
+                                        .frame(width: 110)
                                 }
 
                                 Spacer()
@@ -93,7 +102,7 @@ struct LiftEntryView: View {
                                         .font(.caption)
                                     Button(action: saveLift) {
                                         Text("Save")
-                                            .frame(width: 100)
+                                            .frame(width: 80)
                                             .padding(.vertical, 8)
                                             .background(weight.isEmpty || isSaving ? Color.gray : Color.blue)
                                             .foregroundColor(.white)
@@ -101,15 +110,6 @@ struct LiftEntryView: View {
                                     }
                                     .disabled(weight.isEmpty || isSaving)
                                 }
-                            }
-
-                            // Date
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Date")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                DatePicker("", selection: $entryDate, displayedComponents: .date)
-                                    .labelsHidden()
                             }
 
                             // Notes
