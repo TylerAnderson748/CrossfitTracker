@@ -12,4 +12,5 @@ struct WOD: Identifiable, Codable, Hashable {
     var title: String
     var description: String
     var type: WorkoutType
+    var category: String?
 }
