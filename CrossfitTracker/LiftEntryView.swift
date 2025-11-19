@@ -207,53 +207,61 @@ struct LiftEntryView: View {
                                 .padding(.horizontal, 10)
 
                             ForEach(history) { entry in
-                                Button(action: {
-                                    editEntry(entry)
-                                }) {
-                                    HStack(spacing: 6) {
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            Text(entry.date, style: .date)
-                                                .font(.caption)
-                                                .foregroundColor(.secondary)
-                                            Text("\(entry.weight, specifier: "%.1f") × \(entry.reps)")
-                                                .font(.subheadline)
-                                                .fontWeight(.semibold)
-                                                .foregroundColor(.primary)
-                                            if let notes = entry.notes, !notes.isEmpty {
-                                                Text(notes)
-                                                    .font(.caption2)
-                                                    .foregroundColor(.secondary)
-                                                    .lineLimit(1)
-                                            }
-                                        }
-
-                                        Spacer()
-
-                                        VStack(alignment: .trailing, spacing: 2) {
-                                            Text("1RM")
+                                HStack(spacing: 6) {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(entry.date, style: .date)
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                        Text("\(entry.weight, specifier: "%.1f") × \(entry.reps)")
+                                            .font(.subheadline)
+                                            .fontWeight(.semibold)
+                                            .foregroundColor(.primary)
+                                        if let notes = entry.notes, !notes.isEmpty {
+                                            Text(notes)
                                                 .font(.caption2)
                                                 .foregroundColor(.secondary)
-                                            Text(String(format: "%.0f", entry.estimatedOneRepMax))
-                                                .font(.subheadline)
-                                                .fontWeight(.bold)
-                                                .foregroundColor(.blue)
+                                                .lineLimit(1)
                                         }
+                                    }
 
-                                        Image(systemName: "chevron.right")
+                                    Spacer()
+
+                                    VStack(alignment: .trailing, spacing: 2) {
+                                        Text("1RM")
                                             .font(.caption2)
                                             .foregroundColor(.secondary)
+                                        Text(String(format: "%.0f", entry.estimatedOneRepMax))
+                                            .font(.subheadline)
+                                            .fontWeight(.bold)
+                                            .foregroundColor(.blue)
                                     }
-                                    .padding(8)
-                                    .background(Color(.systemBackground))
-                                    .cornerRadius(6)
+
+                                    Button(action: {
+                                        editEntry(entry)
+                                    }) {
+                                        Image(systemName: "pencil.circle.fill")
+                                            .font(.title3)
+                                            .foregroundColor(.blue)
+                                    }
+                                    .buttonStyle(PlainButtonStyle())
                                 }
-                                .buttonStyle(PlainButtonStyle())
-                                .contextMenu {
+                                .padding(8)
+                                .background(Color(.systemBackground))
+                                .cornerRadius(6)
+                                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                                     Button(role: .destructive) {
                                         deleteEntry(entry)
                                     } label: {
                                         Label("Delete", systemImage: "trash")
                                     }
+                                }
+                                .swipeActions(edge: .leading) {
+                                    Button {
+                                        editEntry(entry)
+                                    } label: {
+                                        Label("Edit", systemImage: "pencil")
+                                    }
+                                    .tint(.blue)
                                 }
                             }
                             .padding(.horizontal, 10)
@@ -472,65 +480,106 @@ struct LineChartView: View {
         return max(0, min - 20) // Add some padding below
     }
 
+    private let dateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "M/d"
+        return formatter
+    }()
+
     var body: some View {
         GeometryReader { geometry in
-            ZStack(alignment: .bottomLeading) {
-                // Grid lines
-                VStack(spacing: 0) {
-                    ForEach(0..<5) { i in
-                        HStack {
-                            let value = maxWeight - (Double(i) * (maxWeight - minWeight) / 4)
-                            Text(String(format: "%.0f", value))
-                                .font(.system(size: 8))
-                                .foregroundColor(.secondary)
-                                .frame(width: 30, alignment: .trailing)
+            VStack(spacing: 0) {
+                // Chart area
+                ZStack(alignment: .bottomLeading) {
+                    // Grid lines
+                    VStack(spacing: 0) {
+                        ForEach(0..<5) { i in
+                            HStack {
+                                let value = maxWeight - (Double(i) * (maxWeight - minWeight) / 4)
+                                Text(String(format: "%.0f", value))
+                                    .font(.system(size: 8))
+                                    .foregroundColor(.secondary)
+                                    .frame(width: 30, alignment: .trailing)
 
-                            Rectangle()
-                                .fill(Color.gray.opacity(0.2))
-                                .frame(height: 0.5)
-                        }
-                        if i < 4 {
-                            Spacer()
+                                Rectangle()
+                                    .fill(Color.gray.opacity(0.2))
+                                    .frame(height: 0.5)
+                            }
+                            if i < 4 {
+                                Spacer()
+                            }
                         }
                     }
-                }
 
-                // Line chart
-                Path { path in
-                    guard !sortedEntries.isEmpty else { return }
+                    // Smooth curve line
+                    Path { path in
+                        guard sortedEntries.count > 1 else { return }
 
-                    let width = geometry.size.width - 35
-                    let height = geometry.size.height
-                    let xStep = width / CGFloat(max(sortedEntries.count - 1, 1))
+                        let width = geometry.size.width - 35
+                        let height = geometry.size.height - 20 // Leave room for x-axis labels
+                        let xStep = width / CGFloat(max(sortedEntries.count - 1, 1))
 
-                    for (index, entry) in sortedEntries.enumerated() {
+                        var points: [CGPoint] = []
+                        for (index, entry) in sortedEntries.enumerated() {
+                            let x = 35 + CGFloat(index) * xStep
+                            let normalizedValue = (entry.estimatedOneRepMax - minWeight) / (maxWeight - minWeight)
+                            let y = height - (CGFloat(normalizedValue) * height)
+                            points.append(CGPoint(x: x, y: y))
+                        }
+
+                        // Create smooth curve
+                        if points.count == 2 {
+                            path.move(to: points[0])
+                            path.addLine(to: points[1])
+                        } else {
+                            path.move(to: points[0])
+                            for i in 1..<points.count {
+                                let currentPoint = points[i]
+                                let previousPoint = points[i - 1]
+
+                                let midX = (previousPoint.x + currentPoint.x) / 2
+                                let midY = (previousPoint.y + currentPoint.y) / 2
+
+                                let controlPoint1 = CGPoint(x: midX, y: previousPoint.y)
+                                let controlPoint2 = CGPoint(x: midX, y: currentPoint.y)
+
+                                path.addQuadCurve(to: CGPoint(x: midX, y: midY), control: controlPoint1)
+                                path.addQuadCurve(to: currentPoint, control: controlPoint2)
+                            }
+                        }
+                    }
+                    .stroke(Color.blue, lineWidth: 2.5)
+
+                    // Data points
+                    ForEach(Array(sortedEntries.enumerated()), id: \.element.id) { index, entry in
+                        let width = geometry.size.width - 35
+                        let height = geometry.size.height - 20
+                        let xStep = width / CGFloat(max(sortedEntries.count - 1, 1))
                         let x = 35 + CGFloat(index) * xStep
                         let normalizedValue = (entry.estimatedOneRepMax - minWeight) / (maxWeight - minWeight)
                         let y = height - (CGFloat(normalizedValue) * height)
 
-                        if index == 0 {
-                            path.move(to: CGPoint(x: x, y: y))
-                        } else {
-                            path.addLine(to: CGPoint(x: x, y: y))
-                        }
+                        Circle()
+                            .fill(Color.blue)
+                            .frame(width: 7, height: 7)
+                            .position(x: x, y: y)
                     }
                 }
-                .stroke(Color.blue, lineWidth: 2)
+                .frame(height: geometry.size.height - 15)
 
-                // Data points
-                ForEach(Array(sortedEntries.enumerated()), id: \.element.id) { index, entry in
-                    let width = geometry.size.width - 35
-                    let height = geometry.size.height
-                    let xStep = width / CGFloat(max(sortedEntries.count - 1, 1))
-                    let x = 35 + CGFloat(index) * xStep
-                    let normalizedValue = (entry.estimatedOneRepMax - minWeight) / (maxWeight - minWeight)
-                    let y = height - (CGFloat(normalizedValue) * height)
+                // X-axis date labels
+                HStack(spacing: 0) {
+                    Spacer()
+                        .frame(width: 35)
 
-                    Circle()
-                        .fill(Color.blue)
-                        .frame(width: 6, height: 6)
-                        .position(x: x, y: y)
+                    ForEach(Array(sortedEntries.enumerated()), id: \.element.id) { index, entry in
+                        Text(dateFormatter.string(from: entry.date))
+                            .font(.system(size: 7))
+                            .foregroundColor(.secondary)
+                            .frame(maxWidth: .infinity)
+                    }
                 }
+                .frame(height: 15)
             }
         }
         .padding(.vertical, 8)
