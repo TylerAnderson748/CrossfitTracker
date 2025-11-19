@@ -807,12 +807,19 @@ struct LiftEntryView: View {
                             print("❌ Error fetching user visibility settings: \(userError.localizedDescription)")
                         } else {
                             let hiddenUsers = userSnapshot?.documents.compactMap { doc -> String? in
-                                if let user = try? doc.data(as: AppUser.self), user.hideFromLeaderboards {
-                                    return user.id
+                                if let user = try? doc.data(as: AppUser.self) {
+                                    print("📋 User \(user.displayName ?? user.email) - hideFromLeaderboards: \(user.hideFromLeaderboards)")
+                                    if user.hideFromLeaderboards {
+                                        print("🚫 Hiding user \(user.displayName ?? user.email) from leaderboard")
+                                        return user.id
+                                    }
+                                } else {
+                                    print("⚠️ Failed to decode user document: \(doc.documentID)")
                                 }
                                 return nil
                             } ?? []
                             usersToHide.formUnion(hiddenUsers)
+                            print("📊 Total users to hide in this batch: \(hiddenUsers.count)")
                         }
 
                         processedBatches += 1
