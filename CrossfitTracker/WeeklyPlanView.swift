@@ -62,7 +62,8 @@ struct WeeklyPlanView: View {
 
                                     let wod = WOD(
                                         title: workout.wodTitle,
-                                        description: workout.wodDescription
+                                        description: workout.wodDescription,
+                                        type: .wod
                                     )
 
                                     print("   - Created WOD with title: '\(wod.title)'")
