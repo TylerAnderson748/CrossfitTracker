@@ -14,6 +14,7 @@ struct WODListView: View {
     let workouts = SampleData.wods
     @State private var selectedType: WorkoutType = .wod
     @State private var searchText: String = ""
+    @State private var expandedSections: Set<String> = []
     @AppStorage("workoutAccessCounts") private var accessCountsData: Data = Data()
 
     private var accessCounts: [String: Int] {
@@ -104,7 +105,18 @@ struct WODListView: View {
                 List {
                     // Frequent section (only when not searching)
                     if searchText.isEmpty && !frequentWorkouts.isEmpty {
-                        Section(header: Text("⚡ Frequent")) {
+                        DisclosureGroup(
+                            isExpanded: Binding(
+                                get: { expandedSections.contains("⚡ Frequent") },
+                                set: { isExpanded in
+                                    if isExpanded {
+                                        expandedSections.insert("⚡ Frequent")
+                                    } else {
+                                        expandedSections.remove("⚡ Frequent")
+                                    }
+                                }
+                            )
+                        ) {
                             ForEach(frequentWorkouts) { wod in
                                 NavigationLink(destination: destinationView(for: wod)) {
                                     VStack(alignment: .leading, spacing: 4) {
@@ -123,12 +135,26 @@ struct WODListView: View {
                                     recordAccess(for: wod)
                                 })
                             }
+                        } label: {
+                            Text("⚡ Frequent")
+                                .font(.headline)
                         }
                     }
 
                     // Regular categories
                     ForEach(sortedCategories, id: \.self) { category in
-                        Section(header: Text(category)) {
+                        DisclosureGroup(
+                            isExpanded: Binding(
+                                get: { expandedSections.contains(category) },
+                                set: { isExpanded in
+                                    if isExpanded {
+                                        expandedSections.insert(category)
+                                    } else {
+                                        expandedSections.remove(category)
+                                    }
+                                }
+                            )
+                        ) {
                             ForEach(groupedWorkouts[category] ?? []) { wod in
                                 NavigationLink(destination: destinationView(for: wod)) {
                                     VStack(alignment: .leading, spacing: 4) {
@@ -147,6 +173,9 @@ struct WODListView: View {
                                     recordAccess(for: wod)
                                 })
                             }
+                        } label: {
+                            Text(category)
+                                .font(.headline)
                         }
                     }
                 }
