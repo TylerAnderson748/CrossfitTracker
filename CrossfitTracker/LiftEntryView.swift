@@ -40,106 +40,108 @@ struct LiftEntryView: View {
 
     var body: some View {
         NavigationView {
-            ScrollView {
-                VStack(spacing: 8) {
-                    // Entry Form
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(lift.title)
-                            .font(.headline)
-                            .fontWeight(.bold)
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(spacing: 8) {
+                        // Entry Form
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(lift.title)
+                                .font(.headline)
+                                .fontWeight(.bold)
+                                .id("topOfForm")
 
-                        // Reps and Weight in one row
-                        HStack(spacing: 8) {
-                            // Reps Picker (1-5)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Reps")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                Picker("Reps", selection: $selectedReps) {
-                                    ForEach(1...5, id: \.self) { rep in
-                                        Text("\(rep)").tag(rep)
-                                    }
-                                }
-                                .pickerStyle(.segmented)
-                                .onChange(of: selectedReps) { _ in
-                                    updateWeightForReps()
-                                }
-                            }
-
-                            // Weight Input
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Weight")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                HStack {
-                                    TextField("0", text: $weight)
-                                        .keyboardType(.decimalPad)
-                                        .textFieldStyle(.roundedBorder)
-                                        .frame(width: 80)
-                                    Text("lbs")
+                            // Reps and Weight in one row
+                            HStack(spacing: 8) {
+                                // Reps Picker (1-5)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Reps")
                                         .font(.caption)
                                         .foregroundColor(.secondary)
+                                    Picker("Reps", selection: $selectedReps) {
+                                        ForEach(1...5, id: \.self) { rep in
+                                            Text("\(rep)").tag(rep)
+                                        }
+                                    }
+                                    .pickerStyle(.segmented)
+                                    .onChange(of: selectedReps) { _ in
+                                        updateWeightForReps()
+                                    }
+                                }
+
+                                // Weight Input
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Weight")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                    HStack {
+                                        TextField("0", text: $weight)
+                                            .keyboardType(.decimalPad)
+                                            .textFieldStyle(.roundedBorder)
+                                            .frame(width: 80)
+                                        Text("lbs")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+                            }
+
+                            // Date and Notes
+                            HStack(spacing: 8) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Date")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                    DatePicker("", selection: $entryDate, displayedComponents: .date)
+                                        .labelsHidden()
+                                        .frame(maxWidth: .infinity)
+                                }
+                            }
+
+                            // Notes
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Notes")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                TextEditor(text: $notes)
+                                    .frame(height: 50)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 6)
+                                            .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                                    )
+                            }
+
+                            // Save/Update Button
+                            Button(action: {
+                                if isEditing {
+                                    updateEntry()
+                                } else {
+                                    saveLift()
+                                }
+                            }) {
+                                Text(isEditing ? "Update" : "Save")
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 8)
+                                    .background(weight.isEmpty || isSaving ? Color.gray : Color.blue)
+                                    .foregroundColor(.white)
+                                    .cornerRadius(8)
+                            }
+                            .disabled(weight.isEmpty || isSaving)
+
+                            if isEditing {
+                                Button(action: {
+                                    cancelEdit()
+                                }) {
+                                    Text("Cancel")
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.vertical, 6)
+                                        .background(Color.gray.opacity(0.2))
+                                        .foregroundColor(.blue)
+                                        .cornerRadius(8)
                                 }
                             }
                         }
-
-                        // Date and Notes
-                        HStack(spacing: 8) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Date")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                DatePicker("", selection: $entryDate, displayedComponents: .date)
-                                    .labelsHidden()
-                                    .frame(maxWidth: .infinity)
-                            }
-                        }
-
-                        // Notes
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Notes")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                            TextEditor(text: $notes)
-                                .frame(height: 50)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 6)
-                                        .stroke(Color.gray.opacity(0.3), lineWidth: 1)
-                                )
-                        }
-
-                        // Save/Update Button
-                        Button(action: {
-                            if isEditing {
-                                updateEntry()
-                            } else {
-                                saveLift()
-                            }
-                        }) {
-                            Text(isEditing ? "Update" : "Save")
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 8)
-                                .background(weight.isEmpty || isSaving ? Color.gray : Color.blue)
-                                .foregroundColor(.white)
-                                .cornerRadius(8)
-                        }
-                        .disabled(weight.isEmpty || isSaving)
-
-                        if isEditing {
-                            Button(action: {
-                                cancelEdit()
-                            }) {
-                                Text("Cancel")
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 6)
-                                    .background(Color.gray.opacity(0.2))
-                                    .foregroundColor(.blue)
-                                    .cornerRadius(8)
-                            }
-                        }
-                    }
-                    .padding(10)
-                    .background(Color(.systemBackground))
+                        .padding(10)
+                        .background(Color(.systemBackground))
 
                     // Percentage Chart (based on most recent weight for selected reps)
                     if let baseWeight = currentWeight, let recent = mostRecentForReps {
@@ -271,20 +273,28 @@ struct LiftEntryView: View {
                         }
                         .padding(.vertical, 6)
                     }
+                    }
+                    .padding(.vertical, 6)
                 }
-                .padding(.vertical, 6)
-            }
-            .navigationTitle(lift.title)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Close") {
-                        dismiss()
+                .navigationTitle(lift.title)
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        Button("Close") {
+                            dismiss()
+                        }
                     }
                 }
-            }
-            .onAppear {
-                loadHistory()
+                .onAppear {
+                    loadHistory()
+                }
+                .onChange(of: isEditing) { editing in
+                    if editing {
+                        withAnimation {
+                            proxy.scrollTo("topOfForm", anchor: .top)
+                        }
+                    }
+                }
             }
         }
     }
@@ -392,6 +402,7 @@ struct LiftEntryView: View {
     }
 
     private func editEntry(_ entry: LiftResult) {
+        print("📝 Editing entry: \(entry.weight) × \(entry.reps)")
         editingEntry = entry
         isEditing = true
         weight = String(entry.weight)
