@@ -129,19 +129,21 @@ struct LiftEntryView: View {
                         .background(Color(.systemBackground))
 
                     // Percentage Chart (based on most recent weight for selected reps)
-                    if let baseWeight = currentWeight, let recent = mostRecentForReps {
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack {
-                                Text("Training %")
-                                    .font(.subheadline)
-                                    .fontWeight(.semibold)
-                                Spacer()
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Text("Training %")
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                            Spacer()
+                            if let recent = mostRecentForReps {
                                 Text("Latest: \(String(format: "%.0f", recent.weight)) × \(recent.reps)")
                                     .font(.caption)
                                     .foregroundColor(.blue)
                             }
-                            .padding(.horizontal, 10)
+                        }
+                        .padding(.horizontal, 10)
 
+                        if let baseWeight = currentWeight {
                             HStack(spacing: 0) {
                                 // Column 1: 100%, 95%, 90%, 85% - Red (heaviest)
                                 VStack(spacing: 1) {
@@ -201,30 +203,42 @@ struct LiftEntryView: View {
                                 .frame(maxWidth: .infinity)
                             }
                             .padding(.horizontal, 10)
+                        } else {
+                            Text("Add an entry to see training percentages")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .center)
+                                .padding(.vertical, 20)
                         }
-                        .padding(.vertical, 4)
-                        .background(Color(.systemGray6))
-                        .cornerRadius(8)
-                        .padding(.horizontal, 10)
                     }
+                    .padding(.vertical, 4)
+                    .background(Color(.systemGray6))
+                    .cornerRadius(8)
+                    .padding(.horizontal, 10)
 
                     // Progress Chart (filtered by selected reps)
-                    if filteredHistory.count > 1 {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("Progress (\(selectedReps) rep\(selectedReps == 1 ? "" : "s"))")
-                                .font(.caption)
-                                .fontWeight(.semibold)
-                                .padding(.horizontal, 10)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Progress (\(selectedReps) rep\(selectedReps == 1 ? "" : "s"))")
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .padding(.horizontal, 10)
 
+                        if filteredHistory.count > 1 {
                             LineChartView(entries: filteredHistory)
                                 .frame(height: 100)
                                 .padding(.horizontal, 10)
+                        } else {
+                            Text("Add more entries to see progress chart")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .center)
+                                .frame(height: 100)
                         }
-                        .padding(.vertical, 6)
-                        .background(Color(.systemGray6))
-                        .cornerRadius(8)
-                        .padding(.horizontal, 10)
                     }
+                    .padding(.vertical, 6)
+                    .background(Color(.systemGray6))
+                    .cornerRadius(8)
+                    .padding(.horizontal, 10)
 
                     // History
                     if !filteredHistory.isEmpty {
@@ -383,7 +397,7 @@ struct LiftEntryView: View {
                         .padding(.vertical, 6)
                     }
                     }
-                    .padding(.top, 12)
+                    .padding(.top, 0)
                     .padding(.bottom, 4)
                 }
             .navigationTitle(lift.title)
