@@ -142,41 +142,57 @@ struct LiftEntryView: View {
                             }
                             .padding(.horizontal, 10)
 
-                            HStack(spacing: 8) {
-                                // Left column - 100%, 90%, 80%, 70%, 60%, 50%
+                            HStack(spacing: 4) {
+                                // Column 1: 100%, 85%, 70%, 55%
                                 VStack(spacing: 1) {
-                                    ForEach(Array(stride(from: 100, through: 50, by: -10)), id: \.self) { percentage in
+                                    ForEach([100, 85, 70, 55], id: \.self) { percentage in
                                         let weight = baseWeight * (Double(percentage) / 100.0)
-                                        HStack(spacing: 6) {
+                                        HStack(spacing: 4) {
                                             Text("\(percentage)%")
                                                 .font(.system(.caption2, design: .monospaced))
-                                                .frame(width: 35, alignment: .leading)
+                                                .frame(width: 32, alignment: .leading)
                                                 .foregroundColor(colorForPercentage(percentage))
-
-                                            Spacer()
 
                                             Text(String(format: "%.0f", weight))
                                                 .font(.system(.caption2, design: .monospaced))
                                                 .foregroundColor(.secondary)
+                                                .frame(width: 35, alignment: .trailing)
                                         }
                                     }
                                 }
 
-                                // Right column - 95%, 85%, 75%, 65%, 55%, 45%
+                                // Column 2: 95%, 80%, 65%, 50%
                                 VStack(spacing: 1) {
-                                    ForEach(Array(stride(from: 95, through: 45, by: -10)), id: \.self) { percentage in
+                                    ForEach([95, 80, 65, 50], id: \.self) { percentage in
                                         let weight = baseWeight * (Double(percentage) / 100.0)
-                                        HStack(spacing: 6) {
+                                        HStack(spacing: 4) {
                                             Text("\(percentage)%")
                                                 .font(.system(.caption2, design: .monospaced))
-                                                .frame(width: 35, alignment: .leading)
+                                                .frame(width: 32, alignment: .leading)
                                                 .foregroundColor(colorForPercentage(percentage))
-
-                                            Spacer()
 
                                             Text(String(format: "%.0f", weight))
                                                 .font(.system(.caption2, design: .monospaced))
                                                 .foregroundColor(.secondary)
+                                                .frame(width: 35, alignment: .trailing)
+                                        }
+                                    }
+                                }
+
+                                // Column 3: 90%, 75%, 60%, 45%
+                                VStack(spacing: 1) {
+                                    ForEach([90, 75, 60, 45], id: \.self) { percentage in
+                                        let weight = baseWeight * (Double(percentage) / 100.0)
+                                        HStack(spacing: 4) {
+                                            Text("\(percentage)%")
+                                                .font(.system(.caption2, design: .monospaced))
+                                                .frame(width: 32, alignment: .leading)
+                                                .foregroundColor(colorForPercentage(percentage))
+
+                                            Text(String(format: "%.0f", weight))
+                                                .font(.system(.caption2, design: .monospaced))
+                                                .foregroundColor(.secondary)
+                                                .frame(width: 35, alignment: .trailing)
                                         }
                                     }
                                 }
