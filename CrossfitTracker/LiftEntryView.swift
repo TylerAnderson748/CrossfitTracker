@@ -383,7 +383,8 @@ struct LiftEntryView: View {
                         .padding(.vertical, 6)
                     }
                     }
-                    .padding(.vertical, 4)
+                    .padding(.top, 12)
+                    .padding(.bottom, 4)
                 }
             .navigationTitle(lift.title)
             .navigationBarTitleDisplayMode(.inline)
