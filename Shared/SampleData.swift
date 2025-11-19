@@ -9,24 +9,43 @@ import Foundation
 
 struct SampleData {
     static let wods: [WOD] = [
+        // MARK: - POPULAR WODS
+
+        WOD(title: "Fran", description: "21-15-9 thrusters (95/65) and pull-ups", type: .wod, category: "⭐ Popular WODs"),
+        WOD(title: "Murph", description: "1 mile run, 100 pull-ups, 200 push-ups, 300 squats, 1 mile run (with 20lb vest)", type: .wod, category: "⭐ Popular WODs"),
+        WOD(title: "DT", description: "5 rounds: 12 deadlifts (155/105), 9 hang power cleans, 6 push jerks", type: .wod, category: "⭐ Popular WODs"),
+        WOD(title: "Cindy", description: "AMRAP 20 min: 5 pull-ups, 10 push-ups, 15 squats", type: .wod, category: "⭐ Popular WODs"),
+        WOD(title: "Helen", description: "3 rounds: 400m run, 21 KB swings (53/35), 12 pull-ups", type: .wod, category: "⭐ Popular WODs"),
+        WOD(title: "Annie", description: "50-40-30-20-10 double-unders and sit-ups", type: .wod, category: "⭐ Popular WODs"),
+        WOD(title: "Grace", description: "30 clean and jerks (135/95) for time", type: .wod, category: "⭐ Popular WODs"),
+        WOD(title: "Karen", description: "150 wall balls (20/14) for time", type: .wod, category: "⭐ Popular WODs"),
+        WOD(title: "Fight Gone Bad", description: "3 rounds: 1 min each - wall balls, sumo deadlift high pulls, box jumps, push press, row", type: .wod, category: "⭐ Popular WODs"),
+
+        // MARK: - POPULAR LIFTS
+
+        WOD(title: "Back Squat", description: "", type: .lift, category: "⭐ Popular Lifts"),
+        WOD(title: "Deadlift", description: "", type: .lift, category: "⭐ Popular Lifts"),
+        WOD(title: "Clean & Jerk", description: "", type: .lift, category: "⭐ Popular Lifts"),
+        WOD(title: "Snatch", description: "", type: .lift, category: "⭐ Popular Lifts"),
+        WOD(title: "Front Squat", description: "", type: .lift, category: "⭐ Popular Lifts"),
+        WOD(title: "Push Press", description: "", type: .lift, category: "⭐ Popular Lifts"),
+        WOD(title: "Strict Press", description: "", type: .lift, category: "⭐ Popular Lifts"),
+        WOD(title: "Power Clean", description: "", type: .lift, category: "⭐ Popular Lifts"),
+        WOD(title: "Thruster", description: "", type: .lift, category: "⭐ Popular Lifts"),
+        WOD(title: "Bench Press", description: "", type: .lift, category: "⭐ Popular Lifts"),
+
         // MARK: - GIRLS WORKOUTS
 
         // Original Girls
         WOD(title: "Angie", description: "100 pull-ups, 100 push-ups, 100 sit-ups, 100 squats", type: .wod, category: "Original Girls"),
-        WOD(title: "Annie", description: "50-40-30-20-10 double-unders and sit-ups", type: .wod, category: "Original Girls"),
         WOD(title: "Amanda", description: "9-7-5 muscle-ups and squat snatches (135/95)", type: .wod, category: "Original Girls"),
         WOD(title: "Barbara", description: "5 rounds: 20 pull-ups, 30 push-ups, 40 sit-ups, 50 squats", type: .wod, category: "Original Girls"),
         WOD(title: "Chelsea", description: "EMOM 30: 5 pull-ups, 10 push-ups, 15 squats", type: .wod, category: "Original Girls"),
-        WOD(title: "Cindy", description: "AMRAP 20 min: 5 pull-ups, 10 push-ups, 15 squats", type: .wod, category: "Original Girls"),
         WOD(title: "Diane", description: "21-15-9 deadlifts (225/155) and handstand push-ups", type: .wod, category: "Original Girls"),
         WOD(title: "Elizabeth", description: "21-15-9 cleans (135/95) and ring dips", type: .wod, category: "Original Girls"),
         WOD(title: "Eva", description: "5 rounds: 800m run, 30 KB swings (53/35), 30 pull-ups", type: .wod, category: "Original Girls"),
-        WOD(title: "Fran", description: "21-15-9 thrusters (95/65) and pull-ups", type: .wod, category: "Original Girls"),
-        WOD(title: "Grace", description: "30 clean and jerks (135/95) for time", type: .wod, category: "Original Girls"),
-        WOD(title: "Helen", description: "3 rounds: 400m run, 21 KB swings (53/35), 12 pull-ups", type: .wod, category: "Original Girls"),
         WOD(title: "Isabel", description: "30 snatches (135/95) for time", type: .wod, category: "Original Girls"),
         WOD(title: "Jackie", description: "1000m row, 50 thrusters (45/35), 30 pull-ups", type: .wod, category: "Original Girls"),
-        WOD(title: "Karen", description: "150 wall balls (20/14) for time", type: .wod, category: "Original Girls"),
         WOD(title: "Kelly", description: "5 rounds: 400m run, 30 box jumps (24/20), 30 wall balls (20/14)", type: .wod, category: "Original Girls"),
         WOD(title: "Linda", description: "10-9-8-7-6-5-4-3-2-1 deadlift (1.5x BW), bench press (BW), clean (.75x BW)", type: .wod, category: "Original Girls"),
         WOD(title: "Lynne", description: "5 rounds: max rep bench press (BW), max rep pull-ups", type: .wod, category: "Original Girls"),
@@ -61,7 +80,6 @@ struct SampleData {
         WOD(title: "Chad", description: "1000 step-ups (24/20) wearing 45/25 lb vest", type: .wod, category: "Hero WODs A-D"),
         WOD(title: "Daniel", description: "50 pull-ups, 400m run, 21 thrusters (95/65), 800m run, 21 thrusters, 400m run, 50 pull-ups", type: .wod, category: "Hero WODs A-D"),
         WOD(title: "Danny", description: "20 min AMRAP: 30 box jumps (24/20), 20 push-ups, 10 pull-ups", type: .wod, category: "Hero WODs A-D"),
-        WOD(title: "DT", description: "5 rounds: 12 deadlifts (155/105), 9 hang power cleans, 6 push jerks", type: .wod, category: "Hero WODs A-D"),
 
         // Hero WODs E-J
         WOD(title: "Erin", description: "5 rounds: 15 dumbbell split cleans (40/25), 21 pull-ups", type: .wod, category: "Hero WODs E-J"),
@@ -82,7 +100,6 @@ struct SampleData {
         WOD(title: "Luke", description: "400m run, 30 squats, 30 push-ups (repeat for 6 rounds)", type: .wod, category: "Hero WODs K-M"),
         WOD(title: "McGhee", description: "5 rounds: 10 burpee pull-ups, 10 thrusters (115/75), 10 KB swings (70/53)", type: .wod, category: "Hero WODs K-M"),
         WOD(title: "Michael", description: "3 rounds: 800m run, 50 back extensions, 50 sit-ups", type: .wod, category: "Hero WODs K-M"),
-        WOD(title: "Murph", description: "1 mile run, 100 pull-ups, 200 push-ups, 300 squats, 1 mile run (with 20lb vest)", type: .wod, category: "Hero WODs K-M"),
 
         // Hero WODs N-R
         WOD(title: "Nate", description: "AMRAP 20: 2 muscle-ups, 4 handstand push-ups, 8 KB swings (70/53)", type: .wod, category: "Hero WODs N-R"),
@@ -105,7 +122,6 @@ struct SampleData {
 
         // MARK: - CLASSIC BENCHMARKS
 
-        WOD(title: "Fight Gone Bad", description: "3 rounds: 1 min each - wall balls, sumo deadlift high pulls, box jumps, push press, row", type: .wod, category: "Classic Benchmarks"),
         WOD(title: "Filthy 50", description: "50 reps each: box jumps, jumping pull-ups, KB swings, lunges, knees-to-elbows, push press, back extensions, wall balls, burpees, double-unders", type: .wod, category: "Classic Benchmarks"),
         WOD(title: "Dirty 30", description: "30 reps each: box jumps, jumping pull-ups, KB swings, lunges, knees-to-elbows, push press, back extensions, wall balls, burpees, double-unders", type: .wod, category: "Classic Benchmarks"),
         WOD(title: "The Seven", description: "7 rounds: 7 handstand push-ups, 7 thrusters (135/95), 7 knees-to-elbows, 7 deadlifts (245/165), 7 burpees, 7 KB swings (70/53), 7 pull-ups", type: .wod, category: "Classic Benchmarks"),
@@ -121,8 +137,6 @@ struct SampleData {
         // MARK: - LIFTS
 
         // Squat Variations
-        WOD(title: "Back Squat", description: "", type: .lift, category: "Squat Variations"),
-        WOD(title: "Front Squat", description: "", type: .lift, category: "Squat Variations"),
         WOD(title: "Low-Bar Back Squat", description: "", type: .lift, category: "Squat Variations"),
         WOD(title: "High-Bar Back Squat", description: "", type: .lift, category: "Squat Variations"),
         WOD(title: "Box Squat", description: "", type: .lift, category: "Squat Variations"),
@@ -134,7 +148,6 @@ struct SampleData {
         WOD(title: "Bulgarian Split Squat", description: "", type: .lift, category: "Squat Variations"),
 
         // Deadlift Variations
-        WOD(title: "Deadlift", description: "", type: .lift, category: "Deadlift Variations"),
         WOD(title: "Sumo Deadlift", description: "", type: .lift, category: "Deadlift Variations"),
         WOD(title: "Romanian Deadlift (RDL)", description: "", type: .lift, category: "Deadlift Variations"),
         WOD(title: "Deficit Deadlift", description: "", type: .lift, category: "Deadlift Variations"),
@@ -142,25 +155,20 @@ struct SampleData {
         WOD(title: "Single-Leg RDL", description: "", type: .lift, category: "Deadlift Variations"),
 
         // Bench Press Variations
-        WOD(title: "Bench Press", description: "", type: .lift, category: "Bench Press Variations"),
         WOD(title: "Close-Grip Bench Press", description: "", type: .lift, category: "Bench Press Variations"),
         WOD(title: "Floor Press", description: "", type: .lift, category: "Bench Press Variations"),
 
         // Olympic Lifting - Clean
         WOD(title: "Clean", description: "", type: .lift, category: "Olympic Lifting - Clean"),
-        WOD(title: "Power Clean", description: "", type: .lift, category: "Olympic Lifting - Clean"),
         WOD(title: "Hang Clean", description: "", type: .lift, category: "Olympic Lifting - Clean"),
         WOD(title: "Clean Pull", description: "", type: .lift, category: "Olympic Lifting - Clean"),
 
         // Olympic Lifting - Snatch
-        WOD(title: "Snatch", description: "", type: .lift, category: "Olympic Lifting - Snatch"),
         WOD(title: "Power Snatch", description: "", type: .lift, category: "Olympic Lifting - Snatch"),
         WOD(title: "Hang Snatch", description: "", type: .lift, category: "Olympic Lifting - Snatch"),
         WOD(title: "Snatch Pull", description: "", type: .lift, category: "Olympic Lifting - Snatch"),
 
         // Pressing & Overhead Strength
-        WOD(title: "Strict Press", description: "", type: .lift, category: "Pressing & Overhead"),
-        WOD(title: "Push Press", description: "", type: .lift, category: "Pressing & Overhead"),
         WOD(title: "Push Jerk", description: "", type: .lift, category: "Pressing & Overhead"),
         WOD(title: "Split Jerk", description: "", type: .lift, category: "Pressing & Overhead"),
         WOD(title: "Behind-the-Neck Press", description: "", type: .lift, category: "Pressing & Overhead"),

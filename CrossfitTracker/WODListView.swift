@@ -14,6 +14,23 @@ struct WODListView: View {
     let workouts = SampleData.wods
     @State private var selectedType: WorkoutType = .wod
     @State private var searchText: String = ""
+    @AppStorage("workoutAccessCounts") private var accessCountsData: Data = Data()
+
+    private var accessCounts: [String: Int] {
+        (try? JSONDecoder().decode([String: Int].self, from: accessCountsData)) ?? [:]
+    }
+
+    private func saveAccessCounts(_ counts: [String: Int]) {
+        if let data = try? JSONEncoder().encode(counts) {
+            accessCountsData = data
+        }
+    }
+
+    private func recordAccess(for workout: WOD) {
+        var counts = accessCounts
+        counts[workout.title, default: 0] += 1
+        saveAccessCounts(counts)
+    }
 
     var filteredWorkouts: [WOD] {
         let typeFiltered = workouts.filter { $0.type == selectedType }
@@ -29,8 +46,21 @@ struct WODListView: View {
         }
     }
 
+    var frequentWorkouts: [WOD] {
+        let typeFiltered = workouts.filter { $0.type == selectedType }
+        let counts = accessCounts
+
+        return typeFiltered
+            .filter { counts[$0.title] ?? 0 > 0 }
+            .sorted { (counts[$0.title] ?? 0) > (counts[$1.title] ?? 0) }
+            .prefix(5)
+            .map { $0 }
+    }
+
     var groupedWorkouts: [String: [WOD]] {
-        Dictionary(grouping: filteredWorkouts) { workout in
+        let workoutsToGroup = searchText.isEmpty ? filteredWorkouts : filteredWorkouts
+
+        return Dictionary(grouping: workoutsToGroup) { workout in
             workout.category ?? "Other"
         }
     }
@@ -72,6 +102,31 @@ struct WODListView: View {
 
                 // Grouped list with sections
                 List {
+                    // Frequent section (only when not searching)
+                    if searchText.isEmpty && !frequentWorkouts.isEmpty {
+                        Section(header: Text("⚡ Frequent")) {
+                            ForEach(frequentWorkouts) { wod in
+                                NavigationLink(destination: destinationView(for: wod)) {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(wod.title)
+                                            .font(.headline)
+                                        // Only show description for WODs, not lifts
+                                        if wod.type != .lift {
+                                            Text(wod.description)
+                                                .font(.subheadline)
+                                                .foregroundColor(.secondary)
+                                        }
+                                    }
+                                    .padding(.vertical, 4)
+                                }
+                                .simultaneousGesture(TapGesture().onEnded {
+                                    recordAccess(for: wod)
+                                })
+                            }
+                        }
+                    }
+
+                    // Regular categories
                     ForEach(sortedCategories, id: \.self) { category in
                         Section(header: Text(category)) {
                             ForEach(groupedWorkouts[category] ?? []) { wod in
@@ -88,6 +143,9 @@ struct WODListView: View {
                                     }
                                     .padding(.vertical, 4)
                                 }
+                                .simultaneousGesture(TapGesture().onEnded {
+                                    recordAccess(for: wod)
+                                })
                             }
                         }
                     }
