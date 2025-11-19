@@ -28,35 +28,30 @@ struct LiftEntryView: View {
         history.first { $0.reps == selectedReps }
     }
 
-    // Calculate 1RM based on current form inputs or most recent entry for selected reps
+    // Get 1RM from most recent entry for selected reps
     private var current1RM: Double? {
-        if let weightValue = Double(weight), weightValue > 0 {
-            // Calculate from current form inputs
-            if selectedReps == 1 {
-                return weightValue
-            }
-            return weightValue * (1 + Double(selectedReps) / 30)
-        } else if let recentEntry = mostRecentForReps {
-            // Use most recent entry for this rep count
-            return recentEntry.estimatedOneRepMax
-        }
-        return nil
+        mostRecentForReps?.estimatedOneRepMax
+    }
+
+    // Get entries filtered by selected rep count
+    private var filteredHistory: [LiftResult] {
+        history.filter { $0.reps == selectedReps }
     }
 
     var body: some View {
         NavigationView {
             ScrollView {
-                VStack(spacing: 12) {
+                VStack(spacing: 8) {
                     // Entry Form
-                    VStack(alignment: .leading, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 8) {
                         Text(lift.title)
                             .font(.headline)
                             .fontWeight(.bold)
 
                         // Reps and Weight in one row
-                        HStack(spacing: 12) {
+                        HStack(spacing: 8) {
                             // Reps Picker (1-5)
-                            VStack(alignment: .leading, spacing: 4) {
+                            VStack(alignment: .leading, spacing: 2) {
                                 Text("Reps")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
@@ -72,7 +67,7 @@ struct LiftEntryView: View {
                             }
 
                             // Weight Input
-                            VStack(alignment: .leading, spacing: 4) {
+                            VStack(alignment: .leading, spacing: 2) {
                                 Text("Weight")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
@@ -89,8 +84,8 @@ struct LiftEntryView: View {
                         }
 
                         // Date and Notes
-                        HStack(spacing: 12) {
-                            VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 8) {
+                            VStack(alignment: .leading, spacing: 2) {
                                 Text("Date")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
@@ -101,12 +96,12 @@ struct LiftEntryView: View {
                         }
 
                         // Notes
-                        VStack(alignment: .leading, spacing: 4) {
+                        VStack(alignment: .leading, spacing: 2) {
                             Text("Notes")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                             TextEditor(text: $notes)
-                                .frame(height: 60)
+                                .frame(height: 50)
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 6)
                                         .stroke(Color.gray.opacity(0.3), lineWidth: 1)
@@ -123,7 +118,7 @@ struct LiftEntryView: View {
                         }) {
                             Text(isEditing ? "Update" : "Save")
                                 .frame(maxWidth: .infinity)
-                                .padding(.vertical, 10)
+                                .padding(.vertical, 8)
                                 .background(weight.isEmpty || isSaving ? Color.gray : Color.blue)
                                 .foregroundColor(.white)
                                 .cornerRadius(8)
@@ -136,19 +131,19 @@ struct LiftEntryView: View {
                             }) {
                                 Text("Cancel")
                                     .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 8)
+                                    .padding(.vertical, 6)
                                     .background(Color.gray.opacity(0.2))
                                     .foregroundColor(.blue)
                                     .cornerRadius(8)
                             }
                         }
                     }
-                    .padding(12)
+                    .padding(10)
                     .background(Color(.systemBackground))
 
-                    // Percentage Chart (based on current inputs or most recent for selected reps)
+                    // Percentage Chart (based on most recent for selected reps)
                     if let oneRM = current1RM {
-                        VStack(alignment: .leading, spacing: 8) {
+                        VStack(alignment: .leading, spacing: 6) {
                             HStack {
                                 Text("Training %")
                                     .font(.subheadline)
@@ -158,64 +153,64 @@ struct LiftEntryView: View {
                                     .font(.caption)
                                     .foregroundColor(.blue)
                             }
-                            .padding(.horizontal, 12)
+                            .padding(.horizontal, 10)
 
-                            VStack(spacing: 2) {
+                            VStack(spacing: 1) {
                                 ForEach(Array(stride(from: 100, through: 50, by: -5)), id: \.self) { percentage in
                                     let weight = oneRM * (Double(percentage) / 100.0)
-                                    HStack(spacing: 8) {
+                                    HStack(spacing: 6) {
                                         Text("\(percentage)%")
-                                            .font(.system(.caption, design: .monospaced))
-                                            .frame(width: 40, alignment: .leading)
+                                            .font(.system(.caption2, design: .monospaced))
+                                            .frame(width: 35, alignment: .leading)
                                             .foregroundColor(colorForPercentage(percentage))
 
                                         Spacer()
 
                                         Text(String(format: "%.0f", weight))
-                                            .font(.system(.caption, design: .monospaced))
+                                            .font(.system(.caption2, design: .monospaced))
                                             .foregroundColor(.secondary)
                                     }
                                 }
                             }
-                            .padding(.horizontal, 12)
+                            .padding(.horizontal, 10)
                         }
-                        .padding(.vertical, 8)
+                        .padding(.vertical, 6)
                         .background(Color(.systemGray6))
                         .cornerRadius(8)
-                        .padding(.horizontal, 12)
+                        .padding(.horizontal, 10)
                     }
 
-                    // Progress Chart
-                    if history.count > 1 {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Progress")
-                                .font(.subheadline)
+                    // Progress Chart (filtered by selected reps)
+                    if filteredHistory.count > 1 {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Progress (\(selectedReps) rep\(selectedReps == 1 ? "" : "s"))")
+                                .font(.caption)
                                 .fontWeight(.semibold)
-                                .padding(.horizontal, 12)
+                                .padding(.horizontal, 10)
 
-                            LineChartView(entries: history)
-                                .frame(height: 120)
-                                .padding(.horizontal, 12)
+                            LineChartView(entries: filteredHistory)
+                                .frame(height: 100)
+                                .padding(.horizontal, 10)
                         }
-                        .padding(.vertical, 8)
+                        .padding(.vertical, 6)
                         .background(Color(.systemGray6))
                         .cornerRadius(8)
-                        .padding(.horizontal, 12)
+                        .padding(.horizontal, 10)
                     }
 
                     // History
                     if !history.isEmpty {
-                        VStack(alignment: .leading, spacing: 8) {
+                        VStack(alignment: .leading, spacing: 6) {
                             Text("History")
-                                .font(.subheadline)
+                                .font(.caption)
                                 .fontWeight(.semibold)
-                                .padding(.horizontal, 12)
+                                .padding(.horizontal, 10)
 
                             ForEach(history) { entry in
                                 Button(action: {
                                     editEntry(entry)
                                 }) {
-                                    HStack(spacing: 8) {
+                                    HStack(spacing: 6) {
                                         VStack(alignment: .leading, spacing: 2) {
                                             Text(entry.date, style: .date)
                                                 .font(.caption)
@@ -245,12 +240,12 @@ struct LiftEntryView: View {
                                         }
 
                                         Image(systemName: "chevron.right")
-                                            .font(.caption)
+                                            .font(.caption2)
                                             .foregroundColor(.secondary)
                                     }
-                                    .padding(10)
+                                    .padding(8)
                                     .background(Color(.systemBackground))
-                                    .cornerRadius(8)
+                                    .cornerRadius(6)
                                 }
                                 .buttonStyle(PlainButtonStyle())
                                 .contextMenu {
@@ -261,12 +256,12 @@ struct LiftEntryView: View {
                                     }
                                 }
                             }
-                            .padding(.horizontal, 12)
+                            .padding(.horizontal, 10)
                         }
-                        .padding(.vertical, 8)
+                        .padding(.vertical, 6)
                     }
                 }
-                .padding(.vertical, 8)
+                .padding(.vertical, 6)
             }
             .navigationTitle(lift.title)
             .navigationBarTitleDisplayMode(.inline)
