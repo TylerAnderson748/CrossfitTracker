@@ -133,47 +133,26 @@ struct SampleData {
         WOD(title: "9/11 Tribute", description: "2001m row, then 11 rounds: 9 thrusters (125/85), 11 pull-ups", type: .wod, category: "Classic Benchmarks"),
         WOD(title: "Tabata Something Else", description: "Tabata: pull-ups, push-ups, sit-ups, squats (complete all rounds of each before moving to next)", type: .wod, category: "Classic Benchmarks"),
         WOD(title: "Baseline", description: "500m row, 40 squats, 30 sit-ups, 20 push-ups, 10 pull-ups", type: .wod, category: "Classic Benchmarks"),
+        WOD(title: "CrossFit Total", description: "1RM Back Squat + 1RM Shoulder Press + 1RM Deadlift", type: .wod, category: "Classic Benchmarks"),
 
         // MARK: - LIFTS
 
         // Squat Variations
-        WOD(title: "Low-Bar Back Squat", description: "", type: .lift, category: "Squat Variations"),
-        WOD(title: "High-Bar Back Squat", description: "", type: .lift, category: "Squat Variations"),
-        WOD(title: "Box Squat", description: "", type: .lift, category: "Squat Variations"),
-        WOD(title: "Pause Back Squat", description: "", type: .lift, category: "Squat Variations"),
         WOD(title: "Overhead Squat", description: "", type: .lift, category: "Squat Variations"),
-        WOD(title: "Zercher Squat", description: "", type: .lift, category: "Squat Variations"),
-        WOD(title: "Tempo Squat", description: "", type: .lift, category: "Squat Variations"),
-        WOD(title: "Pause Front Squat", description: "", type: .lift, category: "Squat Variations"),
         WOD(title: "Bulgarian Split Squat", description: "", type: .lift, category: "Squat Variations"),
 
         // Deadlift Variations
         WOD(title: "Sumo Deadlift", description: "", type: .lift, category: "Deadlift Variations"),
         WOD(title: "Romanian Deadlift (RDL)", description: "", type: .lift, category: "Deadlift Variations"),
-        WOD(title: "Deficit Deadlift", description: "", type: .lift, category: "Deadlift Variations"),
-        WOD(title: "Block Pull Deadlift", description: "", type: .lift, category: "Deadlift Variations"),
-        WOD(title: "Single-Leg RDL", description: "", type: .lift, category: "Deadlift Variations"),
 
-        // Bench Press Variations
-        WOD(title: "Close-Grip Bench Press", description: "", type: .lift, category: "Bench Press Variations"),
-        WOD(title: "Floor Press", description: "", type: .lift, category: "Bench Press Variations"),
+        // Olympic Lifting
+        WOD(title: "Clean", description: "", type: .lift, category: "Olympic Lifting"),
+        WOD(title: "Hang Clean", description: "", type: .lift, category: "Olympic Lifting"),
+        WOD(title: "Hang Snatch", description: "", type: .lift, category: "Olympic Lifting"),
 
-        // Olympic Lifting - Clean
-        WOD(title: "Clean", description: "", type: .lift, category: "Olympic Lifting - Clean"),
-        WOD(title: "Hang Clean", description: "", type: .lift, category: "Olympic Lifting - Clean"),
-        WOD(title: "Clean Pull", description: "", type: .lift, category: "Olympic Lifting - Clean"),
-
-        // Olympic Lifting - Snatch
-        WOD(title: "Power Snatch", description: "", type: .lift, category: "Olympic Lifting - Snatch"),
-        WOD(title: "Hang Snatch", description: "", type: .lift, category: "Olympic Lifting - Snatch"),
-        WOD(title: "Snatch Pull", description: "", type: .lift, category: "Olympic Lifting - Snatch"),
-
-        // Pressing & Overhead Strength
-        WOD(title: "Push Jerk", description: "", type: .lift, category: "Pressing & Overhead"),
-        WOD(title: "Split Jerk", description: "", type: .lift, category: "Pressing & Overhead"),
-        WOD(title: "Behind-the-Neck Press", description: "", type: .lift, category: "Pressing & Overhead"),
-        WOD(title: "Strict Dumbbell Press", description: "", type: .lift, category: "Pressing & Overhead"),
-        WOD(title: "Seated Press", description: "", type: .lift, category: "Pressing & Overhead"),
+        // Jerk Variations
+        WOD(title: "Push Jerk", description: "", type: .lift, category: "Jerk Variations"),
+        WOD(title: "Split Jerk", description: "", type: .lift, category: "Jerk Variations"),
 
         // Lower Body Strength
         WOD(title: "Weighted Step-Up", description: "", type: .lift, category: "Lower Body Strength"),
@@ -197,18 +176,6 @@ struct SampleData {
         WOD(title: "Good Morning", description: "", type: .lift, category: "Accessory Strength"),
         WOD(title: "GHD Hip Extension", description: "", type: .lift, category: "Accessory Strength"),
         WOD(title: "GHD Back Extension", description: "", type: .lift, category: "Accessory Strength"),
-
-        // MARK: - STRENGTH BENCHMARKS
-
-        WOD(title: "CrossFit Total", description: "1RM Back Squat + 1RM Shoulder Press + 1RM Deadlift", type: .wod, category: "Strength Benchmarks"),
-        WOD(title: "1RM Back Squat", description: "Find your 1 rep max back squat", type: .lift, category: "Strength Benchmarks"),
-        WOD(title: "1RM Front Squat", description: "Find your 1 rep max front squat", type: .lift, category: "Strength Benchmarks"),
-        WOD(title: "1RM Deadlift", description: "Find your 1 rep max deadlift", type: .lift, category: "Strength Benchmarks"),
-        WOD(title: "1RM Snatch", description: "Find your 1 rep max snatch", type: .lift, category: "Strength Benchmarks"),
-        WOD(title: "1RM Clean", description: "Find your 1 rep max clean", type: .lift, category: "Strength Benchmarks"),
-        WOD(title: "1RM Clean & Jerk", description: "Find your 1 rep max clean and jerk", type: .lift, category: "Strength Benchmarks"),
-        WOD(title: "1RM Shoulder Press", description: "Find your 1 rep max shoulder press", type: .lift, category: "Strength Benchmarks"),
-        WOD(title: "1RM Bench Press", description: "Find your 1 rep max bench press", type: .lift, category: "Strength Benchmarks"),
 
         // MARK: - ENDURANCE BENCHMARKS
 
