@@ -185,15 +185,15 @@ struct LiftEntryView: View {
                     }
 
                     // History
-                    if !history.isEmpty {
+                    if !filteredHistory.isEmpty {
                         VStack(alignment: .leading, spacing: 6) {
-                            Text("History")
+                            Text("History (\(selectedReps) rep\(selectedReps == 1 ? "" : "s"))")
                                 .font(.caption)
                                 .fontWeight(.semibold)
                                 .padding(.horizontal, 10)
 
                             List {
-                                ForEach(history) { entry in
+                                ForEach(filteredHistory) { entry in
                                     if editingEntryId == entry.id {
                                         // EDIT MODE - Show inline edit form
                                         VStack(alignment: .leading, spacing: 8) {
@@ -335,7 +335,7 @@ struct LiftEntryView: View {
                                 }
                             }
                             .listStyle(.plain)
-                            .frame(height: CGFloat(history.count * 80 + (editingEntryId != nil ? 120 : 0)))
+                            .frame(height: CGFloat(filteredHistory.count * 80 + (editingEntryId != nil ? 120 : 0)))
                             .scrollDisabled(true)
                         }
                         .padding(.vertical, 6)
