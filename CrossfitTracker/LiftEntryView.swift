@@ -28,9 +28,19 @@ struct LiftEntryView: View {
         history.first { $0.reps == selectedReps }
     }
 
-    // Get 1RM from most recent entry for selected reps
+    // Get the weight and calculated 1RM from most recent entry for selected reps
     private var current1RM: Double? {
-        mostRecentForReps?.estimatedOneRepMax
+        guard let recent = mostRecentForReps else { return nil }
+
+        // Calculate 1RM using Epley formula
+        if recent.reps == 1 {
+            return recent.weight
+        }
+        return recent.weight * (1 + Double(recent.reps) / 30)
+    }
+
+    private var currentWeight: Double? {
+        mostRecentForReps?.weight
     }
 
     // Get entries filtered by selected rep count
@@ -142,16 +152,21 @@ struct LiftEntryView: View {
                     .background(Color(.systemBackground))
 
                     // Percentage Chart (based on most recent for selected reps)
-                    if let oneRM = current1RM {
+                    if let oneRM = current1RM, let recent = mostRecentForReps {
                         VStack(alignment: .leading, spacing: 6) {
                             HStack {
                                 Text("Training %")
                                     .font(.subheadline)
                                     .fontWeight(.semibold)
                                 Spacer()
-                                Text("1RM: \(String(format: "%.0f", oneRM)) lbs")
-                                    .font(.caption)
-                                    .foregroundColor(.blue)
+                                VStack(alignment: .trailing, spacing: 1) {
+                                    Text("Latest: \(String(format: "%.0f", recent.weight)) × \(recent.reps)")
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                    Text("1RM: \(String(format: "%.0f", oneRM))")
+                                        .font(.caption)
+                                        .foregroundColor(.blue)
+                                }
                             }
                             .padding(.horizontal, 10)
 
