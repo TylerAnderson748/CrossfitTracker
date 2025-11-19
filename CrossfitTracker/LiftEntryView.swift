@@ -20,8 +20,13 @@ struct LiftEntryView: View {
     @State private var entryDate: Date = Date()
     @State private var isSaving = false
     @State private var history: [LiftResult] = []
-    @State private var editingEntry: LiftResult?
-    @State private var isEditing = false
+    @State private var editingEntryId: String?
+
+    // Edit form state
+    @State private var editWeight: String = ""
+    @State private var editReps: Int = 1
+    @State private var editDate: Date = Date()
+    @State private var editNotes: String = ""
 
     // Get the most recent entry for the currently selected rep count
     private var mostRecentForReps: LiftResult? {
@@ -40,15 +45,13 @@ struct LiftEntryView: View {
 
     var body: some View {
         NavigationView {
-            ScrollViewReader { proxy in
-                ScrollView {
-                    VStack(spacing: 8) {
-                        // Entry Form
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text(lift.title)
-                                .font(.headline)
-                                .fontWeight(.bold)
-                                .id("topOfForm")
+            ScrollView {
+                VStack(spacing: 8) {
+                    // Entry Form (for new entries only)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(lift.title)
+                            .font(.headline)
+                            .fontWeight(.bold)
 
                             // Reps and Weight in one row
                             HStack(spacing: 8) {
@@ -110,15 +113,9 @@ struct LiftEntryView: View {
                                     )
                             }
 
-                            // Save/Update Button
-                            Button(action: {
-                                if isEditing {
-                                    updateEntry()
-                                } else {
-                                    saveLift()
-                                }
-                            }) {
-                                Text(isEditing ? "Update" : "Save")
+                            // Save Button
+                            Button(action: saveLift) {
+                                Text("Save")
                                     .frame(maxWidth: .infinity)
                                     .padding(.vertical, 8)
                                     .background(weight.isEmpty || isSaving ? Color.gray : Color.blue)
@@ -126,19 +123,6 @@ struct LiftEntryView: View {
                                     .cornerRadius(8)
                             }
                             .disabled(weight.isEmpty || isSaving)
-
-                            if isEditing {
-                                Button(action: {
-                                    cancelEdit()
-                                }) {
-                                    Text("Cancel")
-                                        .frame(maxWidth: .infinity)
-                                        .padding(.vertical, 6)
-                                        .background(Color.gray.opacity(0.2))
-                                        .foregroundColor(.blue)
-                                        .cornerRadius(8)
-                                }
-                            }
                         }
                         .padding(10)
                         .background(Color(.systemBackground))
@@ -210,65 +194,147 @@ struct LiftEntryView: View {
 
                             List {
                                 ForEach(history) { entry in
-                                    HStack(spacing: 6) {
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            Text(entry.date, style: .date)
-                                                .font(.caption)
-                                                .foregroundColor(.secondary)
-                                            Text("\(entry.weight, specifier: "%.1f") × \(entry.reps)")
-                                                .font(.subheadline)
-                                                .fontWeight(.semibold)
-                                                .foregroundColor(.primary)
-                                            if let notes = entry.notes, !notes.isEmpty {
-                                                Text(notes)
-                                                    .font(.caption2)
+                                    if editingEntryId == entry.id {
+                                        // EDIT MODE - Show inline edit form
+                                        VStack(alignment: .leading, spacing: 8) {
+                                            // Reps and Weight
+                                            HStack(spacing: 8) {
+                                                VStack(alignment: .leading, spacing: 2) {
+                                                    Text("Reps")
+                                                        .font(.caption)
+                                                        .foregroundColor(.secondary)
+                                                    Picker("Reps", selection: $editReps) {
+                                                        ForEach(1...5, id: \.self) { rep in
+                                                            Text("\(rep)").tag(rep)
+                                                        }
+                                                    }
+                                                    .pickerStyle(.segmented)
+                                                }
+
+                                                VStack(alignment: .leading, spacing: 2) {
+                                                    Text("Weight")
+                                                        .font(.caption)
+                                                        .foregroundColor(.secondary)
+                                                    HStack {
+                                                        TextField("0", text: $editWeight)
+                                                            .keyboardType(.decimalPad)
+                                                            .textFieldStyle(.roundedBorder)
+                                                            .frame(width: 80)
+                                                        Text("lbs")
+                                                            .font(.caption)
+                                                            .foregroundColor(.secondary)
+                                                    }
+                                                }
+                                            }
+
+                                            // Date
+                                            VStack(alignment: .leading, spacing: 2) {
+                                                Text("Date")
+                                                    .font(.caption)
                                                     .foregroundColor(.secondary)
-                                                    .lineLimit(1)
+                                                DatePicker("", selection: $editDate, displayedComponents: .date)
+                                                    .labelsHidden()
+                                            }
+
+                                            // Notes
+                                            VStack(alignment: .leading, spacing: 2) {
+                                                Text("Notes")
+                                                    .font(.caption)
+                                                    .foregroundColor(.secondary)
+                                                TextEditor(text: $editNotes)
+                                                    .frame(height: 50)
+                                                    .overlay(
+                                                        RoundedRectangle(cornerRadius: 6)
+                                                            .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                                                    )
+                                            }
+
+                                            // Update and Cancel buttons
+                                            HStack(spacing: 8) {
+                                                Button(action: { updateEntry(entry) }) {
+                                                    Text("Update")
+                                                        .frame(maxWidth: .infinity)
+                                                        .padding(.vertical, 8)
+                                                        .background(editWeight.isEmpty ? Color.gray : Color.blue)
+                                                        .foregroundColor(.white)
+                                                        .cornerRadius(8)
+                                                }
+                                                .disabled(editWeight.isEmpty)
+
+                                                Button(action: cancelEdit) {
+                                                    Text("Cancel")
+                                                        .frame(maxWidth: .infinity)
+                                                        .padding(.vertical, 8)
+                                                        .background(Color.gray.opacity(0.2))
+                                                        .foregroundColor(.blue)
+                                                        .cornerRadius(8)
+                                                }
                                             }
                                         }
+                                        .padding(.vertical, 6)
+                                        .listRowInsets(EdgeInsets(top: 8, leading: 10, bottom: 8, trailing: 10))
+                                        .listRowBackground(Color(.systemBackground))
+                                    } else {
+                                        // DISPLAY MODE - Normal view
+                                        HStack(spacing: 6) {
+                                            VStack(alignment: .leading, spacing: 2) {
+                                                Text(entry.date, style: .date)
+                                                    .font(.caption)
+                                                    .foregroundColor(.secondary)
+                                                Text("\(entry.weight, specifier: "%.1f") × \(entry.reps)")
+                                                    .font(.subheadline)
+                                                    .fontWeight(.semibold)
+                                                    .foregroundColor(.primary)
+                                                if let notes = entry.notes, !notes.isEmpty {
+                                                    Text(notes)
+                                                        .font(.caption2)
+                                                        .foregroundColor(.secondary)
+                                                        .lineLimit(1)
+                                                }
+                                            }
 
-                                        Spacer()
+                                            Spacer()
 
-                                        VStack(alignment: .trailing, spacing: 2) {
-                                            Text("1RM")
-                                                .font(.caption2)
-                                                .foregroundColor(.secondary)
-                                            Text(String(format: "%.0f", entry.estimatedOneRepMax))
-                                                .font(.subheadline)
-                                                .fontWeight(.bold)
-                                                .foregroundColor(.blue)
-                                        }
+                                            VStack(alignment: .trailing, spacing: 2) {
+                                                Text("1RM")
+                                                    .font(.caption2)
+                                                    .foregroundColor(.secondary)
+                                                Text(String(format: "%.0f", entry.estimatedOneRepMax))
+                                                    .font(.subheadline)
+                                                    .fontWeight(.bold)
+                                                    .foregroundColor(.blue)
+                                            }
 
-                                        Button(action: {
-                                            editEntry(entry)
-                                        }) {
-                                            Image(systemName: "pencil.circle.fill")
-                                                .font(.title3)
-                                                .foregroundColor(.blue)
+                                            Button(action: {
+                                                startEditing(entry)
+                                            }) {
+                                                Image(systemName: "pencil.circle.fill")
+                                                    .font(.title3)
+                                                    .foregroundColor(.blue)
+                                            }
+                                            .buttonStyle(PlainButtonStyle())
                                         }
-                                        .buttonStyle(PlainButtonStyle())
-                                    }
-                                    .listRowInsets(EdgeInsets(top: 4, leading: 10, bottom: 4, trailing: 10))
-                                    .listRowBackground(Color(.systemGray6))
-                                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                        Button(role: .destructive) {
-                                            deleteEntry(entry)
-                                        } label: {
-                                            Label("Delete", systemImage: "trash")
+                                        .listRowInsets(EdgeInsets(top: 4, leading: 10, bottom: 4, trailing: 10))
+                                        .listRowBackground(Color(.systemGray6))
+                                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                            Button(role: .destructive) {
+                                                deleteEntry(entry)
+                                            } label: {
+                                                Label("Delete", systemImage: "trash")
+                                            }
                                         }
-                                    }
-                                    .swipeActions(edge: .leading) {
-                                        Button {
-                                            editEntry(entry)
-                                        } label: {
-                                            Label("Edit", systemImage: "pencil")
+                                        .swipeActions(edge: .leading) {
+                                            Button {
+                                                startEditing(entry)
+                                            } label: {
+                                                Label("Edit", systemImage: "pencil")
+                                            }
+                                            .tint(.blue)
                                         }
-                                        .tint(.blue)
                                     }
                                 }
                             }
                             .listStyle(.plain)
-                            .frame(height: CGFloat(history.count * 70))
                             .scrollDisabled(true)
                         }
                         .padding(.vertical, 6)
@@ -276,25 +342,17 @@ struct LiftEntryView: View {
                     }
                     .padding(.vertical, 6)
                 }
-                .navigationTitle(lift.title)
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .navigationBarLeading) {
-                        Button("Close") {
-                            dismiss()
-                        }
+            .navigationTitle(lift.title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Close") {
+                        dismiss()
                     }
                 }
-                .onAppear {
-                    loadHistory()
-                }
-                .onChange(of: isEditing) { editing in
-                    if editing {
-                        withAnimation {
-                            proxy.scrollTo("topOfForm", anchor: .top)
-                        }
-                    }
-                }
+            }
+            .onAppear {
+                loadHistory()
             }
         }
     }
@@ -341,16 +399,14 @@ struct LiftEntryView: View {
                     print("✅ Loaded \(results.count) lift history entries")
 
                     // Pre-fill weight with last known for selected reps
-                    if !self.isEditing {
-                        self.updateWeightForReps()
-                    }
+                    self.updateWeightForReps()
                 }
             }
     }
 
     private func updateWeightForReps() {
         // Don't update if we're editing an existing entry
-        if isEditing { return }
+        if editingEntryId != nil { return }
 
         // Find most recent entry for selected rep count
         if let recentEntry = history.first(where: { $0.reps == selectedReps }) {
@@ -401,29 +457,26 @@ struct LiftEntryView: View {
         isSaving = false
     }
 
-    private func editEntry(_ entry: LiftResult) {
+    private func startEditing(_ entry: LiftResult) {
         print("📝 Editing entry: \(entry.weight) × \(entry.reps)")
-        editingEntry = entry
-        isEditing = true
-        weight = String(entry.weight)
-        selectedReps = entry.reps
-        entryDate = entry.date
-        notes = entry.notes ?? ""
+        editingEntryId = entry.id
+        editWeight = String(entry.weight)
+        editReps = entry.reps
+        editDate = entry.date
+        editNotes = entry.notes ?? ""
     }
 
     private func cancelEdit() {
-        editingEntry = nil
-        isEditing = false
-        weight = ""
-        selectedReps = 1
-        entryDate = Date()
-        notes = ""
+        editingEntryId = nil
+        editWeight = ""
+        editReps = 1
+        editDate = Date()
+        editNotes = ""
     }
 
-    private func updateEntry() {
-        guard let entry = editingEntry,
-              let entryId = entry.id,
-              let weightValue = Double(weight), weightValue > 0 else {
+    private func updateEntry(_ entry: LiftResult) {
+        guard let entryId = entry.id,
+              let weightValue = Double(editWeight), weightValue > 0 else {
             return
         }
 
@@ -440,9 +493,9 @@ struct LiftEntryView: View {
             userName: store.userName,
             liftTitle: lift.title,
             weight: weightValue,
-            reps: selectedReps,
-            date: entryDate,
-            notes: notes.isEmpty ? nil : notes
+            reps: editReps,
+            date: editDate,
+            notes: editNotes.isEmpty ? nil : editNotes
         )
 
         let db = Firestore.firestore()
