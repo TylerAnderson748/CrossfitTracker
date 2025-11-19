@@ -12,7 +12,6 @@
 		CDB1A6AD2EA34E8F00B13136 /* CrossfitTrackerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A6AC2EA34E8F00B13136 /* CrossfitTrackerApp.swift */; };
 		CDB1A6AF2EA34E8F00B13136 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A6AE2EA34E8F00B13136 /* ContentView.swift */; };
 		CDB1A6B12EA34E9000B13136 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CDB1A6B02EA34E9000B13136 /* Assets.xcassets */; };
-		CDB1A7612EA3FIREBASE00B13136 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = CDB1A7602EA3FIREBASE00B13136 /* GoogleService-Info.plist */; };
 		CDB1A6B42EA34E9000B13136 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CDB1A6B32EA34E9000B13136 /* Preview Assets.xcassets */; };
 		CDB1A6BE2EA34E9100B13136 /* CrossfitTrackerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A6BD2EA34E9100B13136 /* CrossfitTrackerTests.swift */; };
 		CDB1A6C82EA34E9100B13136 /* CrossfitTrackerUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A6C72EA34E9100B13136 /* CrossfitTrackerUITests.swift */; };
@@ -134,7 +133,6 @@
 		CDB1A6AE2EA34E8F00B13136 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		CDB1A6B02EA34E9000B13136 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		CDB1A6B32EA34E9000B13136 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
-		CDB1A7602EA3FIREBASE00B13136 /* GoogleService-Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		CDB1A6B92EA34E9100B13136 /* CrossfitTrackerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CrossfitTrackerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		CDB1A6BD2EA34E9100B13136 /* CrossfitTrackerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CrossfitTrackerTests.swift; sourceTree = "<group>"; };
 		CDB1A6C32EA34E9100B13136 /* CrossfitTrackerUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CrossfitTrackerUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -271,7 +269,6 @@
 				CDB1A6AC2EA34E8F00B13136 /* CrossfitTrackerApp.swift */,
 				CDB1A6AE2EA34E8F00B13136 /* ContentView.swift */,
 				CDB1A6B02EA34E9000B13136 /* Assets.xcassets */,
-				CDB1A7602EA3FIREBASE00B13136 /* GoogleService-Info.plist */,
 				CDB1A6E22EA3527A00B13136 /* ProfileView.swift */,
 				CD11C60B2EAC0B84009C3D3F /* AdminView.swift */,
 				CDB1A6E02EA3525300B13136 /* WODListView.swift */,
@@ -565,7 +562,6 @@
 			files = (
 				CDB1A6B42EA34E9000B13136 /* Preview Assets.xcassets in Resources */,
 				CDB1A6B12EA34E9000B13136 /* Assets.xcassets in Resources */,
-				CDB1A7612EA3FIREBASE00B13136 /* GoogleService-Info.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
