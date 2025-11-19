@@ -130,7 +130,7 @@ struct LiftEntryView: View {
 
                     // Percentage Chart (based on most recent weight for selected reps)
                     if let baseWeight = currentWeight, let recent = mostRecentForReps {
-                        VStack(alignment: .leading, spacing: 6) {
+                        VStack(alignment: .leading, spacing: 4) {
                             HStack {
                                 Text("Training %")
                                     .font(.subheadline)
@@ -142,7 +142,7 @@ struct LiftEntryView: View {
                             }
                             .padding(.horizontal, 10)
 
-                            HStack(spacing: 4) {
+                            HStack(spacing: 0) {
                                 // Column 1: 100%, 85%, 70%, 55%
                                 VStack(spacing: 1) {
                                     ForEach([100, 85, 70, 55], id: \.self) { percentage in
@@ -160,6 +160,7 @@ struct LiftEntryView: View {
                                         }
                                     }
                                 }
+                                .frame(maxWidth: .infinity)
 
                                 // Column 2: 95%, 80%, 65%, 50%
                                 VStack(spacing: 1) {
@@ -178,6 +179,7 @@ struct LiftEntryView: View {
                                         }
                                     }
                                 }
+                                .frame(maxWidth: .infinity)
 
                                 // Column 3: 90%, 75%, 60%, 45%
                                 VStack(spacing: 1) {
@@ -196,10 +198,11 @@ struct LiftEntryView: View {
                                         }
                                     }
                                 }
+                                .frame(maxWidth: .infinity)
                             }
                             .padding(.horizontal, 10)
                         }
-                        .padding(.vertical, 6)
+                        .padding(.vertical, 4)
                         .background(Color(.systemGray6))
                         .cornerRadius(8)
                         .padding(.horizontal, 10)
