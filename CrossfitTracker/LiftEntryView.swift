@@ -110,10 +110,16 @@ struct LiftEntryView: View {
             return
         }
 
+        guard let userId = store.currentUser?.uid else {
+            print("❌ No user logged in")
+            isSaving = false
+            return
+        }
+
         isSaving = true
 
         let result = LiftResult(
-            userId: store.userId,
+            userId: userId,
             userName: store.userName,
             liftTitle: lift.title,
             weight: weightValue,
