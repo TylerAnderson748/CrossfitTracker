@@ -335,6 +335,7 @@ struct LiftEntryView: View {
                                 }
                             }
                             .listStyle(.plain)
+                            .frame(height: CGFloat(history.count * 80 + (editingEntryId != nil ? 120 : 0)))
                             .scrollDisabled(true)
                         }
                         .padding(.vertical, 6)
