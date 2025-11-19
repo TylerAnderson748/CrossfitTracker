@@ -23,12 +23,24 @@ struct LiftEntryView: View {
     @State private var editingEntry: LiftResult?
     @State private var isEditing = false
 
-    private var mostRecentResult: LiftResult? {
-        history.first
+    // Get the most recent entry for the currently selected rep count
+    private var mostRecentForReps: LiftResult? {
+        history.first { $0.reps == selectedReps }
     }
 
-    private var mostRecent1RM: Double? {
-        mostRecentResult?.estimatedOneRepMax
+    // Calculate 1RM based on current form inputs or most recent entry for selected reps
+    private var current1RM: Double? {
+        if let weightValue = Double(weight), weightValue > 0 {
+            // Calculate from current form inputs
+            if selectedReps == 1 {
+                return weightValue
+            }
+            return weightValue * (1 + Double(selectedReps) / 30)
+        } else if let recentEntry = mostRecentForReps {
+            // Use most recent entry for this rep count
+            return recentEntry.estimatedOneRepMax
+        }
+        return nil
     }
 
     var body: some View {
@@ -54,6 +66,9 @@ struct LiftEntryView: View {
                                     }
                                 }
                                 .pickerStyle(.segmented)
+                                .onChange(of: selectedReps) { _ in
+                                    updateWeightForReps()
+                                }
                             }
 
                             // Weight Input
@@ -131,8 +146,8 @@ struct LiftEntryView: View {
                     .padding(12)
                     .background(Color(.systemBackground))
 
-                    // Percentage Chart (based on most recent history)
-                    if let oneRM = mostRecent1RM {
+                    // Percentage Chart (based on current inputs or most recent for selected reps)
+                    if let oneRM = current1RM {
                         VStack(alignment: .leading, spacing: 8) {
                             HStack {
                                 Text("Training %")
@@ -145,7 +160,7 @@ struct LiftEntryView: View {
                             }
                             .padding(.horizontal, 12)
 
-                            VStack(spacing: 4) {
+                            VStack(spacing: 2) {
                                 ForEach(Array(stride(from: 100, through: 50, by: -5)), id: \.self) { percentage in
                                     let weight = oneRM * (Double(percentage) / 100.0)
                                     HStack(spacing: 8) {
@@ -153,10 +168,6 @@ struct LiftEntryView: View {
                                             .font(.system(.caption, design: .monospaced))
                                             .frame(width: 40, alignment: .leading)
                                             .foregroundColor(colorForPercentage(percentage))
-
-                                        Rectangle()
-                                            .fill(colorForPercentage(percentage).opacity(0.3))
-                                            .frame(width: CGFloat(percentage) * 1.2, height: 18)
 
                                         Spacer()
 
@@ -167,6 +178,24 @@ struct LiftEntryView: View {
                                 }
                             }
                             .padding(.horizontal, 12)
+                        }
+                        .padding(.vertical, 8)
+                        .background(Color(.systemGray6))
+                        .cornerRadius(8)
+                        .padding(.horizontal, 12)
+                    }
+
+                    // Progress Chart
+                    if history.count > 1 {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Progress")
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                                .padding(.horizontal, 12)
+
+                            LineChartView(entries: history)
+                                .frame(height: 120)
+                                .padding(.horizontal, 12)
                         }
                         .padding(.vertical, 8)
                         .background(Color(.systemGray6))
@@ -294,8 +323,25 @@ struct LiftEntryView: View {
                 DispatchQueue.main.async {
                     self.history = results
                     print("✅ Loaded \(results.count) lift history entries")
+
+                    // Pre-fill weight with last known for selected reps
+                    if !self.isEditing {
+                        self.updateWeightForReps()
+                    }
                 }
             }
+    }
+
+    private func updateWeightForReps() {
+        // Don't update if we're editing an existing entry
+        if isEditing { return }
+
+        // Find most recent entry for selected rep count
+        if let recentEntry = history.first(where: { $0.reps == selectedReps }) {
+            weight = String(format: "%.1f", recentEntry.weight)
+        } else {
+            weight = ""
+        }
     }
 
     private func saveLift() {
@@ -413,3 +459,86 @@ struct LiftEntryView: View {
         }
     }
 }
+
+// MARK: - Line Chart View
+struct LineChartView: View {
+    let entries: [LiftResult]
+
+    private var sortedEntries: [LiftResult] {
+        entries.sorted { $0.date < $1.date }
+    }
+
+    private var maxWeight: Double {
+        sortedEntries.map { $0.estimatedOneRepMax }.max() ?? 100
+    }
+
+    private var minWeight: Double {
+        let min = sortedEntries.map { $0.estimatedOneRepMax }.min() ?? 0
+        return max(0, min - 20) // Add some padding below
+    }
+
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack(alignment: .bottomLeading) {
+                // Grid lines
+                VStack(spacing: 0) {
+                    ForEach(0..<5) { i in
+                        HStack {
+                            let value = maxWeight - (Double(i) * (maxWeight - minWeight) / 4)
+                            Text(String(format: "%.0f", value))
+                                .font(.system(size: 8))
+                                .foregroundColor(.secondary)
+                                .frame(width: 30, alignment: .trailing)
+
+                            Rectangle()
+                                .fill(Color.gray.opacity(0.2))
+                                .frame(height: 0.5)
+                        }
+                        if i < 4 {
+                            Spacer()
+                        }
+                    }
+                }
+
+                // Line chart
+                Path { path in
+                    guard !sortedEntries.isEmpty else { return }
+
+                    let width = geometry.size.width - 35
+                    let height = geometry.size.height
+                    let xStep = width / CGFloat(max(sortedEntries.count - 1, 1))
+
+                    for (index, entry) in sortedEntries.enumerated() {
+                        let x = 35 + CGFloat(index) * xStep
+                        let normalizedValue = (entry.estimatedOneRepMax - minWeight) / (maxWeight - minWeight)
+                        let y = height - (CGFloat(normalizedValue) * height)
+
+                        if index == 0 {
+                            path.move(to: CGPoint(x: x, y: y))
+                        } else {
+                            path.addLine(to: CGPoint(x: x, y: y))
+                        }
+                    }
+                }
+                .stroke(Color.blue, lineWidth: 2)
+
+                // Data points
+                ForEach(Array(sortedEntries.enumerated()), id: \.element.id) { index, entry in
+                    let width = geometry.size.width - 35
+                    let height = geometry.size.height
+                    let xStep = width / CGFloat(max(sortedEntries.count - 1, 1))
+                    let x = 35 + CGFloat(index) * xStep
+                    let normalizedValue = (entry.estimatedOneRepMax - minWeight) / (maxWeight - minWeight)
+                    let y = height - (CGFloat(normalizedValue) * height)
+
+                    Circle()
+                        .fill(Color.blue)
+                        .frame(width: 6, height: 6)
+                        .position(x: x, y: y)
+                }
+            }
+        }
+        .padding(.vertical, 8)
+    }
+}
+
