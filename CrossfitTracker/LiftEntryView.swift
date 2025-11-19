@@ -808,10 +808,10 @@ struct LiftEntryView: View {
                         } else {
                             let hiddenUsers = userSnapshot?.documents.compactMap { doc -> String? in
                                 if let user = try? doc.data(as: AppUser.self) {
-                                    print("📋 User \(user.displayName ?? user.email) - hideFromLeaderboards: \(user.hideFromLeaderboards)")
+                                    print("📋 User \(user.displayName ?? user.email) (ID: \(doc.documentID)) - hideFromLeaderboards: \(user.hideFromLeaderboards)")
                                     if user.hideFromLeaderboards {
                                         print("🚫 Hiding user \(user.displayName ?? user.email) from leaderboard")
-                                        return user.id
+                                        return doc.documentID  // Use document ID instead of user.id
                                     }
                                 } else {
                                     print("⚠️ Failed to decode user document: \(doc.documentID)")
