@@ -700,12 +700,11 @@ struct LiftEntryView: View {
         // First, find gyms where user is a member
         db.collection("gyms")
             .whereField("memberIds", arrayContains: userId)
-            .getDocuments { [weak self] snapshot, error in
-                guard let self = self else { return }
+            .getDocuments { snapshot, error in
 
                 if let error = error {
                     print("❌ Error loading gyms: \(error.localizedDescription)")
-                    DispatchQueue.main.async {
+                    DispatchQueue.main.async { [self] in
                         self.isLoadingLeaderboard = false
                         self.leaderboardEntries = []
                     }
@@ -723,7 +722,7 @@ struct LiftEntryView: View {
 
                 // If user is not in any gym, show empty leaderboard
                 if allMemberIds.isEmpty {
-                    DispatchQueue.main.async {
+                    DispatchQueue.main.async { [self] in
                         self.isLoadingLeaderboard = false
                         self.leaderboardEntries = []
                     }
@@ -740,16 +739,15 @@ struct LiftEntryView: View {
     }
 
     private func queryLiftResults(db: Firestore, userIds: [String]?) {
-        var query: Query = db.collection("liftResults")
+        let query: Query = db.collection("liftResults")
             .whereField("liftTitle", isEqualTo: lift.title)
             .whereField("reps", isEqualTo: selectedReps)
 
-        query.getDocuments { [weak self] snapshot, error in
-            guard let self = self else { return }
+        query.getDocuments { snapshot, error in
 
             if let error = error {
                 print("❌ Error loading leaderboard: \(error.localizedDescription)")
-                DispatchQueue.main.async {
+                DispatchQueue.main.async { [self] in
                     self.isLoadingLeaderboard = false
                     self.leaderboardEntries = []
                 }
@@ -781,7 +779,7 @@ struct LiftEntryView: View {
             // Sort by weight descending
             let sortedResults = bestLifts.values.sorted { $0.weight > $1.weight }
 
-            DispatchQueue.main.async {
+            DispatchQueue.main.async { [self] in
                 self.leaderboardEntries = sortedResults
                 self.isLoadingLeaderboard = false
                 print("✅ Loaded \(sortedResults.count) leaderboard entries")
