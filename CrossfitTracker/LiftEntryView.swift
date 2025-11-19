@@ -46,9 +46,9 @@ struct LiftEntryView: View {
     var body: some View {
         NavigationView {
             ScrollView {
-                VStack(spacing: 8) {
+                VStack(spacing: 4) {
                     // Entry Form (for new entries only)
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 6) {
                         Text(lift.title)
                             .font(.headline)
                             .fontWeight(.bold)
@@ -70,7 +70,7 @@ struct LiftEntryView: View {
                             }
 
                             // Weight, Date, and Save Button in one row
-                            HStack(spacing: 8) {
+                            HStack(spacing: 0) {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text("Weight")
                                         .font(.caption)
@@ -85,6 +85,7 @@ struct LiftEntryView: View {
                                             .foregroundColor(.secondary)
                                     }
                                 }
+                                .frame(maxWidth: .infinity, alignment: .leading)
 
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text("Date")
@@ -92,10 +93,8 @@ struct LiftEntryView: View {
                                         .foregroundColor(.secondary)
                                     DatePicker("", selection: $entryDate, displayedComponents: .date)
                                         .labelsHidden()
-                                        .frame(width: 110)
                                 }
-
-                                Spacer()
+                                .frame(maxWidth: .infinity, alignment: .leading)
 
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(" ")
@@ -110,6 +109,7 @@ struct LiftEntryView: View {
                                     }
                                     .disabled(weight.isEmpty || isSaving)
                                 }
+                                .frame(maxWidth: .infinity, alignment: .trailing)
                             }
 
                             // Notes
@@ -125,7 +125,7 @@ struct LiftEntryView: View {
                                     )
                             }
                         }
-                        .padding(10)
+                        .padding(8)
                         .background(Color(.systemBackground))
 
                     // Percentage Chart (based on most recent weight for selected reps)
@@ -143,7 +143,7 @@ struct LiftEntryView: View {
                             .padding(.horizontal, 10)
 
                             HStack(spacing: 0) {
-                                // Column 1: 100%, 85%, 70%, 55%
+                                // Column 1: 100%, 85%, 70%, 55% - Red (heaviest)
                                 VStack(spacing: 1) {
                                     ForEach([100, 85, 70, 55], id: \.self) { percentage in
                                         let weight = baseWeight * (Double(percentage) / 100.0)
@@ -151,7 +151,7 @@ struct LiftEntryView: View {
                                             Text("\(percentage)%")
                                                 .font(.system(.caption2, design: .monospaced))
                                                 .frame(width: 32, alignment: .leading)
-                                                .foregroundColor(colorForPercentage(percentage))
+                                                .foregroundColor(.red)
 
                                             Text(String(format: "%.0f", weight))
                                                 .font(.system(.caption2, design: .monospaced))
@@ -162,7 +162,7 @@ struct LiftEntryView: View {
                                 }
                                 .frame(maxWidth: .infinity)
 
-                                // Column 2: 95%, 80%, 65%, 50%
+                                // Column 2: 95%, 80%, 65%, 50% - Orange (medium)
                                 VStack(spacing: 1) {
                                     ForEach([95, 80, 65, 50], id: \.self) { percentage in
                                         let weight = baseWeight * (Double(percentage) / 100.0)
@@ -170,7 +170,7 @@ struct LiftEntryView: View {
                                             Text("\(percentage)%")
                                                 .font(.system(.caption2, design: .monospaced))
                                                 .frame(width: 32, alignment: .leading)
-                                                .foregroundColor(colorForPercentage(percentage))
+                                                .foregroundColor(.orange)
 
                                             Text(String(format: "%.0f", weight))
                                                 .font(.system(.caption2, design: .monospaced))
@@ -181,7 +181,7 @@ struct LiftEntryView: View {
                                 }
                                 .frame(maxWidth: .infinity)
 
-                                // Column 3: 90%, 75%, 60%, 45%
+                                // Column 3: 90%, 75%, 60%, 45% - Green (lighter)
                                 VStack(spacing: 1) {
                                     ForEach([90, 75, 60, 45], id: \.self) { percentage in
                                         let weight = baseWeight * (Double(percentage) / 100.0)
@@ -189,7 +189,7 @@ struct LiftEntryView: View {
                                             Text("\(percentage)%")
                                                 .font(.system(.caption2, design: .monospaced))
                                                 .frame(width: 32, alignment: .leading)
-                                                .foregroundColor(colorForPercentage(percentage))
+                                                .foregroundColor(.green)
 
                                             Text(String(format: "%.0f", weight))
                                                 .font(.system(.caption2, design: .monospaced))
@@ -383,7 +383,7 @@ struct LiftEntryView: View {
                         .padding(.vertical, 6)
                     }
                     }
-                    .padding(.vertical, 6)
+                    .padding(.vertical, 4)
                 }
             .navigationTitle(lift.title)
             .navigationBarTitleDisplayMode(.inline)
