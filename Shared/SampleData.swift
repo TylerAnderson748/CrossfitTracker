@@ -138,21 +138,35 @@ struct SampleData {
         // MARK: - LIFTS
 
         // Squat Variations
+        WOD(title: "Back Squat", description: "", type: .lift, category: "Squat Variations"),
+        WOD(title: "Front Squat", description: "", type: .lift, category: "Squat Variations"),
         WOD(title: "Overhead Squat", description: "", type: .lift, category: "Squat Variations"),
         WOD(title: "Bulgarian Split Squat", description: "", type: .lift, category: "Squat Variations"),
 
         // Deadlift Variations
+        WOD(title: "Deadlift", description: "", type: .lift, category: "Deadlift Variations"),
         WOD(title: "Sumo Deadlift", description: "", type: .lift, category: "Deadlift Variations"),
         WOD(title: "Romanian Deadlift (RDL)", description: "", type: .lift, category: "Deadlift Variations"),
 
         // Olympic Lifting
+        WOD(title: "Snatch", description: "", type: .lift, category: "Olympic Lifting"),
+        WOD(title: "Clean & Jerk", description: "", type: .lift, category: "Olympic Lifting"),
+        WOD(title: "Power Clean", description: "", type: .lift, category: "Olympic Lifting"),
         WOD(title: "Clean", description: "", type: .lift, category: "Olympic Lifting"),
         WOD(title: "Hang Clean", description: "", type: .lift, category: "Olympic Lifting"),
         WOD(title: "Hang Snatch", description: "", type: .lift, category: "Olympic Lifting"),
+        WOD(title: "Thruster", description: "", type: .lift, category: "Olympic Lifting"),
 
         // Jerk Variations
         WOD(title: "Push Jerk", description: "", type: .lift, category: "Jerk Variations"),
         WOD(title: "Split Jerk", description: "", type: .lift, category: "Jerk Variations"),
+
+        // Pressing & Overhead
+        WOD(title: "Push Press", description: "", type: .lift, category: "Pressing & Overhead"),
+        WOD(title: "Strict Press", description: "", type: .lift, category: "Pressing & Overhead"),
+
+        // Bench Press Variations
+        WOD(title: "Bench Press", description: "", type: .lift, category: "Bench Press Variations"),
 
         // Lower Body Strength
         WOD(title: "Weighted Step-Up", description: "", type: .lift, category: "Lower Body Strength"),
