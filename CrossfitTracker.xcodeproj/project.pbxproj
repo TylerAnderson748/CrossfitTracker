@@ -67,6 +67,9 @@
 		CDB1A7AD /* GymManagementView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A749 /* GymManagementView.swift */; };
 		CDB1A7AE /* GroupManagementView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A74A /* GroupManagementView.swift */; };
 		CDB1A7AF /* WeeklyPlanView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A74B /* WeeklyPlanView.swift */; };
+		CDB1A7832EA3LIFTRESULT /* LiftResult.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A7802EA3LIFTRESULT /* LiftResult.swift */; };
+		CDB1A7842EA3LIFTENTRY /* LiftEntryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A7812EA3LIFTENTRY /* LiftEntryView.swift */; };
+		CDB1A7852EA3LIFTPERCENT /* LiftPercentageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A7822EA3LIFTPERCENT /* LiftPercentageView.swift */; };
 		CDB1A7B02EA3789B00B13136 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = CDB1A73F2EA3789A00B13136 /* FirebaseAuth */; };
 		CDB1A7B12EA3789C00B13136 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = CDB1A7402EA378A200B13136 /* FirebaseFirestore */; };
 /* End PBXBuildFile section */
@@ -181,6 +184,9 @@
 		CDB1A749 /* GymManagementView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GymManagementView.swift; sourceTree = "<group>"; };
 		CDB1A74A /* GroupManagementView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroupManagementView.swift; sourceTree = "<group>"; };
 		CDB1A74B /* WeeklyPlanView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeeklyPlanView.swift; sourceTree = "<group>"; };
+		CDB1A7802EA3LIFTRESULT /* LiftResult.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiftResult.swift; sourceTree = "<group>"; };
+		CDB1A7812EA3LIFTENTRY /* LiftEntryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiftEntryView.swift; sourceTree = "<group>"; };
+		CDB1A7822EA3LIFTPERCENT /* LiftPercentageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiftPercentageView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -284,6 +290,8 @@
 				CDB1A7372EA3777B00B13136 /* LiftsView.swift */,
 				CDB1A7392EA3779900B13136 /* LiftDetailView.swift */,
 				CDB1A73B2EA377B000B13136 /* LiftHistoryView.swift */,
+				CDB1A7812EA3LIFTENTRY /* LiftEntryView.swift */,
+				CDB1A7822EA3LIFTPERCENT /* LiftPercentageView.swift */,
 			);
 			path = CrossfitTracker;
 			sourceTree = "<group>";
@@ -353,6 +361,7 @@
 			isa = PBXGroup;
 			children = (
 				CDB1A7332EA3772D00B13136 /* Lift.swift */,
+				CDB1A7802EA3LIFTRESULT /* LiftResult.swift */,
 				CDB1A7292EA366B400B13136 /* CompletedWOD.swift */,
 				CDB1A72B2EA366CF00B13136 /* WOD.swift */,
 				CDB1A7272EA364AA00B13136 /* WODCategory.swift */,
@@ -641,6 +650,9 @@
 				CDB1A7AD /* GymManagementView.swift in Sources */,
 				CDB1A7AE /* GroupManagementView.swift in Sources */,
 				CDB1A7AF /* WeeklyPlanView.swift in Sources */,
+				CDB1A7832EA3LIFTRESULT /* LiftResult.swift in Sources */,
+				CDB1A7842EA3LIFTENTRY /* LiftEntryView.swift in Sources */,
+				CDB1A7852EA3LIFTPERCENT /* LiftPercentageView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

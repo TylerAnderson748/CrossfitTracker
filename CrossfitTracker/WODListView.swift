@@ -32,7 +32,7 @@ struct WODListView: View {
 
                 // Filtered list
                 List(filteredWorkouts) { wod in
-                    NavigationLink(destination: WODTimerView(wod: wod)) {
+                    NavigationLink(destination: destinationView(for: wod)) {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(wod.title)
                                 .font(.headline)
@@ -45,6 +45,15 @@ struct WODListView: View {
                 }
             }
             .navigationTitle("Workouts")
+        }
+    }
+
+    @ViewBuilder
+    private func destinationView(for wod: WOD) -> some View {
+        if wod.type == .lift {
+            LiftEntryView(lift: wod)
+        } else {
+            WODTimerView(wod: wod)
         }
     }
 }
