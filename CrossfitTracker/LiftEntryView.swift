@@ -28,6 +28,16 @@ struct LiftEntryView: View {
     @State private var editDate: Date = Date()
     @State private var editNotes: String = ""
 
+    // Leaderboard
+    @State private var leaderboardFilter: LeaderboardFilter = .everyone
+    @State private var leaderboardEntries: [LiftResult] = []
+    @State private var isLoadingLeaderboard = false
+
+    enum LeaderboardFilter {
+        case gym
+        case everyone
+    }
+
     // Get the most recent entry for the currently selected rep count
     private var mostRecentForReps: LiftResult? {
         history.first { $0.reps == selectedReps }
@@ -66,6 +76,7 @@ struct LiftEntryView: View {
                                 .pickerStyle(.segmented)
                                 .onChange(of: selectedReps) { _ in
                                     updateWeightForReps()
+                                    loadLeaderboard()
                                 }
                             }
 
@@ -233,6 +244,83 @@ struct LiftEntryView: View {
                                 .foregroundColor(.secondary)
                                 .frame(maxWidth: .infinity, alignment: .center)
                                 .frame(height: 100)
+                        }
+                    }
+                    .padding(.vertical, 6)
+                    .background(Color(.systemGray6))
+                    .cornerRadius(8)
+                    .padding(.horizontal, 10)
+
+                    // Leaderboard
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Text("Leaderboard (\(selectedReps) rep\(selectedReps == 1 ? "" : "s"))")
+                                .font(.caption)
+                                .fontWeight(.semibold)
+
+                            Spacer()
+
+                            // Filter toggle
+                            Picker("Filter", selection: $leaderboardFilter) {
+                                Text("Gym").tag(LeaderboardFilter.gym)
+                                Text("Everyone").tag(LeaderboardFilter.everyone)
+                            }
+                            .pickerStyle(.segmented)
+                            .frame(width: 180)
+                            .onChange(of: leaderboardFilter) { _ in
+                                loadLeaderboard()
+                            }
+                        }
+                        .padding(.horizontal, 10)
+
+                        if isLoadingLeaderboard {
+                            ProgressView()
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 20)
+                        } else if leaderboardEntries.isEmpty {
+                            Text("No entries yet")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .center)
+                                .padding(.vertical, 20)
+                        } else {
+                            VStack(spacing: 4) {
+                                ForEach(Array(leaderboardEntries.prefix(10).enumerated()), id: \.element.id) { index, entry in
+                                    HStack(spacing: 8) {
+                                        // Rank
+                                        Text("\(index + 1)")
+                                            .font(.caption)
+                                            .fontWeight(.bold)
+                                            .foregroundColor(index < 3 ? .blue : .secondary)
+                                            .frame(width: 25, alignment: .leading)
+
+                                        // Name
+                                        Text(entry.userName)
+                                            .font(.caption)
+                                            .foregroundColor(.primary)
+                                            .lineLimit(1)
+
+                                        Spacer()
+
+                                        // Weight
+                                        Text("\(String(format: "%.0f", entry.weight)) lbs")
+                                            .font(.caption)
+                                            .fontWeight(.semibold)
+                                            .foregroundColor(.primary)
+
+                                        // Date
+                                        Text(entry.date, style: .date)
+                                            .font(.caption2)
+                                            .foregroundColor(.secondary)
+                                            .frame(width: 70, alignment: .trailing)
+                                    }
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 4)
+                                    .background(index % 2 == 0 ? Color(.systemGray6) : Color.clear)
+                                    .cornerRadius(4)
+                                }
+                            }
+                            .padding(.horizontal, 6)
                         }
                     }
                     .padding(.vertical, 6)
@@ -411,6 +499,7 @@ struct LiftEntryView: View {
             }
             .onAppear {
                 loadHistory()
+                loadLeaderboard()
             }
         }
     }
@@ -508,6 +597,7 @@ struct LiftEntryView: View {
             entryDate = Date()
             selectedReps = 1
             loadHistory()
+            loadLeaderboard()
         } catch {
             print("❌ Error saving lift result: \(error.localizedDescription)")
         }
@@ -564,6 +654,7 @@ struct LiftEntryView: View {
             // Clear form and reload history
             cancelEdit()
             loadHistory()
+            loadLeaderboard()
         } catch {
             print("❌ Error updating lift result: \(error.localizedDescription)")
         }
@@ -583,6 +674,117 @@ struct LiftEntryView: View {
             } else {
                 print("✅ Lift result deleted successfully!")
                 loadHistory()
+                loadLeaderboard()
+            }
+        }
+    }
+
+    private func loadLeaderboard() {
+        guard let userId = store.currentUser?.uid else {
+            return
+        }
+
+        isLoadingLeaderboard = true
+        let db = Firestore.firestore()
+
+        if leaderboardFilter == .gym {
+            // Load gym leaderboard - need to find gym members first
+            loadGymMembersLeaderboard(db: db, userId: userId)
+        } else {
+            // Load everyone leaderboard
+            loadEveryoneLeaderboard(db: db)
+        }
+    }
+
+    private func loadGymMembersLeaderboard(db: Firestore, userId: String) {
+        // First, find gyms where user is a member
+        db.collection("gyms")
+            .whereField("memberIds", arrayContains: userId)
+            .getDocuments { [weak self] snapshot, error in
+                guard let self = self else { return }
+
+                if let error = error {
+                    print("❌ Error loading gyms: \(error.localizedDescription)")
+                    DispatchQueue.main.async {
+                        self.isLoadingLeaderboard = false
+                        self.leaderboardEntries = []
+                    }
+                    return
+                }
+
+                // Get all member IDs from all gyms the user is in
+                var allMemberIds = Set<String>()
+                snapshot?.documents.forEach { doc in
+                    if let gym = try? doc.data(as: Gym.self) {
+                        allMemberIds.formUnion(gym.memberIds)
+                        allMemberIds.formUnion(gym.coachIds)
+                    }
+                }
+
+                // If user is not in any gym, show empty leaderboard
+                if allMemberIds.isEmpty {
+                    DispatchQueue.main.async {
+                        self.isLoadingLeaderboard = false
+                        self.leaderboardEntries = []
+                    }
+                    return
+                }
+
+                // Now query lift results for these members
+                self.queryLiftResults(db: db, userIds: Array(allMemberIds))
+            }
+    }
+
+    private func loadEveryoneLeaderboard(db: Firestore) {
+        queryLiftResults(db: db, userIds: nil)
+    }
+
+    private func queryLiftResults(db: Firestore, userIds: [String]?) {
+        var query: Query = db.collection("liftResults")
+            .whereField("liftTitle", isEqualTo: lift.title)
+            .whereField("reps", isEqualTo: selectedReps)
+
+        query.getDocuments { [weak self] snapshot, error in
+            guard let self = self else { return }
+
+            if let error = error {
+                print("❌ Error loading leaderboard: \(error.localizedDescription)")
+                DispatchQueue.main.async {
+                    self.isLoadingLeaderboard = false
+                    self.leaderboardEntries = []
+                }
+                return
+            }
+
+            var results = snapshot?.documents.compactMap { doc -> LiftResult? in
+                try? doc.data(as: LiftResult.self)
+            } ?? []
+
+            // Filter by user IDs if provided (for gym leaderboard)
+            if let userIds = userIds {
+                let userIdSet = Set(userIds)
+                results = results.filter { userIdSet.contains($0.userId) }
+            }
+
+            // Get the best lift for each user
+            var bestLifts: [String: LiftResult] = [:]
+            for result in results {
+                if let existing = bestLifts[result.userId] {
+                    if result.weight > existing.weight {
+                        bestLifts[result.userId] = result
+                    }
+                } else {
+                    bestLifts[result.userId] = result
+                }
+            }
+
+            // Sort by weight descending
+            let sortedResults = bestLifts.values.sorted { $0.weight > $1.weight }
+
+            DispatchQueue.main.async {
+                self.leaderboardEntries = sortedResults
+                self.isLoadingLeaderboard = false
+                print("✅ Loaded \(sortedResults.count) leaderboard entries")
             }
         }
     }
