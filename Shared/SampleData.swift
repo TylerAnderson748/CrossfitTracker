@@ -11,28 +11,28 @@ struct SampleData {
     static let wods: [WOD] = [
         // MARK: - POPULAR WODS
 
-        WOD(title: "Fran", description: "21-15-9 thrusters (95/65) and pull-ups", type: .wod, category: "⭐ Popular WODs"),
-        WOD(title: "Murph", description: "1 mile run, 100 pull-ups, 200 push-ups, 300 squats, 1 mile run (with 20lb vest)", type: .wod, category: "⭐ Popular WODs"),
-        WOD(title: "DT", description: "5 rounds: 12 deadlifts (155/105), 9 hang power cleans, 6 push jerks", type: .wod, category: "⭐ Popular WODs"),
-        WOD(title: "Cindy", description: "AMRAP 20 min: 5 pull-ups, 10 push-ups, 15 squats", type: .wod, category: "⭐ Popular WODs"),
-        WOD(title: "Helen", description: "3 rounds: 400m run, 21 KB swings (53/35), 12 pull-ups", type: .wod, category: "⭐ Popular WODs"),
-        WOD(title: "Annie", description: "50-40-30-20-10 double-unders and sit-ups", type: .wod, category: "⭐ Popular WODs"),
-        WOD(title: "Grace", description: "30 clean and jerks (135/95) for time", type: .wod, category: "⭐ Popular WODs"),
-        WOD(title: "Karen", description: "150 wall balls (20/14) for time", type: .wod, category: "⭐ Popular WODs"),
-        WOD(title: "Fight Gone Bad", description: "3 rounds: 1 min each - wall balls, sumo deadlift high pulls, box jumps, push press, row", type: .wod, category: "⭐ Popular WODs"),
+        WOD(title: "Fran", description: "21-15-9 thrusters (95/65) and pull-ups", type: .wod, category: " ⭐ Popular WODs"),
+        WOD(title: "Murph", description: "1 mile run, 100 pull-ups, 200 push-ups, 300 squats, 1 mile run (with 20lb vest)", type: .wod, category: " ⭐ Popular WODs"),
+        WOD(title: "DT", description: "5 rounds: 12 deadlifts (155/105), 9 hang power cleans, 6 push jerks", type: .wod, category: " ⭐ Popular WODs"),
+        WOD(title: "Cindy", description: "AMRAP 20 min: 5 pull-ups, 10 push-ups, 15 squats", type: .wod, category: " ⭐ Popular WODs"),
+        WOD(title: "Helen", description: "3 rounds: 400m run, 21 KB swings (53/35), 12 pull-ups", type: .wod, category: " ⭐ Popular WODs"),
+        WOD(title: "Annie", description: "50-40-30-20-10 double-unders and sit-ups", type: .wod, category: " ⭐ Popular WODs"),
+        WOD(title: "Grace", description: "30 clean and jerks (135/95) for time", type: .wod, category: " ⭐ Popular WODs"),
+        WOD(title: "Karen", description: "150 wall balls (20/14) for time", type: .wod, category: " ⭐ Popular WODs"),
+        WOD(title: "Fight Gone Bad", description: "3 rounds: 1 min each - wall balls, sumo deadlift high pulls, box jumps, push press, row", type: .wod, category: " ⭐ Popular WODs"),
 
         // MARK: - POPULAR LIFTS
 
-        WOD(title: "Back Squat", description: "", type: .lift, category: "⭐ Popular Lifts"),
-        WOD(title: "Deadlift", description: "", type: .lift, category: "⭐ Popular Lifts"),
-        WOD(title: "Clean & Jerk", description: "", type: .lift, category: "⭐ Popular Lifts"),
-        WOD(title: "Snatch", description: "", type: .lift, category: "⭐ Popular Lifts"),
-        WOD(title: "Front Squat", description: "", type: .lift, category: "⭐ Popular Lifts"),
-        WOD(title: "Push Press", description: "", type: .lift, category: "⭐ Popular Lifts"),
-        WOD(title: "Strict Press", description: "", type: .lift, category: "⭐ Popular Lifts"),
-        WOD(title: "Power Clean", description: "", type: .lift, category: "⭐ Popular Lifts"),
-        WOD(title: "Thruster", description: "", type: .lift, category: "⭐ Popular Lifts"),
-        WOD(title: "Bench Press", description: "", type: .lift, category: "⭐ Popular Lifts"),
+        WOD(title: "Back Squat", description: "", type: .lift, category: " ⭐ Popular Lifts"),
+        WOD(title: "Deadlift", description: "", type: .lift, category: " ⭐ Popular Lifts"),
+        WOD(title: "Clean & Jerk", description: "", type: .lift, category: " ⭐ Popular Lifts"),
+        WOD(title: "Snatch", description: "", type: .lift, category: " ⭐ Popular Lifts"),
+        WOD(title: "Front Squat", description: "", type: .lift, category: " ⭐ Popular Lifts"),
+        WOD(title: "Push Press", description: "", type: .lift, category: " ⭐ Popular Lifts"),
+        WOD(title: "Strict Press", description: "", type: .lift, category: " ⭐ Popular Lifts"),
+        WOD(title: "Power Clean", description: "", type: .lift, category: " ⭐ Popular Lifts"),
+        WOD(title: "Thruster", description: "", type: .lift, category: " ⭐ Popular Lifts"),
+        WOD(title: "Bench Press", description: "", type: .lift, category: " ⭐ Popular Lifts"),
 
         // MARK: - GIRLS WORKOUTS
 
