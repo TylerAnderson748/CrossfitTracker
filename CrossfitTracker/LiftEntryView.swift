@@ -28,17 +28,7 @@ struct LiftEntryView: View {
         history.first { $0.reps == selectedReps }
     }
 
-    // Get the weight and calculated 1RM from most recent entry for selected reps
-    private var current1RM: Double? {
-        guard let recent = mostRecentForReps else { return nil }
-
-        // Calculate 1RM using Epley formula
-        if recent.reps == 1 {
-            return recent.weight
-        }
-        return recent.weight * (1 + Double(recent.reps) / 30)
-    }
-
+    // Get the actual weight from most recent entry for selected reps
     private var currentWeight: Double? {
         mostRecentForReps?.weight
     }
@@ -151,28 +141,23 @@ struct LiftEntryView: View {
                     .padding(10)
                     .background(Color(.systemBackground))
 
-                    // Percentage Chart (based on most recent for selected reps)
-                    if let oneRM = current1RM, let recent = mostRecentForReps {
+                    // Percentage Chart (based on most recent weight for selected reps)
+                    if let baseWeight = currentWeight, let recent = mostRecentForReps {
                         VStack(alignment: .leading, spacing: 6) {
                             HStack {
                                 Text("Training %")
                                     .font(.subheadline)
                                     .fontWeight(.semibold)
                                 Spacer()
-                                VStack(alignment: .trailing, spacing: 1) {
-                                    Text("Latest: \(String(format: "%.0f", recent.weight)) × \(recent.reps)")
-                                        .font(.caption2)
-                                        .foregroundColor(.secondary)
-                                    Text("1RM: \(String(format: "%.0f", oneRM))")
-                                        .font(.caption)
-                                        .foregroundColor(.blue)
-                                }
+                                Text("Latest: \(String(format: "%.0f", recent.weight)) × \(recent.reps)")
+                                    .font(.caption)
+                                    .foregroundColor(.blue)
                             }
                             .padding(.horizontal, 10)
 
                             VStack(spacing: 1) {
                                 ForEach(Array(stride(from: 100, through: 50, by: -5)), id: \.self) { percentage in
-                                    let weight = oneRM * (Double(percentage) / 100.0)
+                                    let weight = baseWeight * (Double(percentage) / 100.0)
                                     HStack(spacing: 6) {
                                         Text("\(percentage)%")
                                             .font(.system(.caption2, design: .monospaced))
