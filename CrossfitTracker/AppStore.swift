@@ -203,11 +203,11 @@ final class AppStore: ObservableObject {
                 let user = AppUser(
                     id: doc.documentID,
                     email: data["email"] as? String ?? email,
-                    fullName: data["fullName"] as? String ?? "",
                     username: data["username"] as? String,
                     role: UserRole(rawValue: data["role"] as? String ?? "athlete") ?? .athlete,
-                    gymId: data["gymId"] as? String,
-                    createdAt: (data["createdAt"] as? Timestamp)?.dateValue() ?? Date()
+                    firstName: data["firstName"] as? String,
+                    lastName: data["lastName"] as? String,
+                    hideFromLeaderboards: data["hideFromLeaderboards"] as? Bool ?? false
                 )
 
                 completion(user, nil)
