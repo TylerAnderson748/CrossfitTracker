@@ -63,6 +63,7 @@
 		CDB1A7A9 /* ScheduledWorkout.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A745 /* ScheduledWorkout.swift */; };
 		CDB1A7AA /* WorkoutLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A746 /* WorkoutLog.swift */; };
 		CDB1A7AB /* TimeSlot.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A747 /* TimeSlot.swift */; };
+		CDB1A9F1 /* WorkoutTemplate.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A9F0 /* WorkoutTemplate.swift */; };
 		CDB1A7AC /* CoachProgrammingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A748 /* CoachProgrammingView.swift */; };
 		CDB1A7AD /* GymManagementView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A749 /* GymManagementView.swift */; };
 		CDB1A7AE /* GroupManagementView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A74A /* GroupManagementView.swift */; };
@@ -179,6 +180,7 @@
 		CDB1A745 /* ScheduledWorkout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduledWorkout.swift; sourceTree = "<group>"; };
 		CDB1A746 /* WorkoutLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutLog.swift; sourceTree = "<group>"; };
 		CDB1A747 /* TimeSlot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimeSlot.swift; sourceTree = "<group>"; };
+		CDB1A9F0 /* WorkoutTemplate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutTemplate.swift; sourceTree = "<group>"; };
 		CDB1A748 /* CoachProgrammingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoachProgrammingView.swift; sourceTree = "<group>"; };
 		CDB1A749 /* GymManagementView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GymManagementView.swift; sourceTree = "<group>"; };
 		CDB1A74A /* GroupManagementView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroupManagementView.swift; sourceTree = "<group>"; };
@@ -372,6 +374,7 @@
 				CDB1A745 /* ScheduledWorkout.swift */,
 				CDB1A746 /* WorkoutLog.swift */,
 				CDB1A747 /* TimeSlot.swift */,
+				CDB1A9F0 /* WorkoutTemplate.swift */,
 				CDB1A7172EA3563C00B13136 /* Models.swift */,
 				CDB1A7192EA3565100B13136 /* SampleData.swift */,
 				CDB1A72D2EA36CE100B13136 /* Notifications.swift */,
@@ -643,6 +646,7 @@
 				CDB1A7A9 /* ScheduledWorkout.swift in Sources */,
 				CDB1A7AA /* WorkoutLog.swift in Sources */,
 				CDB1A7AB /* TimeSlot.swift in Sources */,
+				CDB1A9F1 /* WorkoutTemplate.swift in Sources */,
 				CDB1A7AC /* CoachProgrammingView.swift in Sources */,
 				CDB1A7AD /* GymManagementView.swift in Sources */,
 				CDB1A7AE /* GroupManagementView.swift in Sources */,

@@ -15,11 +15,6 @@ enum RecurrenceType: String, Codable {
     case monthly = "monthly"
 }
 
-enum WorkoutType: String, Codable {
-    case wod = "wod"
-    case lift = "lift"
-}
-
 struct ScheduledWorkout: Codable, Identifiable {
     @DocumentID var id: String?
     var wodId: String
