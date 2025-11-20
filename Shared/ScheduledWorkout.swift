@@ -1,13 +1,8 @@
 import Foundation
 
-// MARK: - Workout Type
-enum WorkoutType: String, Codable, CaseIterable {
-    case lift = "Lift"
-    case wod = "WOD"
-}
-
 // MARK: - Recurrence Pattern
 enum RecurrenceType: String, Codable, CaseIterable {
+    case none = "None"
     case once = "Once"
     case weekly = "Weekly"
     case monthly = "Monthly"
