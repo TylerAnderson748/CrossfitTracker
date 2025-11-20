@@ -156,10 +156,12 @@ extension MonthlyRecurrence {
             return day == range?.count
 
         case .firstWeekday, .secondWeekday, .thirdWeekday, .fourthWeekday, .lastWeekday:
-            guard let targetWeek = weekOfMonth,
-                  let targetDay = dayOfWeek else {
+            guard let targetWeek = self.weekOfMonth,
+                  let targetDay = self.dayOfWeek else {
                 return false
             }
+
+            // weekOfMonth from date components is already unwrapped
 
             // Check if it's the last occurrence of this weekday in the month
             if option == .lastWeekday {

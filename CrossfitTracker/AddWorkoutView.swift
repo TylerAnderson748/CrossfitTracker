@@ -249,7 +249,7 @@ struct AddWorkoutView: View {
     }
 
     private func addOneTimeWorkout() {
-        var workout = ScheduledWorkout(
+        let workout = ScheduledWorkout(
             workoutType: workoutType,
             liftID: selectedLift?.id,
             wodID: selectedWOD?.id,

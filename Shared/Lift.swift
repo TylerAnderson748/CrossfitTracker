@@ -10,7 +10,7 @@
 
 import Foundation
 
-struct Lift: Identifiable, Codable, Equatable {
+struct Lift: Identifiable, Codable, Equatable, Hashable {
     let id: UUID
     var name: String
 
