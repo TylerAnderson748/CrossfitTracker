@@ -148,11 +148,11 @@ final class AppStore: ObservableObject {
         }
     }
 
-    func deleteScheduledWorkout(id: UUID) {
+    func deleteScheduledWorkout(id: String) {
         scheduledWorkouts.removeAll { $0.id == id }
     }
 
-    func toggleScheduledWorkout(id: UUID) {
+    func toggleScheduledWorkout(id: String) {
         if let idx = scheduledWorkouts.firstIndex(where: { $0.id == id }) {
             scheduledWorkouts[idx].isActive.toggle()
         }
@@ -165,7 +165,17 @@ final class AppStore: ObservableObject {
 
     // Get workout name helper
     func workoutName(for scheduled: ScheduledWorkout) -> String {
-        switch scheduled.workoutType {
+        // Use wodTitle directly if available (new model)
+        if !scheduled.wodTitle.isEmpty {
+            return scheduled.wodTitle
+        }
+
+        // Fall back to legacy workoutType-based lookup
+        guard let workoutType = scheduled.workoutType else {
+            return "Unknown"
+        }
+
+        switch workoutType {
         case .lift:
             if let liftID = scheduled.liftID,
                let lift = lifts.first(where: { $0.id == liftID }) {
