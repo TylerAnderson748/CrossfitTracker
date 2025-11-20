@@ -132,22 +132,15 @@ struct WODTimerView: View {
     }
 
     private var chartContent: some View {
-        Chart {
-            ForEach(allWodHistory()) { entry in
-                LineMark(
-                    x: .value("Date", entry.date),
-                    y: .value("Time (seconds)", entry.time),
-                    series: .value("Category", entry.category.rawValue)
-                )
-                .foregroundStyle(by: .value("Category", entry.category.rawValue))
-                .symbol(by: .value("Category", entry.category.rawValue))
-
-                PointMark(
-                    x: .value("Date", entry.date),
-                    y: .value("Time (seconds)", entry.time)
-                )
-                .foregroundStyle(by: .value("Category", entry.category.rawValue))
-            }
+        let history = allWodHistory()
+        return Chart(history) { entry in
+            LineMark(
+                x: .value("Date", entry.date),
+                y: .value("Time (seconds)", entry.time),
+                series: .value("Category", entry.category.rawValue)
+            )
+            .foregroundStyle(by: .value("Category", entry.category.rawValue))
+            .symbol(by: .value("Category", entry.category.rawValue))
         }
         .chartForegroundStyleScale([
             "RX+": .orange,
