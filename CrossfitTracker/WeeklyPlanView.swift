@@ -15,6 +15,8 @@ struct WeeklyPlanView: View {
     @State private var showAddWorkout = false
     @State private var addWorkoutDate = Date()
     @State private var navigationPath = NavigationPath()
+    @State private var showEditWorkout = false
+    @State private var workoutToEdit: ScheduledWorkout?
 
     private let daysOfWeek = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
@@ -52,6 +54,12 @@ struct WeeklyPlanView: View {
                                 workouts: workouts(for: date),
                                 onDelete: { workout in
                                     deleteWorkout(workout)
+                                },
+                                onDeleteSeries: { workout in
+                                    deleteWorkoutSeries(workout)
+                                },
+                                onEdit: { workout in
+                                    editWorkout(workout)
                                 },
                                 onLogWorkout: { workout in
                                     // Navigate to timer view (same as Dashboard)
@@ -100,6 +108,14 @@ struct WeeklyPlanView: View {
                     savePersonalWorkout(workout)
                 }
                 .environmentObject(store)
+            }
+            .sheet(isPresented: $showEditWorkout) {
+                if let workout = workoutToEdit {
+                    EditPersonalWorkoutSheet(workout: workout) { updatedWorkout in
+                        updatePersonalWorkout(updatedWorkout)
+                    }
+                    .environmentObject(store)
+                }
             }
             .navigationDestination(for: WODDestination.self) { destination in
                 switch destination {
@@ -210,6 +226,44 @@ struct WeeklyPlanView: View {
         }
     }
 
+    private func deleteWorkoutSeries(_ workout: ScheduledWorkout) {
+        guard let seriesId = workout.seriesId else {
+            print("❌ Cannot delete series - no seriesId")
+            // If no seriesId, just delete the single workout
+            deleteWorkout(workout)
+            return
+        }
+
+        store.deleteWorkoutSeries(seriesId: seriesId) { error in
+            if let error = error {
+                print("❌ Error deleting workout series: \(error)")
+            } else {
+                print("✅ Workout series deleted")
+                // Remove all workouts with this seriesId from local array
+                self.scheduledWorkouts.removeAll { $0.seriesId == seriesId }
+            }
+        }
+    }
+
+    private func editWorkout(_ workout: ScheduledWorkout) {
+        workoutToEdit = workout
+        showEditWorkout = true
+    }
+
+    private func updatePersonalWorkout(_ workout: ScheduledWorkout) {
+        store.saveScheduledWorkout(workout) { savedWorkout, error in
+            if let error = error {
+                print("❌ Error updating workout: \(error)")
+            } else if let savedWorkout = savedWorkout {
+                print("✅ Workout updated")
+                // Update in local array
+                if let index = self.scheduledWorkouts.firstIndex(where: { $0.id == savedWorkout.id }) {
+                    self.scheduledWorkouts[index] = savedWorkout
+                }
+            }
+        }
+    }
+
     private func savePersonalWorkout(_ workout: ScheduledWorkout) {
         if workout.isRecurring {
             store.saveRecurringWorkout(workout) { workouts, error in
@@ -240,6 +294,8 @@ struct DayWorkoutCard: View {
     let date: Date
     let workouts: [ScheduledWorkout]
     let onDelete: (ScheduledWorkout) -> Void
+    let onDeleteSeries: (ScheduledWorkout) -> Void
+    let onEdit: (ScheduledWorkout) -> Void
     let onLogWorkout: (ScheduledWorkout) -> Void
 
     private var dayName: String {
@@ -300,12 +356,34 @@ struct DayWorkoutCard: View {
                                 Label("Log Result", systemImage: "checkmark.circle")
                             }
 
-                            // Only allow deleting personal workouts that the user created
+                            // Only allow editing/deleting personal workouts that the user created
                             if workout.isPersonalWorkout {
-                                Button(role: .destructive) {
-                                    onDelete(workout)
+                                Button {
+                                    onEdit(workout)
                                 } label: {
-                                    Label("Delete Workout", systemImage: "trash")
+                                    Label("Edit Workout", systemImage: "pencil")
+                                }
+
+                                Divider()
+
+                                if workout.isRecurring {
+                                    Button(role: .destructive) {
+                                        onDelete(workout)
+                                    } label: {
+                                        Label("Delete This Occurrence", systemImage: "trash")
+                                    }
+
+                                    Button(role: .destructive) {
+                                        onDeleteSeries(workout)
+                                    } label: {
+                                        Label("Delete All in Series", systemImage: "trash.fill")
+                                    }
+                                } else {
+                                    Button(role: .destructive) {
+                                        onDelete(workout)
+                                    } label: {
+                                        Label("Delete Workout", systemImage: "trash")
+                                    }
                                 }
                             }
                         }
@@ -694,3 +772,74 @@ struct AddPersonalWorkoutSheet: View {
         }
     }
 }
+
+struct EditPersonalWorkoutSheet: View {
+    @Environment(\.dismiss) var dismiss
+    @EnvironmentObject var store: AppStore
+    let workout: ScheduledWorkout
+    let onSave: (ScheduledWorkout) -> Void
+
+    @State private var title: String
+    @State private var description: String
+    @State private var date: Date
+
+    init(workout: ScheduledWorkout, onSave: @escaping (ScheduledWorkout) -> Void) {
+        self.workout = workout
+        self.onSave = onSave
+        _title = State(initialValue: workout.wodTitle)
+        _description = State(initialValue: workout.wodDescription)
+        _date = State(initialValue: workout.date)
+    }
+
+    var body: some View {
+        NavigationView {
+            Form {
+                Section("Workout Details") {
+                    TextField("Title", text: $title)
+                    TextField("Description", text: $description, axis: .vertical)
+                        .lineLimit(3...6)
+                    DatePicker("Date", selection: $date, displayedComponents: .date)
+                }
+
+                if workout.isRecurring {
+                    Section {
+                        Text("Note: This will only update this specific occurrence. To edit the entire series, please delete and recreate it.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+            .navigationTitle("Edit Workout")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        guard let userId = store.currentUser?.uid else {
+                            print("❌ No user logged in")
+                            dismiss()
+                            return
+                        }
+
+                        let calendar = Calendar.current
+                        let normalizedDate = calendar.startOfDay(for: date)
+
+                        var updatedWorkout = workout
+                        updatedWorkout.wodTitle = title
+                        updatedWorkout.wodDescription = description
+                        updatedWorkout.date = normalizedDate
+
+                        onSave(updatedWorkout)
+                        dismiss()
+                    }
+                    .disabled(title.isEmpty || description.isEmpty)
+                }
+            }
+        }
+    }
+}
+

@@ -1337,6 +1337,44 @@ final class AppStore: ObservableObject {
         }
     }
 
+    func deleteWorkoutSeries(seriesId: String, completion: @escaping (String?) -> Void) {
+        // Query for all workouts in the series
+        db.collection("scheduledWorkouts")
+            .whereField("seriesId", isEqualTo: seriesId)
+            .getDocuments { querySnapshot, error in
+                if let error = error {
+                    DispatchQueue.main.async {
+                        completion(error.localizedDescription)
+                    }
+                    return
+                }
+
+                guard let documents = querySnapshot?.documents else {
+                    DispatchQueue.main.async {
+                        completion("No workouts found in series")
+                    }
+                    return
+                }
+
+                // Delete all workouts in the series
+                let batch = self.db.batch()
+                for document in documents {
+                    batch.deleteDocument(document.reference)
+                }
+
+                batch.commit { error in
+                    DispatchQueue.main.async {
+                        if let error = error {
+                            completion(error.localizedDescription)
+                        } else {
+                            print("✅ Deleted \(documents.count) workouts in series")
+                            completion(nil)
+                        }
+                    }
+                }
+            }
+    }
+
     // MARK: - Workout Logs
     func saveWorkoutLog(_ log: WorkoutLog, completion: @escaping (WorkoutLog?, String?) -> Void) {
         print("💾 Attempting to save workout log:")
