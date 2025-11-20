@@ -7,6 +7,12 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		2ADE821039E80B338E90A27A /* ScheduledWorkout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1478F42D91F5DF3773347A1A /* ScheduledWorkout.swift */; };
+		622E9862DB4B26AE5A1A7F91 /* AddWorkoutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A6E6D6F6E0F54220E667B62 /* AddWorkoutView.swift */; };
+		6C0DEE0974BB730CC7931F44 /* WeeklySchedulerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 057F7AC9F79E22A4708778E0 /* WeeklySchedulerView.swift */; };
+		DAE389FCD1FC4D53BF4BE780 /* MonthlySchedulerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 128132D8F38D2047CBF80534 /* MonthlySchedulerView.swift */; };
+		3CB9B2F6F40660407B0DC28C /* ScheduledWorkoutsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7F16049703E69A4C4B32179 /* ScheduledWorkoutsView.swift */; };
+
 		CD11C60A2EAC0B83009C3D3F /* WODHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD11C6092EAC0B83009C3D3F /* WODHistoryView.swift */; };
 		CDB1A6AD2EA34E8F00B13136 /* CrossfitTrackerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A6AC2EA34E8F00B13136 /* CrossfitTrackerApp.swift */; };
 		CDB1A6AF2EA34E8F00B13136 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A6AE2EA34E8F00B13136 /* ContentView.swift */; };
@@ -150,6 +156,11 @@
 		CDB1A7372EA3777B00B13136 /* LiftsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiftsView.swift; sourceTree = "<group>"; };
 		CDB1A7392EA3779900B13136 /* LiftDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiftDetailView.swift; sourceTree = "<group>"; };
 		CDB1A73B2EA377B000B13136 /* LiftHistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiftHistoryView.swift; sourceTree = "<group>"; };
+		1478F42D91F5DF3773347A1A /* ScheduledWorkout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduledWorkout.swift; sourceTree = "<group>"; };
+		8A6E6D6F6E0F54220E667B62 /* AddWorkoutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddWorkoutView.swift; sourceTree = "<group>"; };
+		057F7AC9F79E22A4708778E0 /* WeeklySchedulerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeeklySchedulerView.swift; sourceTree = "<group>"; };
+		128132D8F38D2047CBF80534 /* MonthlySchedulerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MonthlySchedulerView.swift; sourceTree = "<group>"; };
+		B7F16049703E69A4C4B32179 /* ScheduledWorkoutsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduledWorkoutsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -246,7 +257,11 @@
 				CDB1A71B2EA357B800B13136 /* WODTimerView.swift */,
 				CDB1A71D2EA3597700B13136 /* LeaderboardView.swift */,
 				CDB1A6B22EA34E9000B13136 /* Preview Content */,
-			);
+			
+				8A6E6D6F6E0F54220E667B62 /* AddWorkoutView.swift */,
+				057F7AC9F79E22A4708778E0 /* WeeklySchedulerView.swift */,
+				128132D8F38D2047CBF80534 /* MonthlySchedulerView.swift */,
+				B7F16049703E69A4C4B32179 /* ScheduledWorkoutsView.swift */,);
 			path = CrossfitTracker;
 			sourceTree = "<group>";
 		};
@@ -573,7 +588,12 @@
 				CDB1A7362EA3775100B13136 /* CompletedLift.swift in Sources */,
 				CDB1A71E2EA3597700B13136 /* LeaderboardView.swift in Sources */,
 				CDB1A7382EA3777B00B13136 /* LiftsView.swift in Sources */,
-			);
+			
+				2ADE821039E80B338E90A27A /* ScheduledWorkout.swift in Sources */,
+				622E9862DB4B26AE5A1A7F91 /* AddWorkoutView.swift in Sources */,
+				6C0DEE0974BB730CC7931F44 /* WeeklySchedulerView.swift in Sources */,
+				DAE389FCD1FC4D53BF4BE780 /* MonthlySchedulerView.swift in Sources */,
+				3CB9B2F6F40660407B0DC28C /* ScheduledWorkoutsView.swift in Sources */,);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		CDB1A6B52EA34E9100B13136 /* Sources */ = {
