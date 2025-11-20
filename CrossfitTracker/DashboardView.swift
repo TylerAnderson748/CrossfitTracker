@@ -17,7 +17,7 @@ struct DashboardView: View {
                     .font(.title.bold())
                     .padding(.top)
 
-                List(SampleData.wods) { wod in
+                List(store.wods) { wod in
                     VStack(alignment: .leading, spacing: 12) {
                         // WOD Info
                         VStack(alignment: .leading, spacing: 4) {

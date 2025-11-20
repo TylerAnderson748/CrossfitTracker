@@ -17,6 +17,7 @@ final class AppStore: ObservableObject {
     @Published var userName: String = "Guest"
 
     // MARK: - WODs
+    @Published var wods: [WOD] = SampleData.wods // User's WOD library (includes defaults + custom)
     @Published var activeWOD: WOD? = nil
     @Published var wodStartTime: Date? = nil
     @Published var completedWODs: [CompletedWOD] = []
@@ -32,6 +33,9 @@ final class AppStore: ObservableObject {
     ]
 
     @Published var liftEntries: [LiftEntry] = [] // all lift history entries
+
+    // MARK: - Scheduled Workouts
+    @Published var scheduledWorkouts: [ScheduledWorkout] = []
 
     private init() {}
 
@@ -116,5 +120,60 @@ final class AppStore: ObservableObject {
     // MARK: - WOD Results Query
     func results(for wod: WOD) -> [CompletedWOD] {
         return completedWODs.filter { $0.wod.id == wod.id }
+    }
+
+    // MARK: - WOD Management
+    func addWOD(title: String, description: String) {
+        let newWOD = WOD(title: title, description: description)
+        wods.append(newWOD)
+    }
+
+    func deleteWOD(id: UUID) {
+        wods.removeAll { $0.id == id }
+        // Also remove any scheduled workouts using this WOD
+        scheduledWorkouts.removeAll { $0.wodID == id }
+    }
+
+    // MARK: - Scheduled Workout Management
+    func addScheduledWorkout(_ workout: ScheduledWorkout) {
+        scheduledWorkouts.append(workout)
+    }
+
+    func updateScheduledWorkout(_ workout: ScheduledWorkout) {
+        if let idx = scheduledWorkouts.firstIndex(where: { $0.id == workout.id }) {
+            scheduledWorkouts[idx] = workout
+        }
+    }
+
+    func deleteScheduledWorkout(id: UUID) {
+        scheduledWorkouts.removeAll { $0.id == id }
+    }
+
+    func toggleScheduledWorkout(id: UUID) {
+        if let idx = scheduledWorkouts.firstIndex(where: { $0.id == id }) {
+            scheduledWorkouts[idx].isActive.toggle()
+        }
+    }
+
+    // Get scheduled workouts for a specific date
+    func scheduledWorkouts(for date: Date) -> [ScheduledWorkout] {
+        return scheduledWorkouts.filter { $0.shouldOccur(on: date) }
+    }
+
+    // Get workout name helper
+    func workoutName(for scheduled: ScheduledWorkout) -> String {
+        switch scheduled.workoutType {
+        case .lift:
+            if let liftID = scheduled.liftID,
+               let lift = lifts.first(where: { $0.id == liftID }) {
+                return lift.name
+            }
+        case .wod:
+            if let wodID = scheduled.wodID,
+               let wod = wods.first(where: { $0.id == wodID }) {
+                return wod.title
+            }
+        }
+        return "Unknown"
     }
 }

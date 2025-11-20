@@ -23,6 +23,11 @@ struct MainTabView: View {
                     Label("WODs", systemImage: "list.bullet.rectangle")
                 }
 
+            ScheduledWorkoutsView()
+                .tabItem {
+                    Label("Schedule", systemImage: "calendar")
+                }
+
             ProfileView()
                 .tabItem {
                     Label("Profile", systemImage: "person.circle.fill")

@@ -22,6 +22,11 @@ struct ContentView: View {
                     Label("Lifts", systemImage: "dumbbell.fill")
                 }
 
+            ScheduledWorkoutsView()
+                .tabItem {
+                    Label("Schedule", systemImage: "calendar")
+                }
+
             WODHistoryView()
                 .tabItem {
                     Label("History", systemImage: "clock.fill")
