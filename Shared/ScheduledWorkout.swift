@@ -114,6 +114,9 @@ struct ScheduledWorkout: Identifiable, Codable {
         if let end = endDate, date > end { return false }
 
         switch recurrenceType {
+        case .none:
+            return false
+
         case .once:
             return Calendar.current.isDate(date, inSameDayAs: startDate)
 
