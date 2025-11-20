@@ -228,4 +228,355 @@ final class AppStore: ObservableObject {
             }
         }
     }
+
+    // MARK: - Scheduled Workout Management
+    func loadScheduledWorkouts(groupId: String?, userId: String, completion: @escaping ([ScheduledWorkout], String?) -> Void) {
+        let db = Firestore.firestore()
+        var query: Query = db.collection("scheduledWorkouts")
+
+        if let groupId = groupId {
+            query = query.whereField("groupId", isEqualTo: groupId)
+        } else {
+            // Load personal workouts for this user
+            query = query.whereField("createdBy", isEqualTo: userId)
+                         .whereField("groupId", isEqualTo: NSNull())
+        }
+
+        query.getDocuments { snapshot, error in
+            if let error = error {
+                completion([], "Error loading workouts: \(error.localizedDescription)")
+                return
+            }
+
+            let workouts = snapshot?.documents.compactMap { doc -> ScheduledWorkout? in
+                try? doc.data(as: ScheduledWorkout.self)
+            } ?? []
+
+            completion(workouts, nil)
+        }
+    }
+
+    func saveScheduledWorkout(_ workout: ScheduledWorkout, completion: @escaping (ScheduledWorkout?, String?) -> Void) {
+        let db = Firestore.firestore()
+
+        do {
+            if let id = workout.id {
+                // Update existing workout
+                try db.collection("scheduledWorkouts").document(id).setData(from: workout, merge: true) { error in
+                    if let error = error {
+                        completion(nil, error.localizedDescription)
+                    } else {
+                        completion(workout, nil)
+                    }
+                }
+            } else {
+                // Create new workout
+                var newWorkout = workout
+                let docRef = db.collection("scheduledWorkouts").document()
+                newWorkout.id = docRef.documentID
+                try docRef.setData(from: newWorkout) { error in
+                    if let error = error {
+                        completion(nil, error.localizedDescription)
+                    } else {
+                        completion(newWorkout, nil)
+                    }
+                }
+            }
+        } catch {
+            completion(nil, error.localizedDescription)
+        }
+    }
+
+    func deleteScheduledWorkout(workoutId: String, completion: @escaping (String?) -> Void) {
+        let db = Firestore.firestore()
+
+        db.collection("scheduledWorkouts").document(workoutId).delete { error in
+            if let error = error {
+                completion(error.localizedDescription)
+            } else {
+                completion(nil)
+            }
+        }
+    }
+
+    func saveRecurringWorkout(_ workout: ScheduledWorkout, completion: @escaping ([ScheduledWorkout], String?) -> Void) {
+        // For recurring workouts, we create multiple ScheduledWorkout entries
+        var workoutsToSave: [ScheduledWorkout] = []
+        let calendar = Calendar.current
+
+        guard let endDate = workout.recurrenceEndDate else {
+            // If no end date, just save the single workout
+            saveScheduledWorkout(workout) { saved, error in
+                if let error = error {
+                    completion([], error)
+                } else if let saved = saved {
+                    completion([saved], nil)
+                } else {
+                    completion([], nil)
+                }
+            }
+            return
+        }
+
+        var currentDate = workout.date
+        while currentDate <= endDate {
+            // Check if this date matches the recurrence pattern
+            var shouldInclude = false
+
+            switch workout.recurrenceType {
+            case .daily:
+                shouldInclude = true
+            case .weekly:
+                if let weekdays = workout.weekdays {
+                    let weekday = calendar.component(.weekday, from: currentDate)
+                    shouldInclude = weekdays.contains(weekday)
+                }
+            case .once:
+                shouldInclude = calendar.isDate(currentDate, inSameDayAs: workout.date)
+            default:
+                break
+            }
+
+            if shouldInclude {
+                var workoutCopy = workout
+                workoutCopy.id = nil // Generate new ID for each instance
+                workoutCopy.date = currentDate
+                workoutsToSave.append(workoutCopy)
+            }
+
+            // Move to next day
+            guard let nextDate = calendar.date(byAdding: .day, value: 1, to: currentDate) else {
+                break
+            }
+            currentDate = nextDate
+        }
+
+        // Save all workouts
+        let group = DispatchGroup()
+        var savedWorkouts: [ScheduledWorkout] = []
+        var saveError: String?
+
+        for workout in workoutsToSave {
+            group.enter()
+            saveScheduledWorkout(workout) { saved, error in
+                if let error = error {
+                    saveError = error
+                } else if let saved = saved {
+                    savedWorkouts.append(saved)
+                }
+                group.leave()
+            }
+        }
+
+        group.notify(queue: .main) {
+            completion(savedWorkouts, saveError)
+        }
+    }
+
+    // MARK: - Gym Management
+    func loadGyms(forUserId userId: String, completion: @escaping ([Gym], String?) -> Void) {
+        let db = Firestore.firestore()
+
+        // Load gyms where user is owner, coach, or member
+        db.collection("gyms")
+            .whereField("memberIds", arrayContains: userId)
+            .getDocuments { snapshot, error in
+                if let error = error {
+                    completion([], error.localizedDescription)
+                    return
+                }
+
+                let gyms = snapshot?.documents.compactMap { doc -> Gym? in
+                    try? doc.data(as: Gym.self)
+                } ?? []
+
+                completion(gyms, nil)
+            }
+    }
+
+    func loadGym(gymId: String, completion: @escaping (Gym?, String?) -> Void) {
+        let db = Firestore.firestore()
+
+        db.collection("gyms").document(gymId).getDocument { snapshot, error in
+            if let error = error {
+                completion(nil, error.localizedDescription)
+                return
+            }
+
+            guard let snapshot = snapshot, snapshot.exists else {
+                completion(nil, "Gym not found")
+                return
+            }
+
+            let gym = try? snapshot.data(as: Gym.self)
+            completion(gym, nil)
+        }
+    }
+
+    func createGym(name: String, ownerId: String, completion: @escaping (Gym?, String?) -> Void) {
+        let db = Firestore.firestore()
+        let gym = Gym(name: name, ownerId: ownerId)
+
+        do {
+            let docRef = db.collection("gyms").document()
+            var newGym = gym
+            newGym.id = docRef.documentID
+            newGym.memberIds = [ownerId] // Owner is automatically a member
+
+            try docRef.setData(from: newGym) { error in
+                if let error = error {
+                    completion(nil, error.localizedDescription)
+                } else {
+                    completion(newGym, nil)
+                }
+            }
+        } catch {
+            completion(nil, error.localizedDescription)
+        }
+    }
+
+    func deleteGym(gymId: String, completion: @escaping (String?) -> Void) {
+        let db = Firestore.firestore()
+
+        db.collection("gyms").document(gymId).delete { error in
+            if let error = error {
+                completion(error.localizedDescription)
+            } else {
+                completion(nil)
+            }
+        }
+    }
+
+    func addUserToGym(gymId: String, userId: String, completion: @escaping (String?) -> Void) {
+        let db = Firestore.firestore()
+
+        db.collection("gyms").document(gymId).updateData([
+            "memberIds": FieldValue.arrayUnion([userId])
+        ]) { error in
+            if let error = error {
+                completion(error.localizedDescription)
+            } else {
+                completion(nil)
+            }
+        }
+    }
+
+    // MARK: - Group Management
+    func loadGroupsForGym(gymId: String, completion: @escaping ([WorkoutGroup], String?) -> Void) {
+        let db = Firestore.firestore()
+
+        db.collection("groups")
+            .whereField("gymId", isEqualTo: gymId)
+            .getDocuments { snapshot, error in
+                if let error = error {
+                    completion([], error.localizedDescription)
+                    return
+                }
+
+                let groups = snapshot?.documents.compactMap { doc -> WorkoutGroup? in
+                    try? doc.data(as: WorkoutGroup.self)
+                } ?? []
+
+                completion(groups, nil)
+            }
+    }
+
+    func loadGroupsForUser(userId: String, completion: @escaping ([WorkoutGroup], String?) -> Void) {
+        let db = Firestore.firestore()
+
+        db.collection("groups")
+            .whereField("memberIds", arrayContains: userId)
+            .getDocuments { snapshot, error in
+                if let error = error {
+                    completion([], error.localizedDescription)
+                    return
+                }
+
+                let groups = snapshot?.documents.compactMap { doc -> WorkoutGroup? in
+                    try? doc.data(as: WorkoutGroup.self)
+                } ?? []
+
+                completion(groups, nil)
+            }
+    }
+
+    func createGroup(_ group: WorkoutGroup, completion: @escaping (WorkoutGroup?, String?) -> Void) {
+        let db = Firestore.firestore()
+
+        do {
+            let docRef = db.collection("groups").document()
+            var newGroup = group
+            newGroup.id = docRef.documentID
+
+            try docRef.setData(from: newGroup) { error in
+                if let error = error {
+                    completion(nil, error.localizedDescription)
+                } else {
+                    completion(newGroup, nil)
+                }
+            }
+        } catch {
+            completion(nil, error.localizedDescription)
+        }
+    }
+
+    func deleteGroup(groupId: String, completion: @escaping (String?) -> Void) {
+        let db = Firestore.firestore()
+
+        db.collection("groups").document(groupId).delete { error in
+            if let error = error {
+                completion(error.localizedDescription)
+            } else {
+                completion(nil)
+            }
+        }
+    }
+
+    func addUserToGroup(groupId: String, userId: String, completion: @escaping (String?) -> Void) {
+        let db = Firestore.firestore()
+
+        db.collection("groups").document(groupId).updateData([
+            "memberIds": FieldValue.arrayUnion([userId])
+        ]) { error in
+            if let error = error {
+                completion(error.localizedDescription)
+            } else {
+                completion(nil)
+            }
+        }
+    }
+
+    func removeUserFromGroup(groupId: String, userId: String, completion: @escaping (String?) -> Void) {
+        let db = Firestore.firestore()
+
+        db.collection("groups").document(groupId).updateData([
+            "memberIds": FieldValue.arrayRemove([userId])
+        ]) { error in
+            if let error = error {
+                completion(error.localizedDescription)
+            } else {
+                completion(nil)
+            }
+        }
+    }
+
+    // MARK: - User Loading
+    func loadUser(userId: String, completion: @escaping (AppUser?, String?) -> Void) {
+        let db = Firestore.firestore()
+
+        db.collection("users").document(userId).getDocument { snapshot, error in
+            if let error = error {
+                completion(nil, error.localizedDescription)
+                return
+            }
+
+            guard let snapshot = snapshot, snapshot.exists else {
+                completion(nil, "User not found")
+                return
+            }
+
+            let user = try? snapshot.data(as: AppUser.self)
+            completion(user, nil)
+        }
+    }
 }
