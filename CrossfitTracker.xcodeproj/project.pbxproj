@@ -338,6 +338,7 @@
 				CDB1A7192EA3565100B13136 /* SampleData.swift */,
 				CDB1A72D2EA36CE100B13136 /* Notifications.swift */,
 				CDB1A7352EA3775100B13136 /* CompletedLift.swift */,
+				1478F42D91F5DF3773347A1A /* ScheduledWorkout.swift */,
 			);
 			path = Shared;
 			sourceTree = "<group>";
