@@ -129,6 +129,7 @@ struct WeeklyPlanView: View {
             }
             .onAppear {
                 loadScheduledWorkouts()
+                loadUserGroups()
             }
         }
     }
@@ -206,6 +207,22 @@ struct WeeklyPlanView: View {
                 print("   - \(workout.wodTitle): groupId=\(workout.groupId ?? "nil"), createdBy=\(workout.createdBy), date=\(workout.date)")
             }
             self.scheduledWorkouts = workouts
+        }
+    }
+
+    private func loadUserGroups() {
+        guard let userId = store.currentUser?.uid else {
+            print("❌ [WeeklyPlan] No user logged in")
+            return
+        }
+
+        print("📥 [WeeklyPlan] Loading groups for user \(userId)")
+        store.loadGroupsForUser(userId: userId) { groups, error in
+            if let error = error {
+                print("❌ [WeeklyPlan] Error loading groups: \(error)")
+            } else {
+                print("✅ [WeeklyPlan] Loaded \(groups.count) groups")
+            }
         }
     }
 
@@ -349,6 +366,7 @@ struct DayWorkoutCard: View {
             } else {
                 ForEach(workouts) { workout in
                     WorkoutSummaryRow(workout: workout)
+                        .environmentObject(store)
                         .contextMenu {
                             Button {
                                 onLogWorkout(workout)
@@ -400,12 +418,46 @@ struct DayWorkoutCard: View {
 }
 
 struct WorkoutSummaryRow: View {
+    @EnvironmentObject var store: AppStore
     let workout: ScheduledWorkout
 
+    private var workoutTypeInfo: (label: String, color: Color, icon: String) {
+        if workout.isPersonalWorkout {
+            return ("Personal", .blue, "person.fill")
+        } else {
+            // For group workouts, try to find the group name
+            if let groupId = workout.groupId,
+               let group = store.groups.first(where: { $0.id == groupId }) {
+                return (group.name, .green, "person.3.fill")
+            } else {
+                return ("Group", .green, "person.3.fill")
+            }
+        }
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(workout.wodTitle)
-                .font(.headline)
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(workout.wodTitle)
+                    .font(.headline)
+
+                Spacer()
+
+                // Badge showing workout type
+                HStack(spacing: 4) {
+                    Image(systemName: workoutTypeInfo.icon)
+                        .font(.caption2)
+                    Text(workoutTypeInfo.label)
+                        .font(.caption)
+                        .fontWeight(.medium)
+                }
+                .foregroundColor(.white)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(workoutTypeInfo.color)
+                .cornerRadius(8)
+            }
+
             Text(workout.wodDescription)
                 .font(.subheadline)
                 .foregroundColor(.secondary)

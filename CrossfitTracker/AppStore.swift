@@ -42,6 +42,9 @@ final class AppStore: ObservableObject {
     // MARK: - Leaderboards
     @Published var leaderboardEntries: [LeaderboardEntry] = []
 
+    // MARK: - Groups
+    @Published var groups: [WorkoutGroup] = []
+
     private init() {
         // Listen for Firebase auth state changes
         Auth.auth().addStateDidChangeListener { [weak self] _, user in
@@ -879,6 +882,7 @@ final class AppStore: ObservableObject {
 
                 DispatchQueue.main.async {
                     print("✅ Loaded \(groups.count) groups for user")
+                    self.groups = groups
                     completion(groups, nil)
                 }
             }
