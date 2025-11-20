@@ -7,6 +7,11 @@
 
 import SwiftUI
 
+enum MonthlyRecurrenceType {
+    case sameDay // e.g., 15th of every month
+    case weekBased // e.g., first Monday, last Friday
+}
+
 struct CoachProgrammingView: View {
     @EnvironmentObject var store: AppStore
     let gym: Gym
@@ -287,6 +292,11 @@ struct AddWorkoutSheet: View {
     @State private var recurrenceEndDate: Date
     @State private var selectedWeekdays: Set<Int> = []
 
+    // Monthly recurrence options
+    @State private var monthlyRecurrenceType: MonthlyRecurrenceType = .sameDay
+    @State private var selectedMonthlyWeekPosition: Int = 1
+    @State private var selectedMonthlyWeekday: Int = 2
+
     init(gym: Gym, selectedDate: Date, onSave: @escaping (ScheduledWorkout) -> Void) {
         self.gym = gym
         self.selectedDate = selectedDate
@@ -297,6 +307,13 @@ struct AddWorkoutSheet: View {
         // Initialize with current day of week
         let weekday = Calendar.current.component(.weekday, from: selectedDate)
         _selectedWeekdays = State(initialValue: [weekday])
+        _selectedMonthlyWeekday = State(initialValue: weekday)
+
+        // Calculate week position in month (1st, 2nd, 3rd, 4th, or Last)
+        let calendar = Calendar.current
+        let dayOfMonth = calendar.component(.day, from: selectedDate)
+        let weekPosition = (dayOfMonth - 1) / 7 + 1
+        _selectedMonthlyWeekPosition = State(initialValue: min(weekPosition, 4))
     }
 
     var body: some View {
@@ -347,6 +364,46 @@ struct AddWorkoutSheet: View {
                         }
                     }
 
+                    if recurrenceType == .monthly {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Picker("Monthly repeat type", selection: $monthlyRecurrenceType) {
+                                Text("Same day each month").tag(MonthlyRecurrenceType.sameDay)
+                                Text("Week-based").tag(MonthlyRecurrenceType.weekBased)
+                            }
+                            .pickerStyle(.segmented)
+
+                            if monthlyRecurrenceType == .sameDay {
+                                Text("Repeats on day \(Calendar.current.component(.day, from: date)) of every month")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            } else {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Picker("Week position", selection: $selectedMonthlyWeekPosition) {
+                                        Text("First").tag(1)
+                                        Text("Second").tag(2)
+                                        Text("Third").tag(3)
+                                        Text("Fourth").tag(4)
+                                        Text("Last").tag(5)
+                                    }
+
+                                    Picker("Weekday", selection: $selectedMonthlyWeekday) {
+                                        Text("Sunday").tag(1)
+                                        Text("Monday").tag(2)
+                                        Text("Tuesday").tag(3)
+                                        Text("Wednesday").tag(4)
+                                        Text("Thursday").tag(5)
+                                        Text("Friday").tag(6)
+                                        Text("Saturday").tag(7)
+                                    }
+
+                                    Text(monthlyWeekBasedSummary)
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                        }
+                    }
+
                     if recurrenceType != .none {
                         Toggle("Set end date", isOn: $hasEndDate)
 
@@ -390,7 +447,9 @@ struct AddWorkoutSheet: View {
                             createdBy: userId,
                             recurrenceType: recurrenceType,
                             recurrenceEndDate: hasEndDate ? recurrenceEndDate : nil,
-                            weekdays: recurrenceType == .weekly ? Array(selectedWeekdays) : nil
+                            weekdays: recurrenceType == .weekly ? Array(selectedWeekdays) : nil,
+                            monthlyWeekPosition: (recurrenceType == .monthly && monthlyRecurrenceType == .weekBased) ? selectedMonthlyWeekPosition : nil,
+                            monthlyWeekday: (recurrenceType == .monthly && monthlyRecurrenceType == .weekBased) ? selectedMonthlyWeekday : nil
                         )
 
                         if workout.isRecurring {
@@ -421,6 +480,16 @@ struct AddWorkoutSheet: View {
         }
     }
 
+    private var monthlyWeekBasedSummary: String {
+        let weekPositionNames = ["", "First", "Second", "Third", "Fourth", "Last"]
+        let weekdayNames = ["", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+
+        let position = weekPositionNames[selectedMonthlyWeekPosition]
+        let day = weekdayNames[selectedMonthlyWeekday]
+
+        return "Repeats on the \(position) \(day) of every month"
+    }
+
     private var recurrenceSummary: String {
         let calendar = Calendar.current
         let formatter = DateFormatter()
@@ -448,11 +517,18 @@ struct AddWorkoutSheet: View {
                 return "Repeats on \(weekdayNames) for 1 year"
             }
         case .monthly:
+            var baseText = ""
+            if monthlyRecurrenceType == .sameDay {
+                baseText = "Repeats on day \(calendar.component(.day, from: date)) of every month"
+            } else {
+                baseText = monthlyWeekBasedSummary
+            }
+
             if hasEndDate {
                 let months = calendar.dateComponents([.month], from: date, to: recurrenceEndDate).month ?? 0
-                return "Repeats monthly for \(months) months (until \(formatter.string(from: recurrenceEndDate)))"
+                return "\(baseText) for \(months) months (until \(formatter.string(from: recurrenceEndDate)))"
             } else {
-                return "Repeats monthly for 1 year (12 months)"
+                return "\(baseText) for 1 year (12 months)"
             }
         }
     }
