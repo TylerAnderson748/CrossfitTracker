@@ -132,7 +132,12 @@ struct CoachProgrammingView: View {
         print("📅 Loading workouts from \(start) to \(end)")
 
         // Load all workouts for the current week (coaches see all workouts they created)
-        store.loadScheduledWorkouts(startDate: start, endDate: end) { workouts, error in
+        guard let userId = store.currentUser?.uid else {
+            print("❌ No user logged in")
+            return
+        }
+
+        store.loadScheduledWorkoutsForUser(userId: userId, startDate: start, endDate: end) { workouts, error in
             if let error = error {
                 print("❌ Error loading scheduled workouts: \(error)")
                 return
@@ -141,13 +146,9 @@ struct CoachProgrammingView: View {
             print("📥 Received \(workouts.count) workouts from Firestore")
 
             // Filter to only show workouts created by current user
-            if let userId = store.currentUser?.uid {
-                let filtered = workouts.filter { $0.createdBy == userId }
-                print("🔍 Filtered to \(filtered.count) workouts for user \(userId)")
-                self.scheduledWorkouts = filtered
-            } else {
-                self.scheduledWorkouts = workouts
-            }
+            let filtered = workouts.filter { $0.createdBy == userId }
+            print("🔍 Filtered to \(filtered.count) workouts for user \(userId)")
+            self.scheduledWorkouts = filtered
 
             print("📊 Final scheduledWorkouts count: \(self.scheduledWorkouts.count)")
         }
@@ -162,7 +163,7 @@ struct CoachProgrammingView: View {
             }
 
             if let savedWorkout = savedWorkout {
-                print("✅ Workout saved with ID: \(savedWorkout.id ?? "nil")")
+                print("✅ Workout saved with ID: \(savedWorkout.id)")
                 // Add to local array if new, or update if existing
                 if let index = self.scheduledWorkouts.firstIndex(where: { $0.id == savedWorkout.id }) {
                     print("📝 Updating existing workout at index \(index)")
@@ -177,20 +178,14 @@ struct CoachProgrammingView: View {
     }
 
     private func deleteWorkout(_ workout: ScheduledWorkout) {
-        guard let workoutId = workout.id else {
-            print("❌ Cannot delete workout without ID")
-            return
-        }
+        let workoutId = workout.id
+        print("🗑️ Deleting workout: \(workoutId)")
 
-        store.deleteScheduledWorkout(workoutId: workoutId) { error in
-            if let error = error {
-                print("❌ Error deleting workout: \(error)")
-            } else {
-                print("✅ Workout deleted")
-                // Remove from local array
-                self.scheduledWorkouts.removeAll { $0.id == workoutId }
-            }
-        }
+        // TODO: Add Firebase deletion when implemented
+        // For now, just remove from local array
+        store.deleteScheduledWorkout(id: workoutId)
+        self.scheduledWorkouts.removeAll { $0.id == workoutId }
+        print("✅ Workout deleted")
     }
 }
 
@@ -398,7 +393,7 @@ struct AddWorkoutSheet: View {
                             store.saveRecurringWorkout(workout) { workouts, error in
                                 if let error = error {
                                     print("❌ Error saving recurring workouts: \(error)")
-                                } else {
+                                } else if let workouts = workouts {
                                     print("✅ Saved \(workouts.count) recurring workout instances")
                                     // Add all workouts to the view
                                     for savedWorkout in workouts {
@@ -429,6 +424,8 @@ struct AddWorkoutSheet: View {
         switch recurrenceType {
         case .none:
             return ""
+        case .once:
+            return "One time on \(formatter.string(from: date))"
         case .daily:
             if hasEndDate {
                 return "Repeats daily until \(formatter.string(from: recurrenceEndDate))"

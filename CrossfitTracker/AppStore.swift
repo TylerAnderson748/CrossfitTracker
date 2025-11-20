@@ -308,4 +308,219 @@ final class AppStore: ObservableObject {
             }
         }
     }
+
+    // MARK: - Gym Management
+    func loadGroupsForGym(gymId: String, completion: @escaping ([WorkoutGroup], String?) -> Void) {
+        let db = Firestore.firestore()
+
+        db.collection("workoutGroups")
+            .whereField("gymId", isEqualTo: gymId)
+            .getDocuments { snapshot, error in
+                if let error = error {
+                    completion([], error.localizedDescription)
+                    return
+                }
+
+                let groups = snapshot?.documents.compactMap { doc -> WorkoutGroup? in
+                    try? doc.data(as: WorkoutGroup.self)
+                } ?? []
+
+                completion(groups, nil)
+            }
+    }
+
+    func loadGyms(completion: @escaping ([Gym], String?) -> Void) {
+        let db = Firestore.firestore()
+
+        guard let userId = currentUser?.uid else {
+            completion([], "No user logged in")
+            return
+        }
+
+        // Load gyms where user is owner, coach, or member
+        db.collection("gyms")
+            .whereField("ownerId", isEqualTo: userId)
+            .getDocuments { ownerSnapshot, ownerError in
+                if let ownerError = ownerError {
+                    completion([], ownerError.localizedDescription)
+                    return
+                }
+
+                var allGyms = ownerSnapshot?.documents.compactMap { doc -> Gym? in
+                    try? doc.data(as: Gym.self)
+                } ?? []
+
+                // Also load gyms where user is a coach
+                db.collection("gyms")
+                    .whereField("coachIds", arrayContains: userId)
+                    .getDocuments { coachSnapshot, coachError in
+                        if let coachError = coachError {
+                            completion([], coachError.localizedDescription)
+                            return
+                        }
+
+                        let coachGyms = coachSnapshot?.documents.compactMap { doc -> Gym? in
+                            try? doc.data(as: Gym.self)
+                        } ?? []
+
+                        // Merge and deduplicate
+                        for gym in coachGyms {
+                            if !allGyms.contains(where: { $0.id == gym.id }) {
+                                allGyms.append(gym)
+                            }
+                        }
+
+                        // Also load gyms where user is a member
+                        db.collection("gyms")
+                            .whereField("memberIds", arrayContains: userId)
+                            .getDocuments { memberSnapshot, memberError in
+                                if let memberError = memberError {
+                                    completion([], memberError.localizedDescription)
+                                    return
+                                }
+
+                                let memberGyms = memberSnapshot?.documents.compactMap { doc -> Gym? in
+                                    try? doc.data(as: Gym.self)
+                                } ?? []
+
+                                // Merge and deduplicate
+                                for gym in memberGyms {
+                                    if !allGyms.contains(where: { $0.id == gym.id }) {
+                                        allGyms.append(gym)
+                                    }
+                                }
+
+                                completion(allGyms, nil)
+                            }
+                    }
+            }
+    }
+
+    func createGym(name: String, completion: @escaping (Gym?, String?) -> Void) {
+        let db = Firestore.firestore()
+
+        guard let userId = currentUser?.uid else {
+            completion(nil, "No user logged in")
+            return
+        }
+
+        let docRef = db.collection("gyms").document()
+        var gym = Gym(name: name, ownerId: userId)
+        gym.id = docRef.documentID
+
+        do {
+            try docRef.setData(from: gym) { error in
+                if let error = error {
+                    completion(nil, error.localizedDescription)
+                } else {
+                    completion(gym, nil)
+                }
+            }
+        } catch {
+            completion(nil, "Error encoding gym: \(error.localizedDescription)")
+        }
+    }
+
+    func deleteGym(gymId: String, completion: @escaping (String?) -> Void) {
+        let db = Firestore.firestore()
+
+        db.collection("gyms").document(gymId).delete { error in
+            if let error = error {
+                completion(error.localizedDescription)
+            } else {
+                completion(nil)
+            }
+        }
+    }
+
+    func findUserByEmail(email: String, completion: @escaping (AppUser?, String?) -> Void) {
+        let db = Firestore.firestore()
+
+        db.collection("users")
+            .whereField("email", isEqualTo: email)
+            .getDocuments { snapshot, error in
+                if let error = error {
+                    completion(nil, error.localizedDescription)
+                    return
+                }
+
+                guard let document = snapshot?.documents.first else {
+                    completion(nil, "User not found")
+                    return
+                }
+
+                do {
+                    let user = try document.data(as: AppUser.self)
+                    completion(user, nil)
+                } catch {
+                    completion(nil, "Error decoding user: \(error.localizedDescription)")
+                }
+            }
+    }
+
+    func loadUser(userId: String, completion: @escaping (AppUser?, String?) -> Void) {
+        let db = Firestore.firestore()
+
+        db.collection("users").document(userId).getDocument { document, error in
+            if let error = error {
+                completion(nil, error.localizedDescription)
+                return
+            }
+
+            guard let document = document, document.exists else {
+                completion(nil, "User not found")
+                return
+            }
+
+            do {
+                let user = try document.data(as: AppUser.self)
+                completion(user, nil)
+            } catch {
+                completion(nil, "Error decoding user: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    func addUserToGym(gymId: String, userId: String, role: UserRole, completion: @escaping (String?) -> Void) {
+        let db = Firestore.firestore()
+        let gymRef = db.collection("gyms").document(gymId)
+
+        gymRef.getDocument { document, error in
+            if let error = error {
+                completion(error.localizedDescription)
+                return
+            }
+
+            guard let document = document, document.exists else {
+                completion("Gym not found")
+                return
+            }
+
+            do {
+                var gym = try document.data(as: Gym.self)
+
+                // Add user to appropriate array based on role
+                if role == .coach {
+                    if !gym.coachIds.contains(userId) {
+                        gym.coachIds.append(userId)
+                    }
+                } else {
+                    if !gym.memberIds.contains(userId) {
+                        gym.memberIds.append(userId)
+                    }
+                }
+
+                // Update in Firestore
+                try gymRef.setData(from: gym) { error in
+                    if let error = error {
+                        completion(error.localizedDescription)
+                    } else {
+                        completion(nil)
+                    }
+                }
+            } catch {
+                completion("Error updating gym: \(error.localizedDescription)")
+            }
+        }
+    }
 }
