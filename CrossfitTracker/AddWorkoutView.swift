@@ -264,7 +264,9 @@ struct AddWorkoutView: View {
     }
 }
 
-#Preview {
-    AddWorkoutView()
-        .environmentObject(AppStore.shared)
+struct AddWorkoutView_Previews: PreviewProvider {
+    static var previews: some View {
+        AddWorkoutView()
+            .environmentObject(AppStore.shared)
+    }
 }

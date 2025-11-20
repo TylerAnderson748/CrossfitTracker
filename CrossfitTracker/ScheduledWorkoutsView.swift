@@ -155,7 +155,9 @@ struct WorkoutRow: View {
     }
 }
 
-#Preview {
-    ScheduledWorkoutsView()
-        .environmentObject(AppStore.shared)
+struct ScheduledWorkoutsView_Previews: PreviewProvider {
+    static var previews: some View {
+        ScheduledWorkoutsView()
+            .environmentObject(AppStore.shared)
+    }
 }

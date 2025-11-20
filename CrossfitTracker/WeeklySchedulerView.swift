@@ -117,12 +117,14 @@ struct WeeklySchedulerView: View {
     }
 }
 
-#Preview {
-    WeeklySchedulerView(
-        workoutType: .wod,
-        liftID: nil,
-        wodID: SampleData.wods.first?.id,
-        startDate: Date()
-    )
-    .environmentObject(AppStore.shared)
+struct WeeklySchedulerView_Previews: PreviewProvider {
+    static var previews: some View {
+        WeeklySchedulerView(
+            workoutType: .wod,
+            liftID: nil,
+            wodID: SampleData.wods.first?.id,
+            startDate: Date()
+        )
+        .environmentObject(AppStore.shared)
+    }
 }

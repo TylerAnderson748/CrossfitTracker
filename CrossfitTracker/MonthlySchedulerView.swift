@@ -173,12 +173,14 @@ struct MonthlySchedulerView: View {
     }
 }
 
-#Preview {
-    MonthlySchedulerView(
-        workoutType: .wod,
-        liftID: nil,
-        wodID: SampleData.wods.first?.id,
-        startDate: Date()
-    )
-    .environmentObject(AppStore.shared)
+struct MonthlySchedulerView_Previews: PreviewProvider {
+    static var previews: some View {
+        MonthlySchedulerView(
+            workoutType: .wod,
+            liftID: nil,
+            wodID: SampleData.wods.first?.id,
+            startDate: Date()
+        )
+        .environmentObject(AppStore.shared)
+    }
 }
