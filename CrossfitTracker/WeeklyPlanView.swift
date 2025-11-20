@@ -205,7 +205,7 @@ struct WeeklyPlanView: View {
             store.saveRecurringWorkout(workout) { workouts, error in
                 if let error = error {
                     print("❌ Error saving recurring workouts: \(error)")
-                } else {
+                } else if let workouts = workouts {
                     print("✅ Saved \(workouts.count) recurring workout instances")
                     // Add to local array
                     self.scheduledWorkouts.append(contentsOf: workouts)
