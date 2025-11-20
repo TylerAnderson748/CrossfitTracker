@@ -523,4 +523,31 @@ final class AppStore: ObservableObject {
             }
         }
     }
+
+    // MARK: - Admin Functions
+    func updateUserRole(userId: String, role: UserRole, completion: @escaping (String?) -> Void) {
+        let db = Firestore.firestore()
+        let userRef = db.collection("users").document(userId)
+
+        userRef.updateData([
+            "role": role.rawValue
+        ]) { error in
+            if let error = error {
+                completion(error.localizedDescription)
+            } else {
+                // Update local user if it's the current user
+                if userId == self.currentUser?.uid {
+                    userRef.getDocument { document, error in
+                        if let document = document,
+                           let user = try? document.data(as: AppUser.self) {
+                            self.appUser = user
+                        }
+                        completion(nil)
+                    }
+                } else {
+                    completion(nil)
+                }
+            }
+        }
+    }
 }
