@@ -372,7 +372,6 @@
 			isa = PBXGroup;
 			children = (
 				CDB1A7332EA3772D00B13136 /* Lift.swift */,
-				B7F16049703E69A4C4B32179 /* ScheduledWorkoutsView.swift */,
 				1478F42D91F5DF3773347A1A /* ScheduledWorkout.swift */,
 				CDB1A7802EA3LIFTRESULT /* LiftResult.swift */,
 				CDB1A7292EA366B400B13136 /* CompletedWOD.swift */,
