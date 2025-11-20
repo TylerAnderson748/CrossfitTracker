@@ -192,6 +192,77 @@ final class AppStore: ObservableObject {
     }
 
     // MARK: - Firebase Scheduled Workout Management
+    func loadScheduledWorkoutsForUser(userId: String, startDate: Date, endDate: Date, completion: @escaping ([ScheduledWorkout], String?) -> Void) {
+        let db = Firestore.firestore()
+
+        db.collection("scheduledWorkouts")
+            .whereField("date", isGreaterThanOrEqualTo: startDate)
+            .whereField("date", isLessThan: endDate)
+            .getDocuments { snapshot, error in
+                if let error = error {
+                    completion([], error.localizedDescription)
+                    return
+                }
+
+                let workouts = snapshot?.documents.compactMap { doc -> ScheduledWorkout? in
+                    try? doc.data(as: ScheduledWorkout.self)
+                } ?? []
+
+                // Filter for workouts that belong to the user (either personal or in their groups)
+                let userWorkouts = workouts.filter { workout in
+                    // Include personal workouts created by this user
+                    if workout.createdBy == userId && workout.groupId == nil {
+                        return true
+                    }
+                    // TODO: Also include workouts from groups the user is in
+                    return false
+                }
+
+                completion(userWorkouts, nil)
+            }
+    }
+
+    func saveScheduledWorkout(_ workout: ScheduledWorkout, completion: @escaping (ScheduledWorkout?, String?) -> Void) {
+        let db = Firestore.firestore()
+        let docRef = db.collection("scheduledWorkouts").document()
+
+        var workoutToSave = workout
+        workoutToSave.id = docRef.documentID
+
+        do {
+            try docRef.setData(from: workoutToSave) { error in
+                if let error = error {
+                    completion(nil, error.localizedDescription)
+                } else {
+                    // Add to local array
+                    self.scheduledWorkouts.append(workoutToSave)
+                    completion(workoutToSave, nil)
+                }
+            }
+        } catch {
+            completion(nil, "Error encoding workout: \(error.localizedDescription)")
+        }
+    }
+
+    func loadGroupsForUser(userId: String, completion: @escaping ([WorkoutGroup], String?) -> Void) {
+        let db = Firestore.firestore()
+
+        db.collection("workoutGroups")
+            .whereField("memberIds", arrayContains: userId)
+            .getDocuments { snapshot, error in
+                if let error = error {
+                    completion([], error.localizedDescription)
+                    return
+                }
+
+                let groups = snapshot?.documents.compactMap { doc -> WorkoutGroup? in
+                    try? doc.data(as: WorkoutGroup.self)
+                } ?? []
+
+                completion(groups, nil)
+            }
+    }
+
     func saveRecurringWorkout(_ workout: ScheduledWorkout, completion: @escaping ([ScheduledWorkout]?, String?) -> Void) {
         let db = Firestore.firestore()
 

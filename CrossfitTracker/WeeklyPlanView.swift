@@ -62,8 +62,7 @@ struct WeeklyPlanView: View {
 
                                     let wod = WOD(
                                         title: workout.wodTitle,
-                                        description: workout.wodDescription,
-                                        type: .wod
+                                        description: workout.wodDescription
                                     )
 
                                     print("   - Created WOD with title: '\(wod.title)'")
@@ -194,20 +193,11 @@ struct WeeklyPlanView: View {
     }
 
     private func deleteWorkout(_ workout: ScheduledWorkout) {
-        guard let workoutId = workout.id else {
-            print("❌ Cannot delete workout without ID")
-            return
-        }
-
-        store.deleteScheduledWorkout(workoutId: workoutId) { error in
-            if let error = error {
-                print("❌ Error deleting workout: \(error)")
-            } else {
-                print("✅ Workout deleted")
-                // Remove from local array
-                self.scheduledWorkouts.removeAll { $0.id == workoutId }
-            }
-        }
+        let workoutId = workout.id
+        print("✅ Deleting workout: \(workoutId)")
+        store.deleteScheduledWorkout(id: workoutId)
+        // Remove from local array
+        self.scheduledWorkouts.removeAll { $0.id == workoutId }
     }
 
     private func savePersonalWorkout(_ workout: ScheduledWorkout) {
@@ -592,9 +582,7 @@ struct AddPersonalWorkoutSheet: View {
                             createdBy: userId,
                             recurrenceType: recurrenceType,
                             recurrenceEndDate: hasEndDate ? recurrenceEndDate : nil,
-                            weekdays: nil,
-                            monthlyWeekPosition: recurrenceType == .monthly ? monthlyWeekPosition : nil,
-                            monthlyWeekday: recurrenceType == .monthly ? monthlyWeekday : nil
+                            weekdays: nil
                         )
 
                         onSave(workout)
@@ -614,6 +602,8 @@ struct AddPersonalWorkoutSheet: View {
         switch recurrenceType {
         case .none:
             return ""
+        case .once:
+            return "One time on \(formatter.string(from: date))"
         case .daily:
             if hasEndDate {
                 return "Repeats daily until \(formatter.string(from: recurrenceEndDate))"
