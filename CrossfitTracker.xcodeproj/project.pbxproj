@@ -664,6 +664,10 @@
 				CDB1A7AF /* WeeklyPlanView.swift in Sources */,
 				CDB1A7832EA3LIFTRESULT /* LiftResult.swift in Sources */,
 				CDB1A7842EA3LIFTENTRY /* LiftEntryView.swift in Sources */,
+				622E9862DB4B26AE5A1A7F91 /* AddWorkoutView.swift in Sources */,
+				6C0DEE0974BB730CC7931F44 /* WeeklySchedulerView.swift in Sources */,
+				DAE389FCD1FC4D53BF4BE780 /* MonthlySchedulerView.swift in Sources */,
+				3CB9B2F6F40660407B0DC28C /* ScheduledWorkoutsView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
