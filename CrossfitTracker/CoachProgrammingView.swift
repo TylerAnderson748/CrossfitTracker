@@ -584,6 +584,7 @@ struct WeekdayPicker: View {
                         .foregroundColor(selectedWeekdays.contains(day.value) ? .white : .primary)
                         .clipShape(Circle())
                 }
+                .buttonStyle(.plain)
             }
         }
     }
