@@ -117,8 +117,15 @@ struct WorkoutRow: View {
         dateFormatter.timeStyle = .none
 
         switch workout.recurrenceType {
+        case .none:
+            return "No recurrence"
+
         case .once:
-            return "Once on \(dateFormatter.string(from: workout.startDate))"
+            let displayDate = workout.startDate ?? workout.date
+            return "Once on \(dateFormatter.string(from: displayDate))"
+
+        case .daily:
+            return "Daily"
 
         case .weekly:
             if let weekly = workout.weeklyRecurrence {

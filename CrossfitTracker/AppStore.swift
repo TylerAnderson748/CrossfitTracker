@@ -8,6 +8,8 @@
 import Foundation
 import SwiftUI
 import Combine
+import FirebaseAuth
+import FirebaseFirestore
 
 final class AppStore: ObservableObject {
     static let shared = AppStore()
@@ -15,6 +17,8 @@ final class AppStore: ObservableObject {
     // MARK: - User info
     @Published var isLoggedIn: Bool = false
     @Published var userName: String = "Guest"
+    @Published var currentUser: FirebaseAuth.User?
+    @Published var appUser: AppUser? // The full app user profile
 
     // MARK: - WODs
     @Published var wods: [WOD] = SampleData.wods // User's WOD library (includes defaults + custom)
@@ -145,11 +149,11 @@ final class AppStore: ObservableObject {
         }
     }
 
-    func deleteScheduledWorkout(id: UUID) {
+    func deleteScheduledWorkout(id: String) {
         scheduledWorkouts.removeAll { $0.id == id }
     }
 
-    func toggleScheduledWorkout(id: UUID) {
+    func toggleScheduledWorkout(id: String) {
         if let idx = scheduledWorkouts.firstIndex(where: { $0.id == id }) {
             scheduledWorkouts[idx].isActive.toggle()
         }
@@ -162,7 +166,17 @@ final class AppStore: ObservableObject {
 
     // Get workout name helper
     func workoutName(for scheduled: ScheduledWorkout) -> String {
-        switch scheduled.workoutType {
+        // Use wodTitle directly if available (new model)
+        if !scheduled.wodTitle.isEmpty {
+            return scheduled.wodTitle
+        }
+
+        // Fall back to legacy workoutType-based lookup
+        guard let workoutType = scheduled.workoutType else {
+            return "Unknown"
+        }
+
+        switch workoutType {
         case .lift:
             if let liftID = scheduled.liftID,
                let lift = lifts.first(where: { $0.id == liftID }) {
@@ -175,5 +189,52 @@ final class AppStore: ObservableObject {
             }
         }
         return "Unknown"
+    }
+
+    // MARK: - Firebase Scheduled Workout Management
+    func saveRecurringWorkout(_ workout: ScheduledWorkout, completion: @escaping ([ScheduledWorkout]?, String?) -> Void) {
+        let db = Firestore.firestore()
+
+        // Generate individual workout instances based on recurrence
+        var instances: [ScheduledWorkout] = []
+        let calendar = Calendar.current
+        let startDate = workout.date
+        let endDate = workout.recurrenceEndDate ?? calendar.date(byAdding: .year, value: 1, to: startDate) ?? startDate
+
+        var currentDate = startDate
+        while currentDate <= endDate {
+            if workout.shouldOccur(on: currentDate) {
+                var instance = workout
+                instance.id = UUID().uuidString
+                instance.date = currentDate
+                instances.append(instance)
+            }
+
+            // Move to next day
+            guard let nextDate = calendar.date(byAdding: .day, value: 1, to: currentDate) else { break }
+            currentDate = nextDate
+        }
+
+        // Save all instances to Firestore
+        let batch = db.batch()
+        for instance in instances {
+            let docRef = db.collection("scheduledWorkouts").document()
+            do {
+                try batch.setData(from: instance, forDocument: docRef)
+            } catch {
+                completion(nil, "Error encoding workout: \(error.localizedDescription)")
+                return
+            }
+        }
+
+        batch.commit { error in
+            if let error = error {
+                completion(nil, "Error saving workouts: \(error.localizedDescription)")
+            } else {
+                // Add to local array
+                self.scheduledWorkouts.append(contentsOf: instances)
+                completion(instances, nil)
+            }
+        }
     }
 }

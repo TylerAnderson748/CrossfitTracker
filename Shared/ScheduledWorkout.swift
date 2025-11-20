@@ -4,6 +4,7 @@ import Foundation
 enum RecurrenceType: String, Codable, CaseIterable {
     case none = "None"
     case once = "Once"
+    case daily = "Daily"
     case weekly = "Weekly"
     case monthly = "Monthly"
 }
@@ -88,20 +89,99 @@ struct MonthlyRecurrence: Codable, Equatable {
 
 // MARK: - Scheduled Workout
 struct ScheduledWorkout: Identifiable, Codable {
-    var id = UUID()
-    var workoutType: WorkoutType
+    var id: String = UUID().uuidString
+    var wodId: String = ""
+    var wodTitle: String = ""
+    var wodDescription: String = ""
+    var date: Date = Date()
+    var groupId: String? // nil for personal workouts
+    var timeSlots: [String] = []
+    var createdBy: String = ""
+    var recurrenceType: RecurrenceType = .none
+    var recurrenceEndDate: Date?
+    var weekdays: [Int]? // For weekly recurrence (1=Sunday, 7=Saturday)
+
+    // Legacy support for old model structure
+    var workoutType: WorkoutType?
     var liftID: UUID? // If workoutType is .lift
     var wodID: UUID? // If workoutType is .wod
-    var recurrenceType: RecurrenceType
     var weeklyRecurrence: WeeklyRecurrence?
     var monthlyRecurrence: MonthlyRecurrence?
-    var startDate: Date
+    var startDate: Date?
     var endDate: Date? // Optional end date for the schedule
     var isActive: Bool = true
 
+    // Initializer for new Firebase-based workouts
+    init(
+        id: String = UUID().uuidString,
+        wodId: String,
+        wodTitle: String,
+        wodDescription: String,
+        date: Date,
+        groupId: String? = nil,
+        timeSlots: [String] = [],
+        createdBy: String,
+        recurrenceType: RecurrenceType,
+        recurrenceEndDate: Date? = nil,
+        weekdays: [Int]? = nil,
+        isActive: Bool = true
+    ) {
+        self.id = id
+        self.wodId = wodId
+        self.wodTitle = wodTitle
+        self.wodDescription = wodDescription
+        self.date = date
+        self.groupId = groupId
+        self.timeSlots = timeSlots
+        self.createdBy = createdBy
+        self.recurrenceType = recurrenceType
+        self.recurrenceEndDate = recurrenceEndDate
+        self.weekdays = weekdays
+        self.isActive = isActive
+    }
+
+    // Initializer for legacy lift/WOD-based workouts
+    init(
+        workoutType: WorkoutType,
+        liftID: UUID? = nil,
+        wodID: UUID? = nil,
+        recurrenceType: RecurrenceType,
+        weeklyRecurrence: WeeklyRecurrence? = nil,
+        monthlyRecurrence: MonthlyRecurrence? = nil,
+        startDate: Date,
+        endDate: Date? = nil,
+        isActive: Bool = true
+    ) {
+        self.id = UUID().uuidString
+        self.date = startDate
+        self.recurrenceType = recurrenceType
+        self.isActive = isActive
+
+        // Legacy fields
+        self.workoutType = workoutType
+        self.liftID = liftID
+        self.wodID = wodID
+        self.weeklyRecurrence = weeklyRecurrence
+        self.monthlyRecurrence = monthlyRecurrence
+        self.startDate = startDate
+        self.endDate = endDate
+    }
+
+    // Computed properties
+    var isRecurring: Bool {
+        return recurrenceType != .none && recurrenceType != .once
+    }
+
+    var isPersonalWorkout: Bool {
+        return groupId == nil
+    }
+
     // Helper computed properties
     var workoutName: String {
-        // This will be populated by AppStore with actual lift/wod name
+        if !wodTitle.isEmpty {
+            return wodTitle
+        }
+        // Fallback to empty string for legacy support - AppStore will populate this
         return ""
     }
 
@@ -109,21 +189,32 @@ struct ScheduledWorkout: Identifiable, Codable {
     func shouldOccur(on date: Date) -> Bool {
         guard isActive else { return false }
 
+        let checkDate = startDate ?? self.date
+        let checkEndDate = endDate ?? recurrenceEndDate
+
         // Check if date is within the active range
-        if date < startDate { return false }
-        if let end = endDate, date > end { return false }
+        if date < checkDate { return false }
+        if let end = checkEndDate, date > end { return false }
 
         switch recurrenceType {
         case .none:
             return false
 
         case .once:
-            return Calendar.current.isDate(date, inSameDayAs: startDate)
+            return Calendar.current.isDate(date, inSameDayAs: self.date)
+
+        case .daily:
+            return true // Occurs every day within the date range
 
         case .weekly:
-            guard let weekly = weeklyRecurrence else { return false }
-            let weekday = Calendar.current.component(.weekday, from: date)
-            return weekly.selectedDays.contains(where: { $0.rawValue == weekday })
+            if let weekdays = weekdays, !weekdays.isEmpty {
+                let weekday = Calendar.current.component(.weekday, from: date)
+                return weekdays.contains(weekday)
+            } else if let weekly = weeklyRecurrence {
+                let weekday = Calendar.current.component(.weekday, from: date)
+                return weekly.selectedDays.contains(where: { $0.rawValue == weekday })
+            }
+            return false
 
         case .monthly:
             guard let monthly = monthlyRecurrence else { return false }
