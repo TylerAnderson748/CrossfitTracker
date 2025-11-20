@@ -17,6 +17,7 @@ final class AppStore: ObservableObject {
     // MARK: - User info
     @Published var isLoggedIn: Bool = false
     @Published var userName: String = "Guest"
+    @Published var currentUser: FirebaseAuth.User?
 
     // MARK: - WODs
     @Published var wods: [WOD] = SampleData.wods // User's WOD library (includes defaults + custom)

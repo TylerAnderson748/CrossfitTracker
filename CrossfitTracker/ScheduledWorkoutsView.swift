@@ -162,6 +162,9 @@ struct WorkoutRow: View {
                 }
             }
             return "Monthly"
+
+        case .none:
+            return "No recurrence"
         }
     }
 }
