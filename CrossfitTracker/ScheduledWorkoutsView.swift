@@ -65,6 +65,13 @@ struct WorkoutRow: View {
     @EnvironmentObject var store: AppStore
     let workout: ScheduledWorkout
 
+    private var dateFormatter: DateFormatter {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .none
+        return formatter
+    }
+
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
@@ -87,7 +94,7 @@ struct WorkoutRow: View {
                     .foregroundColor(.secondary)
 
                 if let endDate = workout.endDate {
-                    Text("Until \(endDate, style: .date)")
+                    Text("Until \(dateFormatter.string(from: endDate))")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
@@ -105,9 +112,13 @@ struct WorkoutRow: View {
     }
 
     private var recurrenceDescription: String {
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateStyle = .medium
+        dateFormatter.timeStyle = .none
+
         switch workout.recurrenceType {
         case .once:
-            return "Once on \(workout.startDate, style: .date)"
+            return "Once on \(dateFormatter.string(from: workout.startDate))"
 
         case .weekly:
             if let weekly = workout.weeklyRecurrence {
