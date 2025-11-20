@@ -550,4 +550,131 @@ final class AppStore: ObservableObject {
             }
         }
     }
+
+    func loadGym(gymId: String, completion: @escaping (Gym?, String?) -> Void) {
+        let db = Firestore.firestore()
+
+        db.collection("gyms").document(gymId).getDocument { document, error in
+            if let error = error {
+                completion(nil, error.localizedDescription)
+                return
+            }
+
+            guard let document = document, document.exists else {
+                completion(nil, "Gym not found")
+                return
+            }
+
+            do {
+                let gym = try document.data(as: Gym.self)
+                completion(gym, nil)
+            } catch {
+                completion(nil, "Error decoding gym: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    // MARK: - Group Management
+    func createGroup(_ group: WorkoutGroup, completion: @escaping (WorkoutGroup?, String?) -> Void) {
+        let db = Firestore.firestore()
+        let docRef = db.collection("workoutGroups").document()
+        var newGroup = group
+        newGroup.id = docRef.documentID
+
+        do {
+            try docRef.setData(from: newGroup) { error in
+                if let error = error {
+                    completion(nil, error.localizedDescription)
+                } else {
+                    completion(newGroup, nil)
+                }
+            }
+        } catch {
+            completion(nil, "Error encoding group: \(error.localizedDescription)")
+        }
+    }
+
+    func deleteGroup(groupId: String, completion: @escaping (String?) -> Void) {
+        let db = Firestore.firestore()
+
+        db.collection("workoutGroups").document(groupId).delete { error in
+            if let error = error {
+                completion(error.localizedDescription)
+            } else {
+                completion(nil)
+            }
+        }
+    }
+
+    func addUserToGroup(groupId: String, userId: String, completion: @escaping (String?) -> Void) {
+        let db = Firestore.firestore()
+        let groupRef = db.collection("workoutGroups").document(groupId)
+
+        groupRef.getDocument { document, error in
+            if let error = error {
+                completion(error.localizedDescription)
+                return
+            }
+
+            guard let document = document, document.exists else {
+                completion("Group not found")
+                return
+            }
+
+            do {
+                var group = try document.data(as: WorkoutGroup.self)
+
+                // Add user if not already in group
+                if !group.memberIds.contains(userId) {
+                    group.memberIds.append(userId)
+                }
+
+                // Update in Firestore
+                try groupRef.setData(from: group) { error in
+                    if let error = error {
+                        completion(error.localizedDescription)
+                    } else {
+                        completion(nil)
+                    }
+                }
+            } catch {
+                completion("Error updating group: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    func removeUserFromGroup(groupId: String, userId: String, completion: @escaping (String?) -> Void) {
+        let db = Firestore.firestore()
+        let groupRef = db.collection("workoutGroups").document(groupId)
+
+        groupRef.getDocument { document, error in
+            if let error = error {
+                completion(error.localizedDescription)
+                return
+            }
+
+            guard let document = document, document.exists else {
+                completion("Group not found")
+                return
+            }
+
+            do {
+                var group = try document.data(as: WorkoutGroup.self)
+
+                // Remove user from group
+                group.memberIds.removeAll { $0 == userId }
+
+                // Update in Firestore
+                try groupRef.setData(from: group) { error in
+                    if let error = error {
+                        completion(error.localizedDescription)
+                    } else {
+                        completion(nil)
+                    }
+                }
+            } catch {
+                completion("Error updating group: \(error.localizedDescription)")
+            }
+        }
+    }
 }
