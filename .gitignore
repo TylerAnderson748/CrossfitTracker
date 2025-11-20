@@ -96,3 +96,7 @@ iOSInjectionProject/
 
 # Firebase
 GoogleService-Info.plist
+
+# Build logs
+build.log
+*.log
