@@ -11,6 +11,7 @@ import FirebaseFirestore
 struct LiftEntryView: View {
     @EnvironmentObject var store: AppStore
     @Environment(\.dismiss) var dismiss
+    @FocusState private var focusedField: Field?
 
     let lift: WOD
 
@@ -30,6 +31,11 @@ struct LiftEntryView: View {
     @State private var leaderboardFilter: LeaderboardFilter = .everyone
     @State private var leaderboardEntries: [LiftResult] = []
     @State private var isLoadingLeaderboard = false
+
+    enum Field {
+        case weight
+        case editWeight
+    }
 
     enum LeaderboardFilter {
         case gym
@@ -89,6 +95,7 @@ struct LiftEntryView: View {
                                             .keyboardType(.decimalPad)
                                             .textFieldStyle(.roundedBorder)
                                             .frame(width: 70)
+                                            .focused($focusedField, equals: .weight)
                                         Text("lbs")
                                             .font(.caption)
                                             .foregroundColor(.secondary)
@@ -349,6 +356,7 @@ struct LiftEntryView: View {
                                                             .keyboardType(.decimalPad)
                                                             .textFieldStyle(.roundedBorder)
                                                             .frame(width: 80)
+                                                            .focused($focusedField, equals: .editWeight)
                                                         Text("lbs")
                                                             .font(.caption)
                                                             .foregroundColor(.secondary)
@@ -546,6 +554,9 @@ struct LiftEntryView: View {
             return
         }
 
+        // Dismiss keyboard before making changes
+        focusedField = nil
+
         isSaving = true
 
         let result = LiftResult(
@@ -601,6 +612,9 @@ struct LiftEntryView: View {
             print("❌ No user logged in")
             return
         }
+
+        // Dismiss keyboard before making changes
+        focusedField = nil
 
         isSaving = true
 
