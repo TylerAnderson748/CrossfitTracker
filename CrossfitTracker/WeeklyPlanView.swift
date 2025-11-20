@@ -308,6 +308,7 @@ struct WeeklyPlanView: View {
 }
 
 struct DayWorkoutCard: View {
+    @EnvironmentObject var store: AppStore
     let date: Date
     let workouts: [ScheduledWorkout]
     let onDelete: (ScheduledWorkout) -> Void
@@ -636,7 +637,7 @@ struct AddPersonalWorkoutSheet: View {
             return 3 // Third week
         } else {
             // Check if this is the last occurrence of this weekday
-            let weekday = calendar.component(.weekday, from: date)
+            let _ = calendar.component(.weekday, from: date)
             guard let nextWeek = calendar.date(byAdding: .weekOfMonth, value: 1, to: date),
                   calendar.component(.month, from: nextWeek) != calendar.component(.month, from: date) else {
                 return 4 // Fourth week
@@ -871,7 +872,7 @@ struct EditPersonalWorkoutSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
-                        guard let userId = store.currentUser?.uid else {
+                        guard store.currentUser?.uid != nil else {
                             print("❌ No user logged in")
                             dismiss()
                             return
