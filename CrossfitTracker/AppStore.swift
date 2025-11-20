@@ -8,6 +8,8 @@
 import Foundation
 import SwiftUI
 import Combine
+import FirebaseAuth
+import FirebaseFirestore
 
 final class AppStore: ObservableObject {
     static let shared = AppStore()
@@ -175,5 +177,54 @@ final class AppStore: ObservableObject {
             }
         }
         return "Unknown"
+    }
+
+    // MARK: - Admin Functions
+    func findUserByEmail(email: String, completion: @escaping (AppUser?, String?) -> Void) {
+        let db = Firestore.firestore()
+
+        db.collection("users")
+            .whereField("email", isEqualTo: email)
+            .limit(to: 1)
+            .getDocuments { snapshot, error in
+                if let error = error {
+                    completion(nil, "Error searching for user: \(error.localizedDescription)")
+                    return
+                }
+
+                guard let documents = snapshot?.documents, !documents.isEmpty else {
+                    completion(nil, "No user found with that email")
+                    return
+                }
+
+                let doc = documents[0]
+                let data = doc.data()
+
+                let user = AppUser(
+                    id: doc.documentID,
+                    email: data["email"] as? String ?? email,
+                    fullName: data["fullName"] as? String ?? "",
+                    username: data["username"] as? String,
+                    role: UserRole(rawValue: data["role"] as? String ?? "athlete") ?? .athlete,
+                    gymId: data["gymId"] as? String,
+                    createdAt: (data["createdAt"] as? Timestamp)?.dateValue() ?? Date()
+                )
+
+                completion(user, nil)
+            }
+    }
+
+    func updateUserRole(userId: String, role: UserRole, completion: @escaping (String?) -> Void) {
+        let db = Firestore.firestore()
+
+        db.collection("users").document(userId).updateData([
+            "role": role.rawValue
+        ]) { error in
+            if let error = error {
+                completion(error.localizedDescription)
+            } else {
+                completion(nil)
+            }
+        }
     }
 }
