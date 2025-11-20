@@ -124,40 +124,44 @@ struct WODTimerView: View {
                     .foregroundColor(.gray)
                     .padding()
             } else {
-                Chart {
-                    ForEach(allWodHistory()) { entry in
-                        LineMark(
-                            x: .value("Date", entry.date),
-                            y: .value("Time (seconds)", entry.time),
-                            series: .value("Category", entry.category.rawValue)
-                        )
-                        .foregroundStyle(by: .value("Category", entry.category.rawValue))
-                        .symbol(by: .value("Category", entry.category.rawValue))
+                chartContent
+                    .frame(height: 200)
+                    .padding()
+            }
+        }
+    }
 
-                        PointMark(
-                            x: .value("Date", entry.date),
-                            y: .value("Time (seconds)", entry.time)
-                        )
-                        .foregroundStyle(by: .value("Category", entry.category.rawValue))
+    private var chartContent: some View {
+        Chart {
+            ForEach(allWodHistory()) { entry in
+                LineMark(
+                    x: .value("Date", entry.date),
+                    y: .value("Time (seconds)", entry.time),
+                    series: .value("Category", entry.category.rawValue)
+                )
+                .foregroundStyle(by: .value("Category", entry.category.rawValue))
+                .symbol(by: .value("Category", entry.category.rawValue))
+
+                PointMark(
+                    x: .value("Date", entry.date),
+                    y: .value("Time (seconds)", entry.time)
+                )
+                .foregroundStyle(by: .value("Category", entry.category.rawValue))
+            }
+        }
+        .chartForegroundStyleScale([
+            "RX+": .orange,
+            "RX": .blue,
+            "Scaled": .gray,
+            "Just Happy To Be Here": .green
+        ])
+        .chartYAxis {
+            AxisMarks { value in
+                AxisValueLabel {
+                    if let seconds = value.as(Double.self) {
+                        Text(formatTime(seconds))
                     }
                 }
-                .chartForegroundStyleScale([
-                    "RX+": .orange,
-                    "RX": .blue,
-                    "Scaled": .gray,
-                    "Just Happy To Be Here": .green
-                ])
-                .chartYAxis {
-                    AxisMarks { value in
-                        AxisValueLabel {
-                            if let seconds = value.as(Double.self) {
-                                Text(formatTime(seconds))
-                            }
-                        }
-                    }
-                }
-                .frame(height: 200)
-                .padding()
             }
         }
     }
