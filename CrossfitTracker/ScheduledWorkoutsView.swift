@@ -56,7 +56,8 @@ struct ScheduledWorkoutsView: View {
     private func deleteWorkout(at offsets: IndexSet) {
         for index in offsets {
             let workout = store.scheduledWorkouts[index]
-            store.deleteScheduledWorkout(id: workout.id)
+            guard let id = workout.id else { continue }
+            store.deleteScheduledWorkout(id: id)
         }
     }
 }
@@ -76,8 +77,9 @@ struct WorkoutRow: View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
-                    Image(systemName: workout.workoutType == .lift ? "figure.strengthtraining.traditional" : "flame.fill")
-                        .foregroundColor(workout.workoutType == .lift ? .blue : .orange)
+                    let isLift = workout.workoutType == .lift
+                    Image(systemName: isLift ? "figure.strengthtraining.traditional" : "flame.fill")
+                        .foregroundColor(isLift ? .blue : .orange)
 
                     Text(store.workoutName(for: workout))
                         .font(.headline)
@@ -104,7 +106,11 @@ struct WorkoutRow: View {
 
             Toggle("", isOn: Binding(
                 get: { workout.isActive },
-                set: { _ in store.toggleScheduledWorkout(id: workout.id) }
+                set: { _ in
+                    if let id = workout.id {
+                        store.toggleScheduledWorkout(id: id)
+                    }
+                }
             ))
             .labelsHidden()
         }
@@ -118,7 +124,11 @@ struct WorkoutRow: View {
 
         switch workout.recurrenceType {
         case .once:
-            return "Once on \(dateFormatter.string(from: workout.startDate))"
+            let displayDate = workout.startDate ?? workout.date
+            return "Once on \(dateFormatter.string(from: displayDate))"
+
+        case .daily:
+            return "Daily"
 
         case .weekly:
             if let weekly = workout.weeklyRecurrence {

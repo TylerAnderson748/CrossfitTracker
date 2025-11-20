@@ -100,17 +100,37 @@ struct WeeklySchedulerView: View {
     }
 
     private func scheduleWorkout() {
-        let weeklyRecurrence = WeeklyRecurrence(selectedDays: selectedDays)
+        // Get workout details
+        let wodTitle = workoutName
+        let wodDescription: String
+        let wodIdString: String
+
+        if workoutType == .lift, let liftID = liftID {
+            wodDescription = ""
+            wodIdString = liftID.uuidString
+        } else if workoutType == .wod, let wodID = wodID {
+            wodDescription = store.wods.first(where: { $0.id == wodID })?.description ?? ""
+            wodIdString = wodID.uuidString
+        } else {
+            return
+        }
+
+        guard let userId = store.currentUser?.uid else { return }
+
+        // Convert selectedDays to weekdays array (1=Sunday, 7=Saturday)
+        let weekdaysArray = selectedDays.map { $0.rawValue }.sorted()
 
         let workout = ScheduledWorkout(
-            workoutType: workoutType,
-            liftID: liftID,
-            wodID: wodID,
+            wodId: wodIdString,
+            wodTitle: wodTitle,
+            wodDescription: wodDescription,
+            date: startDate,
+            groupId: nil,
+            timeSlots: [],
+            createdBy: userId,
             recurrenceType: .weekly,
-            weeklyRecurrence: weeklyRecurrence,
-            monthlyRecurrence: nil,
-            startDate: startDate,
-            endDate: hasEndDate ? endDate : nil
+            recurrenceEndDate: hasEndDate ? endDate : nil,
+            weekdays: weekdaysArray
         )
 
         store.addScheduledWorkout(workout)

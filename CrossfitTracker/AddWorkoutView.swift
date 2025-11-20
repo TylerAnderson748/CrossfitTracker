@@ -249,15 +249,36 @@ struct AddWorkoutView: View {
     }
 
     private func addOneTimeWorkout() {
+        // Get workout details based on type
+        let wodTitle: String
+        let wodDescription: String
+        let wodId: String
+
+        if workoutType == .wod {
+            guard let wod = selectedWOD else { return }
+            wodTitle = wod.title
+            wodDescription = wod.description
+            wodId = wod.id.uuidString
+        } else {
+            guard let lift = selectedLift else { return }
+            wodTitle = lift.name
+            wodDescription = ""
+            wodId = lift.id.uuidString
+        }
+
+        guard let userId = store.currentUser?.uid else { return }
+
         let workout = ScheduledWorkout(
-            workoutType: workoutType,
-            liftID: selectedLift?.id,
-            wodID: selectedWOD?.id,
+            wodId: wodId,
+            wodTitle: wodTitle,
+            wodDescription: wodDescription,
+            date: selectedDate,
+            groupId: nil,
+            timeSlots: [],
+            createdBy: userId,
             recurrenceType: .once,
-            weeklyRecurrence: nil,
-            monthlyRecurrence: nil,
-            startDate: selectedDate,
-            endDate: nil
+            recurrenceEndDate: nil,
+            weekdays: nil
         )
 
         store.addScheduledWorkout(workout)

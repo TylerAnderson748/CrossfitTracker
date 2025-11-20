@@ -134,6 +134,23 @@ struct MonthlySchedulerView: View {
     }
 
     private func scheduleWorkout() {
+        // Get workout details
+        let wodTitle = workoutName
+        let wodDescription: String
+        let wodIdString: String
+
+        if workoutType == .lift, let liftID = liftID {
+            wodDescription = ""
+            wodIdString = liftID.uuidString
+        } else if workoutType == .wod, let wodID = wodID {
+            wodDescription = store.wods.first(where: { $0.id == wodID })?.description ?? ""
+            wodIdString = wodID.uuidString
+        } else {
+            return
+        }
+
+        guard let userId = store.currentUser?.uid else { return }
+
         let monthlyRecurrence: MonthlyRecurrence
 
         switch monthlyOption {
@@ -158,16 +175,23 @@ struct MonthlySchedulerView: View {
             monthlyRecurrence = MonthlyRecurrence.onWeekday(week: 5, day: selectedWeekday)
         }
 
-        let workout = ScheduledWorkout(
-            workoutType: workoutType,
-            liftID: liftID,
-            wodID: wodID,
+        var workout = ScheduledWorkout(
+            wodId: wodIdString,
+            wodTitle: wodTitle,
+            wodDescription: wodDescription,
+            date: startDate,
+            groupId: nil,
+            timeSlots: [],
+            createdBy: userId,
             recurrenceType: .monthly,
-            weeklyRecurrence: nil,
-            monthlyRecurrence: monthlyRecurrence,
-            startDate: startDate,
-            endDate: hasEndDate ? endDate : nil
+            recurrenceEndDate: hasEndDate ? endDate : nil,
+            weekdays: nil
         )
+
+        // Set legacy property for monthly recurrence
+        workout.monthlyRecurrence = monthlyRecurrence
+        workout.startDate = startDate
+        workout.endDate = hasEndDate ? endDate : nil
 
         store.addScheduledWorkout(workout)
     }
