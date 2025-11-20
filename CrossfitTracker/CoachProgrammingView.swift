@@ -282,6 +282,7 @@ struct AddWorkoutSheet: View {
     let selectedDate: Date
     let onSave: (ScheduledWorkout) -> Void
 
+    @State private var workoutType: WorkoutType = .wod
     @State private var title: String = ""
     @State private var description: String = ""
     @State private var date: Date
@@ -319,6 +320,14 @@ struct AddWorkoutSheet: View {
     var body: some View {
         NavigationView {
             Form {
+                Section {
+                    Picker("Workout Type", selection: $workoutType) {
+                        Text("WOD").tag(WorkoutType.wod)
+                        Text("Lift").tag(WorkoutType.lift)
+                    }
+                    .pickerStyle(.segmented)
+                }
+
                 Section("Workout Details") {
                     TextField("Title", text: $title)
                     TextField("Description", text: $description, axis: .vertical)
@@ -442,6 +451,7 @@ struct AddWorkoutSheet: View {
                             wodTitle: title,
                             wodDescription: description,
                             date: normalizedDate,
+                            workoutType: workoutType,
                             groupId: selectedGroupId,
                             timeSlots: [],
                             createdBy: userId,

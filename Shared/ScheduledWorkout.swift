@@ -15,12 +15,18 @@ enum RecurrenceType: String, Codable {
     case monthly = "monthly"
 }
 
+enum WorkoutType: String, Codable {
+    case wod = "wod"
+    case lift = "lift"
+}
+
 struct ScheduledWorkout: Codable, Identifiable {
     @DocumentID var id: String?
     var wodId: String
     var wodTitle: String
     var wodDescription: String
     var date: Date
+    var workoutType: WorkoutType // lift or wod
     var groupId: String? // which group this is for, nil = personal workout
     var timeSlots: [TimeSlot] // available time slots for group workouts
     var createdBy: String
@@ -42,6 +48,7 @@ struct ScheduledWorkout: Codable, Identifiable {
         wodTitle: String,
         wodDescription: String,
         date: Date,
+        workoutType: WorkoutType = .wod,
         groupId: String? = nil,
         timeSlots: [TimeSlot] = [],
         createdBy: String,
@@ -57,6 +64,7 @@ struct ScheduledWorkout: Codable, Identifiable {
         self.wodTitle = wodTitle
         self.wodDescription = wodDescription
         self.date = date
+        self.workoutType = workoutType
         self.groupId = groupId
         self.timeSlots = timeSlots
         self.createdBy = createdBy

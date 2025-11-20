@@ -1379,6 +1379,103 @@ final class AppStore: ObservableObject {
             }
     }
 
+    // MARK: - Workout Templates
+    func saveWorkoutTemplate(_ template: WorkoutTemplate, completion: @escaping (WorkoutTemplate?, String?) -> Void) {
+        do {
+            let docRef = db.collection("workoutTemplates").document()
+            var templateWithId = template
+            templateWithId.id = docRef.documentID
+
+            try docRef.setData(from: templateWithId) { error in
+                DispatchQueue.main.async {
+                    if let error = error {
+                        print("❌ Error saving workout template: \(error.localizedDescription)")
+                        completion(nil, error.localizedDescription)
+                    } else {
+                        print("✅ Workout template saved: \(templateWithId.title)")
+                        completion(templateWithId, nil)
+                    }
+                }
+            }
+        } catch {
+            DispatchQueue.main.async {
+                print("❌ Error encoding workout template: \(error.localizedDescription)")
+                completion(nil, error.localizedDescription)
+            }
+        }
+    }
+
+    func loadUserWorkoutTemplates(userId: String, workoutType: WorkoutType? = nil, completion: @escaping ([WorkoutTemplate], String?) -> Void) {
+        var query: Query = db.collection("workoutTemplates")
+            .whereField("createdBy", isEqualTo: userId)
+
+        if let workoutType = workoutType {
+            query = query.whereField("workoutType", isEqualTo: workoutType.rawValue)
+        }
+
+        query.getDocuments { snapshot, error in
+            if let error = error {
+                DispatchQueue.main.async {
+                    print("❌ Error loading workout templates: \(error.localizedDescription)")
+                    completion([], error.localizedDescription)
+                }
+                return
+            }
+
+            guard let documents = snapshot?.documents else {
+                DispatchQueue.main.async {
+                    completion([], nil)
+                }
+                return
+            }
+
+            let templates = documents.compactMap { doc -> WorkoutTemplate? in
+                try? doc.data(as: WorkoutTemplate.self)
+            }
+
+            DispatchQueue.main.async {
+                print("✅ Loaded \(templates.count) workout templates")
+                completion(templates, nil)
+            }
+        }
+    }
+
+    func searchWorkoutTemplates(userId: String, searchText: String, workoutType: WorkoutType? = nil, completion: @escaping ([WorkoutTemplate], String?) -> Void) {
+        // Load all user templates first (Firestore doesn't support case-insensitive search)
+        loadUserWorkoutTemplates(userId: userId, workoutType: workoutType) { templates, error in
+            if let error = error {
+                completion([], error)
+                return
+            }
+
+            // Filter locally by search text (case-insensitive)
+            let filtered = templates.filter { template in
+                let titleMatch = template.title.localizedCaseInsensitiveContains(searchText)
+                let descMatch = template.description.localizedCaseInsensitiveContains(searchText)
+                return titleMatch || descMatch
+            }
+
+            DispatchQueue.main.async {
+                print("✅ Found \(filtered.count) templates matching '\(searchText)'")
+                completion(filtered, nil)
+            }
+        }
+    }
+
+    func deleteWorkoutTemplate(templateId: String, completion: @escaping (String?) -> Void) {
+        db.collection("workoutTemplates").document(templateId).delete { error in
+            DispatchQueue.main.async {
+                if let error = error {
+                    print("❌ Error deleting workout template: \(error.localizedDescription)")
+                    completion(error.localizedDescription)
+                } else {
+                    print("✅ Workout template deleted")
+                    completion(nil)
+                }
+            }
+        }
+    }
+
     // MARK: - Workout Logs
     func saveWorkoutLog(_ log: WorkoutLog, completion: @escaping (WorkoutLog?, String?) -> Void) {
         print("💾 Attempting to save workout log:")

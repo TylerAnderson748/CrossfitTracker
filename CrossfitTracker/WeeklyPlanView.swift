@@ -599,6 +599,7 @@ struct AddPersonalWorkoutSheet: View {
     let selectedDate: Date
     let onSave: (ScheduledWorkout) -> Void
 
+    @State private var workoutType: WorkoutType = .wod
     @State private var title: String = ""
     @State private var description: String = ""
     @State private var date: Date
@@ -649,6 +650,14 @@ struct AddPersonalWorkoutSheet: View {
     var body: some View {
         NavigationView {
             Form {
+                Section {
+                    Picker("Workout Type", selection: $workoutType) {
+                        Text("WOD").tag(WorkoutType.wod)
+                        Text("Lift").tag(WorkoutType.lift)
+                    }
+                    .pickerStyle(.segmented)
+                }
+
                 Section("Workout Details") {
                     TextField("Title", text: $title)
                     TextField("Description", text: $description, axis: .vertical)
@@ -753,6 +762,7 @@ struct AddPersonalWorkoutSheet: View {
                             wodTitle: title,
                             wodDescription: description,
                             date: normalizedDate,
+                            workoutType: workoutType,
                             groupId: nil, // Personal workout
                             timeSlots: [],
                             createdBy: userId,
@@ -832,6 +842,7 @@ struct EditPersonalWorkoutSheet: View {
     let workout: ScheduledWorkout
     let onSave: (ScheduledWorkout) -> Void
 
+    @State private var workoutType: WorkoutType
     @State private var title: String
     @State private var description: String
     @State private var date: Date
@@ -839,6 +850,7 @@ struct EditPersonalWorkoutSheet: View {
     init(workout: ScheduledWorkout, onSave: @escaping (ScheduledWorkout) -> Void) {
         self.workout = workout
         self.onSave = onSave
+        _workoutType = State(initialValue: workout.workoutType)
         _title = State(initialValue: workout.wodTitle)
         _description = State(initialValue: workout.wodDescription)
         _date = State(initialValue: workout.date)
@@ -847,6 +859,14 @@ struct EditPersonalWorkoutSheet: View {
     var body: some View {
         NavigationView {
             Form {
+                Section {
+                    Picker("Workout Type", selection: $workoutType) {
+                        Text("WOD").tag(WorkoutType.wod)
+                        Text("Lift").tag(WorkoutType.lift)
+                    }
+                    .pickerStyle(.segmented)
+                }
+
                 Section("Workout Details") {
                     TextField("Title", text: $title)
                     TextField("Description", text: $description, axis: .vertical)
@@ -882,6 +902,7 @@ struct EditPersonalWorkoutSheet: View {
                         let normalizedDate = calendar.startOfDay(for: date)
 
                         var updatedWorkout = workout
+                        updatedWorkout.workoutType = workoutType
                         updatedWorkout.wodTitle = title
                         updatedWorkout.wodDescription = description
                         updatedWorkout.date = normalizedDate
