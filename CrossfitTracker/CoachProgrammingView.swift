@@ -429,6 +429,8 @@ struct AddWorkoutSheet: View {
         switch recurrenceType {
         case .none:
             return ""
+        case .once:
+            return "One-time workout"
         case .daily:
             if hasEndDate {
                 return "Repeats daily until \(formatter.string(from: recurrenceEndDate))"

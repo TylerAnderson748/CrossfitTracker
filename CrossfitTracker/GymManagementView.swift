@@ -73,7 +73,12 @@ struct GymManagementView: View {
     }
 
     private func loadGyms() {
-        store.loadGyms { loadedGyms, error in
+        guard let userId = store.currentUser?.uid else {
+            print("❌ No current user")
+            return
+        }
+
+        store.loadGyms(forUserId: userId) { loadedGyms, error in
             if let error = error {
                 print("❌ Error loading gyms: \(error)")
                 return
@@ -84,7 +89,12 @@ struct GymManagementView: View {
     }
 
     private func saveGym(_ gym: Gym) {
-        store.createGym(name: gym.name) { savedGym, error in
+        guard let ownerId = store.currentUser?.uid else {
+            print("❌ No current user to set as owner")
+            return
+        }
+
+        store.createGym(name: gym.name, ownerId: ownerId) { savedGym, error in
             if let error = error {
                 print("❌ Error creating gym: \(error)")
                 return
@@ -338,21 +348,16 @@ struct GymDetailView: View {
             }
 
             // Add user to gym
-            store.addUserToGym(gymId: gymId, userId: userId, role: role) { error in
+            store.addUserToGym(gymId: gymId, userId: userId) { error in
                 if let error = error {
                     print("❌ Error adding user to gym: \(error)")
                     return
                 }
 
                 // Add to local list
-                if role == .coach {
-                    if !self.coaches.contains(where: { $0.id == user.id }) {
-                        self.coaches.append(user)
-                    }
-                } else {
-                    if !self.members.contains(where: { $0.id == user.id }) {
-                        self.members.append(user)
-                    }
+                // Note: Currently adds as member. Role-based addition would need separate methods
+                if !self.members.contains(where: { $0.id == user.id }) {
+                    self.members.append(user)
                 }
             }
         }

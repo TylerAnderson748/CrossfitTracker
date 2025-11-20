@@ -18,6 +18,7 @@ final class AppStore: ObservableObject {
     @Published var isLoggedIn: Bool = false
     @Published var userName: String = "Guest"
     @Published var currentUser: FirebaseAuth.User?
+    @Published var appUser: AppUser? // The full app user profile
 
     // MARK: - WODs
     @Published var wods: [WOD] = SampleData.wods // User's WOD library (includes defaults + custom)
@@ -264,6 +265,62 @@ final class AppStore: ObservableObject {
 
             completion(workouts, nil)
         }
+    }
+
+    // Overload for date-based loading (for CoachProgrammingView)
+    func loadScheduledWorkouts(startDate: Date, endDate: Date, completion: @escaping ([ScheduledWorkout], String?) -> Void) {
+        let db = Firestore.firestore()
+
+        db.collection("scheduledWorkouts")
+            .whereField("date", isGreaterThanOrEqualTo: startDate)
+            .whereField("date", isLessThan: endDate)
+            .getDocuments { snapshot, error in
+                if let error = error {
+                    completion([], error.localizedDescription)
+                    return
+                }
+
+                let workouts = snapshot?.documents.compactMap { doc -> ScheduledWorkout? in
+                    try? doc.data(as: ScheduledWorkout.self)
+                } ?? []
+
+                completion(workouts, nil)
+            }
+    }
+
+    // For WeeklyPlanView - user-specific date-based loading
+    func loadScheduledWorkoutsForUser(userId: String, startDate: Date, endDate: Date, completion: @escaping ([ScheduledWorkout], String?) -> Void) {
+        let db = Firestore.firestore()
+
+        db.collection("scheduledWorkouts")
+            .whereField("date", isGreaterThanOrEqualTo: startDate)
+            .whereField("date", isLessThan: endDate)
+            .getDocuments { snapshot, error in
+                if let error = error {
+                    completion([], error.localizedDescription)
+                    return
+                }
+
+                var workouts = snapshot?.documents.compactMap { doc -> ScheduledWorkout? in
+                    try? doc.data(as: ScheduledWorkout.self)
+                } ?? []
+
+                // Filter to personal workouts for this user or group workouts they're in
+                workouts = workouts.filter { workout in
+                    // Personal workout created by user
+                    if workout.isPersonalWorkout && workout.createdBy == userId {
+                        return true
+                    }
+                    // Group workout - would need to check if user is in group
+                    // For now, include all non-personal workouts
+                    if !workout.isPersonalWorkout {
+                        return true
+                    }
+                    return false
+                }
+
+                completion(workouts, nil)
+            }
     }
 
     func saveScheduledWorkout(_ workout: ScheduledWorkout, completion: @escaping (ScheduledWorkout?, String?) -> Void) {
