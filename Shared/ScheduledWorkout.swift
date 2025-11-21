@@ -79,5 +79,38 @@ struct ScheduledWorkout: Codable, Identifiable {
     var isRecurring: Bool {
         return recurrenceType != .none
     }
-}
 
+    // Custom decoder to handle old workouts without workoutType field
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+
+        // Decode required fields
+        wodId = try container.decode(String.self, forKey: .wodId)
+        wodTitle = try container.decode(String.self, forKey: .wodTitle)
+        wodDescription = try container.decode(String.self, forKey: .wodDescription)
+        date = try container.decode(Date.self, forKey: .date)
+        createdBy = try container.decode(String.self, forKey: .createdBy)
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        recurrenceType = try container.decode(RecurrenceType.self, forKey: .recurrenceType)
+
+        // Decode optional fields
+        id = try container.decodeIfPresent(String.self, forKey: .id)
+        groupId = try container.decodeIfPresent(String.self, forKey: .groupId)
+        timeSlots = try container.decodeIfPresent([TimeSlot].self, forKey: .timeSlots) ?? []
+        recurrenceEndDate = try container.decodeIfPresent(Date.self, forKey: .recurrenceEndDate)
+        seriesId = try container.decodeIfPresent(String.self, forKey: .seriesId)
+        weekdays = try container.decodeIfPresent([Int].self, forKey: .weekdays)
+        monthlyWeekPosition = try container.decodeIfPresent(Int.self, forKey: .monthlyWeekPosition)
+        monthlyWeekday = try container.decodeIfPresent(Int.self, forKey: .monthlyWeekday)
+
+        // Decode workoutType with default fallback for old workouts
+        workoutType = try container.decodeIfPresent(WorkoutType.self, forKey: .workoutType) ?? .wod
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, wodId, wodTitle, wodDescription, date, workoutType
+        case groupId, timeSlots, createdBy, createdAt
+        case recurrenceType, recurrenceEndDate, seriesId, weekdays
+        case monthlyWeekPosition, monthlyWeekday
+    }
+}
