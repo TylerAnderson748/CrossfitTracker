@@ -62,20 +62,27 @@ struct WeeklyPlanView: View {
                                     editWorkout(workout)
                                 },
                                 onLogWorkout: { workout in
-                                    // Navigate to timer view (same as Dashboard)
-                                    print("📱 [WeeklyPlan] Navigating to timer for workout:")
+                                    // Navigate to appropriate logging view based on workout type
+                                    print("📱 [WeeklyPlan] Navigating to log workout:")
                                     print("   - Title: '\(workout.wodTitle)'")
+                                    print("   - Type: '\(workout.workoutType.rawValue)'")
                                     print("   - Description: '\(workout.wodDescription)'")
                                     print("   - Date: \(workout.date)")
 
                                     let wod = WOD(
                                         title: workout.wodTitle,
                                         description: workout.wodDescription,
-                                        type: .wod
+                                        type: workout.workoutType
                                     )
 
-                                    print("   - Created WOD with title: '\(wod.title)'")
-                                    navigationPath.append(WODDestination.timer(wod))
+                                    // Route to lift entry or WOD timer based on type
+                                    if workout.workoutType == .lift {
+                                        print("   - Navigating to LiftEntryView")
+                                        navigationPath.append(WODDestination.liftEntry(wod))
+                                    } else {
+                                        print("   - Navigating to WODTimerView")
+                                        navigationPath.append(WODDestination.timer(wod))
+                                    }
                                 }
                             )
                         }
@@ -121,6 +128,9 @@ struct WeeklyPlanView: View {
                 switch destination {
                 case .timer(let wod):
                     WODTimerView(wod: wod)
+                        .environmentObject(store)
+                case .liftEntry(let wod):
+                    LiftEntryView(lift: wod)
                         .environmentObject(store)
                 case .leaderboard(let wod):
                     LeaderboardView(wod: wod)
@@ -610,6 +620,18 @@ struct AddPersonalWorkoutSheet: View {
     @State private var monthlyRecurrenceType: MonthlyRecurrenceType = .sameDay
     @State private var monthlyWeekPosition: Int = 1 // 1=First, 2=Second, 3=Third, 4=Fourth, 5=Last
     @State private var monthlyWeekday: Int = 2 // Default to Monday
+    @State private var showSuggestions: Bool = false
+
+    // Filtered workout suggestions based on title and type
+    private var workoutSuggestions: [WOD] {
+        guard !title.isEmpty else { return [] }
+
+        return SampleData.wods
+            .filter { $0.type == workoutType }
+            .filter { $0.title.localizedCaseInsensitiveContains(title) }
+            .prefix(5)
+            .map { $0 }
+    }
 
     init(selectedDate: Date, onSave: @escaping (ScheduledWorkout) -> Void) {
         self.selectedDate = selectedDate
@@ -659,7 +681,51 @@ struct AddPersonalWorkoutSheet: View {
                 }
 
                 Section("Workout Details") {
-                    TextField("Title", text: $title)
+                    VStack(alignment: .leading, spacing: 8) {
+                        TextField("Title", text: $title)
+                            .onChange(of: title) { _ in
+                                showSuggestions = !title.isEmpty
+                            }
+
+                        // Show suggestions when typing
+                        if showSuggestions && !workoutSuggestions.isEmpty {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Suggestions:")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+
+                                ForEach(workoutSuggestions) { suggestion in
+                                    Button(action: {
+                                        title = suggestion.title
+                                        description = suggestion.description
+                                        showSuggestions = false
+                                    }) {
+                                        HStack {
+                                            VStack(alignment: .leading, spacing: 2) {
+                                                Text(suggestion.title)
+                                                    .font(.body)
+                                                    .foregroundColor(.primary)
+                                                if !suggestion.description.isEmpty {
+                                                    Text(suggestion.description)
+                                                        .font(.caption)
+                                                        .foregroundColor(.secondary)
+                                                        .lineLimit(1)
+                                                }
+                                            }
+                                            Spacer()
+                                        }
+                                        .padding(.vertical, 4)
+                                        .padding(.horizontal, 8)
+                                        .background(Color(.systemGray6))
+                                        .cornerRadius(6)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                            .padding(.top, 4)
+                        }
+                    }
+
                     TextField("Description", text: $description, axis: .vertical)
                         .lineLimit(3...6)
                     DatePicker("Date", selection: $date, displayedComponents: .date)

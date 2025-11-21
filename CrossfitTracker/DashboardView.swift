@@ -65,6 +65,8 @@ struct DashboardView: View {
                 switch destination {
                 case .timer(let wod):
                     WODTimerView(wod: wod)
+                case .liftEntry(let wod):
+                    LiftEntryView(lift: wod)
                 case .leaderboard(let wod):
                     LeaderboardView(wod: wod)
                 }
@@ -273,6 +275,7 @@ struct ResultRow: View {
 // Navigation destination enum
 enum WODDestination: Hashable {
     case timer(WOD)
+    case liftEntry(WOD)
     case leaderboard(WOD)
 }
 

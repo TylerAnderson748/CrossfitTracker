@@ -297,6 +297,18 @@ struct AddWorkoutSheet: View {
     @State private var monthlyRecurrenceType: MonthlyRecurrenceType = .sameDay
     @State private var selectedMonthlyWeekPosition: Int = 1
     @State private var selectedMonthlyWeekday: Int = 2
+    @State private var showSuggestions: Bool = false
+
+    // Filtered workout suggestions based on title and type
+    private var workoutSuggestions: [WOD] {
+        guard !title.isEmpty else { return [] }
+
+        return SampleData.wods
+            .filter { $0.type == workoutType }
+            .filter { $0.title.localizedCaseInsensitiveContains(title) }
+            .prefix(5)
+            .map { $0 }
+    }
 
     init(gym: Gym, selectedDate: Date, onSave: @escaping (ScheduledWorkout) -> Void) {
         self.gym = gym
@@ -329,7 +341,51 @@ struct AddWorkoutSheet: View {
                 }
 
                 Section("Workout Details") {
-                    TextField("Title", text: $title)
+                    VStack(alignment: .leading, spacing: 8) {
+                        TextField("Title", text: $title)
+                            .onChange(of: title) { _ in
+                                showSuggestions = !title.isEmpty
+                            }
+
+                        // Show suggestions when typing
+                        if showSuggestions && !workoutSuggestions.isEmpty {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Suggestions:")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+
+                                ForEach(workoutSuggestions) { suggestion in
+                                    Button(action: {
+                                        title = suggestion.title
+                                        description = suggestion.description
+                                        showSuggestions = false
+                                    }) {
+                                        HStack {
+                                            VStack(alignment: .leading, spacing: 2) {
+                                                Text(suggestion.title)
+                                                    .font(.body)
+                                                    .foregroundColor(.primary)
+                                                if !suggestion.description.isEmpty {
+                                                    Text(suggestion.description)
+                                                        .font(.caption)
+                                                        .foregroundColor(.secondary)
+                                                        .lineLimit(1)
+                                                }
+                                            }
+                                            Spacer()
+                                        }
+                                        .padding(.vertical, 4)
+                                        .padding(.horizontal, 8)
+                                        .background(Color(.systemGray6))
+                                        .cornerRadius(6)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                            .padding(.top, 4)
+                        }
+                    }
+
                     TextField("Description", text: $description, axis: .vertical)
                         .lineLimit(3...6)
                     DatePicker("Date", selection: $date, displayedComponents: .date)
