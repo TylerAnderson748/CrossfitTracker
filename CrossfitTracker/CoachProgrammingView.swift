@@ -86,8 +86,9 @@ struct CoachProgrammingView: View {
             .sheet(isPresented: $showEditWorkout) {
                 if let workout = workoutToEdit {
                     NavigationStack {
-                        EditWorkoutSheet(gym: gym, workout: workout) { updatedWorkout in
-                            updateWorkout(updatedWorkout)
+                        EditWorkoutSheet(gym: gym, workout: workout) {
+                            // Reload workouts after edit to handle all cases including recurring conversion
+                            loadScheduledWorkouts()
                         }
                         .environmentObject(store)
                     }
@@ -199,25 +200,6 @@ struct CoachProgrammingView: View {
     private func editWorkout(_ workout: ScheduledWorkout) {
         workoutToEdit = workout
         showEditWorkout = true
-    }
-
-    private func updateWorkout(_ workout: ScheduledWorkout) {
-        print("💾 updateWorkout called for: \(workout.wodTitle)")
-        store.saveScheduledWorkout(workout) { savedWorkout, error in
-            if let error = error {
-                print("❌ Error updating workout: \(error)")
-                return
-            }
-
-            if let savedWorkout = savedWorkout {
-                print("✅ Workout updated with ID: \(savedWorkout.id ?? "nil")")
-                // Update in local array
-                if let index = self.scheduledWorkouts.firstIndex(where: { $0.id == savedWorkout.id }) {
-                    print("📝 Updating workout at index \(index)")
-                    self.scheduledWorkouts[index] = savedWorkout
-                }
-            }
-        }
     }
 
     private func deleteWorkout(_ workout: ScheduledWorkout) {
@@ -769,7 +751,7 @@ struct EditWorkoutSheet: View {
     @EnvironmentObject var store: AppStore
     let gym: Gym
     let workout: ScheduledWorkout
-    let onSave: (ScheduledWorkout) -> Void
+    let onSave: () -> Void
 
     @State private var workoutType: WorkoutType
     @State private var title: String
@@ -777,8 +759,15 @@ struct EditWorkoutSheet: View {
     @State private var date: Date
     @State private var groups: [WorkoutGroup] = []
     @State private var selectedGroupId: String?
+    @State private var recurrenceType: RecurrenceType
+    @State private var hasEndDate: Bool
+    @State private var recurrenceEndDate: Date
+    @State private var selectedWeekdays: Set<Int>
+    @State private var monthlyRecurrenceType: MonthlyRecurrenceType
+    @State private var selectedMonthlyWeekPosition: Int
+    @State private var selectedMonthlyWeekday: Int
 
-    init(gym: Gym, workout: ScheduledWorkout, onSave: @escaping (ScheduledWorkout) -> Void) {
+    init(gym: Gym, workout: ScheduledWorkout, onSave: @escaping () -> Void) {
         self.gym = gym
         self.workout = workout
         self.onSave = onSave
@@ -787,6 +776,32 @@ struct EditWorkoutSheet: View {
         _description = State(initialValue: workout.wodDescription)
         _date = State(initialValue: workout.date)
         _selectedGroupId = State(initialValue: workout.groupId)
+        _recurrenceType = State(initialValue: workout.recurrenceType)
+        _hasEndDate = State(initialValue: workout.recurrenceEndDate != nil)
+        _recurrenceEndDate = State(initialValue: workout.recurrenceEndDate ?? Calendar.current.date(byAdding: .month, value: 3, to: workout.date) ?? workout.date)
+
+        // Initialize weekdays
+        if let weekdays = workout.weekdays, !weekdays.isEmpty {
+            _selectedWeekdays = State(initialValue: Set(weekdays))
+        } else {
+            let weekday = Calendar.current.component(.weekday, from: workout.date)
+            _selectedWeekdays = State(initialValue: [weekday])
+        }
+
+        // Initialize monthly recurrence
+        if workout.monthlyWeekPosition != nil && workout.monthlyWeekday != nil {
+            _monthlyRecurrenceType = State(initialValue: .weekBased)
+            _selectedMonthlyWeekPosition = State(initialValue: workout.monthlyWeekPosition ?? 1)
+            _selectedMonthlyWeekday = State(initialValue: workout.monthlyWeekday ?? 2)
+        } else {
+            _monthlyRecurrenceType = State(initialValue: .sameDay)
+            let calendar = Calendar.current
+            let dayOfMonth = calendar.component(.day, from: workout.date)
+            let weekPosition = (dayOfMonth - 1) / 7 + 1
+            let weekday = calendar.component(.weekday, from: workout.date)
+            _selectedMonthlyWeekPosition = State(initialValue: min(weekPosition, 4))
+            _selectedMonthlyWeekday = State(initialValue: weekday)
+        }
     }
 
     var body: some View {
@@ -804,6 +819,77 @@ struct EditWorkoutSheet: View {
                 TextField("Description", text: $description, axis: .vertical)
                     .lineLimit(3...6)
                 DatePicker("Date", selection: $date, displayedComponents: .date)
+            }
+
+            Section("Recurrence") {
+                Picker("Repeat", selection: $recurrenceType) {
+                    Text("Does not repeat").tag(RecurrenceType.none)
+                    Text("Daily").tag(RecurrenceType.daily)
+                    Text("Weekly").tag(RecurrenceType.weekly)
+                    Text("Monthly").tag(RecurrenceType.monthly)
+                }
+
+                if recurrenceType == .weekly {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Repeat on")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+
+                        WeekdayPicker(selectedWeekdays: $selectedWeekdays)
+                    }
+                }
+
+                if recurrenceType == .monthly {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Picker("Monthly repeat type", selection: $monthlyRecurrenceType) {
+                            Text("Same day each month").tag(MonthlyRecurrenceType.sameDay)
+                            Text("Week-based").tag(MonthlyRecurrenceType.weekBased)
+                        }
+                        .pickerStyle(.segmented)
+
+                        if monthlyRecurrenceType == .sameDay {
+                            Text("Repeats on day \(Calendar.current.component(.day, from: date)) of every month")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        } else {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Picker("Week position", selection: $selectedMonthlyWeekPosition) {
+                                    Text("First").tag(1)
+                                    Text("Second").tag(2)
+                                    Text("Third").tag(3)
+                                    Text("Fourth").tag(4)
+                                    Text("Last").tag(5)
+                                }
+
+                                Picker("Weekday", selection: $selectedMonthlyWeekday) {
+                                    Text("Sunday").tag(1)
+                                    Text("Monday").tag(2)
+                                    Text("Tuesday").tag(3)
+                                    Text("Wednesday").tag(4)
+                                    Text("Thursday").tag(5)
+                                    Text("Friday").tag(6)
+                                    Text("Saturday").tag(7)
+                                }
+
+                                Text(monthlyWeekBasedSummary)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                }
+
+                if recurrenceType != .none {
+                    Toggle("Set end date", isOn: $hasEndDate)
+
+                    if hasEndDate {
+                        DatePicker("Ends on", selection: $recurrenceEndDate, in: date..., displayedComponents: .date)
+                    }
+
+                    Text(recurrenceSummary)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
             }
 
             Section("Assignment") {
@@ -825,14 +911,6 @@ struct EditWorkoutSheet: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
-
-            if workout.isRecurring {
-                Section {
-                    Text("Note: This will only update this specific occurrence. To edit the entire series, please delete and recreate it.")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-            }
         }
         .navigationTitle("Edit Workout")
         .navigationBarTitleDisplayMode(.inline)
@@ -844,7 +922,7 @@ struct EditWorkoutSheet: View {
             }
             ToolbarItem(placement: .confirmationAction) {
                 Button("Save") {
-                    guard store.currentUser?.uid != nil else {
+                    guard let userId = store.currentUser?.uid else {
                         print("❌ No user logged in")
                         dismiss()
                         return
@@ -859,8 +937,49 @@ struct EditWorkoutSheet: View {
                     updatedWorkout.wodDescription = description
                     updatedWorkout.date = normalizedDate
                     updatedWorkout.groupId = selectedGroupId
+                    updatedWorkout.recurrenceType = recurrenceType
+                    updatedWorkout.recurrenceEndDate = hasEndDate ? recurrenceEndDate : nil
+                    updatedWorkout.weekdays = recurrenceType == .weekly ? Array(selectedWeekdays) : nil
+                    updatedWorkout.monthlyWeekPosition = (recurrenceType == .monthly && monthlyRecurrenceType == .weekBased) ? selectedMonthlyWeekPosition : nil
+                    updatedWorkout.monthlyWeekday = (recurrenceType == .monthly && monthlyRecurrenceType == .weekBased) ? selectedMonthlyWeekday : nil
 
-                    onSave(updatedWorkout)
+                    // If changing to recurring or if it's a new recurring workout
+                    if updatedWorkout.isRecurring && workout.recurrenceType == .none {
+                        // Converting from non-recurring to recurring - create a series
+                        print("💾 Converting to recurring workout: \(updatedWorkout.wodTitle)")
+
+                        // Delete the original single workout first if it has an ID
+                        if let originalId = workout.id {
+                            store.deleteScheduledWorkout(workoutId: originalId) { error in
+                                if let error = error {
+                                    print("❌ Error deleting original workout: \(error)")
+                                }
+                            }
+                        }
+
+                        // Create the recurring series
+                        store.saveRecurringWorkout(updatedWorkout) { workouts, error in
+                            if let error = error {
+                                print("❌ Error saving recurring workouts: \(error)")
+                            } else {
+                                print("✅ Saved \(workouts.count) recurring workout instances")
+                            }
+                            // Reload workouts in parent view
+                            onSave()
+                        }
+                    } else {
+                        // Regular single workout update
+                        store.saveScheduledWorkout(updatedWorkout) { savedWorkout, error in
+                            if let error = error {
+                                print("❌ Error updating workout: \(error)")
+                            } else {
+                                print("✅ Workout updated")
+                            }
+                            // Reload workouts in parent view
+                            onSave()
+                        }
+                    }
+
                     dismiss()
                 }
                 .disabled(title.isEmpty || description.isEmpty)
@@ -868,6 +987,59 @@ struct EditWorkoutSheet: View {
         }
         .onAppear {
             loadGroups()
+        }
+    }
+
+    private var monthlyWeekBasedSummary: String {
+        let weekPositionNames = ["", "First", "Second", "Third", "Fourth", "Last"]
+        let weekdayNames = ["", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+
+        let position = weekPositionNames[selectedMonthlyWeekPosition]
+        let day = weekdayNames[selectedMonthlyWeekday]
+
+        return "Repeats on the \(position) \(day) of every month"
+    }
+
+    private var recurrenceSummary: String {
+        let calendar = Calendar.current
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+
+        switch recurrenceType {
+        case .none:
+            return ""
+        case .daily:
+            if hasEndDate {
+                return "Repeats daily until \(formatter.string(from: recurrenceEndDate))"
+            } else {
+                return "Repeats daily for 1 year"
+            }
+        case .weekly:
+            let weekdayNames = selectedWeekdays.sorted().map { weekday in
+                let dayFormatter = DateFormatter()
+                dayFormatter.weekdaySymbols = dayFormatter.shortWeekdaySymbols
+                return dayFormatter.weekdaySymbols[weekday - 1]
+            }.joined(separator: ", ")
+
+            if hasEndDate {
+                return "Repeats on \(weekdayNames) until \(formatter.string(from: recurrenceEndDate))"
+            } else {
+                return "Repeats on \(weekdayNames) for 1 year"
+            }
+        case .monthly:
+            var baseText = ""
+            if monthlyRecurrenceType == .sameDay {
+                baseText = "Repeats on day \(calendar.component(.day, from: date)) of every month"
+            } else {
+                baseText = monthlyWeekBasedSummary
+            }
+
+            if hasEndDate {
+                let months = calendar.dateComponents([.month], from: date, to: recurrenceEndDate).month ?? 0
+                return "\(baseText) for \(months) months (until \(formatter.string(from: recurrenceEndDate)))"
+            } else {
+                return "\(baseText) for 1 year (12 months)"
+            }
         }
     }
 
