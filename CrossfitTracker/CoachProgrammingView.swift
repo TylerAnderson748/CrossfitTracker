@@ -62,6 +62,9 @@ struct CoachProgrammingView: View {
                                 },
                                 onDelete: { workout in
                                     deleteWorkout(workout)
+                                },
+                                onDeleteSeries: { workout in
+                                    deleteWorkoutSeries(workout)
                                 }
                             )
                         }
@@ -218,6 +221,25 @@ struct CoachProgrammingView: View {
             }
         }
     }
+
+    private func deleteWorkoutSeries(_ workout: ScheduledWorkout) {
+        guard let seriesId = workout.seriesId else {
+            print("❌ Cannot delete series - no seriesId")
+            // If no seriesId, just delete the single workout
+            deleteWorkout(workout)
+            return
+        }
+
+        store.deleteWorkoutSeries(seriesId: seriesId) { error in
+            if let error = error {
+                print("❌ Error deleting workout series: \(error)")
+            } else {
+                print("✅ Workout series deleted")
+                // Remove all workouts with this seriesId from local array
+                self.scheduledWorkouts.removeAll { $0.seriesId == seriesId }
+            }
+        }
+    }
 }
 
 struct CoachDayCard: View {
@@ -226,6 +248,7 @@ struct CoachDayCard: View {
     let onAddWorkout: () -> Void
     let onEdit: (ScheduledWorkout) -> Void
     let onDelete: (ScheduledWorkout) -> Void
+    let onDeleteSeries: (ScheduledWorkout) -> Void
 
     private var dayName: String {
         let formatter = DateFormatter()
@@ -291,10 +314,22 @@ struct CoachDayCard: View {
                         }
                         .buttonStyle(.plain)
 
-                        // Delete button
-                        Button(action: {
-                            onDelete(workout)
-                        }) {
+                        // Delete menu - shows options for single or series delete
+                        Menu {
+                            Button(role: .destructive) {
+                                onDelete(workout)
+                            } label: {
+                                Label("Delete This", systemImage: "trash")
+                            }
+
+                            if workout.isRecurring {
+                                Button(role: .destructive) {
+                                    onDeleteSeries(workout)
+                                } label: {
+                                    Label("Delete Series", systemImage: "trash.fill")
+                                }
+                            }
+                        } label: {
                             Image(systemName: "trash")
                                 .foregroundColor(.red)
                                 .font(.body)
