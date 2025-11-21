@@ -376,46 +376,14 @@ struct DayWorkoutCard: View {
                     .padding(.vertical, 8)
             } else {
                 ForEach(workouts) { workout in
-                    WorkoutSummaryRow(workout: workout)
-                        .environmentObject(store)
-                        .contextMenu {
-                            Button {
-                                onLogWorkout(workout)
-                            } label: {
-                                Label("Log Result", systemImage: "checkmark.circle")
-                            }
-
-                            // Only allow editing/deleting personal workouts that the user created
-                            if workout.isPersonalWorkout {
-                                Button {
-                                    onEdit(workout)
-                                } label: {
-                                    Label("Edit Workout", systemImage: "pencil")
-                                }
-
-                                Divider()
-
-                                if workout.isRecurring {
-                                    Button(role: .destructive) {
-                                        onDelete(workout)
-                                    } label: {
-                                        Label("Delete This Occurrence", systemImage: "trash")
-                                    }
-
-                                    Button(role: .destructive) {
-                                        onDeleteSeries(workout)
-                                    } label: {
-                                        Label("Delete All in Series", systemImage: "trash.fill")
-                                    }
-                                } else {
-                                    Button(role: .destructive) {
-                                        onDelete(workout)
-                                    } label: {
-                                        Label("Delete Workout", systemImage: "trash")
-                                    }
-                                }
-                            }
-                        }
+                    WorkoutSummaryRow(
+                        workout: workout,
+                        onLog: { onLogWorkout(workout) },
+                        onEdit: workout.isPersonalWorkout ? { onEdit(workout) } : nil,
+                        onDelete: workout.isPersonalWorkout ? { onDelete(workout) } : nil,
+                        onDeleteSeries: (workout.isPersonalWorkout && workout.isRecurring) ? { onDeleteSeries(workout) } : nil
+                    )
+                    .environmentObject(store)
                 }
             }
         }
@@ -431,6 +399,10 @@ struct DayWorkoutCard: View {
 struct WorkoutSummaryRow: View {
     @EnvironmentObject var store: AppStore
     let workout: ScheduledWorkout
+    var onLog: (() -> Void)?
+    var onEdit: (() -> Void)?
+    var onDelete: (() -> Void)?
+    var onDeleteSeries: (() -> Void)?
 
     private var workoutTypeInfo: (label: String, color: Color, icon: String) {
         if workout.isPersonalWorkout {
@@ -447,7 +419,7 @@ struct WorkoutSummaryRow: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text(workout.wodTitle)
                     .font(.headline)
@@ -473,6 +445,52 @@ struct WorkoutSummaryRow: View {
                 .font(.subheadline)
                 .foregroundColor(.secondary)
                 .lineLimit(2)
+
+            // Action buttons
+            HStack(spacing: 8) {
+                // Log button - always show
+                if let onLog = onLog {
+                    Button(action: onLog) {
+                        Label("Log", systemImage: "checkmark.circle")
+                            .font(.caption)
+                            .fontWeight(.medium)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.green)
+                }
+
+                // Edit button - only for personal workouts
+                if workout.isPersonalWorkout, let onEdit = onEdit {
+                    Button(action: onEdit) {
+                        Label("Edit", systemImage: "pencil")
+                            .font(.caption)
+                            .fontWeight(.medium)
+                    }
+                    .buttonStyle(.bordered)
+                }
+
+                // Delete button - only for personal workouts
+                if workout.isPersonalWorkout, let onDelete = onDelete {
+                    Menu {
+                        Button(role: .destructive, action: onDelete) {
+                            Label("Delete This", systemImage: "trash")
+                        }
+                        if workout.isRecurring, let onDeleteSeries = onDeleteSeries {
+                            Button(role: .destructive, action: onDeleteSeries) {
+                                Label("Delete Series", systemImage: "trash.fill")
+                            }
+                        }
+                    } label: {
+                        Label("Delete", systemImage: "trash")
+                            .font(.caption)
+                            .fontWeight(.medium)
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(.red)
+                }
+
+                Spacer()
+            }
         }
         .padding(.vertical, 4)
     }
@@ -975,61 +993,59 @@ struct EditPersonalWorkoutSheet: View {
     }
 
     var body: some View {
-        NavigationView {
-            Form {
+        Form {
+            Section {
+                Picker("Workout Type", selection: $workoutType) {
+                    Text("WOD").tag(WorkoutType.wod)
+                    Text("Lift").tag(WorkoutType.lift)
+                }
+                .pickerStyle(.segmented)
+            }
+
+            Section("Workout Details") {
+                TextField("Title", text: $title)
+                TextField("Description", text: $description, axis: .vertical)
+                    .lineLimit(3...6)
+                DatePicker("Date", selection: $date, displayedComponents: .date)
+            }
+
+            if workout.isRecurring {
                 Section {
-                    Picker("Workout Type", selection: $workoutType) {
-                        Text("WOD").tag(WorkoutType.wod)
-                        Text("Lift").tag(WorkoutType.lift)
-                    }
-                    .pickerStyle(.segmented)
-                }
-
-                Section("Workout Details") {
-                    TextField("Title", text: $title)
-                    TextField("Description", text: $description, axis: .vertical)
-                        .lineLimit(3...6)
-                    DatePicker("Date", selection: $date, displayedComponents: .date)
-                }
-
-                if workout.isRecurring {
-                    Section {
-                        Text("Note: This will only update this specific occurrence. To edit the entire series, please delete and recreate it.")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
+                    Text("Note: This will only update this specific occurrence. To edit the entire series, please delete and recreate it.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
                 }
             }
-            .navigationTitle("Edit Workout")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
+        }
+        .navigationTitle("Edit Workout")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Cancel") {
+                    dismiss()
                 }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        guard store.currentUser?.uid != nil else {
-                            print("❌ No user logged in")
-                            dismiss()
-                            return
-                        }
-
-                        let calendar = Calendar.current
-                        let normalizedDate = calendar.startOfDay(for: date)
-
-                        var updatedWorkout = workout
-                        updatedWorkout.workoutType = workoutType
-                        updatedWorkout.wodTitle = title
-                        updatedWorkout.wodDescription = description
-                        updatedWorkout.date = normalizedDate
-
-                        onSave(updatedWorkout)
+            }
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Save") {
+                    guard store.currentUser?.uid != nil else {
+                        print("❌ No user logged in")
                         dismiss()
+                        return
                     }
-                    .disabled(title.isEmpty || description.isEmpty)
+
+                    let calendar = Calendar.current
+                    let normalizedDate = calendar.startOfDay(for: date)
+
+                    var updatedWorkout = workout
+                    updatedWorkout.workoutType = workoutType
+                    updatedWorkout.wodTitle = title
+                    updatedWorkout.wodDescription = description
+                    updatedWorkout.date = normalizedDate
+
+                    onSave(updatedWorkout)
+                    dismiss()
                 }
+                .disabled(title.isEmpty || description.isEmpty)
             }
         }
     }
