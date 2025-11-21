@@ -80,18 +80,21 @@ struct ScheduledWorkout: Codable, Identifiable {
         return recurrenceType != .none
     }
 
-    // Custom decoder to handle old workouts without workoutType field
+    // Custom decoder to handle old workouts without newer fields
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
 
-        // Decode required fields
+        // Decode core required fields (always present)
         wodId = try container.decode(String.self, forKey: .wodId)
         wodTitle = try container.decode(String.self, forKey: .wodTitle)
         wodDescription = try container.decode(String.self, forKey: .wodDescription)
         date = try container.decode(Date.self, forKey: .date)
         createdBy = try container.decode(String.self, forKey: .createdBy)
         createdAt = try container.decode(Date.self, forKey: .createdAt)
-        recurrenceType = try container.decode(RecurrenceType.self, forKey: .recurrenceType)
+
+        // Decode fields with defaults for backward compatibility
+        workoutType = try container.decodeIfPresent(WorkoutType.self, forKey: .workoutType) ?? .wod
+        recurrenceType = try container.decodeIfPresent(RecurrenceType.self, forKey: .recurrenceType) ?? .none
 
         // Decode optional fields
         id = try container.decodeIfPresent(String.self, forKey: .id)
@@ -102,9 +105,6 @@ struct ScheduledWorkout: Codable, Identifiable {
         weekdays = try container.decodeIfPresent([Int].self, forKey: .weekdays)
         monthlyWeekPosition = try container.decodeIfPresent(Int.self, forKey: .monthlyWeekPosition)
         monthlyWeekday = try container.decodeIfPresent(Int.self, forKey: .monthlyWeekday)
-
-        // Decode workoutType with default fallback for old workouts
-        workoutType = try container.decodeIfPresent(WorkoutType.self, forKey: .workoutType) ?? .wod
     }
 
     private enum CodingKeys: String, CodingKey {
