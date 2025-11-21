@@ -17,6 +17,8 @@ struct CoachProgrammingView: View {
     let gym: Gym
 
     @State private var showingAddWorkout = false
+    @State private var showEditWorkout = false
+    @State private var workoutToEdit: ScheduledWorkout?
     @State private var selectedDate = Date()
     @State private var scheduledWorkouts: [ScheduledWorkout] = []
 
@@ -55,6 +57,9 @@ struct CoachProgrammingView: View {
                                     selectedDate = date
                                     showingAddWorkout = true
                                 },
+                                onEdit: { workout in
+                                    editWorkout(workout)
+                                },
                                 onDelete: { workout in
                                     deleteWorkout(workout)
                                 }
@@ -77,6 +82,16 @@ struct CoachProgrammingView: View {
                     saveWorkout(workout)
                 }
                 .environmentObject(store)
+            }
+            .sheet(isPresented: $showEditWorkout) {
+                if let workout = workoutToEdit {
+                    NavigationStack {
+                        EditWorkoutSheet(gym: gym, workout: workout) { updatedWorkout in
+                            updateWorkout(updatedWorkout)
+                        }
+                        .environmentObject(store)
+                    }
+                }
             }
             .onAppear {
                 loadScheduledWorkouts()
@@ -181,6 +196,30 @@ struct CoachProgrammingView: View {
         }
     }
 
+    private func editWorkout(_ workout: ScheduledWorkout) {
+        workoutToEdit = workout
+        showEditWorkout = true
+    }
+
+    private func updateWorkout(_ workout: ScheduledWorkout) {
+        print("💾 updateWorkout called for: \(workout.wodTitle)")
+        store.saveScheduledWorkout(workout) { savedWorkout, error in
+            if let error = error {
+                print("❌ Error updating workout: \(error)")
+                return
+            }
+
+            if let savedWorkout = savedWorkout {
+                print("✅ Workout updated with ID: \(savedWorkout.id ?? "nil")")
+                // Update in local array
+                if let index = self.scheduledWorkouts.firstIndex(where: { $0.id == savedWorkout.id }) {
+                    print("📝 Updating workout at index \(index)")
+                    self.scheduledWorkouts[index] = savedWorkout
+                }
+            }
+        }
+    }
+
     private func deleteWorkout(_ workout: ScheduledWorkout) {
         guard let workoutId = workout.id else {
             print("❌ Cannot delete workout without ID")
@@ -203,6 +242,7 @@ struct CoachDayCard: View {
     let date: Date
     let workouts: [ScheduledWorkout]
     let onAddWorkout: () -> Void
+    let onEdit: (ScheduledWorkout) -> Void
     let onDelete: (ScheduledWorkout) -> Void
 
     private var dayName: String {
@@ -247,22 +287,39 @@ struct CoachDayCard: View {
                     .padding(.vertical, 8)
             } else {
                 ForEach(workouts) { workout in
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(workout.wodTitle)
-                            .font(.headline)
-                        Text(workout.wodDescription)
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                            .lineLimit(2)
+                    HStack(alignment: .top, spacing: 12) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(workout.wodTitle)
+                                .font(.headline)
+                            Text(workout.wodDescription)
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                                .lineLimit(2)
+                        }
+
+                        Spacer()
+
+                        // Edit button
+                        Button(action: {
+                            onEdit(workout)
+                        }) {
+                            Image(systemName: "pencil")
+                                .foregroundColor(.blue)
+                                .font(.body)
+                        }
+                        .buttonStyle(.plain)
+
+                        // Delete button
+                        Button(action: {
+                            onDelete(workout)
+                        }) {
+                            Image(systemName: "trash")
+                                .foregroundColor(.red)
+                                .font(.body)
+                        }
+                        .buttonStyle(.plain)
                     }
                     .padding(.vertical, 4)
-                    .contextMenu {
-                        Button(role: .destructive) {
-                            onDelete(workout)
-                        } label: {
-                            Label("Delete Workout", systemImage: "trash")
-                        }
-                    }
                 }
             }
         }
@@ -703,6 +760,133 @@ struct WeekdayPicker: View {
                 }
                 .buttonStyle(.plain)
             }
+        }
+    }
+}
+
+struct EditWorkoutSheet: View {
+    @Environment(\.dismiss) var dismiss
+    @EnvironmentObject var store: AppStore
+    let gym: Gym
+    let workout: ScheduledWorkout
+    let onSave: (ScheduledWorkout) -> Void
+
+    @State private var workoutType: WorkoutType
+    @State private var title: String
+    @State private var description: String
+    @State private var date: Date
+    @State private var groups: [WorkoutGroup] = []
+    @State private var selectedGroupId: String?
+
+    init(gym: Gym, workout: ScheduledWorkout, onSave: @escaping (ScheduledWorkout) -> Void) {
+        self.gym = gym
+        self.workout = workout
+        self.onSave = onSave
+        _workoutType = State(initialValue: workout.workoutType)
+        _title = State(initialValue: workout.wodTitle)
+        _description = State(initialValue: workout.wodDescription)
+        _date = State(initialValue: workout.date)
+        _selectedGroupId = State(initialValue: workout.groupId)
+    }
+
+    var body: some View {
+        Form {
+            Section {
+                Picker("Workout Type", selection: $workoutType) {
+                    Text("WOD").tag(WorkoutType.wod)
+                    Text("Lift").tag(WorkoutType.lift)
+                }
+                .pickerStyle(.segmented)
+            }
+
+            Section("Workout Details") {
+                TextField("Title", text: $title)
+                TextField("Description", text: $description, axis: .vertical)
+                    .lineLimit(3...6)
+                DatePicker("Date", selection: $date, displayedComponents: .date)
+            }
+
+            Section("Assignment") {
+                if groups.isEmpty {
+                    Text("Loading groups...")
+                        .foregroundColor(.secondary)
+                } else {
+                    Picker("Assign to Group", selection: $selectedGroupId) {
+                        Text("Personal (only you)").tag(nil as String?)
+                        ForEach(groups) { group in
+                            if let groupId = group.id {
+                                Text(group.name).tag(groupId as String?)
+                            }
+                        }
+                    }
+                }
+
+                Text("Select a group to assign this workout to")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+
+            if workout.isRecurring {
+                Section {
+                    Text("Note: This will only update this specific occurrence. To edit the entire series, please delete and recreate it.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+        }
+        .navigationTitle("Edit Workout")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Cancel") {
+                    dismiss()
+                }
+            }
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Save") {
+                    guard store.currentUser?.uid != nil else {
+                        print("❌ No user logged in")
+                        dismiss()
+                        return
+                    }
+
+                    let calendar = Calendar.current
+                    let normalizedDate = calendar.startOfDay(for: date)
+
+                    var updatedWorkout = workout
+                    updatedWorkout.workoutType = workoutType
+                    updatedWorkout.wodTitle = title
+                    updatedWorkout.wodDescription = description
+                    updatedWorkout.date = normalizedDate
+                    updatedWorkout.groupId = selectedGroupId
+
+                    onSave(updatedWorkout)
+                    dismiss()
+                }
+                .disabled(title.isEmpty || description.isEmpty)
+            }
+        }
+        .onAppear {
+            loadGroups()
+        }
+    }
+
+    private func loadGroups() {
+        guard let gymId = gym.id else {
+            print("❌ No gym ID")
+            return
+        }
+
+        // Load groups from this specific gym
+        store.loadGroupsForGym(gymId: gymId) { loadedGroups, error in
+            if let error = error {
+                print("❌ Error loading groups for gym: \(error)")
+                return
+            }
+
+            // Filter out personal groups (they're not for programming)
+            self.groups = loadedGroups.filter { $0.type != .personal }
+            print("✅ Loaded \(self.groups.count) groups for programming in gym: \(self.gym.name)")
         }
     }
 }
