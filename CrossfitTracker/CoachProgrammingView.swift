@@ -298,16 +298,30 @@ struct AddWorkoutSheet: View {
     @State private var selectedMonthlyWeekPosition: Int = 1
     @State private var selectedMonthlyWeekday: Int = 2
     @State private var showSuggestions: Bool = false
+    @State private var saveToLibrary: Bool = false
+    @State private var userTemplates: [WorkoutTemplate] = []
 
     // Filtered workout suggestions based on title and type
     private var workoutSuggestions: [WOD] {
         guard !title.isEmpty else { return [] }
 
-        return SampleData.wods
+        // Combine preset workouts and user templates
+        var suggestions: [WOD] = []
+
+        // Add presets from SampleData
+        let presetMatches = SampleData.wods
             .filter { $0.type == workoutType }
             .filter { $0.title.localizedCaseInsensitiveContains(title) }
-            .prefix(5)
-            .map { $0 }
+        suggestions.append(contentsOf: presetMatches)
+
+        // Add user's saved templates
+        let templateMatches = userTemplates
+            .filter { $0.workoutType == workoutType }
+            .filter { $0.title.localizedCaseInsensitiveContains(title) }
+            .map { WOD(title: $0.title, description: $0.description, type: $0.workoutType) }
+        suggestions.append(contentsOf: templateMatches)
+
+        return Array(suggestions.prefix(5))
     }
 
     init(gym: Gym, selectedDate: Date, onSave: @escaping (ScheduledWorkout) -> Void) {
@@ -389,6 +403,8 @@ struct AddWorkoutSheet: View {
                     TextField("Description", text: $description, axis: .vertical)
                         .lineLimit(3...6)
                     DatePicker("Date", selection: $date, displayedComponents: .date)
+
+                    Toggle("Save to my workout library", isOn: $saveToLibrary)
                 }
 
                 Section("Assignment") {
@@ -535,6 +551,25 @@ struct AddWorkoutSheet: View {
                             print("💾 Saving workout: \(workout.wodTitle) for \(normalizedDate), groupId: \(selectedGroupId ?? "nil (personal)")")
                             onSave(workout)
                         }
+
+                        // Save workout template to library if toggle is on
+                        if saveToLibrary {
+                            let template = WorkoutTemplate(
+                                title: title,
+                                description: description,
+                                workoutType: workoutType,
+                                createdBy: userId,
+                                isPersonal: true
+                            )
+                            store.saveWorkoutTemplate(template) { savedTemplate, error in
+                                if let error = error {
+                                    print("❌ Error saving workout template: \(error)")
+                                } else {
+                                    print("✅ Workout template saved to library")
+                                }
+                            }
+                        }
+
                         dismiss()
                     }
                     .disabled(title.isEmpty || description.isEmpty)
@@ -542,6 +577,22 @@ struct AddWorkoutSheet: View {
             }
             .onAppear {
                 loadGroups()
+                loadUserTemplates()
+            }
+            .onChange(of: workoutType) { _ in
+                loadUserTemplates()
+            }
+        }
+    }
+
+    private func loadUserTemplates() {
+        guard let userId = store.currentUser?.uid else { return }
+        store.loadUserWorkoutTemplates(userId: userId, workoutType: workoutType) { templates, error in
+            if let error = error {
+                print("❌ Error loading user templates: \(error)")
+            } else {
+                self.userTemplates = templates
+                print("✅ Loaded \(templates.count) user workout templates")
             }
         }
     }
