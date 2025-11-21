@@ -275,15 +275,6 @@ struct WeeklyPlanView: View {
     }
 
     private func editWorkout(_ workout: ScheduledWorkout) {
-        print("🔍 [EditWorkout] Starting edit for workout:")
-        print("   - ID: \(workout.id ?? "nil")")
-        print("   - Title: '\(workout.wodTitle)'")
-        print("   - Description: '\(workout.wodDescription)'")
-        print("   - Type: '\(workout.workoutType.rawValue)'")
-        print("   - Date: \(workout.date)")
-        print("   - GroupId: \(workout.groupId ?? "nil")")
-        print("   - CreatedBy: \(workout.createdBy)")
-
         workoutToEdit = workout
         showEditWorkout = true
     }
@@ -996,26 +987,16 @@ struct EditPersonalWorkoutSheet: View {
     @State private var date: Date
 
     init(workout: ScheduledWorkout, onSave: @escaping (ScheduledWorkout) -> Void) {
-        print("🏗️ [EditPersonalWorkoutSheet.init] Initializing with workout:")
-        print("   - ID: \(workout.id ?? "nil")")
-        print("   - Title: '\(workout.wodTitle)'")
-        print("   - Description: '\(workout.wodDescription)'")
-        print("   - Type: '\(workout.workoutType.rawValue)'")
-        print("   - Date: \(workout.date)")
-
         self.workout = workout
         self.onSave = onSave
         _workoutType = State(initialValue: workout.workoutType)
         _title = State(initialValue: workout.wodTitle)
         _description = State(initialValue: workout.wodDescription)
         _date = State(initialValue: workout.date)
-
-        print("✅ [EditPersonalWorkoutSheet.init] Initialization complete")
     }
 
     var body: some View {
-        print("🎨 [EditPersonalWorkoutSheet.body] Rendering body")
-        return Form {
+        Form {
             Section {
                 Picker("Workout Type", selection: $workoutType) {
                     Text("WOD").tag(WorkoutType.wod)
