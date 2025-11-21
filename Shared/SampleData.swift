@@ -165,9 +165,6 @@ struct SampleData {
         WOD(title: "Push Press", description: "", type: .lift, category: "Pressing & Overhead"),
         WOD(title: "Strict Press", description: "", type: .lift, category: "Pressing & Overhead"),
 
-        // Bench Press Variations
-        WOD(title: "Bench Press", description: "", type: .lift, category: "Bench Press Variations"),
-
         // Lower Body Strength
         WOD(title: "Weighted Step-Up", description: "", type: .lift, category: "Lower Body Strength"),
         WOD(title: "Hip Thrust", description: "", type: .lift, category: "Lower Body Strength"),
