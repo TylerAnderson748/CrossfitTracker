@@ -117,17 +117,13 @@ struct WeeklyPlanView: View {
                 .environmentObject(store)
             }
             .sheet(isPresented: $showEditWorkout) {
-                print("📋 [Sheet] Edit workout sheet presented. workoutToEdit is \(workoutToEdit == nil ? "nil" : "not nil")")
                 if let workout = workoutToEdit {
-                    print("📋 [Sheet] Creating EditPersonalWorkoutSheet for: \(workout.wodTitle)")
                     NavigationStack {
                         EditPersonalWorkoutSheet(workout: workout) { updatedWorkout in
                             updatePersonalWorkout(updatedWorkout)
                         }
                         .environmentObject(store)
                     }
-                } else {
-                    print("⚠️ [Sheet] workoutToEdit is nil!")
                 }
             }
             .navigationDestination(for: WODDestination.self) { destination in
