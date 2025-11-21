@@ -96,8 +96,7 @@ struct ScheduledWorkout: Codable, Identifiable {
         workoutType = try container.decodeIfPresent(WorkoutType.self, forKey: .workoutType) ?? .wod
         recurrenceType = try container.decodeIfPresent(RecurrenceType.self, forKey: .recurrenceType) ?? .none
 
-        // Decode optional fields
-        id = try container.decodeIfPresent(String.self, forKey: .id)
+        // Decode optional fields (except id - let @DocumentID handle that)
         groupId = try container.decodeIfPresent(String.self, forKey: .groupId)
         timeSlots = try container.decodeIfPresent([TimeSlot].self, forKey: .timeSlots) ?? []
         recurrenceEndDate = try container.decodeIfPresent(Date.self, forKey: .recurrenceEndDate)
@@ -105,12 +104,17 @@ struct ScheduledWorkout: Codable, Identifiable {
         weekdays = try container.decodeIfPresent([Int].self, forKey: .weekdays)
         monthlyWeekPosition = try container.decodeIfPresent(Int.self, forKey: .monthlyWeekPosition)
         monthlyWeekday = try container.decodeIfPresent(Int.self, forKey: .monthlyWeekday)
+
+        // Let @DocumentID wrapper handle the id field from Firestore
+        // This ensures the document ID is properly extracted
+        _id = try DocumentID<String>(from: decoder)
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, wodId, wodTitle, wodDescription, date, workoutType
+        case wodId, wodTitle, wodDescription, date, workoutType
         case groupId, timeSlots, createdBy, createdAt
         case recurrenceType, recurrenceEndDate, seriesId, weekdays
         case monthlyWeekPosition, monthlyWeekday
+        // Note: 'id' is intentionally excluded - @DocumentID handles it
     }
 }
