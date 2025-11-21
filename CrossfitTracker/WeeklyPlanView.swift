@@ -118,10 +118,12 @@ struct WeeklyPlanView: View {
             }
             .sheet(isPresented: $showEditWorkout) {
                 if let workout = workoutToEdit {
-                    EditPersonalWorkoutSheet(workout: workout) { updatedWorkout in
-                        updatePersonalWorkout(updatedWorkout)
+                    NavigationStack {
+                        EditPersonalWorkoutSheet(workout: workout) { updatedWorkout in
+                            updatePersonalWorkout(updatedWorkout)
+                        }
+                        .environmentObject(store)
                     }
-                    .environmentObject(store)
                 }
             }
             .navigationDestination(for: WODDestination.self) { destination in
@@ -446,8 +448,8 @@ struct WorkoutSummaryRow: View {
                 .foregroundColor(.secondary)
                 .lineLimit(2)
 
-            // Action buttons
-            HStack(spacing: 8) {
+            // Action buttons - evenly spaced
+            HStack(spacing: 0) {
                 // Log button - always show
                 if let onLog = onLog {
                     Button(action: onLog) {
@@ -457,6 +459,7 @@ struct WorkoutSummaryRow: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(.green)
+                    .frame(maxWidth: .infinity)
                 }
 
                 // Edit button - only for personal workouts
@@ -467,6 +470,7 @@ struct WorkoutSummaryRow: View {
                             .fontWeight(.medium)
                     }
                     .buttonStyle(.bordered)
+                    .frame(maxWidth: .infinity)
                 }
 
                 // Delete button - only for personal workouts
@@ -487,9 +491,8 @@ struct WorkoutSummaryRow: View {
                     }
                     .buttonStyle(.bordered)
                     .tint(.red)
+                    .frame(maxWidth: .infinity)
                 }
-
-                Spacer()
             }
         }
         .padding(.vertical, 4)
