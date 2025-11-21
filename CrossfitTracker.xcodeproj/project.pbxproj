@@ -72,7 +72,8 @@
 		CDB1A7842EA3LIFTENTRY /* LiftEntryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB1A7812EA3LIFTENTRY /* LiftEntryView.swift */; };
 		CDB1A7B02EA3789B00B13136 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = CDB1A73F2EA3789A00B13136 /* FirebaseAuth */; };
 		CDB1A7B12EA3789C00B13136 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = CDB1A7402EA378A200B13136 /* FirebaseFirestore */; };
-/* End PBXBuildFile section */
+		3205A15AE9CA4AC3AE4A2C48 /* WorkoutTemplateLibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 006EAD9C3C764C87AAE1F2C7 /* WorkoutTemplateLibraryView.swift */; };
+		/* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
 		CDB1A6BA2EA34E9100B13136 /* PBXContainerItemProxy */ = {
@@ -187,7 +188,8 @@
 		CDB1A74B /* WeeklyPlanView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeeklyPlanView.swift; sourceTree = "<group>"; };
 		CDB1A7802EA3LIFTRESULT /* LiftResult.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiftResult.swift; sourceTree = "<group>"; };
 		CDB1A7812EA3LIFTENTRY /* LiftEntryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiftEntryView.swift; sourceTree = "<group>"; };
-/* End PBXFileReference section */
+		006EAD9C3C764C87AAE1F2C7 /* WorkoutTemplateLibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutTemplateLibraryView.swift; sourceTree = "<group>"; };
+		/* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		CDB1A6A62EA34E8F00B13136 /* Frameworks */ = {
@@ -653,7 +655,8 @@
 				CDB1A7AF /* WeeklyPlanView.swift in Sources */,
 				CDB1A7832EA3LIFTRESULT /* LiftResult.swift in Sources */,
 				CDB1A7842EA3LIFTENTRY /* LiftEntryView.swift in Sources */,
-			);
+			
+				3205A15AE9CA4AC3AE4A2C48 /* WorkoutTemplateLibraryView.swift in Sources */,);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		CDB1A6B52EA34E9100B13136 /* Sources */ = {

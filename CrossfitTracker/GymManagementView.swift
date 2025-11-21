@@ -301,6 +301,18 @@ struct GymDetailView: View {
                             .foregroundColor(.secondary)
                     }
                 }
+
+                NavigationLink(destination: WorkoutTemplateLibraryView(gym: gym).environmentObject(store)) {
+                    HStack {
+                        Image(systemName: "book.fill")
+                            .foregroundColor(.orange)
+                        Text("Workout Library")
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
             }
         }
         .navigationTitle("Gym Details")
