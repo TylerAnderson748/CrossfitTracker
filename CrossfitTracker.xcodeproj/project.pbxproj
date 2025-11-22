@@ -293,6 +293,7 @@
 				CDB1A7392EA3779900B13136 /* LiftDetailView.swift */,
 				CDB1A73B2EA377B000B13136 /* LiftHistoryView.swift */,
 				CDB1A7812EA3LIFTENTRY /* LiftEntryView.swift */,
+				006EAD9C3C764C87AAE1F2C7 /* WorkoutTemplateLibraryView.swift */,
 			);
 			path = CrossfitTracker;
 			sourceTree = "<group>";
