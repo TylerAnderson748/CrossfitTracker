@@ -16,6 +16,7 @@ struct WODListView: View {
     @State private var selectedType: WorkoutType = .wod
     @State private var searchText: String = ""
     @State private var expandedSections: Set<String> = []
+    @State private var savedTemplates: [WorkoutTemplate] = []
     @AppStorage("workoutAccessCounts") private var accessCountsData: Data = Data()
 
     private var accessCounts: [String: Int] {
@@ -44,6 +45,19 @@ struct WODListView: View {
                 workout.title.localizedCaseInsensitiveContains(searchText) ||
                 workout.description.localizedCaseInsensitiveContains(searchText) ||
                 (workout.category?.localizedCaseInsensitiveContains(searchText) ?? false)
+            }
+        }
+    }
+
+    var filteredSavedTemplates: [WorkoutTemplate] {
+        let typeFiltered = savedTemplates.filter { $0.workoutType == selectedType }
+
+        if searchText.isEmpty {
+            return typeFiltered
+        } else {
+            return typeFiltered.filter { template in
+                template.title.localizedCaseInsensitiveContains(searchText) ||
+                template.description.localizedCaseInsensitiveContains(searchText)
             }
         }
     }
@@ -104,6 +118,41 @@ struct WODListView: View {
 
                 // Grouped list with sections
                 List {
+                    // Saved templates section
+                    if !filteredSavedTemplates.isEmpty {
+                        DisclosureGroup(
+                            isExpanded: Binding(
+                                get: { expandedSections.contains("💾 Saved \(selectedType == .wod ? "WODs" : "Lifts")") },
+                                set: { isExpanded in
+                                    if isExpanded {
+                                        expandedSections.insert("💾 Saved \(selectedType == .wod ? "WODs" : "Lifts")")
+                                    } else {
+                                        expandedSections.remove("💾 Saved \(selectedType == .wod ? "WODs" : "Lifts")")
+                                    }
+                                }
+                            )
+                        ) {
+                            ForEach(filteredSavedTemplates) { template in
+                                NavigationLink(destination: destinationView(for: WOD(title: template.title, description: template.description, type: template.workoutType))) {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(template.title)
+                                            .font(.headline)
+                                        // Only show description for WODs, not lifts
+                                        if template.workoutType != .lift {
+                                            Text(template.description)
+                                                .font(.subheadline)
+                                                .foregroundColor(.secondary)
+                                        }
+                                    }
+                                    .padding(.vertical, 4)
+                                }
+                            }
+                        } label: {
+                            Text("💾 Saved \(selectedType == .wod ? "WODs" : "Lifts")")
+                                .font(.headline)
+                        }
+                    }
+
                     // Frequent section (only when not searching)
                     if searchText.isEmpty && !frequentWorkouts.isEmpty {
                         DisclosureGroup(
@@ -188,6 +237,30 @@ struct WODListView: View {
                         Image(systemName: "book.fill")
                     }
                 }
+            }
+            .onAppear {
+                loadSavedTemplates()
+            }
+            .onChange(of: selectedType) { _ in
+                loadSavedTemplates()
+            }
+        }
+    }
+
+    private func loadSavedTemplates() {
+        guard let userId = store.currentUser?.uid else {
+            print("❌ [WODListView] No user logged in")
+            return
+        }
+
+        print("📥 [WODListView] Loading saved templates for user: \(userId), type: \(selectedType.rawValue)")
+
+        store.loadUserWorkoutTemplates(userId: userId, workoutType: selectedType) { templates, error in
+            if let error = error {
+                print("❌ [WODListView] Error loading templates: \(error)")
+            } else {
+                self.savedTemplates = templates
+                print("✅ [WODListView] Loaded \(templates.count) saved templates")
             }
         }
     }
