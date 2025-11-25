@@ -60,6 +60,7 @@ struct LeaderboardEntry: Codable, Identifiable {
     /// Create a leaderboard entry from a workout log
     static func from(workoutLog: WorkoutLog, userName: String) -> LeaderboardEntry {
         return LeaderboardEntry(
+            id: workoutLog.id,  // Use workout log ID for unique identification
             userId: workoutLog.userId,
             userName: userName,
             workoutLogId: workoutLog.id ?? "",
