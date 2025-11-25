@@ -294,24 +294,36 @@ struct WeeklyPlanView: View {
     }
 
     private func savePersonalWorkout(_ workout: ScheduledWorkout) {
+        print("🔵 [WeeklyPlan] savePersonalWorkout called")
+        print("   - Title: '\(workout.wodTitle)'")
+        print("   - Date: \(workout.date)")
+        print("   - Type: \(workout.workoutType.rawValue)")
+        print("   - isRecurring: \(workout.isRecurring)")
+
         if workout.isRecurring {
+            print("🔄 [WeeklyPlan] Saving recurring workout...")
             store.saveRecurringWorkout(workout) { workouts, error in
                 if let error = error {
-                    print("❌ Error saving recurring workouts: \(error)")
+                    print("❌ [WeeklyPlan] Error saving recurring workouts: \(error)")
                 } else {
-                    print("✅ Saved \(workouts.count) recurring workout instances")
+                    print("✅ [WeeklyPlan] Saved \(workouts.count) recurring workout instances")
+                    print("   Current scheduledWorkouts count: \(self.scheduledWorkouts.count)")
                     // Add to local array
                     self.scheduledWorkouts.append(contentsOf: workouts)
+                    print("   Updated scheduledWorkouts count: \(self.scheduledWorkouts.count)")
                 }
             }
         } else {
+            print("💾 [WeeklyPlan] Saving single workout...")
             store.saveScheduledWorkout(workout) { savedWorkout, error in
                 if let error = error {
-                    print("❌ Error saving workout: \(error)")
+                    print("❌ [WeeklyPlan] Error saving workout: \(error)")
                 } else if let savedWorkout = savedWorkout {
-                    print("✅ Workout saved")
+                    print("✅ [WeeklyPlan] Workout saved with ID: \(savedWorkout.id ?? "nil")")
+                    print("   Current scheduledWorkouts count: \(self.scheduledWorkouts.count)")
                     // Add to local array
                     self.scheduledWorkouts.append(savedWorkout)
+                    print("   Updated scheduledWorkouts count: \(self.scheduledWorkouts.count)")
                 }
             }
         }
