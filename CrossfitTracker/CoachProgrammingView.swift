@@ -479,6 +479,15 @@ struct AddWorkoutSheet: View {
                     DatePicker("Date", selection: $date, displayedComponents: .date)
 
                     Toggle("Save to my workout library", isOn: $saveToLibrary)
+
+                    NavigationLink(destination: WorkoutTemplateLibraryView(gym: nil).environmentObject(store)) {
+                        HStack {
+                            Image(systemName: "book.fill")
+                                .foregroundColor(.blue)
+                            Text("View My Workout Library")
+                                .foregroundColor(.blue)
+                        }
+                    }
                 }
 
                 Section("Assignment") {
