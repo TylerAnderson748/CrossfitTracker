@@ -602,9 +602,10 @@ final class AppStore: ObservableObject {
             return
         }
 
-        // Load gyms where user is owner
+        print("📊 [loadGyms] Loading gyms for user: \(userId)")
+
+        // Load all gyms where user is owner, coach, or member
         db.collection("gyms")
-            .whereField("ownerId", isEqualTo: userId)
             .getDocuments { snapshot, error in
                 if let error = error {
                     DispatchQueue.main.async {
@@ -613,19 +614,32 @@ final class AppStore: ObservableObject {
                     return
                 }
 
-                let gyms = snapshot?.documents.compactMap { doc -> Gym? in
+                let allGyms = snapshot?.documents.compactMap { doc -> Gym? in
                     try? doc.data(as: Gym.self)
                 } ?? []
 
-                // Auto-fix: Add owner to Members group if not already there
-                for gym in gyms {
+                // Filter to gyms where user is owner, coach, or member
+                let userGyms = allGyms.filter { gym in
+                    gym.ownerId == userId ||
+                    gym.coachIds.contains(userId) ||
+                    gym.memberIds.contains(userId)
+                }
+
+                print("📊 [loadGyms] Found \(allGyms.count) total gyms, \(userGyms.count) for this user")
+                for gym in userGyms {
+                    print("  - \(gym.name): owner=\(gym.ownerId == userId), coach=\(gym.coachIds.contains(userId)), member=\(gym.memberIds.contains(userId))")
+                    print("    memberIds: \(gym.memberIds)")
+                }
+
+                // Auto-fix: Add owner to Members group if not already there (for owned gyms only)
+                for gym in userGyms where gym.ownerId == userId {
                     guard let gymId = gym.id else { continue }
                     self.ensureOwnerInMembersGroup(gymId: gymId, ownerId: userId)
                 }
 
                 DispatchQueue.main.async {
-                    print("✅ Loaded \(gyms.count) gyms")
-                    completion(gyms, nil)
+                    print("✅ Loaded \(userGyms.count) gyms for user")
+                    completion(userGyms, nil)
                 }
             }
     }
@@ -2009,5 +2023,173 @@ final class AppStore: ObservableObject {
                 }
             }
         }
+    }
+
+    // MARK: - Gym Membership Requests
+
+    /// Request to join a gym
+    func requestGymMembership(gymId: String, gymName: String, completion: @escaping (String?) -> Void) {
+        guard let userId = currentUser?.uid,
+              let userEmail = appUser?.email else {
+            completion("No user logged in")
+            return
+        }
+
+        // Check if request already exists
+        db.collection("gymMembershipRequests")
+            .whereField("gymId", isEqualTo: gymId)
+            .whereField("userId", isEqualTo: userId)
+            .whereField("status", isEqualTo: RequestStatus.pending.rawValue)
+            .getDocuments { snapshot, error in
+                if let error = error {
+                    DispatchQueue.main.async {
+                        completion(error.localizedDescription)
+                    }
+                    return
+                }
+
+                if let existing = snapshot?.documents.first {
+                    DispatchQueue.main.async {
+                        completion("You already have a pending request for this gym")
+                    }
+                    return
+                }
+
+                // Create new request
+                let request = GymMembershipRequest(
+                    gymId: gymId,
+                    gymName: gymName,
+                    userId: userId,
+                    userEmail: userEmail,
+                    userDisplayName: self.appUser?.displayName
+                )
+
+                do {
+                    try self.db.collection("gymMembershipRequests").addDocument(from: request) { error in
+                        DispatchQueue.main.async {
+                            if let error = error {
+                                print("❌ Error creating membership request: \(error.localizedDescription)")
+                                completion(error.localizedDescription)
+                            } else {
+                                print("✅ Membership request created for gym: \(gymName)")
+                                completion(nil)
+                            }
+                        }
+                    }
+                } catch {
+                    DispatchQueue.main.async {
+                        completion(error.localizedDescription)
+                    }
+                }
+            }
+    }
+
+    /// Load pending membership requests for a gym (for owners)
+    func loadPendingMembershipRequests(gymId: String, completion: @escaping ([GymMembershipRequest], String?) -> Void) {
+        db.collection("gymMembershipRequests")
+            .whereField("gymId", isEqualTo: gymId)
+            .whereField("status", isEqualTo: RequestStatus.pending.rawValue)
+            .order(by: "requestedAt", descending: true)
+            .getDocuments { snapshot, error in
+                if let error = error {
+                    DispatchQueue.main.async {
+                        completion([], error.localizedDescription)
+                    }
+                    return
+                }
+
+                let requests = snapshot?.documents.compactMap { doc -> GymMembershipRequest? in
+                    try? doc.data(as: GymMembershipRequest.self)
+                } ?? []
+
+                DispatchQueue.main.async {
+                    print("✅ Loaded \(requests.count) pending membership requests for gym")
+                    completion(requests, nil)
+                }
+            }
+    }
+
+    /// Approve a gym membership request
+    func approveMembershipRequest(requestId: String, gymId: String, userId: String, completion: @escaping (String?) -> Void) {
+        guard let ownerId = currentUser?.uid else {
+            completion("No user logged in")
+            return
+        }
+
+        // Add user to gym's memberIds
+        db.collection("gyms").document(gymId).updateData([
+            "memberIds": FieldValue.arrayUnion([userId])
+        ]) { error in
+            if let error = error {
+                DispatchQueue.main.async {
+                    completion(error.localizedDescription)
+                }
+                return
+            }
+
+            // Update request status
+            self.db.collection("gymMembershipRequests").document(requestId).updateData([
+                "status": RequestStatus.approved.rawValue,
+                "processedAt": FieldValue.serverTimestamp(),
+                "processedBy": ownerId
+            ]) { error in
+                DispatchQueue.main.async {
+                    if let error = error {
+                        print("❌ Error updating request status: \(error.localizedDescription)")
+                        completion(error.localizedDescription)
+                    } else {
+                        print("✅ Membership request approved")
+                        completion(nil)
+                    }
+                }
+            }
+        }
+    }
+
+    /// Deny a gym membership request
+    func denyMembershipRequest(requestId: String, completion: @escaping (String?) -> Void) {
+        guard let ownerId = currentUser?.uid else {
+            completion("No user logged in")
+            return
+        }
+
+        db.collection("gymMembershipRequests").document(requestId).updateData([
+            "status": RequestStatus.denied.rawValue,
+            "processedAt": FieldValue.serverTimestamp(),
+            "processedBy": ownerId
+        ]) { error in
+            DispatchQueue.main.async {
+                if let error = error {
+                    print("❌ Error denying request: \(error.localizedDescription)")
+                    completion(error.localizedDescription)
+                } else {
+                    print("✅ Membership request denied")
+                    completion(nil)
+                }
+            }
+        }
+    }
+
+    /// Load all gyms for browsing (for athletes to find and request membership)
+    func loadAllGyms(completion: @escaping ([Gym], String?) -> Void) {
+        db.collection("gyms")
+            .order(by: "name")
+            .getDocuments { snapshot, error in
+                if let error = error {
+                    DispatchQueue.main.async {
+                        completion([], error.localizedDescription)
+                    }
+                    return
+                }
+
+                let gyms = snapshot?.documents.compactMap { doc -> Gym? in
+                    try? doc.data(as: Gym.self)
+                } ?? []
+
+                DispatchQueue.main.async {
+                    print("✅ Loaded \(gyms.count) total gyms")
+                    completion(gyms, nil)
+                }
+            }
     }
 }
