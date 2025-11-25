@@ -12,6 +12,8 @@ struct LeaderboardEntry: Codable, Identifiable {
     @DocumentID var id: String?
     var userId: String
     var userName: String // Cached for display
+    var userGender: String? // User's gender for filtering
+    var gymName: String? // User's gym name for display
     var workoutLogId: String // Reference to the workout log
     var normalizedWorkoutName: String // Normalized name for matching (lowercase, no spaces)
     var originalWorkoutName: String // Original workout name as entered
@@ -30,6 +32,8 @@ struct LeaderboardEntry: Codable, Identifiable {
         id: String? = nil,
         userId: String,
         userName: String,
+        userGender: String? = nil,
+        gymName: String? = nil,
         workoutLogId: String,
         normalizedWorkoutName: String,
         originalWorkoutName: String,
@@ -44,6 +48,8 @@ struct LeaderboardEntry: Codable, Identifiable {
         self.id = id
         self.userId = userId
         self.userName = userName
+        self.userGender = userGender
+        self.gymName = gymName
         self.workoutLogId = workoutLogId
         self.normalizedWorkoutName = normalizedWorkoutName
         self.originalWorkoutName = originalWorkoutName
@@ -58,11 +64,13 @@ struct LeaderboardEntry: Codable, Identifiable {
     }
 
     /// Create a leaderboard entry from a workout log
-    static func from(workoutLog: WorkoutLog, userName: String) -> LeaderboardEntry {
+    static func from(workoutLog: WorkoutLog, userName: String, userGender: String? = nil, gymName: String? = nil) -> LeaderboardEntry {
         return LeaderboardEntry(
             id: workoutLog.id,  // Use workout log ID for unique identification
             userId: workoutLog.userId,
             userName: userName,
+            userGender: userGender,
+            gymName: gymName,
             workoutLogId: workoutLog.id ?? "",
             normalizedWorkoutName: normalizeWorkoutName(workoutLog.wodTitle),
             originalWorkoutName: workoutLog.wodTitle,

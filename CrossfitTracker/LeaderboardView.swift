@@ -146,6 +146,7 @@ struct WorkoutLeaderboardDetailView: View {
     let entries: [LeaderboardEntry]
     var isLoading: Bool = false
     @State private var genderFilter: GenderFilter = .all
+    @State private var gymFilter: GymFilter = .everyone
 
     enum GenderFilter {
         case all
@@ -153,22 +154,34 @@ struct WorkoutLeaderboardDetailView: View {
         case female
     }
 
+    enum GymFilter {
+        case gym
+        case everyone
+    }
+
     var filteredEntries: [LeaderboardEntry] {
+        var filtered = entries
+
+        // Filter by gender
         switch genderFilter {
         case .all:
-            return entries
+            break // no filter
         case .male:
-            return entries.filter { entry in
-                // Check if user's gender is male (we need to get this from somewhere)
-                // For now, we'll show all entries - we'll need to enhance this
-                return true
-            }
+            filtered = filtered.filter { $0.userGender == "Male" }
         case .female:
-            return entries.filter { entry in
-                // Check if user's gender is female
-                return true
-            }
+            filtered = filtered.filter { $0.userGender == "Female" }
         }
+
+        // Filter by gym membership
+        switch gymFilter {
+        case .everyone:
+            break // no filter
+        case .gym:
+            // Only show users who have a gym
+            filtered = filtered.filter { $0.gymName != nil }
+        }
+
+        return filtered
     }
 
     var sortedEntries: [LeaderboardEntry] {
@@ -212,6 +225,15 @@ struct WorkoutLeaderboardDetailView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            // Gym/Everyone filter
+            Picker("Scope", selection: $gymFilter) {
+                Text("Gym").tag(GymFilter.gym)
+                Text("Everyone").tag(GymFilter.everyone)
+            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal)
+            .padding(.top)
+
             // Gender filter
             Picker("Gender", selection: $genderFilter) {
                 Text("All").tag(GenderFilter.all)
@@ -219,7 +241,8 @@ struct WorkoutLeaderboardDetailView: View {
                 Text("Female").tag(GenderFilter.female)
             }
             .pickerStyle(.segmented)
-            .padding()
+            .padding(.horizontal)
+            .padding(.bottom)
 
             if isLoading {
                 Spacer()
@@ -261,8 +284,16 @@ struct WorkoutLeaderboardDetailView: View {
                             }
 
                             VStack(alignment: .leading, spacing: 4) {
-                                Text(entry.userName)
-                                    .font(.headline)
+                                HStack(spacing: 4) {
+                                    Text(entry.userName)
+                                        .font(.headline)
+
+                                    if let gymName = entry.gymName {
+                                        Text("(\(gymName))")
+                                            .font(.caption)
+                                            .foregroundColor(.blue)
+                                    }
+                                }
 
                                 HStack {
                                     Text(entry.resultSummary)

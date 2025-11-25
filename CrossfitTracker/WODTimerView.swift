@@ -240,11 +240,20 @@ struct WODTimerView: View {
                                             .foregroundColor(index < 3 ? .blue : .secondary)
                                             .frame(width: 25, alignment: .leading)
 
-                                        // Name
-                                        Text(entry.userName)
-                                            .font(.caption)
-                                            .foregroundColor(.primary)
-                                            .lineLimit(1)
+                                        // Name and Gym
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(entry.userName)
+                                                .font(.caption)
+                                                .foregroundColor(.primary)
+                                                .lineLimit(1)
+
+                                            if let gymName = entry.gymName {
+                                                Text(gymName)
+                                                    .font(.caption2)
+                                                    .foregroundColor(.blue)
+                                                    .lineLimit(1)
+                                            }
+                                        }
 
                                         Spacer()
 
@@ -778,44 +787,82 @@ struct WODTimerView: View {
                                 print("📊 [Leaderboard] Collected user names: \(userNames)")
                                 print("📊 [Leaderboard] Collected user genders: \(userGenders)")
 
-                                // Filter by hidden users
-                                var filteredLogs = bestTimes.values.filter { !usersToHide.contains($0.userId) }
+                                // Fetch gym names for all users
+                                self.fetchGymNamesForUsers(db: db, userIds: userIdsToCheck) { userGyms in
+                                    // Filter by hidden users
+                                    var filteredLogs = bestTimes.values.filter { !usersToHide.contains($0.userId) }
 
-                                // Filter by gender if not "all"
-                                if self.genderFilter != .all {
-                                    filteredLogs = filteredLogs.filter { log in
-                                        guard let userGender = userGenders[log.userId] else { return false }
-                                        switch self.genderFilter {
-                                        case .male:
-                                            return userGender == .male
-                                        case .female:
-                                            return userGender == .female
-                                        case .all:
-                                            return true
+                                    // Filter by gender if not "all"
+                                    if self.genderFilter != .all {
+                                        filteredLogs = filteredLogs.filter { log in
+                                            guard let userGender = userGenders[log.userId] else { return false }
+                                            switch self.genderFilter {
+                                            case .male:
+                                                return userGender == .male
+                                            case .female:
+                                                return userGender == .female
+                                            case .all:
+                                                return true
+                                            }
                                         }
+                                        print("📊 [Leaderboard] After gender filter (\(self.genderFilter)): \(filteredLogs.count) entries")
                                     }
-                                    print("📊 [Leaderboard] After gender filter (\(self.genderFilter)): \(filteredLogs.count) entries")
-                                }
 
-                                let sortedLogs = filteredLogs.sorted { ($0.timeInSeconds ?? Double.infinity) < ($1.timeInSeconds ?? Double.infinity) }
+                                    let sortedLogs = filteredLogs.sorted { ($0.timeInSeconds ?? Double.infinity) < ($1.timeInSeconds ?? Double.infinity) }
 
-                                // Convert to LeaderboardEntry with actual user names
-                                let entries = sortedLogs.compactMap { log -> LeaderboardEntry? in
-                                    guard let time = log.timeInSeconds else { return nil }
-                                    let userName = userNames[log.userId] ?? "User"
-                                    let gender = userGenders[log.userId]?.rawValue ?? "Unknown"
-                                    print("📊 [Leaderboard] Creating entry for userId '\(log.userId)' with name '\(userName)', gender '\(gender)', and time \(time)")
-                                    return LeaderboardEntry.from(workoutLog: log, userName: userName)
-                                }
+                                    // Convert to LeaderboardEntry with actual user names, genders, and gym names
+                                    let entries = sortedLogs.compactMap { log -> LeaderboardEntry? in
+                                        guard let time = log.timeInSeconds else { return nil }
+                                        let userName = userNames[log.userId] ?? "User"
+                                        let gender = userGenders[log.userId]?.rawValue
+                                        let gymName = userGyms[log.userId]
+                                        print("📊 [Leaderboard] Creating entry for userId '\(log.userId)' with name '\(userName)', gender '\(gender ?? "Unknown")', gym '\(gymName ?? "None")', and time \(time)")
+                                        return LeaderboardEntry.from(workoutLog: log, userName: userName, userGender: gender, gymName: gymName)
+                                    }
 
-                                DispatchQueue.main.async {
-                                    self.leaderboardEntries = entries
-                                    self.isLoadingLeaderboard = false
-                                    print("✅ Loaded \(entries.count) leaderboard entries with user names")
+                                    DispatchQueue.main.async {
+                                        self.leaderboardEntries = entries
+                                        self.isLoadingLeaderboard = false
+                                        print("✅ Loaded \(entries.count) leaderboard entries with user names")
+                                    }
                                 }
                             }
                         }
                 }
+            }
+    }
+
+    // MARK: - Helper Functions
+
+    private func fetchGymNamesForUsers(db: Firestore, userIds: [String], completion: @escaping ([String: String]) -> Void) {
+        // Query all gyms and find which ones each user belongs to
+        db.collection("gyms")
+            .getDocuments { snapshot, error in
+                if let error = error {
+                    print("❌ Error fetching gyms: \(error.localizedDescription)")
+                    completion([:])
+                    return
+                }
+
+                var userGyms: [String: String] = [:]
+
+                let gyms = snapshot?.documents.compactMap { doc -> Gym? in
+                    try? doc.data(as: Gym.self)
+                } ?? []
+
+                // For each user, find their gym
+                for userId in userIds {
+                    // Find first gym where user is member, coach, or owner
+                    if let gym = gyms.first(where: { gym in
+                        gym.memberIds.contains(userId) ||
+                        gym.coachIds.contains(userId) ||
+                        gym.ownerId == userId
+                    }) {
+                        userGyms[userId] = gym.name
+                    }
+                }
+
+                completion(userGyms)
             }
     }
 }

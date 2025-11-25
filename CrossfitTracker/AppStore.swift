@@ -1892,6 +1892,7 @@ final class AppStore: ObservableObject {
                 // Fetch user data in batches
                 let batchSize = 10
                 var userNames: [String: String] = [:]
+                var userGenders: [String: String] = [:]
                 var usersToHide = Set<String>()
                 let totalBatches = (userIds.count + batchSize - 1) / batchSize
                 var processedBatches = 0
@@ -1922,6 +1923,7 @@ final class AppStore: ObservableObject {
                                             displayName = user.email.components(separatedBy: "@").first ?? "User"
                                         }
                                         userNames[doc.documentID] = displayName
+                                        userGenders[doc.documentID] = user.gender.rawValue
                                     }
                                 }
                             }
@@ -1929,22 +1931,60 @@ final class AppStore: ObservableObject {
                             processedBatches += 1
 
                             if processedBatches == totalBatches {
-                                let filteredLogs = bestTimes.values.filter { !usersToHide.contains($0.userId) }
-                                let sortedLogs = filteredLogs.sorted { ($0.timeInSeconds ?? Double.infinity) < ($1.timeInSeconds ?? Double.infinity) }
+                                // Now fetch gym memberships
+                                self.fetchGymNamesForUsers(userIds: userIds) { userGyms in
+                                    let filteredLogs = bestTimes.values.filter { !usersToHide.contains($0.userId) }
+                                    let sortedLogs = filteredLogs.sorted { ($0.timeInSeconds ?? Double.infinity) < ($1.timeInSeconds ?? Double.infinity) }
 
-                                let entries = sortedLogs.compactMap { log -> LeaderboardEntry? in
-                                    guard let time = log.timeInSeconds else { return nil }
-                                    let userName = userNames[log.userId] ?? "User"
-                                    return LeaderboardEntry.from(workoutLog: log, userName: userName)
-                                }
+                                    let entries = sortedLogs.compactMap { log -> LeaderboardEntry? in
+                                        guard let time = log.timeInSeconds else { return nil }
+                                        let userName = userNames[log.userId] ?? "User"
+                                        let gender = userGenders[log.userId]
+                                        let gymName = userGyms[log.userId]
+                                        return LeaderboardEntry.from(workoutLog: log, userName: userName, userGender: gender, gymName: gymName)
+                                    }
 
-                                DispatchQueue.main.async {
-                                    print("✅ Loaded \(entries.count) leaderboard entries for '\(workoutName)'")
-                                    completion(entries, nil)
+                                    DispatchQueue.main.async {
+                                        print("✅ Loaded \(entries.count) leaderboard entries for '\(workoutName)'")
+                                        completion(entries, nil)
+                                    }
                                 }
                             }
                         }
                 }
+            }
+    }
+
+    /// Helper function to fetch gym names for users
+    private func fetchGymNamesForUsers(userIds: [String], completion: @escaping ([String: String]) -> Void) {
+        // Query all gyms and find which ones each user belongs to
+        db.collection("gyms")
+            .getDocuments { snapshot, error in
+                if let error = error {
+                    print("❌ Error fetching gyms: \(error.localizedDescription)")
+                    completion([:])
+                    return
+                }
+
+                var userGyms: [String: String] = [:]
+
+                let gyms = snapshot?.documents.compactMap { doc -> Gym? in
+                    try? doc.data(as: Gym.self)
+                } ?? []
+
+                // For each user, find their gym
+                for userId in userIds {
+                    // Find first gym where user is member, coach, or owner
+                    if let gym = gyms.first(where: { gym in
+                        gym.memberIds.contains(userId) ||
+                        gym.coachIds.contains(userId) ||
+                        gym.ownerId == userId
+                    }) {
+                        userGyms[userId] = gym.name
+                    }
+                }
+
+                completion(userGyms)
             }
     }
 
