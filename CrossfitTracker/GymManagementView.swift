@@ -453,7 +453,7 @@ struct GymDetailView: View {
                     return
                 }
 
-                if let user = user, !self.coaches.contains(where: { $0.id == user.id }) {
+                if let user = user, !self.coaches.contains(where: { $0.email == user.email }) {
                     print("✅ Adding coach to list: \(user.email)")
                     self.coaches.append(user)
                     print("   Total coaches now: \(self.coaches.count)")
@@ -470,8 +470,8 @@ struct GymDetailView: View {
                 }
 
                 if let user = user {
-                    let alreadyExists = self.members.contains(where: { $0.id == user.id })
-                    print("🔵 Processing member \(user.email): alreadyExists=\(alreadyExists), user.id=\(user.id ?? "nil")")
+                    let alreadyExists = self.members.contains(where: { $0.email == user.email })
+                    print("🔵 Processing member \(user.email): alreadyExists=\(alreadyExists)")
 
                     if !alreadyExists {
                         print("✅ Adding member to list: \(user.email)")
