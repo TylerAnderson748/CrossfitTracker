@@ -36,6 +36,7 @@ struct WODTimerView: View {
 
     // Leaderboard
     @State private var leaderboardFilter: LeaderboardFilter = .everyone
+    @State private var genderFilter: GenderFilter = .all
     @State private var leaderboardEntries: [LeaderboardEntry] = []
     @State private var isLoadingLeaderboard = false
 
@@ -49,6 +50,12 @@ struct WODTimerView: View {
     enum LeaderboardFilter {
         case gym
         case everyone
+    }
+
+    enum GenderFilter {
+        case all
+        case male
+        case female
     }
 
     var body: some View {
@@ -183,7 +190,7 @@ struct WODTimerView: View {
 
                             Spacer()
 
-                            // Filter toggle
+                            // Gym/Everyone filter
                             Picker("Filter", selection: $leaderboardFilter) {
                                 Text("Gym").tag(LeaderboardFilter.gym)
                                 Text("Everyone").tag(LeaderboardFilter.everyone)
@@ -191,6 +198,22 @@ struct WODTimerView: View {
                             .pickerStyle(.segmented)
                             .frame(width: 180)
                             .onChange(of: leaderboardFilter) { _ in
+                                loadLeaderboard()
+                            }
+                        }
+                        .padding(.horizontal, 10)
+
+                        // Gender filter
+                        HStack {
+                            Spacer()
+                            Picker("Gender", selection: $genderFilter) {
+                                Text("All").tag(GenderFilter.all)
+                                Text("Male").tag(GenderFilter.male)
+                                Text("Female").tag(GenderFilter.female)
+                            }
+                            .pickerStyle(.segmented)
+                            .frame(width: 280)
+                            .onChange(of: genderFilter) { _ in
                                 loadLeaderboard()
                             }
                         }
@@ -698,10 +721,11 @@ struct WODTimerView: View {
                     return
                 }
 
-                // Query users to check hideFromLeaderboards and get display names
+                // Query users to check hideFromLeaderboards and get display names and genders
                 let batchSize = 10
                 var usersToHide = Set<String>()
                 var userNames: [String: String] = [:]
+                var userGenders: [String: Gender] = [:]
                 let totalBatches = (userIdsToCheck.count + batchSize - 1) / batchSize
                 var processedBatches = 0
 
@@ -740,6 +764,8 @@ struct WODTimerView: View {
                                             print("✅ [Leaderboard] User \(doc.documentID) email prefix: '\(displayName)'")
                                         }
                                         userNames[doc.documentID] = displayName
+                                        userGenders[doc.documentID] = user.gender
+                                        print("✅ [Leaderboard] User \(doc.documentID) gender: '\(user.gender.rawValue)'")
                                     } else {
                                         print("❌ [Leaderboard] Failed to decode user doc \(doc.documentID)")
                                     }
@@ -750,15 +776,35 @@ struct WODTimerView: View {
 
                             if processedBatches == totalBatches {
                                 print("📊 [Leaderboard] Collected user names: \(userNames)")
+                                print("📊 [Leaderboard] Collected user genders: \(userGenders)")
 
-                                let filteredLogs = bestTimes.values.filter { !usersToHide.contains($0.userId) }
+                                // Filter by hidden users
+                                var filteredLogs = bestTimes.values.filter { !usersToHide.contains($0.userId) }
+
+                                // Filter by gender if not "all"
+                                if self.genderFilter != .all {
+                                    filteredLogs = filteredLogs.filter { log in
+                                        guard let userGender = userGenders[log.userId] else { return false }
+                                        switch self.genderFilter {
+                                        case .male:
+                                            return userGender == .male
+                                        case .female:
+                                            return userGender == .female
+                                        case .all:
+                                            return true
+                                        }
+                                    }
+                                    print("📊 [Leaderboard] After gender filter (\(self.genderFilter)): \(filteredLogs.count) entries")
+                                }
+
                                 let sortedLogs = filteredLogs.sorted { ($0.timeInSeconds ?? Double.infinity) < ($1.timeInSeconds ?? Double.infinity) }
 
                                 // Convert to LeaderboardEntry with actual user names
                                 let entries = sortedLogs.compactMap { log -> LeaderboardEntry? in
                                     guard let time = log.timeInSeconds else { return nil }
                                     let userName = userNames[log.userId] ?? "User"
-                                    print("📊 [Leaderboard] Creating entry for userId '\(log.userId)' with name '\(userName)' and time \(time)")
+                                    let gender = userGenders[log.userId]?.rawValue ?? "Unknown"
+                                    print("📊 [Leaderboard] Creating entry for userId '\(log.userId)' with name '\(userName)', gender '\(gender)', and time \(time)")
                                     return LeaderboardEntry.from(workoutLog: log, userName: userName)
                                 }
 
