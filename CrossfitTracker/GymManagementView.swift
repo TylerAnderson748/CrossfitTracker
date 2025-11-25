@@ -11,6 +11,7 @@ struct GymManagementView: View {
     @EnvironmentObject var store: AppStore
     @State private var gyms: [Gym] = []
     @State private var showingAddGym = false
+    @State private var showingFindGyms = false
     @State private var selectedGym: Gym?
 
     var body: some View {
@@ -26,17 +27,25 @@ struct GymManagementView: View {
                             .font(.title2)
                             .foregroundColor(.secondary)
 
-                        Text("Create your first gym to start managing coaches and members")
+                        Text("Create a gym or request to join an existing one")
                             .font(.subheadline)
                             .foregroundColor(.secondary)
                             .multilineTextAlignment(.center)
                             .padding(.horizontal)
 
-                        Button(action: { showingAddGym = true }) {
-                            Label("Create Gym", systemImage: "plus.circle.fill")
-                                .font(.headline)
+                        HStack(spacing: 12) {
+                            Button(action: { showingAddGym = true }) {
+                                Label("Create Gym", systemImage: "plus.circle.fill")
+                                    .font(.headline)
+                            }
+                            .buttonStyle(.borderedProminent)
+
+                            Button(action: { showingFindGyms = true }) {
+                                Label("Find Gyms", systemImage: "magnifyingglass")
+                                    .font(.headline)
+                            }
+                            .buttonStyle(.bordered)
                         }
-                        .buttonStyle(.borderedProminent)
                         .padding(.top)
                     }
                     .padding()
@@ -54,6 +63,11 @@ struct GymManagementView: View {
             .navigationTitle("Gym Management")
             .toolbar {
                 if !gyms.isEmpty {
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        Button(action: { showingFindGyms = true }) {
+                            Label("Find", systemImage: "magnifyingglass")
+                        }
+                    }
                     ToolbarItem(placement: .navigationBarTrailing) {
                         Button(action: { showingAddGym = true }) {
                             Image(systemName: "plus")
@@ -65,6 +79,10 @@ struct GymManagementView: View {
                 AddGymSheet { gym in
                     saveGym(gym)
                 }
+            }
+            .sheet(isPresented: $showingFindGyms) {
+                FindGymsView()
+                    .environmentObject(store)
             }
             .onAppear {
                 loadGyms()
@@ -194,6 +212,11 @@ struct GymDetailView: View {
     @State private var members: [AppUser] = []
     @State private var showingAddCoach = false
     @State private var showingAddMember = false
+    @State private var pendingRequestCount: Int = 0
+
+    var isOwner: Bool {
+        gym.ownerId == store.currentUser?.uid
+    }
 
     var body: some View {
         List {
@@ -210,6 +233,27 @@ struct GymDetailView: View {
                         .foregroundColor(.secondary)
                     Spacer()
                     Text(gym.createdAt, style: .date)
+                }
+            }
+
+            // Membership Requests section (only for owners)
+            if isOwner && pendingRequestCount > 0 {
+                Section {
+                    NavigationLink(destination: MembershipRequestsView(gym: gym).environmentObject(store)) {
+                        HStack {
+                            Image(systemName: "person.badge.plus")
+                                .foregroundColor(.orange)
+                            Text("Membership Requests")
+                            Spacer()
+                            Text("\(pendingRequestCount)")
+                                .font(.caption)
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Color.orange)
+                                .cornerRadius(12)
+                        }
+                    }
                 }
             }
 
@@ -318,6 +362,9 @@ struct GymDetailView: View {
         .navigationTitle("Gym Details")
         .onAppear {
             loadGymUsers()
+            if isOwner {
+                loadPendingRequestCount()
+            }
         }
         .sheet(isPresented: $showingAddCoach) {
             AddUserToGymSheet(gym: gym, role: .coach) { email in
@@ -397,6 +444,19 @@ struct GymDetailView: View {
                     self.members.append(user)
                 }
             }
+        }
+    }
+
+    private func loadPendingRequestCount() {
+        guard let gymId = gym.id else { return }
+
+        store.loadPendingMembershipRequests(gymId: gymId) { requests, error in
+            if let error = error {
+                print("❌ Error loading pending requests: \(error)")
+                return
+            }
+
+            pendingRequestCount = requests.count
         }
     }
 }
