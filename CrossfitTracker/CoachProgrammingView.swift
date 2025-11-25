@@ -21,6 +21,7 @@ struct CoachProgrammingView: View {
     @State private var workoutToEdit: ScheduledWorkout?
     @State private var selectedDate = Date()
     @State private var scheduledWorkouts: [ScheduledWorkout] = []
+    @State private var groups: [WorkoutGroup] = []
 
     var body: some View {
             VStack(spacing: 0) {
@@ -53,6 +54,7 @@ struct CoachProgrammingView: View {
                             CoachDayCard(
                                 date: date,
                                 workouts: workouts(for: date),
+                                groups: groups,
                                 onAddWorkout: {
                                     selectedDate = date
                                     showingAddWorkout = true
@@ -99,6 +101,7 @@ struct CoachProgrammingView: View {
             }
             .onAppear {
                 loadScheduledWorkouts()
+                loadGroups()
             }
     }
 
@@ -177,6 +180,20 @@ struct CoachProgrammingView: View {
         }
     }
 
+    private func loadGroups() {
+        guard let gymId = gym.id else { return }
+
+        store.loadGroupsForGym(gymId: gymId) { groups, error in
+            if let error = error {
+                print("❌ Error loading groups: \(error)")
+                return
+            }
+
+            self.groups = groups
+            print("✅ Loaded \(groups.count) groups for programming view")
+        }
+    }
+
     private func saveWorkout(_ workout: ScheduledWorkout) {
         print("💾 saveWorkout called for: \(workout.wodTitle)")
         store.saveScheduledWorkout(workout) { savedWorkout, error in
@@ -245,6 +262,7 @@ struct CoachProgrammingView: View {
 struct CoachDayCard: View {
     let date: Date
     let workouts: [ScheduledWorkout]
+    let groups: [WorkoutGroup]
     let onAddWorkout: () -> Void
     let onEdit: (ScheduledWorkout) -> Void
     let onDelete: (ScheduledWorkout) -> Void
@@ -260,6 +278,11 @@ struct CoachDayCard: View {
         let formatter = DateFormatter()
         formatter.dateFormat = "d"
         return formatter.string(from: date)
+    }
+
+    private func groupName(for workout: ScheduledWorkout) -> String? {
+        guard let groupId = workout.groupId else { return nil }
+        return groups.first(where: { $0.id == groupId })?.name
     }
 
     var body: some View {
@@ -294,8 +317,21 @@ struct CoachDayCard: View {
                 ForEach(workouts) { workout in
                     HStack(alignment: .top, spacing: 12) {
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(workout.wodTitle)
-                                .font(.headline)
+                            HStack(spacing: 8) {
+                                Text(workout.wodTitle)
+                                    .font(.headline)
+
+                                if let groupName = groupName(for: workout) {
+                                    Text(groupName)
+                                        .font(.caption)
+                                        .foregroundColor(.white)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 2)
+                                        .background(Color.purple)
+                                        .cornerRadius(8)
+                                }
+                            }
+
                             Text(workout.wodDescription)
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
