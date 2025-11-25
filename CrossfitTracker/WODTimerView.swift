@@ -696,9 +696,10 @@ struct WODTimerView: View {
                     return
                 }
 
-                // Query users to check hideFromLeaderboards
+                // Query users to check hideFromLeaderboards and get display names
                 let batchSize = 10
                 var usersToHide = Set<String>()
+                var userNames: [String: String] = [:]
                 let totalBatches = (userIdsToCheck.count + batchSize - 1) / batchSize
                 var processedBatches = 0
 
@@ -711,15 +712,28 @@ struct WODTimerView: View {
                         .whereField(FieldPath.documentID(), in: batchUserIds)
                         .getDocuments { userSnapshot, userError in
                             if let userError = userError {
-                                print("❌ Error fetching user visibility settings: \(userError.localizedDescription)")
+                                print("❌ Error fetching user data: \(userError.localizedDescription)")
                             } else {
-                                let hiddenUsers = userSnapshot?.documents.compactMap { doc -> String? in
-                                    if let user = try? doc.data(as: AppUser.self), user.hideFromLeaderboards {
-                                        return doc.documentID
+                                userSnapshot?.documents.forEach { doc in
+                                    if let user = try? doc.data(as: AppUser.self) {
+                                        // Check if user should be hidden
+                                        if user.hideFromLeaderboards {
+                                            usersToHide.insert(doc.documentID)
+                                        }
+
+                                        // Extract display name (try multiple fields as fallback)
+                                        let displayName: String
+                                        if let name = user.displayName, !name.isEmpty {
+                                            displayName = name
+                                        } else if let username = user.username, !username.isEmpty {
+                                            displayName = username
+                                        } else {
+                                            // Use email prefix as last resort
+                                            displayName = user.email.components(separatedBy: "@").first ?? "User"
+                                        }
+                                        userNames[doc.documentID] = displayName
                                     }
-                                    return nil
-                                } ?? []
-                                usersToHide.formUnion(hiddenUsers)
+                                }
                             }
 
                             processedBatches += 1
@@ -728,16 +742,17 @@ struct WODTimerView: View {
                                 let filteredLogs = bestTimes.values.filter { !usersToHide.contains($0.userId) }
                                 let sortedLogs = filteredLogs.sorted { ($0.timeInSeconds ?? Double.infinity) < ($1.timeInSeconds ?? Double.infinity) }
 
-                                // Convert to LeaderboardEntry
+                                // Convert to LeaderboardEntry with actual user names
                                 let entries = sortedLogs.compactMap { log -> LeaderboardEntry? in
                                     guard let time = log.timeInSeconds else { return nil }
-                                    return LeaderboardEntry.from(workoutLog: log, userName: "User")
+                                    let userName = userNames[log.userId] ?? "User"
+                                    return LeaderboardEntry.from(workoutLog: log, userName: userName)
                                 }
 
                                 DispatchQueue.main.async {
                                     self.leaderboardEntries = entries
                                     self.isLoadingLeaderboard = false
-                                    print("✅ Loaded \(entries.count) leaderboard entries")
+                                    print("✅ Loaded \(entries.count) leaderboard entries with user names")
                                 }
                             }
                         }
