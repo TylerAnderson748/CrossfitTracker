@@ -2031,9 +2031,12 @@ final class AppStore: ObservableObject {
     func requestGymMembership(gymId: String, gymName: String, completion: @escaping (String?) -> Void) {
         guard let userId = currentUser?.uid,
               let userEmail = appUser?.email else {
+            print("❌ requestGymMembership: No user logged in")
             completion("No user logged in")
             return
         }
+
+        print("🔵 requestGymMembership: Starting request for user \(userId) to gym \(gymName) (\(gymId))")
 
         // Check if request already exists
         db.collection("gymMembershipRequests")
@@ -2042,13 +2045,17 @@ final class AppStore: ObservableObject {
             .whereField("status", isEqualTo: RequestStatus.pending.rawValue)
             .getDocuments { snapshot, error in
                 if let error = error {
+                    print("❌ requestGymMembership: Error checking existing requests: \(error.localizedDescription)")
                     DispatchQueue.main.async {
                         completion(error.localizedDescription)
                     }
                     return
                 }
 
+                print("🔵 requestGymMembership: Found \(snapshot?.documents.count ?? 0) existing pending requests")
+
                 if let existing = snapshot?.documents.first {
+                    print("⚠️ requestGymMembership: User already has pending request")
                     DispatchQueue.main.async {
                         completion("You already have a pending request for this gym")
                     }
@@ -2064,19 +2071,26 @@ final class AppStore: ObservableObject {
                     userDisplayName: self.appUser?.displayName
                 )
 
+                print("🔵 requestGymMembership: Creating new request document")
+                print("   - gymId: \(gymId)")
+                print("   - userId: \(userId)")
+                print("   - userEmail: \(userEmail)")
+                print("   - userDisplayName: \(self.appUser?.displayName ?? "nil")")
+
                 do {
                     try self.db.collection("gymMembershipRequests").addDocument(from: request) { error in
                         DispatchQueue.main.async {
                             if let error = error {
-                                print("❌ Error creating membership request: \(error.localizedDescription)")
+                                print("❌ requestGymMembership: Error creating request document: \(error.localizedDescription)")
                                 completion(error.localizedDescription)
                             } else {
-                                print("✅ Membership request created for gym: \(gymName)")
+                                print("✅ requestGymMembership: Successfully created request for gym: \(gymName)")
                                 completion(nil)
                             }
                         }
                     }
                 } catch {
+                    print("❌ requestGymMembership: Exception encoding request: \(error.localizedDescription)")
                     DispatchQueue.main.async {
                         completion(error.localizedDescription)
                     }
@@ -2086,24 +2100,41 @@ final class AppStore: ObservableObject {
 
     /// Load pending membership requests for a gym (for owners)
     func loadPendingMembershipRequests(gymId: String, completion: @escaping ([GymMembershipRequest], String?) -> Void) {
+        guard let userId = currentUser?.uid else {
+            print("❌ loadPendingMembershipRequests: No user logged in")
+            DispatchQueue.main.async {
+                completion([], "No user logged in")
+            }
+            return
+        }
+
+        print("🔵 loadPendingMembershipRequests: Loading for gym \(gymId) by user \(userId)")
+
         db.collection("gymMembershipRequests")
             .whereField("gymId", isEqualTo: gymId)
             .whereField("status", isEqualTo: RequestStatus.pending.rawValue)
             .order(by: "requestedAt", descending: true)
             .getDocuments { snapshot, error in
                 if let error = error {
+                    print("❌ loadPendingMembershipRequests: Error loading requests: \(error.localizedDescription)")
                     DispatchQueue.main.async {
                         completion([], error.localizedDescription)
                     }
                     return
                 }
 
+                print("🔵 loadPendingMembershipRequests: Found \(snapshot?.documents.count ?? 0) documents")
+
                 let requests = snapshot?.documents.compactMap { doc -> GymMembershipRequest? in
-                    try? doc.data(as: GymMembershipRequest.self)
+                    let request = try? doc.data(as: GymMembershipRequest.self)
+                    if let request = request {
+                        print("   - Request from \(request.userEmail) at \(request.requestedAt)")
+                    }
+                    return request
                 } ?? []
 
                 DispatchQueue.main.async {
-                    print("✅ Loaded \(requests.count) pending membership requests for gym")
+                    print("✅ loadPendingMembershipRequests: Successfully loaded \(requests.count) pending requests for gym")
                     completion(requests, nil)
                 }
             }

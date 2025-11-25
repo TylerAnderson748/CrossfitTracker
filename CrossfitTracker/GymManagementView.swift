@@ -448,14 +448,19 @@ struct GymDetailView: View {
     }
 
     private func loadPendingRequestCount() {
-        guard let gymId = gym.id else { return }
+        guard let gymId = gym.id else {
+            print("❌ GymDetailView: No gym ID for loading pending requests")
+            return
+        }
 
+        print("🔵 GymDetailView: Loading pending request count for gym \(gym.name) (\(gymId))")
         store.loadPendingMembershipRequests(gymId: gymId) { requests, error in
             if let error = error {
-                print("❌ Error loading pending requests: \(error)")
+                print("❌ GymDetailView: Error loading pending requests: \(error)")
                 return
             }
 
+            print("✅ GymDetailView: Found \(requests.count) pending requests")
             pendingRequestCount = requests.count
         }
     }

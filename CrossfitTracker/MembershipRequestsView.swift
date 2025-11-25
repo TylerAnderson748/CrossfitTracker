@@ -70,17 +70,23 @@ struct MembershipRequestsView: View {
     }
 
     private func loadRequests() {
-        guard let gymId = gym.id else { return }
+        guard let gymId = gym.id else {
+            print("❌ MembershipRequestsView: No gym ID")
+            return
+        }
 
+        print("🔵 MembershipRequestsView: Loading requests for gym \(gym.name) (\(gymId))")
         isLoading = true
         store.loadPendingMembershipRequests(gymId: gymId) { requests, error in
             isLoading = false
             if let error = error {
+                print("❌ MembershipRequestsView: Error loading requests: \(error)")
                 errorMessage = error
                 showError = true
                 return
             }
 
+            print("✅ MembershipRequestsView: Loaded \(requests.count) requests")
             pendingRequests = requests
         }
     }

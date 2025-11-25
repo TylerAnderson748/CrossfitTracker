@@ -15,6 +15,8 @@ struct FindGymsView: View {
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var showError = false
+    @State private var successMessage: String?
+    @State private var showSuccess = false
     @State private var pendingRequests: Set<String> = [] // Gym IDs with pending requests
 
     var filteredGyms: [Gym] {
@@ -88,6 +90,11 @@ struct FindGymsView: View {
             } message: {
                 Text(errorMessage ?? "Unknown error")
             }
+            .alert("Success", isPresented: $showSuccess) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text(successMessage ?? "")
+            }
         }
     }
 
@@ -108,15 +115,18 @@ struct FindGymsView: View {
     private func requestMembership(gym: Gym) {
         guard let gymId = gym.id else { return }
 
+        print("🔵 Requesting membership for gym: \(gym.name) (ID: \(gymId))")
         store.requestGymMembership(gymId: gymId, gymName: gym.name) { error in
             if let error = error {
+                print("❌ Request failed: \(error)")
                 errorMessage = error
                 showError = true
             } else {
+                print("✅ Request sent successfully to \(gym.name)")
                 // Add to pending requests
                 pendingRequests.insert(gymId)
-                errorMessage = "Request sent to \(gym.name)!"
-                showError = true
+                successMessage = "Request sent to \(gym.name)!"
+                showSuccess = true
             }
         }
     }
