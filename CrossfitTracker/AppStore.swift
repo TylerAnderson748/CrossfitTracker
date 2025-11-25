@@ -1843,6 +1843,111 @@ final class AppStore: ObservableObject {
             }
     }
 
+    /// Fetch leaderboard for a specific workout
+    func fetchLeaderboardForWorkout(workoutName: String, completion: @escaping ([LeaderboardEntry], String?) -> Void) {
+        print("📊 [fetchLeaderboardForWorkout] Loading leaderboard for '\(workoutName)'")
+
+        // Query workout logs for this workout
+        db.collection("workoutLogs")
+            .whereField("wodTitle", isEqualTo: workoutName)
+            .whereField("resultType", isEqualTo: WorkoutResultType.time.rawValue)
+            .getDocuments { snapshot, error in
+                if let error = error {
+                    DispatchQueue.main.async {
+                        print("❌ Error fetching leaderboard: \(error.localizedDescription)")
+                        completion([], error.localizedDescription)
+                    }
+                    return
+                }
+
+                let logs = snapshot?.documents.compactMap { doc -> WorkoutLog? in
+                    try? doc.data(as: WorkoutLog.self)
+                } ?? []
+
+                print("📊 [fetchLeaderboardForWorkout] Found \(logs.count) workout logs")
+
+                // Get best time for each user
+                var bestTimes: [String: WorkoutLog] = [:]
+                for log in logs {
+                    guard let time = log.timeInSeconds else { continue }
+                    if let existing = bestTimes[log.userId], let existingTime = existing.timeInSeconds {
+                        if time < existingTime {
+                            bestTimes[log.userId] = log
+                        }
+                    } else {
+                        bestTimes[log.userId] = log
+                    }
+                }
+
+                let userIds = Array(bestTimes.keys)
+                print("📊 [fetchLeaderboardForWorkout] Found \(userIds.count) unique users")
+
+                guard !userIds.isEmpty else {
+                    DispatchQueue.main.async {
+                        completion([], nil)
+                    }
+                    return
+                }
+
+                // Fetch user data in batches
+                let batchSize = 10
+                var userNames: [String: String] = [:]
+                var usersToHide = Set<String>()
+                let totalBatches = (userIds.count + batchSize - 1) / batchSize
+                var processedBatches = 0
+
+                for batchIndex in 0..<totalBatches {
+                    let start = batchIndex * batchSize
+                    let end = min(start + batchSize, userIds.count)
+                    let batchUserIds = Array(userIds[start..<end])
+
+                    self.db.collection("users")
+                        .whereField(FieldPath.documentID(), in: batchUserIds)
+                        .getDocuments { userSnapshot, userError in
+                            if let userError = userError {
+                                print("❌ Error fetching user data: \(userError.localizedDescription)")
+                            } else {
+                                userSnapshot?.documents.forEach { doc in
+                                    if let user = try? doc.data(as: AppUser.self) {
+                                        if user.hideFromLeaderboards {
+                                            usersToHide.insert(doc.documentID)
+                                        }
+
+                                        let displayName: String
+                                        if let name = user.displayName, !name.isEmpty {
+                                            displayName = name
+                                        } else if let username = user.username, !username.isEmpty {
+                                            displayName = username
+                                        } else {
+                                            displayName = user.email.components(separatedBy: "@").first ?? "User"
+                                        }
+                                        userNames[doc.documentID] = displayName
+                                    }
+                                }
+                            }
+
+                            processedBatches += 1
+
+                            if processedBatches == totalBatches {
+                                let filteredLogs = bestTimes.values.filter { !usersToHide.contains($0.userId) }
+                                let sortedLogs = filteredLogs.sorted { ($0.timeInSeconds ?? Double.infinity) < ($1.timeInSeconds ?? Double.infinity) }
+
+                                let entries = sortedLogs.compactMap { log -> LeaderboardEntry? in
+                                    guard let time = log.timeInSeconds else { return nil }
+                                    let userName = userNames[log.userId] ?? "User"
+                                    return LeaderboardEntry.from(workoutLog: log, userName: userName)
+                                }
+
+                                DispatchQueue.main.async {
+                                    print("✅ Loaded \(entries.count) leaderboard entries for '\(workoutName)'")
+                                    completion(entries, nil)
+                                }
+                            }
+                        }
+                }
+            }
+    }
+
     /// Update user's leaderboard visibility preference
     func updateLeaderboardVisibility(hideFromLeaderboards: Bool, completion: @escaping (String?) -> Void) {
         guard let userId = currentUser?.uid else {

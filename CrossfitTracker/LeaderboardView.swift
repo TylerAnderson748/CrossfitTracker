@@ -12,6 +12,7 @@ struct LeaderboardView: View {
     let wod: WOD?
     @State private var selectedWorkout: String?
     @State private var leaderboards: [String: [LeaderboardEntry]] = [:]
+    @State private var specificWorkoutEntries: [LeaderboardEntry] = []
     @State private var isLoading = false
     @State private var errorMessage: String?
 
@@ -25,7 +26,8 @@ struct LeaderboardView: View {
                 // Show leaderboard for specific workout
                 WorkoutLeaderboardDetailView(
                     workoutName: wod.title,
-                    entries: leaderboards[wod.title] ?? []
+                    entries: specificWorkoutEntries,
+                    isLoading: isLoading
                 )
             } else {
                 // Show all leaderboards
@@ -33,7 +35,11 @@ struct LeaderboardView: View {
             }
         }
         .onAppear {
-            if leaderboards.isEmpty {
+            if let wod = wod {
+                // Load leaderboard for specific workout
+                loadSpecificWorkoutLeaderboard(wod: wod)
+            } else if leaderboards.isEmpty {
+                // Load all leaderboards
                 loadLeaderboards()
             }
         }
@@ -117,15 +123,56 @@ struct LeaderboardView: View {
             }
         }
     }
+
+    private func loadSpecificWorkoutLeaderboard(wod: WOD) {
+        isLoading = true
+        errorMessage = nil
+
+        store.fetchLeaderboardForWorkout(workoutName: wod.title) { entries, error in
+            isLoading = false
+            if let error = error {
+                errorMessage = error
+                specificWorkoutEntries = []
+            } else {
+                specificWorkoutEntries = entries
+            }
+        }
+    }
 }
 
 struct WorkoutLeaderboardDetailView: View {
     @EnvironmentObject var store: AppStore
     let workoutName: String
     let entries: [LeaderboardEntry]
+    var isLoading: Bool = false
+    @State private var genderFilter: GenderFilter = .all
+
+    enum GenderFilter {
+        case all
+        case male
+        case female
+    }
+
+    var filteredEntries: [LeaderboardEntry] {
+        switch genderFilter {
+        case .all:
+            return entries
+        case .male:
+            return entries.filter { entry in
+                // Check if user's gender is male (we need to get this from somewhere)
+                // For now, we'll show all entries - we'll need to enhance this
+                return true
+            }
+        case .female:
+            return entries.filter { entry in
+                // Check if user's gender is female
+                return true
+            }
+        }
+    }
 
     var sortedEntries: [LeaderboardEntry] {
-        entries.sorted { entry1, entry2 in
+        filteredEntries.sorted { entry1, entry2 in
             // Sort by result type
             switch entry1.resultType {
             case .time:
@@ -164,50 +211,81 @@ struct WorkoutLeaderboardDetailView: View {
     }
 
     var body: some View {
-        List {
-            ForEach(Array(sortedEntries.enumerated()), id: \.element.id) { index, entry in
-                HStack(spacing: 12) {
-                    // Rank badge
-                    ZStack {
-                        if index < 3 {
-                            Circle()
-                                .fill(rankColor(for: index))
-                                .frame(width: 40, height: 40)
-                        } else {
-                            Circle()
-                                .stroke(Color.gray, lineWidth: 2)
-                                .frame(width: 40, height: 40)
-                        }
+        VStack(spacing: 0) {
+            // Gender filter
+            Picker("Gender", selection: $genderFilter) {
+                Text("All").tag(GenderFilter.all)
+                Text("Male").tag(GenderFilter.male)
+                Text("Female").tag(GenderFilter.female)
+            }
+            .pickerStyle(.segmented)
+            .padding()
 
-                        Text("\(index + 1)")
-                            .font(.headline)
-                            .foregroundColor(index < 3 ? .white : .primary)
-                    }
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(entry.userName)
-                            .font(.headline)
-
-                        HStack {
-                            Text(entry.resultSummary)
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-
-                            if entry.userId == store.currentUser?.uid {
-                                Text("(You)")
-                                    .font(.caption)
-                                    .foregroundColor(.blue)
-                            }
-                        }
-
-                        Text(formatDate(entry.completedDate))
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-
-                    Spacer()
+            if isLoading {
+                Spacer()
+                ProgressView("Loading leaderboard...")
+                Spacer()
+            } else if sortedEntries.isEmpty {
+                Spacer()
+                VStack(spacing: 12) {
+                    Image(systemName: "chart.bar.fill")
+                        .font(.system(size: 60))
+                        .foregroundColor(.gray)
+                    Text("No Entries Yet")
+                        .font(.headline)
+                        .foregroundColor(.secondary)
+                    Text("Be the first to complete this workout!")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
                 }
-                .padding(.vertical, 4)
+                Spacer()
+            } else {
+                List {
+                    ForEach(Array(sortedEntries.enumerated()), id: \.element.id) { index, entry in
+                        HStack(spacing: 12) {
+                            // Rank badge
+                            ZStack {
+                                if index < 3 {
+                                    Circle()
+                                        .fill(rankColor(for: index))
+                                        .frame(width: 40, height: 40)
+                                } else {
+                                    Circle()
+                                        .stroke(Color.gray, lineWidth: 2)
+                                        .frame(width: 40, height: 40)
+                                }
+
+                                Text("\(index + 1)")
+                                    .font(.headline)
+                                    .foregroundColor(index < 3 ? .white : .primary)
+                            }
+
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(entry.userName)
+                                    .font(.headline)
+
+                                HStack {
+                                    Text(entry.resultSummary)
+                                        .font(.subheadline)
+                                        .foregroundColor(.secondary)
+
+                                    if entry.userId == store.currentUser?.uid {
+                                        Text("(You)")
+                                            .font(.caption)
+                                            .foregroundColor(.blue)
+                                    }
+                                }
+
+                                Text(formatDate(entry.completedDate))
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+
+                            Spacer()
+                        }
+                        .padding(.vertical, 4)
+                    }
+                }
             }
         }
         .navigationTitle(workoutName)
