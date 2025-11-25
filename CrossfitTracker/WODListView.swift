@@ -147,6 +147,7 @@ struct WODListView: View {
                                     .padding(.vertical, 4)
                                 }
                             }
+                            .onDelete(perform: deleteSavedTemplates)
                         } label: {
                             Text("💾 Saved \(selectedType == .wod ? "WODs" : "Lifts")")
                                 .font(.headline)
@@ -261,6 +262,23 @@ struct WODListView: View {
             } else {
                 self.savedTemplates = templates
                 print("✅ [WODListView] Loaded \(templates.count) saved templates")
+            }
+        }
+    }
+
+    private func deleteSavedTemplates(at offsets: IndexSet) {
+        let templatesToDelete = offsets.map { filteredSavedTemplates[$0] }
+
+        for template in templatesToDelete {
+            guard let templateId = template.id else { continue }
+
+            store.deleteWorkoutTemplate(templateId: templateId) { error in
+                if let error = error {
+                    print("❌ [WODListView] Error deleting template: \(error)")
+                } else {
+                    print("✅ [WODListView] Template '\(template.title)' deleted successfully")
+                    loadSavedTemplates() // Reload templates
+                }
             }
         }
     }
