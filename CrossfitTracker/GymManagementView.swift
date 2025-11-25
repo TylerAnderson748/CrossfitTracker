@@ -206,7 +206,7 @@ struct AddGymSheet: View {
 
 struct GymDetailView: View {
     @EnvironmentObject var store: AppStore
-    let gym: Gym
+    @State var gym: Gym
 
     @State private var coaches: [AppUser] = []
     @State private var members: [AppUser] = []
@@ -361,10 +361,7 @@ struct GymDetailView: View {
         }
         .navigationTitle("Gym Details")
         .onAppear {
-            loadGymUsers()
-            if isOwner {
-                loadPendingRequestCount()
-            }
+            reloadGym()
         }
         .sheet(isPresented: $showingAddCoach) {
             AddUserToGymSheet(gym: gym, role: .coach) { email in
@@ -417,7 +414,37 @@ struct GymDetailView: View {
         }
     }
 
+    private func reloadGym() {
+        guard let gymId = gym.id else {
+            print("❌ GymDetailView: No gym ID for reload")
+            return
+        }
+
+        print("🔵 GymDetailView: Reloading gym \(gym.name) (\(gymId))")
+        store.loadGym(gymId: gymId) { updatedGym, error in
+            if let error = error {
+                print("❌ GymDetailView: Error reloading gym: \(error)")
+                return
+            }
+
+            if let updatedGym = updatedGym {
+                print("✅ GymDetailView: Gym reloaded with \(updatedGym.memberIds.count) members")
+                self.gym = updatedGym
+                self.loadGymUsers()
+                if self.isOwner {
+                    self.loadPendingRequestCount()
+                }
+            }
+        }
+    }
+
     private func loadGymUsers() {
+        // Clear existing lists
+        coaches = []
+        members = []
+
+        print("🔵 GymDetailView: Loading users - \(gym.coachIds.count) coaches, \(gym.memberIds.count) members")
+
         // Load coaches
         for coachId in gym.coachIds {
             store.loadUser(userId: coachId) { user, error in
