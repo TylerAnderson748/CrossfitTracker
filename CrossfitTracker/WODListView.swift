@@ -11,6 +11,7 @@ import Foundation
 import SwiftUI
 
 struct WODListView: View {
+    @EnvironmentObject var store: AppStore
     let workouts = SampleData.wods
     @State private var selectedType: WorkoutType = .wod
     @State private var searchText: String = ""
@@ -181,6 +182,13 @@ struct WODListView: View {
                 }
             }
             .navigationTitle("Workouts")
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    NavigationLink(destination: WorkoutTemplateLibraryView(gym: nil).environmentObject(store)) {
+                        Image(systemName: "book.fill")
+                    }
+                }
+            }
         }
     }
 

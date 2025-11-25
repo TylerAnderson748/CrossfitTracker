@@ -112,13 +112,19 @@ struct WorkoutTemplateLibraryView: View {
             return
         }
 
+        print("🔍 [WorkoutTemplateLibrary] Loading templates for user: \(userId), type: \(selectedWorkoutType.rawValue)")
+
         // Load personal templates
         store.loadUserWorkoutTemplates(userId: userId, workoutType: selectedWorkoutType) { templates, error in
             if let error = error {
                 print("❌ Error loading personal templates: \(error)")
             } else {
+                print("📥 [WorkoutTemplateLibrary] Received \(templates.count) templates from Firebase")
+                for template in templates {
+                    print("   - '\(template.title)' (isPersonal: \(template.isPersonal), type: \(template.workoutType.rawValue))")
+                }
                 self.personalTemplates = templates.filter { $0.isPersonal }
-                print("✅ Loaded \(self.personalTemplates.count) personal templates")
+                print("✅ Loaded \(self.personalTemplates.count) personal templates after filtering")
             }
         }
 
@@ -130,7 +136,7 @@ struct WorkoutTemplateLibraryView: View {
                 print("❌ Error loading gym templates: \(error)")
             } else {
                 self.gymTemplates = templates.filter { !$0.isPersonal }
-                print("✅ Loaded \(self.gymTemplates.count) gym templates")
+                print("✅ Loaded \(self.gymTemplates.count) gym templates after filtering")
             }
         }
     }
