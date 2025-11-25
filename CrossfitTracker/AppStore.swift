@@ -485,8 +485,10 @@ final class AppStore: ObservableObject {
 
     // MARK: - User Management
     func loadUser(userId: String, completion: @escaping (AppUser?, String?) -> Void) {
+        print("🔵 loadUser: Loading user \(userId)")
         db.collection("users").document(userId).getDocument { snapshot, error in
             if let error = error {
+                print("❌ loadUser: Error loading user \(userId): \(error.localizedDescription)")
                 DispatchQueue.main.async {
                     completion(nil, error.localizedDescription)
                 }
@@ -494,6 +496,7 @@ final class AppStore: ObservableObject {
             }
 
             guard let snapshot = snapshot, snapshot.exists else {
+                print("❌ loadUser: User \(userId) not found in database")
                 DispatchQueue.main.async {
                     completion(nil, "User not found")
                 }
@@ -502,10 +505,12 @@ final class AppStore: ObservableObject {
 
             do {
                 let user = try snapshot.data(as: AppUser.self)
+                print("✅ loadUser: Successfully loaded user \(user.email)")
                 DispatchQueue.main.async {
                     completion(user, nil)
                 }
             } catch {
+                print("❌ loadUser: Error decoding user \(userId): \(error.localizedDescription)")
                 DispatchQueue.main.async {
                     completion(nil, error.localizedDescription)
                 }
