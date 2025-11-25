@@ -73,35 +73,7 @@ struct WODTimerView: View {
                             .padding(.vertical, 4)
 
                         // Timer Controls
-                        HStack(spacing: 12) {
-                            Button(isRunning ? "Pause" : "Start") {
-                                toggleTimer()
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 8)
-                            .background(Color.blue)
-                            .foregroundColor(.white)
-                            .cornerRadius(8)
-
-                            Button("Reset") {
-                                resetTimer()
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 8)
-                            .background(Color.gray.opacity(0.2))
-                            .foregroundColor(.blue)
-                            .cornerRadius(8)
-
-                            Button("Save") {
-                                saveTimerResult()
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 8)
-                            .background(elapsed > 0 ? Color.green : Color.gray)
-                            .foregroundColor(.white)
-                            .cornerRadius(8)
-                            .disabled(elapsed == 0)
-                        }
+                        timerControlsView
 
                         // Category Picker
                         VStack(alignment: .leading, spacing: 2) {
@@ -255,10 +227,12 @@ struct WODTimerView: View {
                                         Spacer()
 
                                         // Time
-                                        Text(formatTime(entry.timeInSeconds))
-                                            .font(.caption)
-                                            .fontWeight(.semibold)
-                                            .foregroundColor(.primary)
+                                        if let time = entry.timeInSeconds {
+                                            Text(formatTime(time))
+                                                .font(.caption)
+                                                .fontWeight(.semibold)
+                                                .foregroundColor(.primary)
+                                        }
 
                                         // Date
                                         Text(entry.completedDate, style: .date)
@@ -448,6 +422,38 @@ struct WODTimerView: View {
         let m = Int(manualMinutes) ?? 0
         let s = Int(manualSeconds) ?? 0
         return m > 0 || s > 0
+    }
+
+    private var timerControlsView: some View {
+        HStack(spacing: 12) {
+            Button(isRunning ? "Pause" : "Start") {
+                toggleTimer()
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 8)
+            .background(Color.blue)
+            .foregroundColor(.white)
+            .cornerRadius(8)
+
+            Button("Reset") {
+                resetTimer()
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 8)
+            .background(Color.gray.opacity(0.2))
+            .foregroundColor(.blue)
+            .cornerRadius(8)
+
+            Button("Save") {
+                saveTimerResult()
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 8)
+            .background(elapsed > 0 ? Color.green : Color.gray)
+            .foregroundColor(.white)
+            .cornerRadius(8)
+            .disabled(elapsed == 0)
+        }
     }
 
     // MARK: - Timer helpers
@@ -727,14 +733,7 @@ struct WODTimerView: View {
                                 // Convert to LeaderboardEntry
                                 let entries = sortedLogs.compactMap { log -> LeaderboardEntry? in
                                     guard let time = log.timeInSeconds else { return nil }
-                                    // TODO: Fetch actual user names from Firestore
-                                    return LeaderboardEntry(
-                                        userId: log.userId,
-                                        userName: "User", // Placeholder - need to fetch from users collection
-                                        wodTitle: log.wodTitle,
-                                        timeInSeconds: time,
-                                        completedDate: log.completedDate
-                                    )
+                                    return LeaderboardEntry.from(workoutLog: log, userName: "User")
                                 }
 
                                 DispatchQueue.main.async {
@@ -747,16 +746,6 @@ struct WODTimerView: View {
                 }
             }
     }
-}
-
-// MARK: - Leaderboard Entry
-struct LeaderboardEntry: Identifiable {
-    var id: String { "\(userId)-\(wodTitle)" }
-    let userId: String
-    let userName: String
-    let wodTitle: String
-    let timeInSeconds: Double
-    let completedDate: Date
 }
 
 // MARK: - WOD Line Chart View
@@ -786,6 +775,20 @@ struct WODLineChartView: View {
         let m = Int(seconds) / 60
         let s = Int(seconds) % 60
         return String(format: "%d:%02d", m, s)
+    }
+
+    private func dataPoint(for time: Double, at index: Int, in geometry: GeometryProxy) -> some View {
+        let width = geometry.size.width - 40
+        let height = geometry.size.height - 20
+        let xStep = width / CGFloat(max(sortedEntries.count - 1, 1))
+        let x = 40 + CGFloat(index) * xStep
+        let normalizedValue = (time - minTime) / (maxTime - minTime)
+        let y = height - (CGFloat(normalizedValue) * height)
+
+        return Circle()
+            .fill(Color.blue)
+            .frame(width: 7, height: 7)
+            .position(x: x, y: y)
     }
 
     var body: some View {
@@ -846,20 +849,13 @@ struct WODLineChartView: View {
 
                     // Data points
                     ForEach(Array(sortedEntries.enumerated()), id: \.element.id) { index, entry in
-                        guard let time = entry.timeInSeconds else { return AnyView(EmptyView()) }
-                        let width = geometry.size.width - 40
-                        let height = geometry.size.height - 20
-                        let xStep = width / CGFloat(max(sortedEntries.count - 1, 1))
-                        let x = 40 + CGFloat(index) * xStep
-                        let normalizedValue = (time - minTime) / (maxTime - minTime)
-                        let y = height - (CGFloat(normalizedValue) * height)
-
-                        return AnyView(
-                            Circle()
-                                .fill(Color.blue)
-                                .frame(width: 7, height: 7)
-                                .position(x: x, y: y)
-                        )
+                        if let time = entry.timeInSeconds {
+                            dataPoint(
+                                for: time,
+                                at: index,
+                                in: geometry
+                            )
+                        }
                     }
                 }
                 .frame(height: geometry.size.height - 15)
