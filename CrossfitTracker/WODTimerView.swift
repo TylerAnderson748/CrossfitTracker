@@ -81,7 +81,6 @@ struct WODTimerView: View {
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                             Picker("Category", selection: $selectedCategory) {
-                                Text("RX+").tag(WODCategory.rxPlus)
                                 Text("RX").tag(WODCategory.rx)
                                 Text("Scaled").tag(WODCategory.scaled)
                                 Text("Happy").tag(WODCategory.happy)
@@ -298,7 +297,6 @@ struct WODTimerView: View {
                                                     .font(.caption)
                                                     .foregroundColor(.secondary)
                                                 Picker("Category", selection: $editCategory) {
-                                                    Text("RX+").tag(WODCategory.rxPlus)
                                                     Text("RX").tag(WODCategory.rx)
                                                     Text("Scaled").tag(WODCategory.scaled)
                                                     Text("Happy").tag(WODCategory.happy)
