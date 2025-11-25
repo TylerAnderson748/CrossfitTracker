@@ -280,9 +280,10 @@ struct CoachDayCard: View {
         return formatter.string(from: date)
     }
 
-    private func groupName(for workout: ScheduledWorkout) -> String? {
-        guard let groupId = workout.groupId else { return nil }
-        return groups.first(where: { $0.id == groupId })?.name
+    private func groupNames(for workout: ScheduledWorkout) -> [String] {
+        return workout.groupIds.compactMap { groupId in
+            groups.first(where: { $0.id == groupId })?.name
+        }
     }
 
     var body: some View {
@@ -321,7 +322,7 @@ struct CoachDayCard: View {
                                 Text(workout.wodTitle)
                                     .font(.headline)
 
-                                if let groupName = groupName(for: workout) {
+                                ForEach(groupNames(for: workout), id: \.self) { groupName in
                                     Text(groupName)
                                         .font(.caption)
                                         .foregroundColor(.white)
@@ -397,7 +398,7 @@ struct AddWorkoutSheet: View {
     @State private var description: String = ""
     @State private var date: Date
     @State private var groups: [WorkoutGroup] = []
-    @State private var selectedGroupId: String?
+    @State private var selectedGroupIds: Set<String> = []
     @State private var recurrenceType: RecurrenceType = .none
     @State private var hasEndDate: Bool = false
     @State private var recurrenceEndDate: Date
@@ -531,19 +532,31 @@ struct AddWorkoutSheet: View {
                         Text("Loading groups...")
                             .foregroundColor(.secondary)
                     } else {
-                        Picker("Assign to Group", selection: $selectedGroupId) {
-                            Text("Personal (only you)").tag(nil as String?)
-                            ForEach(groups) { group in
-                                if let groupId = group.id {
-                                    Text(group.name).tag(groupId as String?)
-                                }
+                        ForEach(groups) { group in
+                            if let groupId = group.id {
+                                Toggle(group.name, isOn: Binding(
+                                    get: { selectedGroupIds.contains(groupId) },
+                                    set: { isOn in
+                                        if isOn {
+                                            selectedGroupIds.insert(groupId)
+                                        } else {
+                                            selectedGroupIds.remove(groupId)
+                                        }
+                                    }
+                                ))
                             }
                         }
                     }
 
-                    Text("Select a group to assign this workout to")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                    if selectedGroupIds.isEmpty {
+                        Text("No groups selected - workout will be personal (only you)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    } else {
+                        Text("Selected \(selectedGroupIds.count) group(s)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
                 }
 
                 Section("Recurrence") {
@@ -643,7 +656,7 @@ struct AddWorkoutSheet: View {
                             wodDescription: description,
                             date: normalizedDate,
                             workoutType: workoutType,
-                            groupId: selectedGroupId,
+                            groupIds: Array(selectedGroupIds),
                             timeSlots: [],
                             createdBy: userId,
                             recurrenceType: recurrenceType,
@@ -667,7 +680,8 @@ struct AddWorkoutSheet: View {
                                 }
                             }
                         } else {
-                            print("💾 Saving workout: \(workout.wodTitle) for \(normalizedDate), groupId: \(selectedGroupId ?? "nil (personal)")")
+                            let groupsText = selectedGroupIds.isEmpty ? "personal" : "\(selectedGroupIds.count) group(s)"
+                            print("💾 Saving workout: \(workout.wodTitle) for \(normalizedDate), groups: \(groupsText)")
                             onSave(workout)
                         }
 
@@ -838,7 +852,7 @@ struct EditWorkoutSheet: View {
     @State private var description: String
     @State private var date: Date
     @State private var groups: [WorkoutGroup] = []
-    @State private var selectedGroupId: String?
+    @State private var selectedGroupIds: Set<String>
     @State private var recurrenceType: RecurrenceType
     @State private var hasEndDate: Bool
     @State private var recurrenceEndDate: Date
@@ -855,7 +869,7 @@ struct EditWorkoutSheet: View {
         _title = State(initialValue: workout.wodTitle)
         _description = State(initialValue: workout.wodDescription)
         _date = State(initialValue: workout.date)
-        _selectedGroupId = State(initialValue: workout.groupId)
+        _selectedGroupIds = State(initialValue: Set(workout.groupIds))
         _recurrenceType = State(initialValue: workout.recurrenceType)
         _hasEndDate = State(initialValue: workout.recurrenceEndDate != nil)
         _recurrenceEndDate = State(initialValue: workout.recurrenceEndDate ?? Calendar.current.date(byAdding: .month, value: 3, to: workout.date) ?? workout.date)
@@ -977,19 +991,31 @@ struct EditWorkoutSheet: View {
                     Text("Loading groups...")
                         .foregroundColor(.secondary)
                 } else {
-                    Picker("Assign to Group", selection: $selectedGroupId) {
-                        Text("Personal (only you)").tag(nil as String?)
-                        ForEach(groups) { group in
-                            if let groupId = group.id {
-                                Text(group.name).tag(groupId as String?)
-                            }
+                    ForEach(groups) { group in
+                        if let groupId = group.id {
+                            Toggle(group.name, isOn: Binding(
+                                get: { selectedGroupIds.contains(groupId) },
+                                set: { isOn in
+                                    if isOn {
+                                        selectedGroupIds.insert(groupId)
+                                    } else {
+                                        selectedGroupIds.remove(groupId)
+                                    }
+                                }
+                            ))
                         }
                     }
                 }
 
-                Text("Select a group to assign this workout to")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                if selectedGroupIds.isEmpty {
+                    Text("No groups selected - workout will be personal (only you)")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                } else {
+                    Text("Selected \(selectedGroupIds.count) group(s)")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
             }
         }
         .navigationTitle("Edit Workout")
@@ -1016,7 +1042,7 @@ struct EditWorkoutSheet: View {
                     updatedWorkout.wodTitle = title
                     updatedWorkout.wodDescription = description
                     updatedWorkout.date = normalizedDate
-                    updatedWorkout.groupId = selectedGroupId
+                    updatedWorkout.groupIds = Array(selectedGroupIds)
                     updatedWorkout.recurrenceType = recurrenceType
                     updatedWorkout.recurrenceEndDate = hasEndDate ? recurrenceEndDate : nil
                     updatedWorkout.weekdays = recurrenceType == .weekly ? Array(selectedWeekdays) : nil

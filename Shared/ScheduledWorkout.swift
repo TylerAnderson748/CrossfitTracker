@@ -22,7 +22,7 @@ struct ScheduledWorkout: Codable, Identifiable {
     var wodDescription: String
     var date: Date
     var workoutType: WorkoutType // lift or wod
-    var groupId: String? // which group this is for, nil = personal workout
+    var groupIds: [String] // which groups this is for, empty = personal workout
     var timeSlots: [TimeSlot] // available time slots for group workouts
     var createdBy: String
     var createdAt: Date
@@ -44,7 +44,7 @@ struct ScheduledWorkout: Codable, Identifiable {
         wodDescription: String,
         date: Date,
         workoutType: WorkoutType = .wod,
-        groupId: String? = nil,
+        groupIds: [String] = [],
         timeSlots: [TimeSlot] = [],
         createdBy: String,
         recurrenceType: RecurrenceType = .none,
@@ -60,7 +60,7 @@ struct ScheduledWorkout: Codable, Identifiable {
         self.wodDescription = wodDescription
         self.date = date
         self.workoutType = workoutType
-        self.groupId = groupId
+        self.groupIds = groupIds
         self.timeSlots = timeSlots
         self.createdBy = createdBy
         self.createdAt = Date()
@@ -73,7 +73,7 @@ struct ScheduledWorkout: Codable, Identifiable {
     }
 
     var isPersonalWorkout: Bool {
-        return groupId == nil
+        return groupIds.isEmpty
     }
 
     var isRecurring: Bool {
@@ -97,7 +97,16 @@ struct ScheduledWorkout: Codable, Identifiable {
         recurrenceType = try container.decodeIfPresent(RecurrenceType.self, forKey: .recurrenceType) ?? .none
 
         // Decode optional fields (except id - let @DocumentID handle that)
-        groupId = try container.decodeIfPresent(String.self, forKey: .groupId)
+        // Handle backward compatibility: old workouts have groupId, new ones have groupIds
+        if let groupIds = try container.decodeIfPresent([String].self, forKey: .groupIds) {
+            self.groupIds = groupIds
+        } else if let groupId = try container.decodeIfPresent(String.self, forKey: .groupId) {
+            // Migrate old single groupId to array
+            self.groupIds = [groupId]
+        } else {
+            self.groupIds = []
+        }
+
         timeSlots = try container.decodeIfPresent([TimeSlot].self, forKey: .timeSlots) ?? []
         recurrenceEndDate = try container.decodeIfPresent(Date.self, forKey: .recurrenceEndDate)
         seriesId = try container.decodeIfPresent(String.self, forKey: .seriesId)
@@ -112,7 +121,7 @@ struct ScheduledWorkout: Codable, Identifiable {
 
     private enum CodingKeys: String, CodingKey {
         case wodId, wodTitle, wodDescription, date, workoutType
-        case groupId, timeSlots, createdBy, createdAt
+        case groupId, groupIds, timeSlots, createdBy, createdAt
         case recurrenceType, recurrenceEndDate, seriesId, weekdays
         case monthlyWeekPosition, monthlyWeekday
         // Note: 'id' is intentionally excluded - @DocumentID handles it
