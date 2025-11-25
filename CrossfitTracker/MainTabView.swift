@@ -25,13 +25,11 @@ struct MainTabView: View {
                     Label("Weekly Plan", systemImage: "calendar")
                 }
 
-            // Owners and above see Gym Management
-            if store.userRole.hasPermission(minimumRole: .owner) {
-                GymManagementView()
-                    .tabItem {
-                        Label("Gym", systemImage: "building.2")
-                    }
-            }
+            // All users see Gym Management (owners manage, athletes can find and join)
+            GymManagementView()
+                .tabItem {
+                    Label("Gym", systemImage: "building.2")
+                }
 
             // All users see Workouts
             WODListView()
