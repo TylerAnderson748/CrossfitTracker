@@ -460,7 +460,7 @@ final class AppStore: ObservableObject {
         saveWorkoutLog(log) { savedLog, error in
             if let error = error {
                 print("❌ [addManualWODResult] Error saving: \(error)")
-            } else if let savedLog = savedLog {
+            } else if savedLog != nil {
                 print("✅ [addManualWODResult] Saved successfully")
 
                 // Also add to local array for backwards compatibility
@@ -1738,7 +1738,7 @@ final class AppStore: ObservableObject {
 
     /// Create a leaderboard entry from a workout log
     func createLeaderboardEntry(from log: WorkoutLog, completion: @escaping (LeaderboardEntry?, String?) -> Void) {
-        guard let userId = currentUser?.uid,
+        guard currentUser?.uid != nil,
               let appUser = appUser else {
             completion(nil, "No user logged in")
             return

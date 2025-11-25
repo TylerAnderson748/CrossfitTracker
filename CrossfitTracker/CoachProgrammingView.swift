@@ -957,7 +957,7 @@ struct EditWorkoutSheet: View {
             }
             ToolbarItem(placement: .confirmationAction) {
                 Button("Save") {
-                    guard let userId = store.currentUser?.uid else {
+                    guard store.currentUser?.uid != nil else {
                         print("❌ No user logged in")
                         dismiss()
                         return
