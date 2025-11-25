@@ -504,8 +504,13 @@ final class AppStore: ObservableObject {
             }
 
             do {
-                let user = try snapshot.data(as: AppUser.self)
-                print("✅ loadUser: Successfully loaded user \(user.email)")
+                var user = try snapshot.data(as: AppUser.self)
+                // Manually set the ID if not populated by @DocumentID
+                if user.id == nil {
+                    user.id = snapshot.documentID
+                    print("🔧 loadUser: Manually set user ID to \(snapshot.documentID)")
+                }
+                print("✅ loadUser: Successfully loaded user \(user.email) with ID \(user.id ?? "nil")")
                 DispatchQueue.main.async {
                     completion(user, nil)
                 }
