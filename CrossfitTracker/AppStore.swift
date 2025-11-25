@@ -2168,6 +2168,10 @@ final class AppStore: ObservableObject {
                 return
             }
 
+            // Add user to auto-assign groups
+            print("🔵 approveMembershipRequest: Adding user to auto-assign groups")
+            self.addUserToAutoAssignGroups(gymId: gymId, userId: userId)
+
             // Update request status
             self.db.collection("gymMembershipRequests").document(requestId).updateData([
                 "status": RequestStatus.approved.rawValue,
@@ -2179,7 +2183,7 @@ final class AppStore: ObservableObject {
                         print("❌ Error updating request status: \(error.localizedDescription)")
                         completion(error.localizedDescription)
                     } else {
-                        print("✅ Membership request approved")
+                        print("✅ Membership request approved and user added to auto-assign groups")
                         completion(nil)
                     }
                 }
