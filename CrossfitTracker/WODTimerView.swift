@@ -687,6 +687,8 @@ struct WODTimerView: View {
 
                 // Get unique user IDs
                 let userIdsToCheck = Array(bestTimes.keys)
+                print("🏆 [Leaderboard] Found \(userIdsToCheck.count) unique users with best times")
+                print("🏆 [Leaderboard] User IDs: \(userIdsToCheck)")
 
                 if userIdsToCheck.isEmpty {
                     DispatchQueue.main.async {
@@ -714,24 +716,32 @@ struct WODTimerView: View {
                             if let userError = userError {
                                 print("❌ Error fetching user data: \(userError.localizedDescription)")
                             } else {
+                                print("📊 [Leaderboard] Fetched \(userSnapshot?.documents.count ?? 0) user documents for batch")
                                 userSnapshot?.documents.forEach { doc in
+                                    print("📊 [Leaderboard] Processing user doc ID: \(doc.documentID)")
                                     if let user = try? doc.data(as: AppUser.self) {
                                         // Check if user should be hidden
                                         if user.hideFromLeaderboards {
                                             usersToHide.insert(doc.documentID)
+                                            print("🚫 [Leaderboard] User \(doc.documentID) is hidden from leaderboards")
                                         }
 
                                         // Extract display name (try multiple fields as fallback)
                                         let displayName: String
                                         if let name = user.displayName, !name.isEmpty {
                                             displayName = name
+                                            print("✅ [Leaderboard] User \(doc.documentID) displayName: '\(displayName)'")
                                         } else if let username = user.username, !username.isEmpty {
                                             displayName = username
+                                            print("✅ [Leaderboard] User \(doc.documentID) username: '\(displayName)'")
                                         } else {
                                             // Use email prefix as last resort
                                             displayName = user.email.components(separatedBy: "@").first ?? "User"
+                                            print("✅ [Leaderboard] User \(doc.documentID) email prefix: '\(displayName)'")
                                         }
                                         userNames[doc.documentID] = displayName
+                                    } else {
+                                        print("❌ [Leaderboard] Failed to decode user doc \(doc.documentID)")
                                     }
                                 }
                             }
@@ -739,6 +749,8 @@ struct WODTimerView: View {
                             processedBatches += 1
 
                             if processedBatches == totalBatches {
+                                print("📊 [Leaderboard] Collected user names: \(userNames)")
+
                                 let filteredLogs = bestTimes.values.filter { !usersToHide.contains($0.userId) }
                                 let sortedLogs = filteredLogs.sorted { ($0.timeInSeconds ?? Double.infinity) < ($1.timeInSeconds ?? Double.infinity) }
 
@@ -746,6 +758,7 @@ struct WODTimerView: View {
                                 let entries = sortedLogs.compactMap { log -> LeaderboardEntry? in
                                     guard let time = log.timeInSeconds else { return nil }
                                     let userName = userNames[log.userId] ?? "User"
+                                    print("📊 [Leaderboard] Creating entry for userId '\(log.userId)' with name '\(userName)' and time \(time)")
                                     return LeaderboardEntry.from(workoutLog: log, userName: userName)
                                 }
 
