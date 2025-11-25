@@ -152,7 +152,7 @@ final class AppStore: ObservableObject {
             }
     }
 
-    func signUp(email: String, password: String, username: String, firstName: String, lastName: String, completion: @escaping (String?) -> Void) {
+    func signUp(email: String, password: String, username: String, firstName: String, lastName: String, gender: Gender, completion: @escaping (String?) -> Void) {
         // First, check if username is available
         checkUsernameAvailability(username: username) { [weak self] isAvailable, error in
             if let error = error {
@@ -186,7 +186,7 @@ final class AppStore: ObservableObject {
                 }
 
                 // Create user document in Firestore with athlete role by default
-                let newUser = AppUser(id: userId, email: email, username: username.lowercased(), role: .athlete, firstName: firstName, lastName: lastName)
+                let newUser = AppUser(id: userId, email: email, username: username.lowercased(), role: .athlete, firstName: firstName, lastName: lastName, gender: gender)
                 self?.createUserDocument(user: newUser) { firestoreError in
                     if let firestoreError = firestoreError {
                         DispatchQueue.main.async {
@@ -275,7 +275,7 @@ final class AppStore: ObservableObject {
                 if let email = self?.currentUser?.email {
                     // Generate a temporary username from email for legacy users
                     let tempUsername = email.components(separatedBy: "@").first ?? UUID().uuidString
-                    let newUser = AppUser(id: userId, email: email, username: tempUsername.lowercased(), role: .athlete)
+                    let newUser = AppUser(id: userId, email: email, username: tempUsername.lowercased(), role: .athlete, gender: .male)
                     self?.createUserDocument(user: newUser) { _ in }
                 }
                 return
@@ -314,13 +314,14 @@ final class AppStore: ObservableObject {
         }
     }
 
-    func updateUserProfile(userId: String, firstName: String, lastName: String, username: String, completion: @escaping (String?) -> Void) {
+    func updateUserProfile(userId: String, firstName: String, lastName: String, username: String, gender: Gender, completion: @escaping (String?) -> Void) {
         let displayName = [firstName, lastName].compactMap { $0.isEmpty ? nil : $0 }.joined(separator: " ")
 
         var updateData: [String: Any] = [
             "firstName": firstName,
             "lastName": lastName,
-            "displayName": displayName
+            "displayName": displayName,
+            "gender": gender.rawValue
         ]
 
         // Only update username if it's not empty

@@ -15,6 +15,7 @@ struct ProfileView: View {
     @State private var editFirstName = ""
     @State private var editLastName = ""
     @State private var editUsername = ""
+    @State private var editGender: Gender = .male
     @State private var showError = false
     @State private var errorMessage = ""
 
@@ -39,6 +40,7 @@ struct ProfileView: View {
                                 editFirstName = store.appUser?.firstName ?? ""
                                 editLastName = store.appUser?.lastName ?? ""
                                 editUsername = store.appUser?.username ?? ""
+                                editGender = store.appUser?.gender ?? .male
                                 showingEditProfile = true
                             }
                             .buttonStyle(.borderedProminent)
@@ -79,6 +81,7 @@ struct ProfileView: View {
                             editFirstName = store.appUser?.firstName ?? ""
                             editLastName = store.appUser?.lastName ?? ""
                             editUsername = store.appUser?.username ?? ""
+                            editGender = store.appUser?.gender ?? .male
                             showingEditProfile = true
                         }) {
                             Image(systemName: "pencil.circle.fill")
@@ -196,6 +199,7 @@ struct ProfileView: View {
                     firstName: $editFirstName,
                     lastName: $editLastName,
                     username: $editUsername,
+                    gender: $editGender,
                     onSave: { saveProfile() }
                 )
             }
@@ -280,8 +284,8 @@ struct ProfileView: View {
     }
 
     private func updateProfileInFirestore(userId: String, username: String) {
-        print("   → Calling updateUserProfile with username: '\(username)'")
-        store.updateUserProfile(userId: userId, firstName: editFirstName, lastName: editLastName, username: username) { error in
+        print("   → Calling updateUserProfile with username: '\(username)' and gender: '\(editGender.rawValue)'")
+        store.updateUserProfile(userId: userId, firstName: editFirstName, lastName: editLastName, username: username, gender: editGender) { error in
             if let error = error {
                 print("❌ Error updating profile: \(error)")
                 errorMessage = "Failed to update profile: \(error)"
@@ -299,6 +303,7 @@ struct EditProfileSheet: View {
     @Binding var firstName: String
     @Binding var lastName: String
     @Binding var username: String
+    @Binding var gender: Gender
     let onSave: () -> Void
 
     var body: some View {
@@ -309,6 +314,15 @@ struct EditProfileSheet: View {
                         .textInputAutocapitalization(.words)
                     TextField("Last Name", text: $lastName)
                         .textInputAutocapitalization(.words)
+                }
+
+                Section("Gender") {
+                    Picker("Gender", selection: $gender) {
+                        ForEach(Gender.allCases, id: \.rawValue) { genderOption in
+                            Text(genderOption.rawValue).tag(genderOption)
+                        }
+                    }
+                    .pickerStyle(.segmented)
                 }
 
                 Section {
