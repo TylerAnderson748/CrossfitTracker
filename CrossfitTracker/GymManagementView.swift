@@ -218,6 +218,11 @@ struct GymDetailView: View {
         gym.ownerId == store.currentUser?.uid
     }
 
+    var isCoachOrOwner: Bool {
+        guard let userId = store.currentUser?.uid else { return false }
+        return gym.ownerId == userId || gym.coachIds.contains(userId)
+    }
+
     var body: some View {
         List {
             Section("Gym Information") {
@@ -260,9 +265,11 @@ struct GymDetailView: View {
             Section(header: HStack {
                 Text("Coaches")
                 Spacer()
-                Button(action: { showingAddCoach = true }) {
-                    Image(systemName: "plus.circle.fill")
-                        .foregroundColor(.blue)
+                if isOwner {
+                    Button(action: { showingAddCoach = true }) {
+                        Image(systemName: "plus.circle.fill")
+                            .foregroundColor(.blue)
+                    }
                 }
             }) {
                 if coaches.isEmpty {
@@ -291,9 +298,11 @@ struct GymDetailView: View {
             Section(header: HStack {
                 Text("Members")
                 Spacer()
-                Button(action: { showingAddMember = true }) {
-                    Image(systemName: "plus.circle.fill")
-                        .foregroundColor(.blue)
+                if isOwner {
+                    Button(action: { showingAddMember = true }) {
+                        Image(systemName: "plus.circle.fill")
+                            .foregroundColor(.blue)
+                    }
                 }
             }) {
                 if members.isEmpty {
@@ -319,42 +328,48 @@ struct GymDetailView: View {
                 }
             }
 
-            Section("Groups") {
-                NavigationLink(destination: GroupManagementView(gym: gym).environmentObject(store)) {
-                    HStack {
-                        Image(systemName: "person.3.sequence")
-                            .foregroundColor(.purple)
-                        Text("Manage Groups")
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+            // Groups section - only for coaches/owners
+            if isCoachOrOwner {
+                Section("Groups") {
+                    NavigationLink(destination: GroupManagementView(gym: gym).environmentObject(store)) {
+                        HStack {
+                            Image(systemName: "person.3.sequence")
+                                .foregroundColor(.purple)
+                            Text("Manage Groups")
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
                     }
                 }
             }
 
-            Section("Programming") {
-                NavigationLink(destination: CoachProgrammingView(gym: gym).environmentObject(store)) {
-                    HStack {
-                        Image(systemName: "calendar.badge.plus")
-                            .foregroundColor(.green)
-                        Text("Create Programming")
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+            // Programming section - only for coaches/owners
+            if isCoachOrOwner {
+                Section("Programming") {
+                    NavigationLink(destination: CoachProgrammingView(gym: gym).environmentObject(store)) {
+                        HStack {
+                            Image(systemName: "calendar.badge.plus")
+                                .foregroundColor(.green)
+                            Text("Create Programming")
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
                     }
-                }
 
-                NavigationLink(destination: WorkoutTemplateLibraryView(gym: gym).environmentObject(store)) {
-                    HStack {
-                        Image(systemName: "book.fill")
-                            .foregroundColor(.orange)
-                        Text("Workout Library")
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                    NavigationLink(destination: WorkoutTemplateLibraryView(gym: gym).environmentObject(store)) {
+                        HStack {
+                            Image(systemName: "book.fill")
+                                .foregroundColor(.orange)
+                            Text("Workout Library")
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
                     }
                 }
             }
