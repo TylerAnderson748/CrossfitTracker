@@ -126,4 +126,25 @@ struct ScheduledWorkout: Codable, Identifiable {
         case monthlyWeekPosition, monthlyWeekday
         // Note: 'id' is intentionally excluded - @DocumentID handles it
     }
+
+    // Custom encoder to handle the groupId/groupIds migration
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+
+        try container.encode(wodId, forKey: .wodId)
+        try container.encode(wodTitle, forKey: .wodTitle)
+        try container.encode(wodDescription, forKey: .wodDescription)
+        try container.encode(date, forKey: .date)
+        try container.encode(workoutType, forKey: .workoutType)
+        try container.encode(groupIds, forKey: .groupIds)
+        try container.encode(timeSlots, forKey: .timeSlots)
+        try container.encode(createdBy, forKey: .createdBy)
+        try container.encode(createdAt, forKey: .createdAt)
+        try container.encode(recurrenceType, forKey: .recurrenceType)
+        try container.encodeIfPresent(recurrenceEndDate, forKey: .recurrenceEndDate)
+        try container.encodeIfPresent(seriesId, forKey: .seriesId)
+        try container.encodeIfPresent(weekdays, forKey: .weekdays)
+        try container.encodeIfPresent(monthlyWeekPosition, forKey: .monthlyWeekPosition)
+        try container.encodeIfPresent(monthlyWeekday, forKey: .monthlyWeekday)
+    }
 }
