@@ -1266,8 +1266,8 @@ final class AppStore: ObservableObject {
                 } else {
                     let personalWorkouts = snapshot?.documents.compactMap { doc -> ScheduledWorkout? in
                         guard let workout = try? doc.data(as: ScheduledWorkout.self) else { return nil }
-                        // Only include workouts with nil groupId (personal workouts)
-                        return workout.groupId == nil ? workout : nil
+                        // Only include workouts with empty groupIds (personal workouts)
+                        return workout.groupIds.isEmpty ? workout : nil
                     } ?? []
                     allWorkouts.append(contentsOf: personalWorkouts)
                     print("✅ Loaded \(personalWorkouts.count) personal workouts")
@@ -1666,7 +1666,7 @@ final class AppStore: ObservableObject {
     /// Fetch recent workout logs from group members for a specific workout
     func loadGymMemberLogs(for workout: ScheduledWorkout, limit: Int = 10, completion: @escaping ([WorkoutLog], [AppUser], String?) -> Void) {
         // Get the group for this workout to find other members
-        guard let groupId = workout.groupId else {
+        guard let groupId = workout.groupIds.first else {
             // Personal workout - no group members
             DispatchQueue.main.async {
                 completion([], [], nil)
