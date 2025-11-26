@@ -17,7 +17,6 @@ struct CoachProgrammingView: View {
     let gym: Gym
 
     @State private var showingAddWorkout = false
-    @State private var showEditWorkout = false
     @State private var workoutToEdit: ScheduledWorkout?
     @State private var selectedDate = Date()
     @State private var scheduledWorkouts: [ScheduledWorkout] = []
@@ -88,15 +87,13 @@ struct CoachProgrammingView: View {
                 }
                 .environmentObject(store)
             }
-            .sheet(isPresented: $showEditWorkout) {
-                if let workout = workoutToEdit {
-                    NavigationStack {
-                        EditWorkoutSheet(gym: gym, workout: workout) {
-                            // Reload workouts after edit to handle all cases including recurring conversion
-                            loadScheduledWorkouts()
-                        }
-                        .environmentObject(store)
+            .sheet(item: $workoutToEdit) { workout in
+                NavigationStack {
+                    EditWorkoutSheet(gym: gym, workout: workout) {
+                        // Reload workouts after edit to handle all cases including recurring conversion
+                        loadScheduledWorkouts()
                     }
+                    .environmentObject(store)
                 }
             }
             .onAppear {
@@ -219,7 +216,6 @@ struct CoachProgrammingView: View {
 
     private func editWorkout(_ workout: ScheduledWorkout) {
         workoutToEdit = workout
-        showEditWorkout = true
     }
 
     private func deleteWorkout(_ workout: ScheduledWorkout) {

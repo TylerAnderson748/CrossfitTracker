@@ -1323,7 +1323,7 @@ final class AppStore: ObservableObject {
                 let batchGroupIds = Array(groupIds[start..<end])
 
                 self.db.collection("scheduledWorkouts")
-                    .whereField("groupId", in: batchGroupIds)
+                    .whereField("groupIds", arrayContainsAny: batchGroupIds)
                     .whereField("date", isGreaterThanOrEqualTo: startDate)
                     .whereField("date", isLessThanOrEqualTo: endDate)
                     .getDocuments { snapshot, error in
