@@ -1309,32 +1309,36 @@ final class AppStore: ObservableObject {
                 return
             }
 
-            print("📋 Loading workouts from \(groups.count) groups")
+            print("📋 Loading workouts from \(groups.count) groups: \(groupIds)")
 
             // Load all workouts for user's groups within date range
-            // Note: Firestore 'in' query supports max 10 items
+            // Query both new groupIds array and old groupId field for backward compatibility
+            // Note: Firestore 'in'/'arrayContainsAny' query supports max 10 items
             let batchSize = 10
             var processedBatches = 0
-            let totalBatches = (groupIds.count + batchSize - 1) / batchSize
+            // 2 queries per batch: one for new groupIds, one for old groupId
+            let totalBatches = ((groupIds.count + batchSize - 1) / batchSize) * 2
 
-            for batchIndex in 0..<totalBatches {
+            for batchIndex in 0..<((groupIds.count + batchSize - 1) / batchSize) {
                 let start = batchIndex * batchSize
                 let end = min(start + batchSize, groupIds.count)
                 let batchGroupIds = Array(groupIds[start..<end])
 
+                // Query 1: New groupIds array field (arrayContainsAny)
                 self.db.collection("scheduledWorkouts")
                     .whereField("groupIds", arrayContainsAny: batchGroupIds)
                     .whereField("date", isGreaterThanOrEqualTo: startDate)
                     .whereField("date", isLessThanOrEqualTo: endDate)
                     .getDocuments { snapshot, error in
                         if let error = error {
-                            print("❌ Error loading workouts batch: \(error.localizedDescription)")
+                            print("❌ Error loading workouts (groupIds) batch \(batchIndex + 1): \(error.localizedDescription)")
+                            print("   Full error: \(error)")
                         } else {
                             let batchWorkouts = snapshot?.documents.compactMap { doc -> ScheduledWorkout? in
                                 try? doc.data(as: ScheduledWorkout.self)
                             } ?? []
                             allWorkouts.append(contentsOf: batchWorkouts)
-                            print("✅ Loaded \(batchWorkouts.count) workouts from batch \(batchIndex + 1)")
+                            print("✅ Loaded \(batchWorkouts.count) workouts from groupIds batch \(batchIndex + 1)")
                         }
 
                         processedBatches += 1
@@ -1342,9 +1346,46 @@ final class AppStore: ObservableObject {
                         if processedBatches == totalBatches {
                             queriesCompleted += 1
                             if queriesCompleted == totalQueries {
+                                // Remove duplicates (in case a workout appears in both queries)
+                                let uniqueWorkouts = Array(Set(allWorkouts.map { $0.id ?? "" }).compactMap { id in
+                                    allWorkouts.first { $0.id == id }
+                                })
                                 DispatchQueue.main.async {
-                                    print("✅ Total workouts loaded: \(allWorkouts.count) (\(groups.count) groups)")
-                                    completion(allWorkouts, nil)
+                                    print("✅ Total workouts loaded: \(uniqueWorkouts.count) (\(groups.count) groups)")
+                                    completion(uniqueWorkouts, nil)
+                                }
+                            }
+                        }
+                    }
+
+                // Query 2: Old groupId string field (for backward compatibility)
+                self.db.collection("scheduledWorkouts")
+                    .whereField("groupId", in: batchGroupIds)
+                    .whereField("date", isGreaterThanOrEqualTo: startDate)
+                    .whereField("date", isLessThanOrEqualTo: endDate)
+                    .getDocuments { snapshot, error in
+                        if let error = error {
+                            print("❌ Error loading workouts (groupId) batch \(batchIndex + 1): \(error.localizedDescription)")
+                        } else {
+                            let batchWorkouts = snapshot?.documents.compactMap { doc -> ScheduledWorkout? in
+                                try? doc.data(as: ScheduledWorkout.self)
+                            } ?? []
+                            allWorkouts.append(contentsOf: batchWorkouts)
+                            print("✅ Loaded \(batchWorkouts.count) workouts from groupId batch \(batchIndex + 1)")
+                        }
+
+                        processedBatches += 1
+
+                        if processedBatches == totalBatches {
+                            queriesCompleted += 1
+                            if queriesCompleted == totalQueries {
+                                // Remove duplicates (in case a workout appears in both queries)
+                                let uniqueWorkouts = Array(Set(allWorkouts.map { $0.id ?? "" }).compactMap { id in
+                                    allWorkouts.first { $0.id == id }
+                                })
+                                DispatchQueue.main.async {
+                                    print("✅ Total workouts loaded: \(uniqueWorkouts.count) (\(groups.count) groups)")
+                                    completion(uniqueWorkouts, nil)
                                 }
                             }
                         }
