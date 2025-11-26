@@ -216,7 +216,7 @@ struct WeeklyPlanView: View {
 
             print("📥 [WeeklyPlan] Received \(workouts.count) workouts")
             for workout in workouts {
-                print("   - \(workout.wodTitle): groupId=\(workout.groupId ?? "nil"), createdBy=\(workout.createdBy), date=\(workout.date)")
+                print("   - \(workout.wodTitle): groupIds=\(workout.groupIds), createdBy=\(workout.createdBy), date=\(workout.date)")
             }
             self.scheduledWorkouts = workouts
         }
@@ -423,7 +423,7 @@ struct WorkoutSummaryRow: View {
             return ("Personal", .blue, "person.fill")
         } else {
             // For group workouts, try to find the group name
-            if let groupId = workout.groupId,
+            if let groupId = workout.groupIds.first,
                let group = store.groups.first(where: { $0.id == groupId }) {
                 return (group.name, .green, "person.3.fill")
             } else {
@@ -565,7 +565,7 @@ struct DebugInfoView: View {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(workout.wodTitle)
                                     .font(.headline)
-                                Text("Group ID: \(workout.groupId ?? "nil (personal)")")
+                                Text("Group IDs: \(workout.groupIds.isEmpty ? "nil (personal)" : workout.groupIds.joined(separator: ", "))")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                                 Text("Created By: \(workout.createdBy)")
@@ -629,7 +629,7 @@ struct DebugInfoView: View {
                 self.allWorkouts = workouts
                 print("✅ Debug: Loaded \(workouts.count) workouts")
                 for workout in workouts {
-                    print("   - \(workout.wodTitle): groupId=\(workout.groupId ?? "nil"), date=\(workout.date)")
+                    print("   - \(workout.wodTitle): groupIds=\(workout.groupIds), date=\(workout.date)")
                 }
             }
         }
@@ -887,7 +887,7 @@ struct AddPersonalWorkoutSheet: View {
                             wodDescription: description,
                             date: normalizedDate,
                             workoutType: workoutType,
-                            groupId: nil, // Personal workout
+                            groupIds: [], // Personal workout
                             timeSlots: [],
                             createdBy: userId,
                             recurrenceType: recurrenceType,
