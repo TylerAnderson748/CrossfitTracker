@@ -74,6 +74,18 @@ struct WorkoutGroup: Codable, Identifiable {
         self.defaultRevealMinute = defaultRevealMinute
     }
 
+    // CodingKeys for current format
+    private enum CodingKeys: String, CodingKey {
+        case id, gymId, name, type, membershipType, memberIds, coachIds, ownerId
+        case isPublic, isDeletable, createdAt, defaultTimeSlots
+        case hideDetailsByDefault, defaultRevealDaysBefore, defaultRevealHour, defaultRevealMinute
+    }
+
+    // Legacy keys for backward compatibility (decode only)
+    private enum LegacyCodingKeys: String, CodingKey {
+        case defaultRevealHoursBefore
+    }
+
     // Custom decoder to handle missing fields in existing documents
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -91,30 +103,27 @@ struct WorkoutGroup: Codable, Identifiable {
         defaultTimeSlots = try container.decodeIfPresent([DefaultTimeSlot].self, forKey: .defaultTimeSlots) ?? []
         hideDetailsByDefault = try container.decodeIfPresent(Bool.self, forKey: .hideDetailsByDefault) ?? false
 
-        // Try new format first, fall back to old format for backward compatibility
+        // Try new format first
         if let daysBefore = try container.decodeIfPresent(Int.self, forKey: .defaultRevealDaysBefore) {
             defaultRevealDaysBefore = daysBefore
             defaultRevealHour = try container.decodeIfPresent(Int.self, forKey: .defaultRevealHour) ?? 9
             defaultRevealMinute = try container.decodeIfPresent(Int.self, forKey: .defaultRevealMinute) ?? 0
-        } else if let hoursBefore = try container.decodeIfPresent(Int.self, forKey: .defaultRevealHoursBefore) {
-            // Migrate old format: convert hours before to days before + time
-            // Assume first class is at 9 AM, so 24 hours before = day before at 9 AM
-            defaultRevealDaysBefore = hoursBefore / 24
-            let remainingHours = hoursBefore % 24
-            // Calculate what time that would be (e.g., 2 hours before 9 AM = 7 AM same day)
-            defaultRevealHour = max(0, 9 - remainingHours)
-            defaultRevealMinute = 0
         } else {
-            defaultRevealDaysBefore = 0
-            defaultRevealHour = 9
-            defaultRevealMinute = 0
+            // Fall back to old format for backward compatibility
+            let legacyContainer = try decoder.container(keyedBy: LegacyCodingKeys.self)
+            if let hoursBefore = try legacyContainer.decodeIfPresent(Int.self, forKey: .defaultRevealHoursBefore) {
+                // Migrate old format: convert hours before to days before + time
+                // Assume first class is at 9 AM, so 24 hours before = day before at 9 AM
+                defaultRevealDaysBefore = hoursBefore / 24
+                let remainingHours = hoursBefore % 24
+                // Calculate what time that would be (e.g., 2 hours before 9 AM = 7 AM same day)
+                defaultRevealHour = max(0, 9 - remainingHours)
+                defaultRevealMinute = 0
+            } else {
+                defaultRevealDaysBefore = 0
+                defaultRevealHour = 9
+                defaultRevealMinute = 0
+            }
         }
-    }
-
-    private enum CodingKeys: String, CodingKey {
-        case id, gymId, name, type, membershipType, memberIds, coachIds, ownerId
-        case isPublic, isDeletable, createdAt, defaultTimeSlots
-        case hideDetailsByDefault, defaultRevealDaysBefore, defaultRevealHour, defaultRevealMinute
-        case defaultRevealHoursBefore // for backward compatibility reading
     }
 }
