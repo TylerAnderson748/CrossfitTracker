@@ -399,6 +399,7 @@ struct WorkoutCard: View {
         .sheet(isPresented: $showTimeSlotPicker) {
             DashboardTimeSlotPickerSheet(
                 workout: workout,
+                showDetails: shouldShowDetails,
                 timeFormatter: timeFormatter,
                 onSelectSlot: { slot in
                     signUpForSlot(slot)
@@ -441,18 +442,38 @@ struct WorkoutCard: View {
 struct DashboardTimeSlotPickerSheet: View {
     @Environment(\.dismiss) var dismiss
     let workout: ScheduledWorkout
+    let showDetails: Bool
     let timeFormatter: DateFormatter
     let onSelectSlot: (TimeSlot) -> Void
+
+    private var dateFormatter: DateFormatter {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        return formatter
+    }
 
     var body: some View {
         NavigationView {
             List {
                 Section {
-                    Text(workout.wodTitle)
-                        .font(.headline)
-                    Text(workout.wodDescription)
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
+                    if showDetails {
+                        Text(workout.wodTitle)
+                            .font(.headline)
+                        Text(workout.wodDescription)
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    } else {
+                        HStack {
+                            Image(systemName: "eye.slash")
+                                .foregroundColor(.secondary)
+                            Text("Workout details hidden")
+                                .font(.headline)
+                                .foregroundColor(.secondary)
+                        }
+                        Text(dateFormatter.string(from: workout.date))
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
                 }
 
                 Section("Select a Class Time") {
