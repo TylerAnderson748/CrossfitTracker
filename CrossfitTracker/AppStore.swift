@@ -1445,6 +1445,127 @@ final class AppStore: ObservableObject {
             }
     }
 
+    // MARK: - Time Slot Sign-up
+    func signUpForTimeSlot(workoutId: String, timeSlotId: String, userId: String, completion: @escaping (ScheduledWorkout?, String?) -> Void) {
+        let docRef = db.collection("scheduledWorkouts").document(workoutId)
+
+        docRef.getDocument { document, error in
+            if let error = error {
+                DispatchQueue.main.async {
+                    completion(nil, error.localizedDescription)
+                }
+                return
+            }
+
+            guard let document = document, document.exists else {
+                DispatchQueue.main.async {
+                    completion(nil, "Workout not found")
+                }
+                return
+            }
+
+            do {
+                var workout = try document.data(as: ScheduledWorkout.self)
+
+                // Find the time slot and add user
+                if let index = workout.timeSlots.firstIndex(where: { $0.id == timeSlotId }) {
+                    var slot = workout.timeSlots[index]
+
+                    // Check if already signed up
+                    if slot.signedUpUserIds.contains(userId) {
+                        DispatchQueue.main.async {
+                            completion(nil, "Already signed up for this time slot")
+                        }
+                        return
+                    }
+
+                    // Check capacity
+                    if slot.capacity > 0 && slot.signedUpUserIds.count >= slot.capacity {
+                        DispatchQueue.main.async {
+                            completion(nil, "This time slot is full")
+                        }
+                        return
+                    }
+
+                    // Add user to the slot
+                    slot.signedUpUserIds.append(userId)
+                    workout.timeSlots[index] = slot
+
+                    // Save updated workout
+                    try docRef.setData(from: workout) { error in
+                        DispatchQueue.main.async {
+                            if let error = error {
+                                completion(nil, error.localizedDescription)
+                            } else {
+                                print("✅ User signed up for time slot")
+                                completion(workout, nil)
+                            }
+                        }
+                    }
+                } else {
+                    DispatchQueue.main.async {
+                        completion(nil, "Time slot not found")
+                    }
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    completion(nil, error.localizedDescription)
+                }
+            }
+        }
+    }
+
+    func cancelTimeSlotSignUp(workoutId: String, timeSlotId: String, userId: String, completion: @escaping (ScheduledWorkout?, String?) -> Void) {
+        let docRef = db.collection("scheduledWorkouts").document(workoutId)
+
+        docRef.getDocument { document, error in
+            if let error = error {
+                DispatchQueue.main.async {
+                    completion(nil, error.localizedDescription)
+                }
+                return
+            }
+
+            guard let document = document, document.exists else {
+                DispatchQueue.main.async {
+                    completion(nil, "Workout not found")
+                }
+                return
+            }
+
+            do {
+                var workout = try document.data(as: ScheduledWorkout.self)
+
+                // Find the time slot and remove user
+                if let index = workout.timeSlots.firstIndex(where: { $0.id == timeSlotId }) {
+                    var slot = workout.timeSlots[index]
+                    slot.signedUpUserIds.removeAll { $0 == userId }
+                    workout.timeSlots[index] = slot
+
+                    // Save updated workout
+                    try docRef.setData(from: workout) { error in
+                        DispatchQueue.main.async {
+                            if let error = error {
+                                completion(nil, error.localizedDescription)
+                            } else {
+                                print("✅ User cancelled time slot sign-up")
+                                completion(workout, nil)
+                            }
+                        }
+                    }
+                } else {
+                    DispatchQueue.main.async {
+                        completion(nil, "Time slot not found")
+                    }
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    completion(nil, error.localizedDescription)
+                }
+            }
+        }
+    }
+
     // MARK: - Workout Templates
     func saveWorkoutTemplate(_ template: WorkoutTemplate, completion: @escaping (WorkoutTemplate?, String?) -> Void) {
         do {

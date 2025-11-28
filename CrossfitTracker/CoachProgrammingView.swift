@@ -333,6 +333,16 @@ struct CoachDayCard: View {
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
                                 .lineLimit(2)
+
+                            // Time slots display for coaches
+                            if !workout.timeSlots.isEmpty {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    ForEach(workout.timeSlots) { slot in
+                                        CoachTimeSlotRow(slot: slot)
+                                    }
+                                }
+                                .padding(.top, 4)
+                            }
                         }
 
                         Spacer()
@@ -382,6 +392,44 @@ struct CoachDayCard: View {
     }
 }
 
+struct CoachTimeSlotRow: View {
+    let slot: TimeSlot
+
+    private var spotsText: String {
+        if slot.capacity == 0 {
+            return "\(slot.signedUpUserIds.count) signed up"
+        } else {
+            return "\(slot.signedUpUserIds.count)/\(slot.capacity) signed up"
+        }
+    }
+
+    private var timeFormatter: DateFormatter {
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        return formatter
+    }
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "clock")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+            Text(timeFormatter.string(from: slot.startTime))
+                .font(.caption)
+                .fontWeight(.medium)
+            Text("•")
+                .foregroundColor(.secondary)
+            Text(spotsText)
+                .font(.caption)
+                .foregroundColor(slot.isFull ? .orange : .secondary)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(Color(.systemGray6))
+        .cornerRadius(6)
+    }
+}
+
 struct AddWorkoutSheet: View {
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var store: AppStore
@@ -407,6 +455,11 @@ struct AddWorkoutSheet: View {
     @State private var showSuggestions: Bool = false
     @State private var saveToLibrary: Bool = false
     @State private var userTemplates: [WorkoutTemplate] = []
+
+    // Time slots for group workouts
+    @State private var timeSlots: [TimeSlot] = []
+    @State private var newSlotTime: Date = Date()
+    @State private var newSlotCapacity: Int = 20
 
     // Filtered workout suggestions based on title and type
     private var workoutSuggestions: [WOD] {
@@ -555,6 +608,56 @@ struct AddWorkoutSheet: View {
                     }
                 }
 
+                // Only show class times for group workouts
+                if !selectedGroupIds.isEmpty {
+                    Section("Class Times") {
+                        if timeSlots.isEmpty {
+                            Text("No class times added")
+                                .foregroundColor(.secondary)
+                                .italic()
+                        } else {
+                            ForEach(timeSlots) { slot in
+                                HStack {
+                                    Text(slot.startTime, style: .time)
+                                        .font(.headline)
+                                    Spacer()
+                                    Text("Capacity: \(slot.capacity == 0 ? "Unlimited" : "\(slot.capacity)")")
+                                        .font(.subheadline)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                            .onDelete { indexSet in
+                                timeSlots.remove(atOffsets: indexSet)
+                            }
+                        }
+
+                        // Add new time slot
+                        VStack(alignment: .leading, spacing: 12) {
+                            DatePicker("Time", selection: $newSlotTime, displayedComponents: .hourAndMinute)
+
+                            Stepper("Capacity: \(newSlotCapacity == 0 ? "Unlimited" : "\(newSlotCapacity)")", value: $newSlotCapacity, in: 0...100)
+
+                            Button(action: {
+                                // Combine the selected date with the time
+                                let calendar = Calendar.current
+                                let timeComponents = calendar.dateComponents([.hour, .minute], from: newSlotTime)
+                                var slotDateTime = calendar.startOfDay(for: date)
+                                slotDateTime = calendar.date(bySettingHour: timeComponents.hour ?? 0, minute: timeComponents.minute ?? 0, second: 0, of: slotDateTime) ?? slotDateTime
+
+                                let newSlot = TimeSlot(startTime: slotDateTime, capacity: newSlotCapacity)
+                                timeSlots.append(newSlot)
+                                // Sort by time
+                                timeSlots.sort { $0.startTime < $1.startTime }
+                            }) {
+                                HStack {
+                                    Image(systemName: "plus.circle.fill")
+                                    Text("Add Class Time")
+                                }
+                            }
+                        }
+                    }
+                }
+
                 Section("Recurrence") {
                     Picker("Repeat", selection: $recurrenceType) {
                         Text("Does not repeat").tag(RecurrenceType.none)
@@ -653,7 +756,7 @@ struct AddWorkoutSheet: View {
                             date: normalizedDate,
                             workoutType: workoutType,
                             groupIds: Array(selectedGroupIds),
-                            timeSlots: [],
+                            timeSlots: selectedGroupIds.isEmpty ? [] : timeSlots,
                             createdBy: userId,
                             recurrenceType: recurrenceType,
                             recurrenceEndDate: hasEndDate ? recurrenceEndDate : nil,
@@ -857,6 +960,11 @@ struct EditWorkoutSheet: View {
     @State private var selectedMonthlyWeekPosition: Int
     @State private var selectedMonthlyWeekday: Int
 
+    // Time slots for group workouts
+    @State private var timeSlots: [TimeSlot]
+    @State private var newSlotTime: Date = Date()
+    @State private var newSlotCapacity: Int = 20
+
     init(gym: Gym, workout: ScheduledWorkout, onSave: @escaping () -> Void) {
         self.gym = gym
         self.workout = workout
@@ -892,6 +1000,9 @@ struct EditWorkoutSheet: View {
             _selectedMonthlyWeekPosition = State(initialValue: min(weekPosition, 4))
             _selectedMonthlyWeekday = State(initialValue: weekday)
         }
+
+        // Initialize time slots from existing workout
+        _timeSlots = State(initialValue: workout.timeSlots)
     }
 
     var body: some View {
@@ -1013,6 +1124,56 @@ struct EditWorkoutSheet: View {
                         .foregroundColor(.secondary)
                 }
             }
+
+            // Only show class times for group workouts
+            if !selectedGroupIds.isEmpty {
+                Section("Class Times") {
+                    if timeSlots.isEmpty {
+                        Text("No class times added")
+                            .foregroundColor(.secondary)
+                            .italic()
+                    } else {
+                        ForEach(timeSlots) { slot in
+                            HStack {
+                                Text(slot.startTime, style: .time)
+                                    .font(.headline)
+                                Spacer()
+                                Text("Capacity: \(slot.capacity == 0 ? "Unlimited" : "\(slot.capacity)")")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        .onDelete { indexSet in
+                            timeSlots.remove(atOffsets: indexSet)
+                        }
+                    }
+
+                    // Add new time slot
+                    VStack(alignment: .leading, spacing: 12) {
+                        DatePicker("Time", selection: $newSlotTime, displayedComponents: .hourAndMinute)
+
+                        Stepper("Capacity: \(newSlotCapacity == 0 ? "Unlimited" : "\(newSlotCapacity)")", value: $newSlotCapacity, in: 0...100)
+
+                        Button(action: {
+                            // Combine the selected date with the time
+                            let calendar = Calendar.current
+                            let timeComponents = calendar.dateComponents([.hour, .minute], from: newSlotTime)
+                            var slotDateTime = calendar.startOfDay(for: date)
+                            slotDateTime = calendar.date(bySettingHour: timeComponents.hour ?? 0, minute: timeComponents.minute ?? 0, second: 0, of: slotDateTime) ?? slotDateTime
+
+                            let newSlot = TimeSlot(startTime: slotDateTime, capacity: newSlotCapacity)
+                            timeSlots.append(newSlot)
+                            // Sort by time
+                            timeSlots.sort { $0.startTime < $1.startTime }
+                        }) {
+                            HStack {
+                                Image(systemName: "plus.circle.fill")
+                                Text("Add Class Time")
+                            }
+                        }
+                    }
+                }
+            }
         }
         .navigationTitle("Edit Workout")
         .navigationBarTitleDisplayMode(.inline)
@@ -1039,6 +1200,7 @@ struct EditWorkoutSheet: View {
                     updatedWorkout.wodDescription = description
                     updatedWorkout.date = normalizedDate
                     updatedWorkout.groupIds = Array(selectedGroupIds)
+                    updatedWorkout.timeSlots = selectedGroupIds.isEmpty ? [] : timeSlots
                     updatedWorkout.recurrenceType = recurrenceType
                     updatedWorkout.recurrenceEndDate = hasEndDate ? recurrenceEndDate : nil
                     updatedWorkout.weekdays = recurrenceType == .weekly ? Array(selectedWeekdays) : nil

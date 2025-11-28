@@ -412,11 +412,15 @@ struct DayWorkoutCard: View {
 
 struct WorkoutSummaryRow: View {
     @EnvironmentObject var store: AppStore
-    let workout: ScheduledWorkout
+    @State var workout: ScheduledWorkout
     var onLog: (() -> Void)?
     var onEdit: (() -> Void)?
     var onDelete: (() -> Void)?
     var onDeleteSeries: (() -> Void)?
+    var onWorkoutUpdated: ((ScheduledWorkout) -> Void)?
+
+    @State private var showSignUpError = false
+    @State private var signUpErrorMessage = ""
 
     private var workoutTypeInfo: (label: String, color: Color, icon: String) {
         if workout.isPersonalWorkout {
@@ -430,6 +434,16 @@ struct WorkoutSummaryRow: View {
                 return ("Group", .green, "person.3.fill")
             }
         }
+    }
+
+    private var currentUserId: String? {
+        store.currentUser?.uid
+    }
+
+    private func timeFormatter() -> DateFormatter {
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        return formatter
     }
 
     var body: some View {
@@ -459,6 +473,26 @@ struct WorkoutSummaryRow: View {
                 .font(.subheadline)
                 .foregroundColor(.secondary)
                 .lineLimit(2)
+
+            // Time slots for group workouts
+            if !workout.isPersonalWorkout && !workout.timeSlots.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Class Times")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.secondary)
+
+                    ForEach(workout.timeSlots) { slot in
+                        TimeSlotRow(
+                            slot: slot,
+                            currentUserId: currentUserId,
+                            onSignUp: { signUpForSlot(slot) },
+                            onCancel: { cancelSignUp(slot) }
+                        )
+                    }
+                }
+                .padding(.vertical, 4)
+            }
 
             // Action buttons - evenly spaced
             HStack(spacing: 0) {
@@ -508,6 +542,117 @@ struct WorkoutSummaryRow: View {
             }
         }
         .padding(.vertical, 4)
+        .alert("Sign-up Error", isPresented: $showSignUpError) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(signUpErrorMessage)
+        }
+    }
+
+    private func signUpForSlot(_ slot: TimeSlot) {
+        guard let workoutId = workout.id,
+              let userId = currentUserId else { return }
+
+        store.signUpForTimeSlot(workoutId: workoutId, timeSlotId: slot.id, userId: userId) { updatedWorkout, error in
+            if let error = error {
+                signUpErrorMessage = error
+                showSignUpError = true
+            } else if let updatedWorkout = updatedWorkout {
+                self.workout = updatedWorkout
+                onWorkoutUpdated?(updatedWorkout)
+            }
+        }
+    }
+
+    private func cancelSignUp(_ slot: TimeSlot) {
+        guard let workoutId = workout.id,
+              let userId = currentUserId else { return }
+
+        store.cancelTimeSlotSignUp(workoutId: workoutId, timeSlotId: slot.id, userId: userId) { updatedWorkout, error in
+            if let error = error {
+                signUpErrorMessage = error
+                showSignUpError = true
+            } else if let updatedWorkout = updatedWorkout {
+                self.workout = updatedWorkout
+                onWorkoutUpdated?(updatedWorkout)
+            }
+        }
+    }
+}
+
+struct TimeSlotRow: View {
+    let slot: TimeSlot
+    let currentUserId: String?
+    let onSignUp: () -> Void
+    let onCancel: () -> Void
+
+    private var isSignedUp: Bool {
+        guard let userId = currentUserId else { return false }
+        return slot.signedUpUserIds.contains(userId)
+    }
+
+    private var spotsText: String {
+        if slot.capacity == 0 {
+            return "\(slot.signedUpUserIds.count) signed up"
+        } else {
+            return "\(slot.signedUpUserIds.count)/\(slot.capacity)"
+        }
+    }
+
+    private var timeFormatter: DateFormatter {
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        return formatter
+    }
+
+    var body: some View {
+        HStack {
+            // Time
+            Image(systemName: "clock")
+                .font(.caption)
+                .foregroundColor(.secondary)
+            Text(timeFormatter.string(from: slot.startTime))
+                .font(.subheadline)
+                .fontWeight(.medium)
+
+            Spacer()
+
+            // Spots indicator
+            Text(spotsText)
+                .font(.caption)
+                .foregroundColor(slot.isFull ? .red : .secondary)
+
+            // Sign up / Cancel button
+            if isSignedUp {
+                Button(action: onCancel) {
+                    Text("Cancel")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                }
+                .buttonStyle(.bordered)
+                .tint(.red)
+            } else if slot.isFull {
+                Text("Full")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color(.systemGray5))
+                    .cornerRadius(6)
+            } else {
+                Button(action: onSignUp) {
+                    Text("Sign Up")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.blue)
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background(Color(.systemGray6))
+        .cornerRadius(8)
     }
 }
 
