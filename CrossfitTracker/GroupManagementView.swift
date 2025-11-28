@@ -296,6 +296,39 @@ struct GroupDetailView: View {
                 }
             }
 
+            Section("Workout Visibility") {
+                Toggle("Hide details by default", isOn: Binding(
+                    get: { group.hideDetailsByDefault },
+                    set: { newValue in
+                        var updatedGroup = group
+                        updatedGroup.hideDetailsByDefault = newValue
+                        updateGroupSettings(updatedGroup)
+                    }
+                ))
+
+                if group.hideDetailsByDefault {
+                    Picker("Reveal details", selection: Binding(
+                        get: { group.defaultRevealHoursBefore },
+                        set: { newValue in
+                            var updatedGroup = group
+                            updatedGroup.defaultRevealHoursBefore = newValue
+                            updateGroupSettings(updatedGroup)
+                        }
+                    )) {
+                        Text("At workout time").tag(0)
+                        Text("1 hour before").tag(1)
+                        Text("2 hours before").tag(2)
+                        Text("4 hours before").tag(4)
+                        Text("Day before (24h)").tag(24)
+                        Text("2 days before (48h)").tag(48)
+                    }
+
+                    Text("Workout names and descriptions will be hidden from members until the reveal time. Coaches and gym owners can always see details.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+
             Section(header: HStack {
                 Text("Members (\(group.memberIds.count))")
                 Spacer()
@@ -373,14 +406,22 @@ struct GroupDetailView: View {
     }
 
     private func deleteTimeSlot(at offsets: IndexSet) {
-        guard let groupId = group.id else { return }
-
         var updatedGroup = group
         updatedGroup.defaultTimeSlots.remove(atOffsets: offsets)
 
         store.updateGroup(updatedGroup) { error in
             if let error = error {
                 print("❌ Error deleting time slot: \(error)")
+            } else {
+                self.group = updatedGroup
+            }
+        }
+    }
+
+    private func updateGroupSettings(_ updatedGroup: WorkoutGroup) {
+        store.updateGroup(updatedGroup) { error in
+            if let error = error {
+                print("❌ Error updating group settings: \(error)")
             } else {
                 self.group = updatedGroup
             }

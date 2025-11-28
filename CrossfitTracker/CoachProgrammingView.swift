@@ -465,6 +465,36 @@ struct AddWorkoutSheet: View {
     // Hide workout details until reveal time
     @State private var hideDetails: Bool = false
     @State private var revealDate: Date = Date()
+    @State private var useCustomVisibility: Bool = false
+
+    // Get default visibility settings from selected groups
+    private var defaultHideSettings: (hide: Bool, hoursBefore: Int)? {
+        for groupId in selectedGroupIds {
+            if let group = groups.first(where: { $0.id == groupId }) {
+                if group.hideDetailsByDefault {
+                    return (true, group.defaultRevealHoursBefore)
+                }
+            }
+        }
+        return nil
+    }
+
+    // Calculate reveal date based on workout date and hours before
+    private func calculateRevealDate(workoutDate: Date, hoursBefore: Int) -> Date {
+        let calendar = Calendar.current
+        // Get the first time slot or use 9am as default
+        let firstSlotHour: Int
+        if let defaultSlots = defaultTimeSlotsFromGroups.first {
+            firstSlotHour = defaultSlots.hour
+        } else {
+            firstSlotHour = 9
+        }
+
+        var workoutDateTime = calendar.startOfDay(for: workoutDate)
+        workoutDateTime = calendar.date(bySettingHour: firstSlotHour, minute: 0, second: 0, of: workoutDateTime) ?? workoutDateTime
+
+        return calendar.date(byAdding: .hour, value: -hoursBefore, to: workoutDateTime) ?? workoutDateTime
+    }
 
     // Get default time slots from selected groups
     private var defaultTimeSlotsFromGroups: [DefaultTimeSlot] {
@@ -723,14 +753,50 @@ struct AddWorkoutSheet: View {
                 // Hide details option for group workouts
                 if !selectedGroupIds.isEmpty {
                     Section("Visibility") {
-                        Toggle("Hide workout details", isOn: $hideDetails)
+                        // Show default settings from group
+                        if let defaults = defaultHideSettings, !useCustomVisibility {
+                            HStack {
+                                Image(systemName: "eye.slash")
+                                    .foregroundColor(.orange)
+                                VStack(alignment: .leading) {
+                                    Text("Details hidden by default")
+                                        .font(.subheadline)
+                                    Text("Revealed \(defaults.hoursBefore == 0 ? "at workout time" : "\(defaults.hoursBefore)h before")")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
 
-                        if hideDetails {
-                            DatePicker("Reveal on", selection: $revealDate, displayedComponents: [.date, .hourAndMinute])
-
-                            Text("Workout name and description will be hidden from members until this time. Coaches and gym owners can always see details.")
+                            Text("Using default visibility from group settings")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
+                        } else if defaultHideSettings == nil && !useCustomVisibility {
+                            HStack {
+                                Image(systemName: "eye")
+                                    .foregroundColor(.green)
+                                Text("Details visible to all members")
+                                    .font(.subheadline)
+                            }
+
+                            Text("Group doesn't hide details by default")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+
+                        // Toggle for custom visibility
+                        Toggle("Use custom visibility", isOn: $useCustomVisibility)
+
+                        // Custom visibility editor
+                        if useCustomVisibility {
+                            Toggle("Hide workout details", isOn: $hideDetails)
+
+                            if hideDetails {
+                                DatePicker("Reveal on", selection: $revealDate, displayedComponents: [.date, .hourAndMinute])
+
+                                Text("Workout name and description will be hidden from members until this time. Coaches and gym owners can always see details.")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
                         }
                     }
                 }
@@ -836,6 +902,23 @@ struct AddWorkoutSheet: View {
                             finalTimeSlots = timeSlotsFromDefaults()
                         }
 
+                        // Determine hide details settings
+                        let finalHideDetails: Bool
+                        let finalRevealDate: Date?
+                        if selectedGroupIds.isEmpty {
+                            finalHideDetails = false
+                            finalRevealDate = nil
+                        } else if useCustomVisibility {
+                            finalHideDetails = hideDetails
+                            finalRevealDate = hideDetails ? revealDate : nil
+                        } else if let defaults = defaultHideSettings {
+                            finalHideDetails = defaults.hide
+                            finalRevealDate = defaults.hide ? calculateRevealDate(workoutDate: normalizedDate, hoursBefore: defaults.hoursBefore) : nil
+                        } else {
+                            finalHideDetails = false
+                            finalRevealDate = nil
+                        }
+
                         let workout = ScheduledWorkout(
                             wodId: UUID().uuidString,
                             wodTitle: title,
@@ -850,8 +933,8 @@ struct AddWorkoutSheet: View {
                             weekdays: recurrenceType == .weekly ? Array(selectedWeekdays) : nil,
                             monthlyWeekPosition: (recurrenceType == .monthly && monthlyRecurrenceType == .weekBased) ? selectedMonthlyWeekPosition : nil,
                             monthlyWeekday: (recurrenceType == .monthly && monthlyRecurrenceType == .weekBased) ? selectedMonthlyWeekday : nil,
-                            hideDetails: selectedGroupIds.isEmpty ? false : hideDetails,
-                            revealDate: hideDetails ? revealDate : nil
+                            hideDetails: finalHideDetails,
+                            revealDate: finalRevealDate
                         )
 
                         if workout.isRecurring {
@@ -1058,6 +1141,35 @@ struct EditWorkoutSheet: View {
     // Hide workout details until reveal time
     @State private var hideDetails: Bool
     @State private var revealDate: Date
+    @State private var useCustomVisibility: Bool
+
+    // Get default visibility settings from selected groups
+    private var defaultHideSettings: (hide: Bool, hoursBefore: Int)? {
+        for groupId in selectedGroupIds {
+            if let group = groups.first(where: { $0.id == groupId }) {
+                if group.hideDetailsByDefault {
+                    return (true, group.defaultRevealHoursBefore)
+                }
+            }
+        }
+        return nil
+    }
+
+    // Calculate reveal date based on workout date and hours before
+    private func calculateRevealDate(workoutDate: Date, hoursBefore: Int) -> Date {
+        let calendar = Calendar.current
+        let firstSlotHour: Int
+        if let defaultSlots = defaultTimeSlotsFromGroups.first {
+            firstSlotHour = defaultSlots.hour
+        } else {
+            firstSlotHour = 9
+        }
+
+        var workoutDateTime = calendar.startOfDay(for: workoutDate)
+        workoutDateTime = calendar.date(bySettingHour: firstSlotHour, minute: 0, second: 0, of: workoutDateTime) ?? workoutDateTime
+
+        return calendar.date(byAdding: .hour, value: -hoursBefore, to: workoutDateTime) ?? workoutDateTime
+    }
 
     // Get default time slots from selected groups
     private var defaultTimeSlotsFromGroups: [DefaultTimeSlot] {
@@ -1127,6 +1239,9 @@ struct EditWorkoutSheet: View {
         // Initialize hide details
         _hideDetails = State(initialValue: workout.hideDetails)
         _revealDate = State(initialValue: workout.revealDate ?? workout.date)
+
+        // If workout has custom hide settings, enable custom mode
+        _useCustomVisibility = State(initialValue: workout.hideDetails)
     }
 
     var body: some View {
@@ -1336,14 +1451,50 @@ struct EditWorkoutSheet: View {
             // Hide details option for group workouts
             if !selectedGroupIds.isEmpty {
                 Section("Visibility") {
-                    Toggle("Hide workout details", isOn: $hideDetails)
+                    // Show default settings from group
+                    if let defaults = defaultHideSettings, !useCustomVisibility {
+                        HStack {
+                            Image(systemName: "eye.slash")
+                                .foregroundColor(.orange)
+                            VStack(alignment: .leading) {
+                                Text("Details hidden by default")
+                                    .font(.subheadline)
+                                Text("Revealed \(defaults.hoursBefore == 0 ? "at workout time" : "\(defaults.hoursBefore)h before")")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
 
-                    if hideDetails {
-                        DatePicker("Reveal on", selection: $revealDate, displayedComponents: [.date, .hourAndMinute])
-
-                        Text("Workout name and description will be hidden from members until this time. Coaches and gym owners can always see details.")
+                        Text("Using default visibility from group settings")
                             .font(.caption)
                             .foregroundColor(.secondary)
+                    } else if defaultHideSettings == nil && !useCustomVisibility {
+                        HStack {
+                            Image(systemName: "eye")
+                                .foregroundColor(.green)
+                            Text("Details visible to all members")
+                                .font(.subheadline)
+                        }
+
+                        Text("Group doesn't hide details by default")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+
+                    // Toggle for custom visibility
+                    Toggle("Use custom visibility", isOn: $useCustomVisibility)
+
+                    // Custom visibility editor
+                    if useCustomVisibility {
+                        Toggle("Hide workout details", isOn: $hideDetails)
+
+                        if hideDetails {
+                            DatePicker("Reveal on", selection: $revealDate, displayedComponents: [.date, .hourAndMinute])
+
+                            Text("Workout name and description will be hidden from members until this time. Coaches and gym owners can always see details.")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
                     }
                 }
             }
@@ -1377,6 +1528,23 @@ struct EditWorkoutSheet: View {
                         finalTimeSlots = timeSlotsFromDefaults()
                     }
 
+                    // Determine hide details settings
+                    let finalHideDetails: Bool
+                    let finalRevealDate: Date?
+                    if selectedGroupIds.isEmpty {
+                        finalHideDetails = false
+                        finalRevealDate = nil
+                    } else if useCustomVisibility {
+                        finalHideDetails = hideDetails
+                        finalRevealDate = hideDetails ? revealDate : nil
+                    } else if let defaults = defaultHideSettings {
+                        finalHideDetails = defaults.hide
+                        finalRevealDate = defaults.hide ? calculateRevealDate(workoutDate: normalizedDate, hoursBefore: defaults.hoursBefore) : nil
+                    } else {
+                        finalHideDetails = false
+                        finalRevealDate = nil
+                    }
+
                     var updatedWorkout = workout
                     updatedWorkout.workoutType = workoutType
                     updatedWorkout.wodTitle = title
@@ -1389,8 +1557,8 @@ struct EditWorkoutSheet: View {
                     updatedWorkout.weekdays = recurrenceType == .weekly ? Array(selectedWeekdays) : nil
                     updatedWorkout.monthlyWeekPosition = (recurrenceType == .monthly && monthlyRecurrenceType == .weekBased) ? selectedMonthlyWeekPosition : nil
                     updatedWorkout.monthlyWeekday = (recurrenceType == .monthly && monthlyRecurrenceType == .weekBased) ? selectedMonthlyWeekday : nil
-                    updatedWorkout.hideDetails = selectedGroupIds.isEmpty ? false : hideDetails
-                    updatedWorkout.revealDate = hideDetails ? revealDate : nil
+                    updatedWorkout.hideDetails = finalHideDetails
+                    updatedWorkout.revealDate = finalRevealDate
 
                     // If changing to recurring or if it's a new recurring workout
                     if updatedWorkout.isRecurring && workout.recurrenceType == .none {

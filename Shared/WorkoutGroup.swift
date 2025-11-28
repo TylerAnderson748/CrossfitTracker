@@ -33,6 +33,10 @@ struct WorkoutGroup: Codable, Identifiable {
     var createdAt: Date
     var defaultTimeSlots: [DefaultTimeSlot] // default class times for this group
 
+    // Default hide settings
+    var hideDetailsByDefault: Bool // if true, new workouts hide details by default
+    var defaultRevealHoursBefore: Int // hours before workout to reveal (0 = at workout time, 24 = day before)
+
     init(
         id: String? = nil,
         gymId: String?,
@@ -44,7 +48,9 @@ struct WorkoutGroup: Codable, Identifiable {
         ownerId: String,
         isPublic: Bool = false,
         isDeletable: Bool = true,
-        defaultTimeSlots: [DefaultTimeSlot] = []
+        defaultTimeSlots: [DefaultTimeSlot] = [],
+        hideDetailsByDefault: Bool = false,
+        defaultRevealHoursBefore: Int = 0
     ) {
         self.id = id
         self.gymId = gymId
@@ -58,9 +64,11 @@ struct WorkoutGroup: Codable, Identifiable {
         self.isDeletable = isDeletable
         self.createdAt = Date()
         self.defaultTimeSlots = defaultTimeSlots
+        self.hideDetailsByDefault = hideDetailsByDefault
+        self.defaultRevealHoursBefore = defaultRevealHoursBefore
     }
 
-    // Custom decoder to handle missing defaultTimeSlots field in existing documents
+    // Custom decoder to handle missing fields in existing documents
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         _id = try container.decode(DocumentID<String>.self, forKey: .id)
@@ -74,7 +82,8 @@ struct WorkoutGroup: Codable, Identifiable {
         isPublic = try container.decode(Bool.self, forKey: .isPublic)
         isDeletable = try container.decode(Bool.self, forKey: .isDeletable)
         createdAt = try container.decode(Date.self, forKey: .createdAt)
-        // Default to empty array if field doesn't exist
         defaultTimeSlots = try container.decodeIfPresent([DefaultTimeSlot].self, forKey: .defaultTimeSlots) ?? []
+        hideDetailsByDefault = try container.decodeIfPresent(Bool.self, forKey: .hideDetailsByDefault) ?? false
+        defaultRevealHoursBefore = try container.decodeIfPresent(Int.self, forKey: .defaultRevealHoursBefore) ?? 0
     }
 }
