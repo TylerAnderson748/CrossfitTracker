@@ -440,11 +440,28 @@ struct GroupDetailView: View {
     }
 
     private func updateGroupSettings(_ updatedGroup: WorkoutGroup) {
+        // Check if visibility settings changed
+        let visibilityChanged = group.hideDetailsByDefault != updatedGroup.hideDetailsByDefault ||
+                                group.defaultRevealDaysBefore != updatedGroup.defaultRevealDaysBefore ||
+                                group.defaultRevealHour != updatedGroup.defaultRevealHour ||
+                                group.defaultRevealMinute != updatedGroup.defaultRevealMinute
+
         store.updateGroup(updatedGroup) { error in
             if let error = error {
                 print("❌ Error updating group settings: \(error)")
             } else {
                 self.group = updatedGroup
+
+                // If visibility settings changed, update all future workouts in this group
+                if visibilityChanged {
+                    store.updateWorkoutRevealDatesForGroup(updatedGroup) { count, error in
+                        if let error = error {
+                            print("❌ Error updating workout reveal dates: \(error)")
+                        } else if count > 0 {
+                            print("✅ Updated reveal dates for \(count) future workouts")
+                        }
+                    }
+                }
             }
         }
     }

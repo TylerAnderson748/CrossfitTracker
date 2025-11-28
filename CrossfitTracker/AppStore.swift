@@ -830,6 +830,80 @@ final class AppStore: ObservableObject {
         }
     }
 
+    /// Updates reveal dates for all future workouts in a group when group visibility settings change
+    func updateWorkoutRevealDatesForGroup(_ group: WorkoutGroup, completion: @escaping (Int, String?) -> Void) {
+        guard let groupId = group.id else {
+            completion(0, "Group ID is missing")
+            return
+        }
+
+        let today = Calendar.current.startOfDay(for: Date())
+
+        // Query future workouts that belong to this group
+        db.collection("scheduledWorkouts")
+            .whereField("groupIds", arrayContains: groupId)
+            .whereField("date", isGreaterThanOrEqualTo: today)
+            .getDocuments { snapshot, error in
+                if let error = error {
+                    DispatchQueue.main.async {
+                        completion(0, error.localizedDescription)
+                    }
+                    return
+                }
+
+                guard let documents = snapshot?.documents else {
+                    DispatchQueue.main.async {
+                        completion(0, nil)
+                    }
+                    return
+                }
+
+                var updatedCount = 0
+                let batch = self.db.batch()
+
+                for document in documents {
+                    do {
+                        var workout = try document.data(as: ScheduledWorkout.self)
+
+                        // Calculate new reveal date based on group settings
+                        if group.hideDetailsByDefault {
+                            let calendar = Calendar.current
+                            var revealDate = calendar.startOfDay(for: workout.date)
+                            revealDate = calendar.date(byAdding: .day, value: -group.defaultRevealDaysBefore, to: revealDate) ?? revealDate
+                            revealDate = calendar.date(bySettingHour: group.defaultRevealHour, minute: group.defaultRevealMinute, second: 0, of: revealDate) ?? revealDate
+
+                            workout.hideDetails = true
+                            workout.revealDate = revealDate
+                        } else {
+                            // Group no longer hides details - unhide workouts
+                            workout.hideDetails = false
+                            workout.revealDate = nil
+                        }
+
+                        // Update in batch
+                        let docRef = self.db.collection("scheduledWorkouts").document(document.documentID)
+                        try batch.setData(from: workout, forDocument: docRef)
+                        updatedCount += 1
+
+                    } catch {
+                        print("❌ Error processing workout: \(error)")
+                    }
+                }
+
+                // Commit batch update
+                batch.commit { error in
+                    DispatchQueue.main.async {
+                        if let error = error {
+                            completion(0, error.localizedDescription)
+                        } else {
+                            print("✅ Updated reveal dates for \(updatedCount) workouts")
+                            completion(updatedCount, nil)
+                        }
+                    }
+                }
+            }
+    }
+
     func createDefaultGroupsForGym(gymId: String, ownerId: String, completion: @escaping (String?) -> Void) {
         // Create 3 default groups: Members (undeletable), Competition Athletes, Weight Training Athletes
         // Owner is automatically added to Members group so they can see programming they create
