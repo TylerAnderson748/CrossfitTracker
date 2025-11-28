@@ -331,7 +331,7 @@ struct WorkoutCard: View {
                     )
                     navigationPath.append(WODDestination.timer(wod))
                 }) {
-                    Label("Start Timer", systemImage: "timer")
+                    Label("Log Workout", systemImage: "timer")
                         .font(.subheadline)
                         .frame(maxWidth: .infinity)
                 }
