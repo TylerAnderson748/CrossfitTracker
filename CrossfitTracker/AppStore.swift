@@ -1981,7 +1981,9 @@ final class AppStore: ObservableObject {
                             print("❌ Error fetching users: \(error.localizedDescription)")
                         } else {
                             let users = snapshot?.documents.compactMap { doc -> AppUser? in
-                                try? doc.data(as: AppUser.self)
+                                var user = try? doc.data(as: AppUser.self)
+                                user?.id = doc.documentID // Manually set document ID
+                                return user
                             } ?? []
                             allUsers.append(contentsOf: users)
                         }
