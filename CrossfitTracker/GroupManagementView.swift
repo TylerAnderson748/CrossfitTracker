@@ -307,20 +307,41 @@ struct GroupDetailView: View {
                 ))
 
                 if group.hideDetailsByDefault {
-                    Picker("Reveal details", selection: Binding(
-                        get: { group.defaultRevealHoursBefore },
+                    Picker("Reveal", selection: Binding(
+                        get: { group.defaultRevealDaysBefore },
                         set: { newValue in
                             var updatedGroup = group
-                            updatedGroup.defaultRevealHoursBefore = newValue
+                            updatedGroup.defaultRevealDaysBefore = newValue
                             updateGroupSettings(updatedGroup)
                         }
                     )) {
-                        Text("At workout time").tag(0)
-                        Text("1 hour before").tag(1)
-                        Text("2 hours before").tag(2)
-                        Text("4 hours before").tag(4)
-                        Text("Day before (24h)").tag(24)
-                        Text("2 days before (48h)").tag(48)
+                        Text("Same day").tag(0)
+                        Text("Day before").tag(1)
+                        Text("2 days before").tag(2)
+                        Text("3 days before").tag(3)
+                    }
+
+                    DatePicker("At time", selection: Binding(
+                        get: {
+                            let calendar = Calendar.current
+                            return calendar.date(from: DateComponents(hour: group.defaultRevealHour, minute: group.defaultRevealMinute)) ?? Date()
+                        },
+                        set: { newValue in
+                            let calendar = Calendar.current
+                            var updatedGroup = group
+                            updatedGroup.defaultRevealHour = calendar.component(.hour, from: newValue)
+                            updatedGroup.defaultRevealMinute = calendar.component(.minute, from: newValue)
+                            updateGroupSettings(updatedGroup)
+                        }
+                    ), displayedComponents: .hourAndMinute)
+
+                    // Show summary of reveal settings
+                    HStack {
+                        Image(systemName: "eye")
+                            .foregroundColor(.blue)
+                        Text(revealSummary(for: group))
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
                     }
 
                     Text("Workout names and descriptions will be hidden from members until the reveal time. Coaches and gym owners can always see details.")
@@ -425,6 +446,26 @@ struct GroupDetailView: View {
             } else {
                 self.group = updatedGroup
             }
+        }
+    }
+
+    private func revealSummary(for group: WorkoutGroup) -> String {
+        let timeFormatter = DateFormatter()
+        timeFormatter.timeStyle = .short
+
+        let calendar = Calendar.current
+        let revealTime = calendar.date(from: DateComponents(hour: group.defaultRevealHour, minute: group.defaultRevealMinute)) ?? Date()
+        let timeString = timeFormatter.string(from: revealTime)
+
+        switch group.defaultRevealDaysBefore {
+        case 0:
+            return "Details revealed at \(timeString) on workout day"
+        case 1:
+            return "Details revealed day before at \(timeString)"
+        case 2:
+            return "Details revealed 2 days before at \(timeString)"
+        default:
+            return "Details revealed \(group.defaultRevealDaysBefore) days before at \(timeString)"
         }
     }
 

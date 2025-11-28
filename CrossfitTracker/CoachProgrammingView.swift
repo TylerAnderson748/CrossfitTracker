@@ -468,32 +468,50 @@ struct AddWorkoutSheet: View {
     @State private var useCustomVisibility: Bool = false
 
     // Get default visibility settings from selected groups
-    private var defaultHideSettings: (hide: Bool, hoursBefore: Int)? {
+    private var defaultHideSettings: (hide: Bool, daysBefore: Int, hour: Int, minute: Int)? {
         for groupId in selectedGroupIds {
             if let group = groups.first(where: { $0.id == groupId }) {
                 if group.hideDetailsByDefault {
-                    return (true, group.defaultRevealHoursBefore)
+                    return (true, group.defaultRevealDaysBefore, group.defaultRevealHour, group.defaultRevealMinute)
                 }
             }
         }
         return nil
     }
 
-    // Calculate reveal date based on workout date and hours before
-    private func calculateRevealDate(workoutDate: Date, hoursBefore: Int) -> Date {
+    // Calculate reveal date based on workout date and reveal settings
+    private func calculateRevealDate(workoutDate: Date, daysBefore: Int, hour: Int, minute: Int) -> Date {
         let calendar = Calendar.current
-        // Get the first time slot or use 9am as default
-        let firstSlotHour: Int
-        if let defaultSlots = defaultTimeSlotsFromGroups.first {
-            firstSlotHour = defaultSlots.hour
-        } else {
-            firstSlotHour = 9
+
+        // Start with workout date
+        var revealDate = calendar.startOfDay(for: workoutDate)
+
+        // Subtract days before
+        revealDate = calendar.date(byAdding: .day, value: -daysBefore, to: revealDate) ?? revealDate
+
+        // Set the specific reveal time
+        revealDate = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: revealDate) ?? revealDate
+
+        return revealDate
+    }
+
+    // Format reveal settings for display
+    private func revealSettingsDescription(_ settings: (hide: Bool, daysBefore: Int, hour: Int, minute: Int)) -> String {
+        let timeFormatter = DateFormatter()
+        timeFormatter.timeStyle = .short
+
+        let calendar = Calendar.current
+        let revealTime = calendar.date(from: DateComponents(hour: settings.hour, minute: settings.minute)) ?? Date()
+        let timeString = timeFormatter.string(from: revealTime)
+
+        switch settings.daysBefore {
+        case 0:
+            return "at \(timeString) on workout day"
+        case 1:
+            return "day before at \(timeString)"
+        default:
+            return "\(settings.daysBefore) days before at \(timeString)"
         }
-
-        var workoutDateTime = calendar.startOfDay(for: workoutDate)
-        workoutDateTime = calendar.date(bySettingHour: firstSlotHour, minute: 0, second: 0, of: workoutDateTime) ?? workoutDateTime
-
-        return calendar.date(byAdding: .hour, value: -hoursBefore, to: workoutDateTime) ?? workoutDateTime
     }
 
     // Get default time slots from selected groups
@@ -761,7 +779,7 @@ struct AddWorkoutSheet: View {
                                 VStack(alignment: .leading) {
                                     Text("Details hidden by default")
                                         .font(.subheadline)
-                                    Text("Revealed \(defaults.hoursBefore == 0 ? "at workout time" : "\(defaults.hoursBefore)h before")")
+                                    Text("Revealed \(revealSettingsDescription(defaults))")
                                         .font(.caption)
                                         .foregroundColor(.secondary)
                                 }
@@ -913,7 +931,7 @@ struct AddWorkoutSheet: View {
                             finalRevealDate = hideDetails ? revealDate : nil
                         } else if let defaults = defaultHideSettings {
                             finalHideDetails = defaults.hide
-                            finalRevealDate = defaults.hide ? calculateRevealDate(workoutDate: normalizedDate, hoursBefore: defaults.hoursBefore) : nil
+                            finalRevealDate = defaults.hide ? calculateRevealDate(workoutDate: normalizedDate, daysBefore: defaults.daysBefore, hour: defaults.hour, minute: defaults.minute) : nil
                         } else {
                             finalHideDetails = false
                             finalRevealDate = nil
@@ -1144,31 +1162,50 @@ struct EditWorkoutSheet: View {
     @State private var useCustomVisibility: Bool
 
     // Get default visibility settings from selected groups
-    private var defaultHideSettings: (hide: Bool, hoursBefore: Int)? {
+    private var defaultHideSettings: (hide: Bool, daysBefore: Int, hour: Int, minute: Int)? {
         for groupId in selectedGroupIds {
             if let group = groups.first(where: { $0.id == groupId }) {
                 if group.hideDetailsByDefault {
-                    return (true, group.defaultRevealHoursBefore)
+                    return (true, group.defaultRevealDaysBefore, group.defaultRevealHour, group.defaultRevealMinute)
                 }
             }
         }
         return nil
     }
 
-    // Calculate reveal date based on workout date and hours before
-    private func calculateRevealDate(workoutDate: Date, hoursBefore: Int) -> Date {
+    // Calculate reveal date based on workout date and reveal settings
+    private func calculateRevealDate(workoutDate: Date, daysBefore: Int, hour: Int, minute: Int) -> Date {
         let calendar = Calendar.current
-        let firstSlotHour: Int
-        if let defaultSlots = defaultTimeSlotsFromGroups.first {
-            firstSlotHour = defaultSlots.hour
-        } else {
-            firstSlotHour = 9
+
+        // Start with workout date
+        var revealDate = calendar.startOfDay(for: workoutDate)
+
+        // Subtract days before
+        revealDate = calendar.date(byAdding: .day, value: -daysBefore, to: revealDate) ?? revealDate
+
+        // Set the specific reveal time
+        revealDate = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: revealDate) ?? revealDate
+
+        return revealDate
+    }
+
+    // Format reveal settings for display
+    private func revealSettingsDescription(_ settings: (hide: Bool, daysBefore: Int, hour: Int, minute: Int)) -> String {
+        let timeFormatter = DateFormatter()
+        timeFormatter.timeStyle = .short
+
+        let calendar = Calendar.current
+        let revealTime = calendar.date(from: DateComponents(hour: settings.hour, minute: settings.minute)) ?? Date()
+        let timeString = timeFormatter.string(from: revealTime)
+
+        switch settings.daysBefore {
+        case 0:
+            return "at \(timeString) on workout day"
+        case 1:
+            return "day before at \(timeString)"
+        default:
+            return "\(settings.daysBefore) days before at \(timeString)"
         }
-
-        var workoutDateTime = calendar.startOfDay(for: workoutDate)
-        workoutDateTime = calendar.date(bySettingHour: firstSlotHour, minute: 0, second: 0, of: workoutDateTime) ?? workoutDateTime
-
-        return calendar.date(byAdding: .hour, value: -hoursBefore, to: workoutDateTime) ?? workoutDateTime
     }
 
     // Get default time slots from selected groups
@@ -1459,7 +1496,7 @@ struct EditWorkoutSheet: View {
                             VStack(alignment: .leading) {
                                 Text("Details hidden by default")
                                     .font(.subheadline)
-                                Text("Revealed \(defaults.hoursBefore == 0 ? "at workout time" : "\(defaults.hoursBefore)h before")")
+                                Text("Revealed \(revealSettingsDescription(defaults))")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                             }
@@ -1539,7 +1576,7 @@ struct EditWorkoutSheet: View {
                         finalRevealDate = hideDetails ? revealDate : nil
                     } else if let defaults = defaultHideSettings {
                         finalHideDetails = defaults.hide
-                        finalRevealDate = defaults.hide ? calculateRevealDate(workoutDate: normalizedDate, hoursBefore: defaults.hoursBefore) : nil
+                        finalRevealDate = defaults.hide ? calculateRevealDate(workoutDate: normalizedDate, daysBefore: defaults.daysBefore, hour: defaults.hour, minute: defaults.minute) : nil
                     } else {
                         finalHideDetails = false
                         finalRevealDate = nil
