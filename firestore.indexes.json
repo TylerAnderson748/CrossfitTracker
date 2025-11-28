@@ -28,7 +28,7 @@
         },
         {
           "fieldPath": "completedDate",
-          "order": "ASCENDING"
+          "order": "DESCENDING"
         }
       ]
     },

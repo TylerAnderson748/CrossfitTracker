@@ -1991,12 +1991,12 @@ final class AppStore: ObservableObject {
 
             dispatchGroup.notify(queue: .main) {
                 // Now fetch workout logs for this workout
+                // Query without ordering to avoid index requirements, sort in memory
                 self.db.collection("workoutLogs")
                     .whereField("wodTitle", isEqualTo: workout.wodTitle)
-                    .order(by: "completedDate", descending: true)
-                    .limit(to: limit)
                     .getDocuments { snapshot, error in
                         if let error = error {
+                            print("❌ Error fetching workout logs: \(error.localizedDescription)")
                             DispatchQueue.main.async {
                                 completion([], allUsers, error.localizedDescription)
                             }
@@ -2007,12 +2007,19 @@ final class AppStore: ObservableObject {
                             try? doc.data(as: WorkoutLog.self)
                         } ?? []
 
+                        print("📊 Found \(logs.count) total logs for '\(workout.wodTitle)'")
+
                         // Filter to only include logs from group participants (members, coaches, owner)
                         let groupParticipantLogs = logs.filter { allParticipantIds.contains($0.userId) }
 
+                        // Sort by completedDate descending and limit
+                        let sortedLogs = groupParticipantLogs
+                            .sorted { $0.completedDate > $1.completedDate }
+                            .prefix(limit)
+
                         DispatchQueue.main.async {
-                            print("✅ Loaded \(groupParticipantLogs.count) group participant logs for \(workout.wodTitle)")
-                            completion(groupParticipantLogs, allUsers, nil)
+                            print("✅ Loaded \(sortedLogs.count) group participant logs for \(workout.wodTitle)")
+                            completion(Array(sortedLogs), allUsers, nil)
                         }
                     }
             }
