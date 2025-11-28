@@ -1270,15 +1270,15 @@ struct EditWorkoutSheet: View {
         // Initialize time slots from existing workout
         _timeSlots = State(initialValue: workout.timeSlots)
 
-        // If workout has custom time slots, enable custom mode
-        _useCustomTimeSlots = State(initialValue: !workout.timeSlots.isEmpty)
+        // Initialize to false - will be set after groups load if settings differ from defaults
+        _useCustomTimeSlots = State(initialValue: false)
 
         // Initialize hide details
         _hideDetails = State(initialValue: workout.hideDetails)
         _revealDate = State(initialValue: workout.revealDate ?? workout.date)
 
-        // If workout has custom hide settings, enable custom mode
-        _useCustomVisibility = State(initialValue: workout.hideDetails)
+        // Initialize to false - will be set after groups load if settings differ from defaults
+        _useCustomVisibility = State(initialValue: false)
     }
 
     var body: some View {
@@ -1713,6 +1713,72 @@ struct EditWorkoutSheet: View {
             // Filter out personal groups (they're not for programming)
             self.groups = loadedGroups.filter { $0.type != .personal }
             print("✅ Loaded \(self.groups.count) groups for programming in gym: \(self.gym.name)")
+
+            // After groups load, check if workout uses custom settings
+            self.checkForCustomSettings()
         }
+    }
+
+    /// Checks if the workout's settings differ from group defaults
+    private func checkForCustomSettings() {
+        // Check time slots - compare workout's slots with what group defaults would produce
+        let defaultSlots = defaultTimeSlotsFromGroups
+        if !defaultSlots.isEmpty {
+            // If workout has time slots, check if they match defaults
+            if !timeSlots.isEmpty {
+                let expectedSlots = timeSlotsFromDefaults()
+                // Compare slot times (ignoring sign-ups)
+                let workoutSlotTimes = Set(timeSlots.map { slotTimeKey($0) })
+                let defaultSlotTimes = Set(expectedSlots.map { slotTimeKey($0) })
+
+                if workoutSlotTimes != defaultSlotTimes {
+                    useCustomTimeSlots = true
+                }
+            }
+        } else if !timeSlots.isEmpty {
+            // Group has no defaults but workout has slots - must be custom
+            useCustomTimeSlots = true
+        }
+
+        // Check visibility settings
+        if let groupDefaults = defaultHideSettings {
+            // Group has hide defaults
+            if workout.hideDetails {
+                // Both hide - check if reveal times match what group would calculate
+                let expectedRevealDate = calculateRevealDate(
+                    workoutDate: workout.date,
+                    daysBefore: groupDefaults.daysBefore,
+                    hour: groupDefaults.hour,
+                    minute: groupDefaults.minute
+                )
+
+                // Compare with some tolerance (within 1 minute)
+                if let workoutReveal = workout.revealDate {
+                    let timeDiff = abs(workoutReveal.timeIntervalSince(expectedRevealDate))
+                    if timeDiff > 60 {
+                        useCustomVisibility = true
+                    }
+                } else {
+                    useCustomVisibility = true
+                }
+            } else {
+                // Group hides but workout doesn't - custom visibility
+                useCustomVisibility = true
+            }
+        } else {
+            // Group doesn't hide by default
+            if workout.hideDetails {
+                // Workout hides but group doesn't - custom visibility
+                useCustomVisibility = true
+            }
+        }
+    }
+
+    /// Creates a time key for comparison (hour:minute)
+    private func slotTimeKey(_ slot: TimeSlot) -> String {
+        let calendar = Calendar.current
+        let hour = calendar.component(.hour, from: slot.startTime)
+        let minute = calendar.component(.minute, from: slot.startTime)
+        return "\(hour):\(minute)"
     }
 }
