@@ -37,6 +37,10 @@ struct ScheduledWorkout: Codable, Identifiable {
     var monthlyWeekPosition: Int? // 1=First, 2=Second, 3=Third, 4=Fourth, 5=Last
     var monthlyWeekday: Int? // 1=Sun, 2=Mon, 3=Tue, 4=Wed, 5=Thu, 6=Fri, 7=Sat
 
+    // Hide workout details from members until reveal date
+    var hideDetails: Bool // if true, hide title/description from non-coaches until revealDate
+    var revealDate: Date? // when to reveal details (nil = hidden until manually changed)
+
     init(
         id: String? = nil,
         wodId: String,
@@ -52,7 +56,9 @@ struct ScheduledWorkout: Codable, Identifiable {
         seriesId: String? = nil,
         weekdays: [Int]? = nil,
         monthlyWeekPosition: Int? = nil,
-        monthlyWeekday: Int? = nil
+        monthlyWeekday: Int? = nil,
+        hideDetails: Bool = false,
+        revealDate: Date? = nil
     ) {
         self.id = id
         self.wodId = wodId
@@ -70,6 +76,8 @@ struct ScheduledWorkout: Codable, Identifiable {
         self.weekdays = weekdays
         self.monthlyWeekPosition = monthlyWeekPosition
         self.monthlyWeekday = monthlyWeekday
+        self.hideDetails = hideDetails
+        self.revealDate = revealDate
     }
 
     var isPersonalWorkout: Bool {
@@ -78,6 +86,13 @@ struct ScheduledWorkout: Codable, Identifiable {
 
     var isRecurring: Bool {
         return recurrenceType != .none
+    }
+
+    // Check if details should be shown (based on revealDate)
+    var shouldRevealDetails: Bool {
+        if !hideDetails { return true }
+        guard let revealDate = revealDate else { return false }
+        return Date() >= revealDate
     }
 
     // Custom decoder to handle old workouts without newer fields
@@ -113,6 +128,8 @@ struct ScheduledWorkout: Codable, Identifiable {
         weekdays = try container.decodeIfPresent([Int].self, forKey: .weekdays)
         monthlyWeekPosition = try container.decodeIfPresent(Int.self, forKey: .monthlyWeekPosition)
         monthlyWeekday = try container.decodeIfPresent(Int.self, forKey: .monthlyWeekday)
+        hideDetails = try container.decodeIfPresent(Bool.self, forKey: .hideDetails) ?? false
+        revealDate = try container.decodeIfPresent(Date.self, forKey: .revealDate)
 
         // Let @DocumentID wrapper handle the id field from Firestore
         // This ensures the document ID is properly extracted
@@ -124,6 +141,7 @@ struct ScheduledWorkout: Codable, Identifiable {
         case groupId, groupIds, timeSlots, createdBy, createdAt
         case recurrenceType, recurrenceEndDate, seriesId, weekdays
         case monthlyWeekPosition, monthlyWeekday
+        case hideDetails, revealDate
         // Note: 'id' is intentionally excluded - @DocumentID handles it
     }
 
@@ -146,5 +164,7 @@ struct ScheduledWorkout: Codable, Identifiable {
         try container.encodeIfPresent(weekdays, forKey: .weekdays)
         try container.encodeIfPresent(monthlyWeekPosition, forKey: .monthlyWeekPosition)
         try container.encodeIfPresent(monthlyWeekday, forKey: .monthlyWeekday)
+        try container.encode(hideDetails, forKey: .hideDetails)
+        try container.encodeIfPresent(revealDate, forKey: .revealDate)
     }
 }

@@ -462,6 +462,10 @@ struct AddWorkoutSheet: View {
     @State private var newSlotCapacity: Int = 20
     @State private var useCustomTimeSlots: Bool = false
 
+    // Hide workout details until reveal time
+    @State private var hideDetails: Bool = false
+    @State private var revealDate: Date = Date()
+
     // Get default time slots from selected groups
     private var defaultTimeSlotsFromGroups: [DefaultTimeSlot] {
         var slots: [DefaultTimeSlot] = []
@@ -716,6 +720,21 @@ struct AddWorkoutSheet: View {
                     }
                 }
 
+                // Hide details option for group workouts
+                if !selectedGroupIds.isEmpty {
+                    Section("Visibility") {
+                        Toggle("Hide workout details", isOn: $hideDetails)
+
+                        if hideDetails {
+                            DatePicker("Reveal on", selection: $revealDate, displayedComponents: [.date, .hourAndMinute])
+
+                            Text("Workout name and description will be hidden from members until this time. Coaches and gym owners can always see details.")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+
                 Section("Recurrence") {
                     Picker("Repeat", selection: $recurrenceType) {
                         Text("Does not repeat").tag(RecurrenceType.none)
@@ -830,7 +849,9 @@ struct AddWorkoutSheet: View {
                             recurrenceEndDate: hasEndDate ? recurrenceEndDate : nil,
                             weekdays: recurrenceType == .weekly ? Array(selectedWeekdays) : nil,
                             monthlyWeekPosition: (recurrenceType == .monthly && monthlyRecurrenceType == .weekBased) ? selectedMonthlyWeekPosition : nil,
-                            monthlyWeekday: (recurrenceType == .monthly && monthlyRecurrenceType == .weekBased) ? selectedMonthlyWeekday : nil
+                            monthlyWeekday: (recurrenceType == .monthly && monthlyRecurrenceType == .weekBased) ? selectedMonthlyWeekday : nil,
+                            hideDetails: selectedGroupIds.isEmpty ? false : hideDetails,
+                            revealDate: hideDetails ? revealDate : nil
                         )
 
                         if workout.isRecurring {
@@ -1034,6 +1055,10 @@ struct EditWorkoutSheet: View {
     @State private var newSlotCapacity: Int = 20
     @State private var useCustomTimeSlots: Bool
 
+    // Hide workout details until reveal time
+    @State private var hideDetails: Bool
+    @State private var revealDate: Date
+
     // Get default time slots from selected groups
     private var defaultTimeSlotsFromGroups: [DefaultTimeSlot] {
         var slots: [DefaultTimeSlot] = []
@@ -1098,6 +1123,10 @@ struct EditWorkoutSheet: View {
 
         // If workout has custom time slots, enable custom mode
         _useCustomTimeSlots = State(initialValue: !workout.timeSlots.isEmpty)
+
+        // Initialize hide details
+        _hideDetails = State(initialValue: workout.hideDetails)
+        _revealDate = State(initialValue: workout.revealDate ?? workout.date)
     }
 
     var body: some View {
@@ -1303,6 +1332,21 @@ struct EditWorkoutSheet: View {
                     }
                 }
             }
+
+            // Hide details option for group workouts
+            if !selectedGroupIds.isEmpty {
+                Section("Visibility") {
+                    Toggle("Hide workout details", isOn: $hideDetails)
+
+                    if hideDetails {
+                        DatePicker("Reveal on", selection: $revealDate, displayedComponents: [.date, .hourAndMinute])
+
+                        Text("Workout name and description will be hidden from members until this time. Coaches and gym owners can always see details.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
         }
         .navigationTitle("Edit Workout")
         .navigationBarTitleDisplayMode(.inline)
@@ -1345,6 +1389,8 @@ struct EditWorkoutSheet: View {
                     updatedWorkout.weekdays = recurrenceType == .weekly ? Array(selectedWeekdays) : nil
                     updatedWorkout.monthlyWeekPosition = (recurrenceType == .monthly && monthlyRecurrenceType == .weekBased) ? selectedMonthlyWeekPosition : nil
                     updatedWorkout.monthlyWeekday = (recurrenceType == .monthly && monthlyRecurrenceType == .weekBased) ? selectedMonthlyWeekday : nil
+                    updatedWorkout.hideDetails = selectedGroupIds.isEmpty ? false : hideDetails
+                    updatedWorkout.revealDate = hideDetails ? revealDate : nil
 
                     // If changing to recurring or if it's a new recurring workout
                     if updatedWorkout.isRecurring && workout.recurrenceType == .none {

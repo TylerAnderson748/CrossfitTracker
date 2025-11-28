@@ -123,20 +123,130 @@ struct DashboardView: View {
 // MARK: - Workout Card Component
 
 struct WorkoutCard: View {
-    let workout: ScheduledWorkout
+    @EnvironmentObject var store: AppStore
+    @State var workout: ScheduledWorkout
     let logs: [WorkoutLog]
     let gymUsers: [String: AppUser]
     @Binding var navigationPath: NavigationPath
+
+    @State private var showTimeSlotPicker = false
+    @State private var showSignUpError = false
+    @State private var signUpErrorMessage = ""
+
+    private var currentUserId: String? {
+        store.currentUser?.uid
+    }
+
+    private var userSignedUpSlot: TimeSlot? {
+        guard let userId = currentUserId else { return nil }
+        return workout.timeSlots.first { $0.signedUpUserIds.contains(userId) }
+    }
+
+    private var timeFormatter: DateFormatter {
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        return formatter
+    }
+
+    // Check if current user is a coach/owner who can see hidden details
+    private var canSeeHiddenDetails: Bool {
+        guard let userId = currentUserId else { return false }
+        // Creator can always see
+        if workout.createdBy == userId { return true }
+        // Check if user is a coach for any of the groups
+        for groupId in workout.groupIds {
+            if let group = store.groups.first(where: { $0.id == groupId }) {
+                if group.coachIds.contains(userId) || group.ownerId == userId {
+                    return true
+                }
+            }
+        }
+        return false
+    }
+
+    // Whether to show workout details (name/description)
+    private var shouldShowDetails: Bool {
+        if !workout.hideDetails { return true }
+        if canSeeHiddenDetails { return true }
+        return workout.shouldRevealDetails
+    }
+
+    private var revealDateFormatter: DateFormatter {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .short
+        formatter.timeStyle = .short
+        return formatter
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             // Workout Header
             VStack(alignment: .leading, spacing: 8) {
-                Text(workout.wodTitle)
+                Text(shouldShowDetails ? workout.wodTitle : "Workout")
                     .font(.title2.bold())
-                Text(workout.wodDescription)
-                    .font(.body)
-                    .foregroundColor(.secondary)
+                if shouldShowDetails {
+                    Text(workout.wodDescription)
+                        .font(.body)
+                        .foregroundColor(.secondary)
+                } else {
+                    HStack {
+                        Image(systemName: "eye.slash")
+                            .foregroundColor(.secondary)
+                        if let revealDate = workout.revealDate {
+                            Text("Details revealed \(revealDateFormatter.string(from: revealDate))")
+                                .font(.body)
+                                .foregroundColor(.secondary)
+                        } else {
+                            Text("Workout details hidden")
+                                .font(.body)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+            }
+
+            // Time slot sign-up for group workouts
+            if !workout.isPersonalWorkout && !workout.timeSlots.isEmpty {
+                HStack {
+                    if let signedUpSlot = userSignedUpSlot {
+                        HStack(spacing: 6) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundColor(.green)
+                            Text("Signed up for \(timeFormatter.string(from: signedUpSlot.startTime))")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                        }
+
+                        Spacer()
+
+                        Button(action: {
+                            cancelSignUp(signedUpSlot)
+                        }) {
+                            Text("Cancel")
+                                .font(.caption)
+                                .fontWeight(.medium)
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(.red)
+                    } else {
+                        Text("\(workout.timeSlots.count) class time\(workout.timeSlots.count == 1 ? "" : "s") available")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+
+                        Spacer()
+
+                        Button(action: {
+                            showTimeSlotPicker = true
+                        }) {
+                            Label("Sign Up", systemImage: "calendar.badge.plus")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.blue)
+                    }
+                }
+                .padding(.vertical, 4)
             }
 
             // Action Buttons
@@ -210,6 +320,123 @@ struct WorkoutCard: View {
         .background(Color(.systemBackground))
         .cornerRadius(12)
         .shadow(color: Color.black.opacity(0.1), radius: 5, x: 0, y: 2)
+        .alert("Sign-up Error", isPresented: $showSignUpError) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(signUpErrorMessage)
+        }
+        .sheet(isPresented: $showTimeSlotPicker) {
+            DashboardTimeSlotPickerSheet(
+                workout: workout,
+                timeFormatter: timeFormatter,
+                onSelectSlot: { slot in
+                    signUpForSlot(slot)
+                }
+            )
+        }
+    }
+
+    private func signUpForSlot(_ slot: TimeSlot) {
+        guard let workoutId = workout.id,
+              let userId = currentUserId else { return }
+
+        store.signUpForTimeSlot(workoutId: workoutId, timeSlotId: slot.id, userId: userId) { updatedWorkout, error in
+            if let error = error {
+                signUpErrorMessage = error
+                showSignUpError = true
+            } else if let updatedWorkout = updatedWorkout {
+                self.workout = updatedWorkout
+            }
+        }
+    }
+
+    private func cancelSignUp(_ slot: TimeSlot) {
+        guard let workoutId = workout.id,
+              let userId = currentUserId else { return }
+
+        store.cancelTimeSlotSignUp(workoutId: workoutId, timeSlotId: slot.id, userId: userId) { updatedWorkout, error in
+            if let error = error {
+                signUpErrorMessage = error
+                showSignUpError = true
+            } else if let updatedWorkout = updatedWorkout {
+                self.workout = updatedWorkout
+            }
+        }
+    }
+}
+
+// MARK: - Dashboard Time Slot Picker
+
+struct DashboardTimeSlotPickerSheet: View {
+    @Environment(\.dismiss) var dismiss
+    let workout: ScheduledWorkout
+    let timeFormatter: DateFormatter
+    let onSelectSlot: (TimeSlot) -> Void
+
+    var body: some View {
+        NavigationView {
+            List {
+                Section {
+                    Text(workout.wodTitle)
+                        .font(.headline)
+                    Text(workout.wodDescription)
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+
+                Section("Select a Class Time") {
+                    ForEach(workout.timeSlots) { slot in
+                        Button(action: {
+                            onSelectSlot(slot)
+                            dismiss()
+                        }) {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(timeFormatter.string(from: slot.startTime))
+                                        .font(.headline)
+                                        .foregroundColor(.primary)
+
+                                    if slot.capacity > 0 {
+                                        Text("\(slot.spotsRemaining) spots remaining")
+                                            .font(.caption)
+                                            .foregroundColor(slot.isFull ? .red : .secondary)
+                                    } else {
+                                        Text("\(slot.signedUpUserIds.count) signed up")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+
+                                Spacer()
+
+                                if slot.isFull {
+                                    Text("Full")
+                                        .font(.caption)
+                                        .foregroundColor(.white)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 4)
+                                        .background(Color.red)
+                                        .cornerRadius(6)
+                                } else {
+                                    Image(systemName: "chevron.right")
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                        }
+                        .disabled(slot.isFull)
+                    }
+                }
+            }
+            .navigationTitle("Sign Up for Class")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+            }
+        }
     }
 }
 

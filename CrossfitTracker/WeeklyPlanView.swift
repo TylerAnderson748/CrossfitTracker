@@ -421,6 +421,7 @@ struct WorkoutSummaryRow: View {
 
     @State private var showSignUpError = false
     @State private var signUpErrorMessage = ""
+    @State private var showTimeSlotPicker = false
 
     private var workoutTypeInfo: (label: String, color: Color, icon: String) {
         if workout.isPersonalWorkout {
@@ -440,8 +441,44 @@ struct WorkoutSummaryRow: View {
         store.currentUser?.uid
     }
 
-    private func timeFormatter() -> DateFormatter {
+    // Check if user is signed up for any time slot
+    private var userSignedUpSlot: TimeSlot? {
+        guard let userId = currentUserId else { return nil }
+        return workout.timeSlots.first { $0.signedUpUserIds.contains(userId) }
+    }
+
+    private var timeFormatter: DateFormatter {
         let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        return formatter
+    }
+
+    // Check if current user is a coach/owner who can see hidden details
+    private var canSeeHiddenDetails: Bool {
+        guard let userId = currentUserId else { return false }
+        // Creator can always see
+        if workout.createdBy == userId { return true }
+        // Check if user is a coach for any of the groups
+        for groupId in workout.groupIds {
+            if let group = store.groups.first(where: { $0.id == groupId }) {
+                if group.coachIds.contains(userId) || group.ownerId == userId {
+                    return true
+                }
+            }
+        }
+        return false
+    }
+
+    // Whether to show workout details (name/description)
+    private var shouldShowDetails: Bool {
+        if !workout.hideDetails { return true }
+        if canSeeHiddenDetails { return true }
+        return workout.shouldRevealDetails
+    }
+
+    private var revealDateFormatter: DateFormatter {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .short
         formatter.timeStyle = .short
         return formatter
     }
@@ -449,7 +486,7 @@ struct WorkoutSummaryRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text(workout.wodTitle)
+                Text(shouldShowDetails ? workout.wodTitle : "Workout")
                     .font(.headline)
 
                 Spacer()
@@ -469,26 +506,68 @@ struct WorkoutSummaryRow: View {
                 .cornerRadius(8)
             }
 
-            Text(workout.wodDescription)
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-                .lineLimit(2)
-
-            // Time slots for group workouts
-            if !workout.isPersonalWorkout && !workout.timeSlots.isEmpty {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Class Times")
-                        .font(.caption)
-                        .fontWeight(.semibold)
+            if shouldShowDetails {
+                Text(workout.wodDescription)
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                    .lineLimit(2)
+            } else {
+                HStack {
+                    Image(systemName: "eye.slash")
                         .foregroundColor(.secondary)
+                    if let revealDate = workout.revealDate {
+                        Text("Details revealed \(revealDateFormatter.string(from: revealDate))")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    } else {
+                        Text("Workout details hidden")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
 
-                    ForEach(workout.timeSlots) { slot in
-                        TimeSlotRow(
-                            slot: slot,
-                            currentUserId: currentUserId,
-                            onSignUp: { signUpForSlot(slot) },
-                            onCancel: { cancelSignUp(slot) }
-                        )
+            // Time slots for group workouts - single sign-up button
+            if !workout.isPersonalWorkout && !workout.timeSlots.isEmpty {
+                HStack {
+                    if let signedUpSlot = userSignedUpSlot {
+                        // User is signed up - show their time and cancel option
+                        HStack(spacing: 6) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundColor(.green)
+                            Text(timeFormatter.string(from: signedUpSlot.startTime))
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                        }
+
+                        Spacer()
+
+                        Button(action: {
+                            cancelSignUp(signedUpSlot)
+                        }) {
+                            Text("Cancel")
+                                .font(.caption)
+                                .fontWeight(.medium)
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(.red)
+                    } else {
+                        // User not signed up - show sign up button
+                        Text("\(workout.timeSlots.count) class time\(workout.timeSlots.count == 1 ? "" : "s") available")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+
+                        Spacer()
+
+                        Button(action: {
+                            showTimeSlotPicker = true
+                        }) {
+                            Label("Sign Up", systemImage: "calendar.badge.plus")
+                                .font(.caption)
+                                .fontWeight(.medium)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.blue)
                     }
                 }
                 .padding(.vertical, 4)
@@ -546,6 +625,15 @@ struct WorkoutSummaryRow: View {
             Button("OK", role: .cancel) { }
         } message: {
             Text(signUpErrorMessage)
+        }
+        .sheet(isPresented: $showTimeSlotPicker) {
+            TimeSlotPickerSheet(
+                workout: workout,
+                timeFormatter: timeFormatter,
+                onSelectSlot: { slot in
+                    signUpForSlot(slot)
+                }
+            )
         }
     }
 
@@ -653,6 +741,79 @@ struct TimeSlotRow: View {
         .padding(.vertical, 6)
         .background(Color(.systemGray6))
         .cornerRadius(8)
+    }
+}
+
+struct TimeSlotPickerSheet: View {
+    @Environment(\.dismiss) var dismiss
+    let workout: ScheduledWorkout
+    let timeFormatter: DateFormatter
+    let onSelectSlot: (TimeSlot) -> Void
+
+    var body: some View {
+        NavigationView {
+            List {
+                Section {
+                    Text(workout.wodTitle)
+                        .font(.headline)
+                    Text(workout.wodDescription)
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+
+                Section("Select a Class Time") {
+                    ForEach(workout.timeSlots) { slot in
+                        Button(action: {
+                            onSelectSlot(slot)
+                            dismiss()
+                        }) {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(timeFormatter.string(from: slot.startTime))
+                                        .font(.headline)
+                                        .foregroundColor(.primary)
+
+                                    if slot.capacity > 0 {
+                                        Text("\(slot.spotsRemaining) spots remaining")
+                                            .font(.caption)
+                                            .foregroundColor(slot.isFull ? .red : .secondary)
+                                    } else {
+                                        Text("\(slot.signedUpUserIds.count) signed up")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+
+                                Spacer()
+
+                                if slot.isFull {
+                                    Text("Full")
+                                        .font(.caption)
+                                        .foregroundColor(.white)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 4)
+                                        .background(Color.red)
+                                        .cornerRadius(6)
+                                } else {
+                                    Image(systemName: "chevron.right")
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                        }
+                        .disabled(slot.isFull)
+                    }
+                }
+            }
+            .navigationTitle("Sign Up for Class")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+            }
+        }
     }
 }
 
