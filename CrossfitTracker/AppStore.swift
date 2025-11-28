@@ -830,19 +830,16 @@ final class AppStore: ObservableObject {
         }
     }
 
-    /// Updates reveal dates for all future workouts in a group when group visibility settings change
+    /// Updates reveal dates for all workouts in a group when group visibility settings change
     func updateWorkoutRevealDatesForGroup(_ group: WorkoutGroup, completion: @escaping (Int, String?) -> Void) {
         guard let groupId = group.id else {
             completion(0, "Group ID is missing")
             return
         }
 
-        let today = Calendar.current.startOfDay(for: Date())
-
-        // Query future workouts that belong to this group
+        // Query ALL workouts that belong to this group (past and future)
         db.collection("scheduledWorkouts")
             .whereField("groupIds", arrayContains: groupId)
-            .whereField("date", isGreaterThanOrEqualTo: today)
             .getDocuments { snapshot, error in
                 if let error = error {
                     DispatchQueue.main.async {
