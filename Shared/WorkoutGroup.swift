@@ -59,4 +59,22 @@ struct WorkoutGroup: Codable, Identifiable {
         self.createdAt = Date()
         self.defaultTimeSlots = defaultTimeSlots
     }
+
+    // Custom decoder to handle missing defaultTimeSlots field in existing documents
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        _id = try container.decode(DocumentID<String>.self, forKey: .id)
+        gymId = try container.decodeIfPresent(String.self, forKey: .gymId)
+        name = try container.decode(String.self, forKey: .name)
+        type = try container.decode(GroupType.self, forKey: .type)
+        membershipType = try container.decode(MembershipType.self, forKey: .membershipType)
+        memberIds = try container.decode([String].self, forKey: .memberIds)
+        coachIds = try container.decode([String].self, forKey: .coachIds)
+        ownerId = try container.decode(String.self, forKey: .ownerId)
+        isPublic = try container.decode(Bool.self, forKey: .isPublic)
+        isDeletable = try container.decode(Bool.self, forKey: .isDeletable)
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        // Default to empty array if field doesn't exist
+        defaultTimeSlots = try container.decodeIfPresent([DefaultTimeSlot].self, forKey: .defaultTimeSlots) ?? []
+    }
 }
