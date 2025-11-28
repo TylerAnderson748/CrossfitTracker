@@ -334,14 +334,17 @@ struct CoachDayCard: View {
                                 .foregroundColor(.secondary)
                                 .lineLimit(2)
 
-                            // Time slots display for coaches
+                            // Show count of time slots if any
                             if !workout.timeSlots.isEmpty {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    ForEach(workout.timeSlots) { slot in
-                                        CoachTimeSlotRow(slot: slot)
-                                    }
+                                HStack(spacing: 4) {
+                                    Image(systemName: "clock")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                    Text("\(workout.timeSlots.count) class time\(workout.timeSlots.count == 1 ? "" : "s")")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
                                 }
-                                .padding(.top, 4)
+                                .padding(.top, 2)
                             }
                         }
 
@@ -687,41 +690,45 @@ struct AddWorkoutSheet: View {
                 // Only show class times for group workouts
                 if !selectedGroupIds.isEmpty {
                     Section("Class Times") {
-                        // Show default times from group settings
-                        if !defaultTimeSlotsFromGroups.isEmpty && !useCustomTimeSlots {
-                            ForEach(defaultTimeSlotsFromGroups) { slot in
-                                HStack {
-                                    Image(systemName: "clock")
-                                        .foregroundColor(.blue)
-                                    Text(slot.timeString)
-                                        .font(.headline)
-                                    Spacer()
-                                    Text(slot.capacity == 0 ? "Unlimited" : "Cap: \(slot.capacity)")
-                                        .font(.subheadline)
-                                        .foregroundColor(.secondary)
-                                }
-                            }
-
-                            Text("Using default class times from group settings")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        } else if defaultTimeSlotsFromGroups.isEmpty && !useCustomTimeSlots {
-                            Text("No default class times set for selected group(s)")
-                                .foregroundColor(.secondary)
-                                .italic()
-
-                            Text("Set default times in Group Management, or use custom times below")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+                        // Toggle for custom times (only show if group has defaults)
+                        if !defaultTimeSlotsFromGroups.isEmpty {
+                            Toggle("Use custom class times", isOn: $useCustomTimeSlots)
                         }
 
-                        // Toggle for custom times
-                        Toggle("Use custom class times", isOn: $useCustomTimeSlots)
+                        // Show default times from group settings (only when NOT using custom)
+                        if !useCustomTimeSlots {
+                            if !defaultTimeSlotsFromGroups.isEmpty {
+                                ForEach(defaultTimeSlotsFromGroups) { slot in
+                                    HStack {
+                                        Image(systemName: "clock")
+                                            .foregroundColor(.blue)
+                                        Text(slot.timeString)
+                                            .font(.headline)
+                                        Spacer()
+                                        Text(slot.capacity == 0 ? "Unlimited" : "Cap: \(slot.capacity)")
+                                            .font(.subheadline)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
 
-                        // Custom time slots editor
-                        if useCustomTimeSlots {
+                                Text("Using default class times from group settings")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            } else {
+                                Text("No default class times set for selected group(s)")
+                                    .foregroundColor(.secondary)
+                                    .italic()
+
+                                Text("Add class times below or set defaults in Group Management")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+
+                        // Custom time slots editor (show when using custom OR when no defaults)
+                        if useCustomTimeSlots || defaultTimeSlotsFromGroups.isEmpty {
                             if timeSlots.isEmpty {
-                                Text("No custom class times added")
+                                Text("No class times added")
                                     .foregroundColor(.secondary)
                                     .italic()
                             } else {
@@ -1404,41 +1411,45 @@ struct EditWorkoutSheet: View {
             // Only show class times for group workouts
             if !selectedGroupIds.isEmpty {
                 Section("Class Times") {
-                    // Show default times from group settings
-                    if !defaultTimeSlotsFromGroups.isEmpty && !useCustomTimeSlots {
-                        ForEach(defaultTimeSlotsFromGroups) { slot in
-                            HStack {
-                                Image(systemName: "clock")
-                                    .foregroundColor(.blue)
-                                Text(slot.timeString)
-                                    .font(.headline)
-                                Spacer()
-                                Text(slot.capacity == 0 ? "Unlimited" : "Cap: \(slot.capacity)")
-                                    .font(.subheadline)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-
-                        Text("Using default class times from group settings")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    } else if defaultTimeSlotsFromGroups.isEmpty && !useCustomTimeSlots {
-                        Text("No default class times set for selected group(s)")
-                            .foregroundColor(.secondary)
-                            .italic()
-
-                        Text("Set default times in Group Management, or use custom times below")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                    // Toggle for custom times (only show if group has defaults)
+                    if !defaultTimeSlotsFromGroups.isEmpty {
+                        Toggle("Use custom class times", isOn: $useCustomTimeSlots)
                     }
 
-                    // Toggle for custom times
-                    Toggle("Use custom class times", isOn: $useCustomTimeSlots)
+                    // Show default times from group settings (only when NOT using custom)
+                    if !useCustomTimeSlots {
+                        if !defaultTimeSlotsFromGroups.isEmpty {
+                            ForEach(defaultTimeSlotsFromGroups) { slot in
+                                HStack {
+                                    Image(systemName: "clock")
+                                        .foregroundColor(.blue)
+                                    Text(slot.timeString)
+                                        .font(.headline)
+                                    Spacer()
+                                    Text(slot.capacity == 0 ? "Unlimited" : "Cap: \(slot.capacity)")
+                                        .font(.subheadline)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
 
-                    // Custom time slots editor
-                    if useCustomTimeSlots {
+                            Text("Using default class times from group settings")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        } else {
+                            Text("No default class times set for selected group(s)")
+                                .foregroundColor(.secondary)
+                                .italic()
+
+                            Text("Add class times below or set defaults in Group Management")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+
+                    // Custom time slots editor (show when using custom OR when no defaults)
+                    if useCustomTimeSlots || defaultTimeSlotsFromGroups.isEmpty {
                         if timeSlots.isEmpty {
-                            Text("No custom class times added")
+                            Text("No class times added")
                                 .foregroundColor(.secondary)
                                 .italic()
                         } else {

@@ -7,12 +7,45 @@ import SwiftUI
 
 struct DashboardView: View {
     @EnvironmentObject var store: AppStore
-    @State private var todaysWorkouts: [ScheduledWorkout] = []
+    @State private var upcomingWorkouts: [ScheduledWorkout] = []
     @State private var workoutLogs: [String: [WorkoutLog]] = [:] // workoutId -> logs
     @State private var gymUsers: [String: AppUser] = [:] // userId -> user
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var navigationPath = NavigationPath()
+
+    // Group workouts by day, sorted with closest day first
+    private var workoutsByDay: [(date: Date, workouts: [ScheduledWorkout])] {
+        let calendar = Calendar.current
+        let grouped = Dictionary(grouping: upcomingWorkouts) { workout in
+            calendar.startOfDay(for: workout.date)
+        }
+        return grouped.sorted { $0.key < $1.key }.map { (date: $0.key, workouts: $0.value) }
+    }
+
+    private var dateFormatter: DateFormatter {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "EEEE, MMM d"
+        return formatter
+    }
+
+    private func isToday(_ date: Date) -> Bool {
+        Calendar.current.isDateInToday(date)
+    }
+
+    private func isTomorrow(_ date: Date) -> Bool {
+        Calendar.current.isDateInTomorrow(date)
+    }
+
+    private func dayLabel(for date: Date) -> String {
+        if isToday(date) {
+            return "Today"
+        } else if isTomorrow(date) {
+            return "Tomorrow"
+        } else {
+            return dateFormatter.string(from: date)
+        }
+    }
 
     var body: some View {
         NavigationStack(path: $navigationPath) {
@@ -20,7 +53,7 @@ struct DashboardView: View {
                 VStack(spacing: 20) {
                     // Header
                     VStack(spacing: 8) {
-                        Text("Today's Workouts")
+                        Text("Upcoming Workouts")
                             .font(.title.bold())
                         Text("Your scheduled workouts and group programming")
                             .font(.subheadline)
@@ -31,12 +64,12 @@ struct DashboardView: View {
                     if isLoading {
                         ProgressView()
                             .padding()
-                    } else if todaysWorkouts.isEmpty {
+                    } else if upcomingWorkouts.isEmpty {
                         VStack(spacing: 12) {
                             Image(systemName: "calendar.badge.clock")
                                 .font(.system(size: 60))
                                 .foregroundColor(.gray)
-                            Text("No workouts scheduled for today")
+                            Text("No upcoming workouts")
                                 .font(.headline)
                                 .foregroundColor(.secondary)
                             Text("Check back later or ask your coach to add workouts!")
@@ -47,15 +80,41 @@ struct DashboardView: View {
                         }
                         .padding(.vertical, 40)
                     } else {
-                        // Today's Workouts
-                        ForEach(todaysWorkouts) { workout in
-                            WorkoutCard(
-                                workout: workout,
-                                logs: workoutLogs[workout.id ?? ""] ?? [],
-                                gymUsers: gymUsers,
-                                navigationPath: $navigationPath
-                            )
-                            .padding(.horizontal)
+                        // Workouts grouped by day
+                        ForEach(workoutsByDay, id: \.date) { dayGroup in
+                            VStack(alignment: .leading, spacing: 12) {
+                                // Day header
+                                HStack {
+                                    Text(dayLabel(for: dayGroup.date))
+                                        .font(.headline)
+                                        .foregroundColor(isToday(dayGroup.date) ? .blue : .primary)
+
+                                    if isToday(dayGroup.date) {
+                                        Text("TODAY")
+                                            .font(.caption)
+                                            .fontWeight(.bold)
+                                            .foregroundColor(.white)
+                                            .padding(.horizontal, 8)
+                                            .padding(.vertical, 2)
+                                            .background(Color.blue)
+                                            .cornerRadius(4)
+                                    }
+
+                                    Spacer()
+                                }
+                                .padding(.horizontal)
+
+                                // Workouts for this day
+                                ForEach(dayGroup.workouts) { workout in
+                                    WorkoutCard(
+                                        workout: workout,
+                                        logs: workoutLogs[workout.id ?? ""] ?? [],
+                                        gymUsers: gymUsers,
+                                        navigationPath: $navigationPath
+                                    )
+                                    .padding(.horizontal)
+                                }
+                            }
                         }
                     }
                 }
@@ -72,24 +131,36 @@ struct DashboardView: View {
                 }
             }
             .onAppear {
-                loadTodaysWorkouts()
+                loadUpcomingWorkouts()
             }
             .refreshable {
-                loadTodaysWorkouts()
+                loadUpcomingWorkouts()
             }
         }
     }
 
-    private func loadTodaysWorkouts() {
+    private func loadUpcomingWorkouts() {
         isLoading = true
-        store.loadTodaysWorkouts { workouts, error in
+
+        guard let userId = store.currentUser?.uid else {
+            errorMessage = "User not logged in"
+            isLoading = false
+            return
+        }
+
+        let calendar = Calendar.current
+        let startOfToday = calendar.startOfDay(for: Date())
+        let endDate = calendar.date(byAdding: .day, value: 7, to: startOfToday)!
+
+        store.loadScheduledWorkoutsForUser(userId: userId, startDate: startOfToday, endDate: endDate) { workouts, error in
             if let error = error {
                 errorMessage = error
                 isLoading = false
                 return
             }
 
-            todaysWorkouts = workouts
+            // Sort by date (closest first)
+            upcomingWorkouts = workouts.sorted { $0.date < $1.date }
 
             // Load logs for each workout
             for workout in workouts {
