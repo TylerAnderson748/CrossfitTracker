@@ -1949,10 +1949,14 @@ final class AppStore: ObservableObject {
                 return
             }
 
-            let memberIds = group.memberIds
+            // Include all group participants: members, coaches, and owner
+            var allParticipantIds = Set(group.memberIds)
+            allParticipantIds.formUnion(group.coachIds)
+            allParticipantIds.insert(group.ownerId)
+            let participantIds = Array(allParticipantIds)
 
-            // Fetch users for these memberIds
-            if memberIds.isEmpty {
+            // Fetch users for all participants
+            if participantIds.isEmpty {
                 DispatchQueue.main.async {
                     completion([], [], nil)
                 }
@@ -1962,8 +1966,8 @@ final class AppStore: ObservableObject {
             // Query users - Firestore has a limit of 10 items in 'in' queries, so we need to batch
             let batchSize = 10
             var allUsers: [AppUser] = []
-            let batches = stride(from: 0, to: memberIds.count, by: batchSize).map {
-                Array(memberIds[$0..<min($0 + batchSize, memberIds.count)])
+            let batches = stride(from: 0, to: participantIds.count, by: batchSize).map {
+                Array(participantIds[$0..<min($0 + batchSize, participantIds.count)])
             }
 
             let dispatchGroup = DispatchGroup()
@@ -2003,13 +2007,12 @@ final class AppStore: ObservableObject {
                             try? doc.data(as: WorkoutLog.self)
                         } ?? []
 
-                        // Filter to only include logs from group members
-                        let memberIdSet = Set(memberIds)
-                        let groupMemberLogs = logs.filter { memberIdSet.contains($0.userId) }
+                        // Filter to only include logs from group participants (members, coaches, owner)
+                        let groupParticipantLogs = logs.filter { allParticipantIds.contains($0.userId) }
 
                         DispatchQueue.main.async {
-                            print("✅ Loaded \(groupMemberLogs.count) group member logs for \(workout.wodTitle)")
-                            completion(groupMemberLogs, allUsers, nil)
+                            print("✅ Loaded \(groupParticipantLogs.count) group participant logs for \(workout.wodTitle)")
+                            completion(groupParticipantLogs, allUsers, nil)
                         }
                     }
             }
