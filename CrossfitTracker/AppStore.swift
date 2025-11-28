@@ -806,6 +806,30 @@ final class AppStore: ObservableObject {
         }
     }
 
+    func updateGroup(_ group: WorkoutGroup, completion: @escaping (String?) -> Void) {
+        guard let groupId = group.id else {
+            completion("Group ID is missing")
+            return
+        }
+
+        do {
+            try db.collection("groups").document(groupId).setData(from: group) { error in
+                DispatchQueue.main.async {
+                    if let error = error {
+                        completion(error.localizedDescription)
+                    } else {
+                        print("✅ Group updated: \(group.name)")
+                        completion(nil)
+                    }
+                }
+            }
+        } catch {
+            DispatchQueue.main.async {
+                completion(error.localizedDescription)
+            }
+        }
+    }
+
     func createDefaultGroupsForGym(gymId: String, ownerId: String, completion: @escaping (String?) -> Void) {
         // Create 3 default groups: Members (undeletable), Competition Athletes, Weight Training Athletes
         // Owner is automatically added to Members group so they can see programming they create

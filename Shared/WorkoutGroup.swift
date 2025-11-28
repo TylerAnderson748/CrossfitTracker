@@ -31,6 +31,7 @@ struct WorkoutGroup: Codable, Identifiable {
     var isPublic: Bool
     var isDeletable: Bool // false for "Members" default group
     var createdAt: Date
+    var defaultTimeSlots: [DefaultTimeSlot] // default class times for this group
 
     init(
         id: String? = nil,
@@ -42,7 +43,8 @@ struct WorkoutGroup: Codable, Identifiable {
         coachIds: [String] = [],
         ownerId: String,
         isPublic: Bool = false,
-        isDeletable: Bool = true
+        isDeletable: Bool = true,
+        defaultTimeSlots: [DefaultTimeSlot] = []
     ) {
         self.id = id
         self.gymId = gymId
@@ -55,5 +57,6 @@ struct WorkoutGroup: Codable, Identifiable {
         self.isPublic = isPublic
         self.isDeletable = isDeletable
         self.createdAt = Date()
+        self.defaultTimeSlots = defaultTimeSlots
     }
 }

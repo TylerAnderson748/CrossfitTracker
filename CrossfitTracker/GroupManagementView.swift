@@ -227,12 +227,13 @@ struct AddGroupSheet: View {
 
 struct GroupDetailView: View {
     @EnvironmentObject var store: AppStore
-    let group: WorkoutGroup
+    @State var group: WorkoutGroup
     let gym: Gym
 
     @State private var members: [AppUser] = []
     @State private var availableUsers: [AppUser] = []
     @State private var showingAddMember = false
+    @State private var showingAddClassTime = false
 
     var body: some View {
         List {
@@ -263,6 +264,35 @@ struct GroupDetailView: View {
                         .foregroundColor(.secondary)
                     Spacer()
                     Text(group.isPublic ? "Public" : "Private")
+                }
+            }
+
+            Section(header: HStack {
+                Text("Default Class Times")
+                Spacer()
+                Button(action: { showingAddClassTime = true }) {
+                    Image(systemName: "plus.circle.fill")
+                        .foregroundColor(.blue)
+                }
+            }) {
+                if group.defaultTimeSlots.isEmpty {
+                    Text("No class times set")
+                        .foregroundColor(.secondary)
+                        .italic()
+                } else {
+                    ForEach(group.defaultTimeSlots) { slot in
+                        HStack {
+                            Image(systemName: "clock")
+                                .foregroundColor(.blue)
+                            Text(slot.timeString)
+                                .font(.body)
+                            Spacer()
+                            Text(slot.capacity == 0 ? "Unlimited" : "Cap: \(slot.capacity)")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .onDelete(perform: deleteTimeSlot)
                 }
             }
 
@@ -317,6 +347,42 @@ struct GroupDetailView: View {
         .sheet(isPresented: $showingAddMember) {
             AddMemberToGroupSheet(group: group, gym: gym, existingMembers: members) { userId in
                 addMemberToGroup(userId: userId)
+            }
+        }
+        .sheet(isPresented: $showingAddClassTime) {
+            AddClassTimeSheet { newSlot in
+                addTimeSlot(newSlot)
+            }
+        }
+    }
+
+    private func addTimeSlot(_ slot: DefaultTimeSlot) {
+        guard let groupId = group.id else { return }
+
+        var updatedGroup = group
+        updatedGroup.defaultTimeSlots.append(slot)
+        updatedGroup.defaultTimeSlots.sort { ($0.hour * 60 + $0.minute) < ($1.hour * 60 + $1.minute) }
+
+        store.updateGroup(updatedGroup) { error in
+            if let error = error {
+                print("❌ Error adding time slot: \(error)")
+            } else {
+                self.group = updatedGroup
+            }
+        }
+    }
+
+    private func deleteTimeSlot(at offsets: IndexSet) {
+        guard let groupId = group.id else { return }
+
+        var updatedGroup = group
+        updatedGroup.defaultTimeSlots.remove(atOffsets: offsets)
+
+        store.updateGroup(updatedGroup) { error in
+            if let error = error {
+                print("❌ Error deleting time slot: \(error)")
+            } else {
+                self.group = updatedGroup
             }
         }
     }
@@ -467,6 +533,67 @@ struct AddMemberToGroupSheet: View {
 
                     if let user = user, !self.gymUsers.contains(where: { $0.id == user.id }) {
                         self.gymUsers.append(user)
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct AddClassTimeSheet: View {
+    @Environment(\.dismiss) var dismiss
+    let onSave: (DefaultTimeSlot) -> Void
+
+    @State private var selectedTime: Date = {
+        let calendar = Calendar.current
+        return calendar.date(from: DateComponents(hour: 9, minute: 0)) ?? Date()
+    }()
+    @State private var capacity: Int = 20
+    @State private var unlimitedCapacity: Bool = false
+
+    var body: some View {
+        NavigationView {
+            Form {
+                Section("Class Time") {
+                    DatePicker("Time", selection: $selectedTime, displayedComponents: .hourAndMinute)
+                }
+
+                Section("Capacity") {
+                    Toggle("Unlimited", isOn: $unlimitedCapacity)
+
+                    if !unlimitedCapacity {
+                        Stepper("Max attendees: \(capacity)", value: $capacity, in: 1...200)
+                    }
+                }
+
+                Section {
+                    Text("This sets the default class time for workouts assigned to this group. You can override these defaults when programming individual workouts.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+            .navigationTitle("Add Class Time")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Add") {
+                        let calendar = Calendar.current
+                        let hour = calendar.component(.hour, from: selectedTime)
+                        let minute = calendar.component(.minute, from: selectedTime)
+
+                        let slot = DefaultTimeSlot(
+                            hour: hour,
+                            minute: minute,
+                            capacity: unlimitedCapacity ? 0 : capacity
+                        )
+
+                        onSave(slot)
+                        dismiss()
                     }
                 }
             }

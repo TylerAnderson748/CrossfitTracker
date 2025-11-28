@@ -460,6 +460,30 @@ struct AddWorkoutSheet: View {
     @State private var timeSlots: [TimeSlot] = []
     @State private var newSlotTime: Date = Date()
     @State private var newSlotCapacity: Int = 20
+    @State private var useCustomTimeSlots: Bool = false
+
+    // Get default time slots from selected groups
+    private var defaultTimeSlotsFromGroups: [DefaultTimeSlot] {
+        var slots: [DefaultTimeSlot] = []
+        for groupId in selectedGroupIds {
+            if let group = groups.first(where: { $0.id == groupId }) {
+                slots.append(contentsOf: group.defaultTimeSlots)
+            }
+        }
+        // Remove duplicates based on time
+        var seen: Set<String> = []
+        return slots.filter { slot in
+            let key = "\(slot.hour):\(slot.minute)"
+            if seen.contains(key) { return false }
+            seen.insert(key)
+            return true
+        }.sorted { ($0.hour * 60 + $0.minute) < ($1.hour * 60 + $1.minute) }
+    }
+
+    // Convert default slots to TimeSlots for the selected date
+    private func timeSlotsFromDefaults() -> [TimeSlot] {
+        return defaultTimeSlotsFromGroups.map { $0.toTimeSlot(for: date) }
+    }
 
     // Filtered workout suggestions based on title and type
     private var workoutSuggestions: [WOD] {
@@ -611,47 +635,81 @@ struct AddWorkoutSheet: View {
                 // Only show class times for group workouts
                 if !selectedGroupIds.isEmpty {
                     Section("Class Times") {
-                        if timeSlots.isEmpty {
-                            Text("No class times added")
-                                .foregroundColor(.secondary)
-                                .italic()
-                        } else {
-                            ForEach(timeSlots) { slot in
+                        // Show default times from group settings
+                        if !defaultTimeSlotsFromGroups.isEmpty && !useCustomTimeSlots {
+                            ForEach(defaultTimeSlotsFromGroups) { slot in
                                 HStack {
-                                    Text(slot.startTime, style: .time)
+                                    Image(systemName: "clock")
+                                        .foregroundColor(.blue)
+                                    Text(slot.timeString)
                                         .font(.headline)
                                     Spacer()
-                                    Text("Capacity: \(slot.capacity == 0 ? "Unlimited" : "\(slot.capacity)")")
+                                    Text(slot.capacity == 0 ? "Unlimited" : "Cap: \(slot.capacity)")
                                         .font(.subheadline)
                                         .foregroundColor(.secondary)
                                 }
                             }
-                            .onDelete { indexSet in
-                                timeSlots.remove(atOffsets: indexSet)
-                            }
+
+                            Text("Using default class times from group settings")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        } else if defaultTimeSlotsFromGroups.isEmpty && !useCustomTimeSlots {
+                            Text("No default class times set for selected group(s)")
+                                .foregroundColor(.secondary)
+                                .italic()
+
+                            Text("Set default times in Group Management, or use custom times below")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
                         }
 
-                        // Add new time slot
-                        VStack(alignment: .leading, spacing: 12) {
-                            DatePicker("Time", selection: $newSlotTime, displayedComponents: .hourAndMinute)
+                        // Toggle for custom times
+                        Toggle("Use custom class times", isOn: $useCustomTimeSlots)
 
-                            Stepper("Capacity: \(newSlotCapacity == 0 ? "Unlimited" : "\(newSlotCapacity)")", value: $newSlotCapacity, in: 0...100)
+                        // Custom time slots editor
+                        if useCustomTimeSlots {
+                            if timeSlots.isEmpty {
+                                Text("No custom class times added")
+                                    .foregroundColor(.secondary)
+                                    .italic()
+                            } else {
+                                ForEach(timeSlots) { slot in
+                                    HStack {
+                                        Text(slot.startTime, style: .time)
+                                            .font(.headline)
+                                        Spacer()
+                                        Text("Capacity: \(slot.capacity == 0 ? "Unlimited" : "\(slot.capacity)")")
+                                            .font(.subheadline)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+                                .onDelete { indexSet in
+                                    timeSlots.remove(atOffsets: indexSet)
+                                }
+                            }
 
-                            Button(action: {
-                                // Combine the selected date with the time
-                                let calendar = Calendar.current
-                                let timeComponents = calendar.dateComponents([.hour, .minute], from: newSlotTime)
-                                var slotDateTime = calendar.startOfDay(for: date)
-                                slotDateTime = calendar.date(bySettingHour: timeComponents.hour ?? 0, minute: timeComponents.minute ?? 0, second: 0, of: slotDateTime) ?? slotDateTime
+                            // Add new time slot
+                            VStack(alignment: .leading, spacing: 12) {
+                                DatePicker("Time", selection: $newSlotTime, displayedComponents: .hourAndMinute)
 
-                                let newSlot = TimeSlot(startTime: slotDateTime, capacity: newSlotCapacity)
-                                timeSlots.append(newSlot)
-                                // Sort by time
-                                timeSlots.sort { $0.startTime < $1.startTime }
-                            }) {
-                                HStack {
-                                    Image(systemName: "plus.circle.fill")
-                                    Text("Add Class Time")
+                                Stepper("Capacity: \(newSlotCapacity == 0 ? "Unlimited" : "\(newSlotCapacity)")", value: $newSlotCapacity, in: 0...100)
+
+                                Button(action: {
+                                    // Combine the selected date with the time
+                                    let calendar = Calendar.current
+                                    let timeComponents = calendar.dateComponents([.hour, .minute], from: newSlotTime)
+                                    var slotDateTime = calendar.startOfDay(for: date)
+                                    slotDateTime = calendar.date(bySettingHour: timeComponents.hour ?? 0, minute: timeComponents.minute ?? 0, second: 0, of: slotDateTime) ?? slotDateTime
+
+                                    let newSlot = TimeSlot(startTime: slotDateTime, capacity: newSlotCapacity)
+                                    timeSlots.append(newSlot)
+                                    // Sort by time
+                                    timeSlots.sort { $0.startTime < $1.startTime }
+                                }) {
+                                    HStack {
+                                        Image(systemName: "plus.circle.fill")
+                                        Text("Add Class Time")
+                                    }
                                 }
                             }
                         }
@@ -749,6 +807,16 @@ struct AddWorkoutSheet: View {
                         let calendar = Calendar.current
                         let normalizedDate = calendar.startOfDay(for: date)
 
+                        // Determine which time slots to use
+                        let finalTimeSlots: [TimeSlot]
+                        if selectedGroupIds.isEmpty {
+                            finalTimeSlots = []
+                        } else if useCustomTimeSlots {
+                            finalTimeSlots = timeSlots
+                        } else {
+                            finalTimeSlots = timeSlotsFromDefaults()
+                        }
+
                         let workout = ScheduledWorkout(
                             wodId: UUID().uuidString,
                             wodTitle: title,
@@ -756,7 +824,7 @@ struct AddWorkoutSheet: View {
                             date: normalizedDate,
                             workoutType: workoutType,
                             groupIds: Array(selectedGroupIds),
-                            timeSlots: selectedGroupIds.isEmpty ? [] : timeSlots,
+                            timeSlots: finalTimeSlots,
                             createdBy: userId,
                             recurrenceType: recurrenceType,
                             recurrenceEndDate: hasEndDate ? recurrenceEndDate : nil,
@@ -964,6 +1032,30 @@ struct EditWorkoutSheet: View {
     @State private var timeSlots: [TimeSlot]
     @State private var newSlotTime: Date = Date()
     @State private var newSlotCapacity: Int = 20
+    @State private var useCustomTimeSlots: Bool
+
+    // Get default time slots from selected groups
+    private var defaultTimeSlotsFromGroups: [DefaultTimeSlot] {
+        var slots: [DefaultTimeSlot] = []
+        for groupId in selectedGroupIds {
+            if let group = groups.first(where: { $0.id == groupId }) {
+                slots.append(contentsOf: group.defaultTimeSlots)
+            }
+        }
+        // Remove duplicates based on time
+        var seen: Set<String> = []
+        return slots.filter { slot in
+            let key = "\(slot.hour):\(slot.minute)"
+            if seen.contains(key) { return false }
+            seen.insert(key)
+            return true
+        }.sorted { ($0.hour * 60 + $0.minute) < ($1.hour * 60 + $1.minute) }
+    }
+
+    // Convert default slots to TimeSlots for the selected date
+    private func timeSlotsFromDefaults() -> [TimeSlot] {
+        return defaultTimeSlotsFromGroups.map { $0.toTimeSlot(for: date) }
+    }
 
     init(gym: Gym, workout: ScheduledWorkout, onSave: @escaping () -> Void) {
         self.gym = gym
@@ -1003,6 +1095,9 @@ struct EditWorkoutSheet: View {
 
         // Initialize time slots from existing workout
         _timeSlots = State(initialValue: workout.timeSlots)
+
+        // If workout has custom time slots, enable custom mode
+        _useCustomTimeSlots = State(initialValue: !workout.timeSlots.isEmpty)
     }
 
     var body: some View {
@@ -1128,47 +1223,81 @@ struct EditWorkoutSheet: View {
             // Only show class times for group workouts
             if !selectedGroupIds.isEmpty {
                 Section("Class Times") {
-                    if timeSlots.isEmpty {
-                        Text("No class times added")
-                            .foregroundColor(.secondary)
-                            .italic()
-                    } else {
-                        ForEach(timeSlots) { slot in
+                    // Show default times from group settings
+                    if !defaultTimeSlotsFromGroups.isEmpty && !useCustomTimeSlots {
+                        ForEach(defaultTimeSlotsFromGroups) { slot in
                             HStack {
-                                Text(slot.startTime, style: .time)
+                                Image(systemName: "clock")
+                                    .foregroundColor(.blue)
+                                Text(slot.timeString)
                                     .font(.headline)
                                 Spacer()
-                                Text("Capacity: \(slot.capacity == 0 ? "Unlimited" : "\(slot.capacity)")")
+                                Text(slot.capacity == 0 ? "Unlimited" : "Cap: \(slot.capacity)")
                                     .font(.subheadline)
                                     .foregroundColor(.secondary)
                             }
                         }
-                        .onDelete { indexSet in
-                            timeSlots.remove(atOffsets: indexSet)
-                        }
+
+                        Text("Using default class times from group settings")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    } else if defaultTimeSlotsFromGroups.isEmpty && !useCustomTimeSlots {
+                        Text("No default class times set for selected group(s)")
+                            .foregroundColor(.secondary)
+                            .italic()
+
+                        Text("Set default times in Group Management, or use custom times below")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
                     }
 
-                    // Add new time slot
-                    VStack(alignment: .leading, spacing: 12) {
-                        DatePicker("Time", selection: $newSlotTime, displayedComponents: .hourAndMinute)
+                    // Toggle for custom times
+                    Toggle("Use custom class times", isOn: $useCustomTimeSlots)
 
-                        Stepper("Capacity: \(newSlotCapacity == 0 ? "Unlimited" : "\(newSlotCapacity)")", value: $newSlotCapacity, in: 0...100)
+                    // Custom time slots editor
+                    if useCustomTimeSlots {
+                        if timeSlots.isEmpty {
+                            Text("No custom class times added")
+                                .foregroundColor(.secondary)
+                                .italic()
+                        } else {
+                            ForEach(timeSlots) { slot in
+                                HStack {
+                                    Text(slot.startTime, style: .time)
+                                        .font(.headline)
+                                    Spacer()
+                                    Text("Capacity: \(slot.capacity == 0 ? "Unlimited" : "\(slot.capacity)")")
+                                        .font(.subheadline)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                            .onDelete { indexSet in
+                                timeSlots.remove(atOffsets: indexSet)
+                            }
+                        }
 
-                        Button(action: {
-                            // Combine the selected date with the time
-                            let calendar = Calendar.current
-                            let timeComponents = calendar.dateComponents([.hour, .minute], from: newSlotTime)
-                            var slotDateTime = calendar.startOfDay(for: date)
-                            slotDateTime = calendar.date(bySettingHour: timeComponents.hour ?? 0, minute: timeComponents.minute ?? 0, second: 0, of: slotDateTime) ?? slotDateTime
+                        // Add new time slot
+                        VStack(alignment: .leading, spacing: 12) {
+                            DatePicker("Time", selection: $newSlotTime, displayedComponents: .hourAndMinute)
 
-                            let newSlot = TimeSlot(startTime: slotDateTime, capacity: newSlotCapacity)
-                            timeSlots.append(newSlot)
-                            // Sort by time
-                            timeSlots.sort { $0.startTime < $1.startTime }
-                        }) {
-                            HStack {
-                                Image(systemName: "plus.circle.fill")
-                                Text("Add Class Time")
+                            Stepper("Capacity: \(newSlotCapacity == 0 ? "Unlimited" : "\(newSlotCapacity)")", value: $newSlotCapacity, in: 0...100)
+
+                            Button(action: {
+                                // Combine the selected date with the time
+                                let calendar = Calendar.current
+                                let timeComponents = calendar.dateComponents([.hour, .minute], from: newSlotTime)
+                                var slotDateTime = calendar.startOfDay(for: date)
+                                slotDateTime = calendar.date(bySettingHour: timeComponents.hour ?? 0, minute: timeComponents.minute ?? 0, second: 0, of: slotDateTime) ?? slotDateTime
+
+                                let newSlot = TimeSlot(startTime: slotDateTime, capacity: newSlotCapacity)
+                                timeSlots.append(newSlot)
+                                // Sort by time
+                                timeSlots.sort { $0.startTime < $1.startTime }
+                            }) {
+                                HStack {
+                                    Image(systemName: "plus.circle.fill")
+                                    Text("Add Class Time")
+                                }
                             }
                         }
                     }
@@ -1194,13 +1323,23 @@ struct EditWorkoutSheet: View {
                     let calendar = Calendar.current
                     let normalizedDate = calendar.startOfDay(for: date)
 
+                    // Determine which time slots to use
+                    let finalTimeSlots: [TimeSlot]
+                    if selectedGroupIds.isEmpty {
+                        finalTimeSlots = []
+                    } else if useCustomTimeSlots {
+                        finalTimeSlots = timeSlots
+                    } else {
+                        finalTimeSlots = timeSlotsFromDefaults()
+                    }
+
                     var updatedWorkout = workout
                     updatedWorkout.workoutType = workoutType
                     updatedWorkout.wodTitle = title
                     updatedWorkout.wodDescription = description
                     updatedWorkout.date = normalizedDate
                     updatedWorkout.groupIds = Array(selectedGroupIds)
-                    updatedWorkout.timeSlots = selectedGroupIds.isEmpty ? [] : timeSlots
+                    updatedWorkout.timeSlots = finalTimeSlots
                     updatedWorkout.recurrenceType = recurrenceType
                     updatedWorkout.recurrenceEndDate = hasEndDate ? recurrenceEndDate : nil
                     updatedWorkout.weekdays = recurrenceType == .weekly ? Array(selectedWeekdays) : nil
