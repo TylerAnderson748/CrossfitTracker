@@ -7,20 +7,6 @@ import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
 import Navigation from "@/components/Navigation";
 
-const commonLifts = [
-  "Back Squat",
-  "Front Squat",
-  "Deadlift",
-  "Bench Press",
-  "Overhead Press",
-  "Clean",
-  "Clean & Jerk",
-  "Snatch",
-  "Power Clean",
-  "Push Press",
-  "Thruster",
-];
-
 interface LiftResult {
   id: string;
   liftName: string;
@@ -28,6 +14,7 @@ interface LiftResult {
   reps: number;
   userId: string;
   userName?: string;
+  gymId?: string;
   date: { toDate: () => Date };
 }
 
@@ -36,7 +23,11 @@ function LiftPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const [liftName, setLiftName] = useState(searchParams.get("name") || "");
+  // Check if coming from a scheduled lift (has name in URL)
+  const urlLiftName = searchParams.get("name") || "";
+  const isFromSchedule = !!urlLiftName;
+
+  const [liftName, setLiftName] = useState(urlLiftName);
   const [selectedReps, setSelectedReps] = useState(1);
   const [weight, setWeight] = useState("");
   const [entryDate, setEntryDate] = useState(new Date().toISOString().split("T")[0]);
@@ -45,6 +36,7 @@ function LiftPageContent() {
   const [history, setHistory] = useState<LiftResult[]>([]);
   const [leaderboard, setLeaderboard] = useState<LiftResult[]>([]);
   const [loadingLeaderboard, setLoadingLeaderboard] = useState(false);
+  const [leaderboardScope, setLeaderboardScope] = useState<"gym" | "everyone">("everyone");
 
   // Edit history state
   const [editingLogId, setEditingLogId] = useState<string | null>(null);
@@ -63,12 +55,11 @@ function LiftPageContent() {
       loadHistory();
       loadLeaderboard();
     }
-  }, [user, liftName, selectedReps]);
+  }, [user, liftName, selectedReps, leaderboardScope]);
 
   const loadHistory = async () => {
     if (!user || !liftName) return;
     try {
-      // Simplified query to avoid index requirements
       const q = query(
         collection(db, "liftResults"),
         where("userId", "==", user.id),
@@ -80,7 +71,6 @@ function LiftPageContent() {
         ...doc.data(),
       })) as LiftResult[];
 
-      // Filter and sort client-side
       const filtered = allResults
         .filter((r) => r.liftName === liftName && r.reps === selectedReps)
         .sort((a, b) => {
@@ -100,7 +90,6 @@ function LiftPageContent() {
     if (!liftName) return;
     setLoadingLeaderboard(true);
     try {
-      // Simple query to avoid compound index requirement
       const q = query(
         collection(db, "liftResults"),
         where("liftName", "==", liftName),
@@ -112,8 +101,13 @@ function LiftPageContent() {
         ...doc.data(),
       })) as LiftResult[];
 
-      // Filter by reps client-side
+      // Filter by reps
       results = results.filter((r) => r.reps === selectedReps);
+
+      // Filter by gym if scope is gym
+      if (leaderboardScope === "gym" && user?.gymId) {
+        results = results.filter((r) => r.gymId === user.gymId);
+      }
 
       // Sort by weight descending
       results.sort((a, b) => b.weight - a.weight);
@@ -151,6 +145,7 @@ function LiftPageContent() {
       await addDoc(collection(db, "liftResults"), {
         userId: user.id,
         userName: user.displayName || `${user.firstName} ${user.lastName}`,
+        gymId: user.gymId || null,
         liftName: liftName.trim(),
         weight: parseFloat(weight),
         reps: selectedReps,
@@ -158,7 +153,6 @@ function LiftPageContent() {
         isPersonalRecord: false,
       });
 
-      // Stay on page - reset weight input and refresh data
       setWeight("");
       loadHistory();
       loadLeaderboard();
@@ -260,311 +254,339 @@ function LiftPageContent() {
   const weights = chartData.map((h) => h.weight);
   const dataMax = weights.length > 0 ? Math.max(...weights) : 100;
   const dataMin = weights.length > 0 ? Math.min(...weights) : 0;
-  // Round to nearest 10 lbs for nice tick marks
   const tickInterval = 10;
   const minWeightTick = Math.floor(dataMin / tickInterval) * tickInterval - tickInterval;
   const maxWeightTick = Math.ceil(dataMax / tickInterval) * tickInterval + tickInterval;
   const range = maxWeightTick - minWeightTick || 50;
-  // Generate Y-axis ticks at 10-lb intervals
   const numTicks = Math.ceil(range / tickInterval) + 1;
   const yTicks = Array.from({ length: Math.min(numTicks, 7) }, (_, i) => maxWeightTick - i * tickInterval);
+
+  // Common lifts for selector (only shown when not from schedule)
+  const commonLifts = [
+    "Back Squat",
+    "Front Squat",
+    "Deadlift",
+    "Bench Press",
+    "Overhead Press",
+    "Clean",
+    "Clean & Jerk",
+    "Snatch",
+    "Power Clean",
+    "Push Press",
+    "Thruster",
+  ];
 
   return (
     <div className="min-h-screen bg-gray-50">
       <Navigation />
-      <main className="max-w-5xl mx-auto px-4 py-6">
+      <main className="max-w-lg mx-auto px-4 py-6">
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg mb-4">
             {error}
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* LEFT COLUMN - Progress, Leaderboard, History */}
-          <div className="space-y-4 order-2 lg:order-1">
-            {/* Progress Line Chart */}
-            {chartData.length >= 1 && (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-                <p className="text-sm font-semibold text-gray-700 mb-3">Progress</p>
-                <div className="relative h-40">
-                  <div className="absolute left-0 top-0 bottom-4 w-10 flex flex-col justify-between text-xs text-gray-400">
-                    {yTicks.map((tick, i) => (
-                      <span key={i}>{tick}</span>
-                    ))}
-                  </div>
-                  <div className="ml-12 h-full relative">
-                    <svg className="w-full h-full" viewBox="0 0 300 100" preserveAspectRatio="none">
-                      {/* Horizontal grid lines */}
-                      {yTicks.map((_, i) => {
-                        const y = (i / (yTicks.length - 1)) * 100;
-                        return <line key={i} x1="10" y1={y} x2="290" y2={y} stroke="#E5E7EB" strokeWidth="1" />;
-                      })}
-                      {/* Vertical grid lines */}
-                      {chartData.map((_, i) => {
-                        const x = chartData.length > 1 ? 10 + (i / (chartData.length - 1)) * 280 : 150;
-                        return <line key={i} x1={x} y1="0" x2={x} y2="100" stroke="#E5E7EB" strokeWidth="1" />;
-                      })}
-                      {chartData.length > 1 ? (
-                        <path
-                          fill="none"
-                          stroke="#9333EA"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          d={chartData.map((d, i) => {
-                            const x = 10 + (i / (chartData.length - 1)) * 280;
-                            const y = range > 0 ? 100 - ((d.weight - minWeightTick) / range) * 100 : 50;
-                            return `${i === 0 ? "M" : "L"} ${x},${y}`;
-                          }).join(" ")}
-                        />
-                      ) : null}
-                      {chartData.map((d, i) => {
-                        const x = chartData.length > 1 ? 10 + (i / (chartData.length - 1)) * 280 : 150;
-                        const y = range > 0 ? 100 - ((d.weight - minWeightTick) / range) * 100 : 50;
-                        return <circle key={i} cx={x} cy={y} r="3" fill="#9333EA" />;
-                      })}
-                    </svg>
-                    <div className="flex justify-between text-xs text-gray-400 mt-1">
-                      {chartData.map((d, i) => (
-                        <span key={i}>{d.date?.toDate?.().toLocaleDateString("en-US", { month: "numeric", day: "numeric" }) || "N/A"}</span>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
+        {/* Lift Title */}
+        {isFromSchedule ? (
+          <h1 className="text-2xl font-bold text-gray-900 text-center mb-6">{liftName}</h1>
+        ) : (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-4">
+            <input
+              type="text"
+              value={liftName}
+              onChange={(e) => setLiftName(e.target.value)}
+              placeholder="Lift Name"
+              className="w-full text-xl font-bold text-gray-900 border-none focus:ring-0 p-0 mb-3 placeholder-gray-400"
+            />
+            <div className="flex flex-wrap gap-2">
+              {commonLifts.map((lift) => (
+                <button
+                  key={lift}
+                  type="button"
+                  onClick={() => setLiftName(lift)}
+                  className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
+                    liftName === lift
+                      ? "bg-purple-600 text-white"
+                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  }`}
+                >
+                  {lift}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
-            {/* Training Percentages */}
-            {latestWeight && (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-                <div className="flex justify-between items-center mb-3">
-                  <p className="text-sm font-semibold text-gray-700">Training %</p>
-                  <p className="text-xs text-purple-600 font-medium">
-                    Latest: {latestWeight} x {selectedReps}
-                  </p>
-                </div>
-                <div className="grid grid-cols-3 gap-x-4 gap-y-1">
-                  {percentages.map(({ pct, color }) => (
-                    <div key={pct} className="flex justify-between items-center">
-                      <span className={`text-xs font-mono ${color}`}>{pct}%</span>
-                      <span className="text-xs font-mono text-gray-600">
-                        {Math.round(latestWeight * (pct / 100))}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+        {/* Reps Picker */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-4">
+          <div className="flex rounded-xl overflow-hidden border border-gray-200">
+            {[1, 2, 3, 4, 5].map((rep) => (
+              <button
+                key={rep}
+                type="button"
+                onClick={() => setSelectedReps(rep)}
+                className={`flex-1 py-3 text-lg font-semibold transition-colors ${
+                  selectedReps === rep
+                    ? "bg-purple-600 text-white"
+                    : "bg-white text-gray-600 hover:bg-gray-50"
+                }`}
+              >
+                {rep}
+              </button>
+            ))}
+          </div>
+        </div>
 
-            {/* Leaderboard */}
-            {liftName && (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-                <p className="text-sm font-semibold text-gray-700 mb-3">
-                  Leaderboard - {liftName} ({selectedReps} rep{selectedReps > 1 ? "s" : ""})
-                </p>
-
-                {loadingLeaderboard ? (
-                  <div className="flex justify-center py-6">
-                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-600"></div>
-                  </div>
-                ) : leaderboard.length === 0 ? (
-                  <p className="text-xs text-gray-500 text-center py-6">No entries yet</p>
-                ) : (
-                  <div className="space-y-2">
-                    {leaderboard.map((entry, index) => (
-                      <div key={entry.id} className="flex items-center gap-3 py-1.5">
-                        <div
-                          className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
-                            index < 3 ? getRankColor(index) + " text-white" : "bg-gray-100 text-gray-600"
-                          }`}
-                        >
-                          #{index + 1}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900 truncate">
-                            {entry.userName || "Unknown"}
-                            {entry.userId === user?.id && (
-                              <span className="text-purple-600 ml-1">(You)</span>
-                            )}
-                          </p>
-                          <p className="text-xs text-gray-400">
-                            {entry.date?.toDate?.().toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                          </p>
-                        </div>
-                        <span className="font-mono text-sm font-semibold text-gray-900">
-                          {entry.weight} lbs
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
+        {/* Weight + Date + Save Row */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-4">
+          <div className="flex items-end gap-3">
+            <div className="flex-1">
+              <div className="flex items-center border border-gray-300 rounded-lg overflow-hidden">
+                <input
+                  type="number"
+                  value={weight}
+                  onChange={(e) => setWeight(e.target.value)}
+                  placeholder="0"
+                  min="0"
+                  step="2.5"
+                  className="w-full px-3 py-2.5 text-center text-lg text-gray-900 border-none focus:ring-0"
+                />
+                <span className="px-3 py-2.5 bg-gray-50 text-gray-500 border-l border-gray-300">lbs</span>
               </div>
-            )}
-
-            {/* History */}
-            {history.length > 0 && (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-                <p className="text-sm font-semibold text-gray-700 mb-3">History</p>
-                <div className="space-y-3">
-                  {history.map((log) => (
-                    <div key={log.id} className="py-2 border-b border-gray-100 last:border-0">
-                      {editingLogId === log.id ? (
-                        <div className="space-y-3">
-                          <div>
-                            <p className="text-xs text-gray-500 mb-1">Date</p>
-                            <input type="date" value={editDate} onChange={(e) => setEditDate(e.target.value)} className="w-full px-2 py-1 border border-gray-300 rounded text-sm text-gray-900" />
-                          </div>
-                          <div>
-                            <p className="text-xs text-gray-500 mb-1">Weight (lbs)</p>
-                            <input type="number" value={editWeight} onChange={(e) => setEditWeight(e.target.value)} placeholder="Weight" className="w-full px-2 py-1 border border-gray-300 rounded text-center text-gray-900" />
-                          </div>
-                          <div>
-                            <p className="text-xs text-gray-500 mb-1">Reps</p>
-                            <div className="flex rounded-lg overflow-hidden border border-gray-200 text-xs">
-                              {[1, 2, 3, 4, 5].map((rep) => (
-                                <button key={rep} onClick={() => setEditReps(rep)} className={`flex-1 px-2 py-1.5 font-medium ${editReps === rep ? "bg-purple-600 text-white" : "bg-white text-gray-600"}`}>
-                                  {rep}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                          <div className="flex gap-2">
-                            <button onClick={() => saveEdit(log.id)} className="px-3 py-1.5 bg-purple-600 text-white rounded-lg text-sm font-medium">Save</button>
-                            <button onClick={cancelEdit} className="px-3 py-1.5 bg-gray-200 text-gray-700 rounded-lg text-sm font-medium">Cancel</button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-xs text-gray-500">{log.date?.toDate().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</p>
-                            <p className="text-lg font-semibold text-gray-900">{log.weight} lbs</p>
-                          </div>
-                          <div className="flex gap-2">
-                            <button onClick={() => startEditLog(log)} className="w-8 h-8 bg-purple-600 rounded-full flex items-center justify-center text-white text-sm">✎</button>
-                            <button onClick={() => deleteLog(log.id)} className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center text-white text-sm">✕</button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+            </div>
+            <div className="flex-1">
+              <input
+                type="date"
+                value={entryDate}
+                onChange={(e) => setEntryDate(e.target.value)}
+                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-gray-900"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={submitting || !weight || !liftName.trim()}
+              className="px-6 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-semibold transition-colors disabled:bg-gray-300"
+            >
+              Save
+            </button>
           </div>
 
-          {/* RIGHT COLUMN - Lift Name, Entry Form, Quick Weight */}
-          <div className="space-y-4 order-1 lg:order-2">
-            {/* Lift Name */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-              <input
-                type="text"
-                value={liftName}
-                onChange={(e) => setLiftName(e.target.value)}
-                placeholder="Lift Name"
-                className="w-full text-xl font-bold text-gray-900 border-none focus:ring-0 p-0 mb-3 placeholder-gray-400"
-              />
-              <div className="flex flex-wrap gap-2">
-                {commonLifts.map((lift) => (
-                  <button
-                    key={lift}
-                    type="button"
-                    onClick={() => setLiftName(lift)}
-                    className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
-                      liftName === lift
-                        ? "bg-purple-600 text-white"
-                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                    }`}
-                  >
-                    {lift}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Entry Form */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-              {/* Reps Picker */}
-              <div className="mb-4">
-                <p className="text-xs text-gray-500 mb-2 font-medium">Reps</p>
-                <div className="flex rounded-xl overflow-hidden border border-gray-200">
-                  {[1, 2, 3, 4, 5].map((rep) => (
-                    <button
-                      key={rep}
-                      type="button"
-                      onClick={() => setSelectedReps(rep)}
-                      className={`flex-1 py-2.5 text-sm font-semibold transition-colors ${
-                        selectedReps === rep
-                          ? "bg-purple-600 text-white"
-                          : "bg-white text-gray-600 hover:bg-gray-50"
-                      }`}
-                    >
-                      {rep}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Weight Input */}
-              <div className="mb-4">
-                <p className="text-xs text-gray-400 mb-1">Weight</p>
-                <div className="flex items-center gap-1">
-                  <input
-                    type="number"
-                    value={weight}
-                    onChange={(e) => setWeight(e.target.value)}
-                    placeholder="0"
-                    min="0"
-                    step="2.5"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-center text-gray-900"
-                  />
-                  <span className="text-gray-500 text-sm">lbs</span>
-                </div>
-              </div>
-
-              {/* Date */}
-              <div className="mb-4">
-                <p className="text-xs text-gray-400 mb-1">Date</p>
-                <input
-                  type="date"
-                  value={entryDate}
-                  onChange={(e) => setEntryDate(e.target.value)}
-                  className="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm text-gray-900"
-                />
-              </div>
-
-              {/* Save Button */}
-              <button
-                type="button"
-                onClick={handleSubmit}
-                disabled={submitting || !weight || !liftName.trim()}
-                className="w-full py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-semibold transition-colors disabled:bg-gray-300"
-              >
-                Save
-              </button>
-            </div>
-
-            {/* Quick Weight Buttons */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-              <p className="text-xs text-gray-500 mb-2 font-medium">Quick Add</p>
-              <div className="flex flex-wrap gap-2">
-                {[45, 95, 135, 185, 225, 275, 315, 365, 405].map((w) => (
-                  <button
-                    key={w}
-                    type="button"
-                    onClick={() => setWeight(w.toString())}
-                    className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                      weight === w.toString()
-                        ? "bg-purple-600 text-white"
-                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                    }`}
-                  >
-                    {w}
-                  </button>
-                ))}
-              </div>
+          {/* Quick Weight Buttons */}
+          <div className="mt-4 pt-4 border-t border-gray-100">
+            <div className="flex flex-wrap gap-2">
+              {[45, 95, 135, 185, 225, 275, 315, 365, 405].map((w) => (
+                <button
+                  key={w}
+                  type="button"
+                  onClick={() => setWeight(w.toString())}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                    weight === w.toString()
+                      ? "bg-purple-600 text-white"
+                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  }`}
+                >
+                  {w}
+                </button>
+              ))}
             </div>
           </div>
         </div>
+
+        {/* Training Percentages */}
+        {latestWeight && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-4">
+            <div className="flex justify-between items-center mb-3">
+              <p className="text-sm font-semibold text-gray-700">Training %</p>
+              <p className="text-xs text-purple-600 font-medium">
+                Based on {latestWeight} lbs x {selectedReps}
+              </p>
+            </div>
+            <div className="grid grid-cols-4 gap-x-4 gap-y-1">
+              {percentages.map(({ pct, color }) => (
+                <div key={pct} className="flex justify-between items-center">
+                  <span className={`text-xs font-mono ${color}`}>{pct}%</span>
+                  <span className="text-xs font-mono text-gray-600">
+                    {Math.round(latestWeight * (pct / 100))}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Progress Line Chart */}
+        {chartData.length >= 1 && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-4">
+            <p className="text-sm font-semibold text-gray-700 mb-3">Progress</p>
+            <div className="relative h-40">
+              <div className="absolute left-0 top-0 bottom-4 w-10 flex flex-col justify-between text-xs text-gray-400">
+                {yTicks.map((tick, i) => (
+                  <span key={i}>{tick}</span>
+                ))}
+              </div>
+              <div className="ml-12 h-full relative">
+                <svg className="w-full h-full" viewBox="0 0 300 100" preserveAspectRatio="none">
+                  {/* Horizontal grid lines */}
+                  {yTicks.map((_, i) => {
+                    const y = (i / (yTicks.length - 1)) * 100;
+                    return <line key={i} x1="10" y1={y} x2="290" y2={y} stroke="#E5E7EB" strokeWidth="1" />;
+                  })}
+                  {/* Vertical grid lines */}
+                  {chartData.map((_, i) => {
+                    const x = chartData.length > 1 ? 10 + (i / (chartData.length - 1)) * 280 : 150;
+                    return <line key={i} x1={x} y1="0" x2={x} y2="100" stroke="#E5E7EB" strokeWidth="1" />;
+                  })}
+                  {chartData.length > 1 ? (
+                    <path
+                      fill="none"
+                      stroke="#9333EA"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d={chartData.map((d, i) => {
+                        const x = 10 + (i / (chartData.length - 1)) * 280;
+                        const y = range > 0 ? 100 - ((d.weight - minWeightTick) / range) * 100 : 50;
+                        return `${i === 0 ? "M" : "L"} ${x},${y}`;
+                      }).join(" ")}
+                    />
+                  ) : null}
+                  {chartData.map((d, i) => {
+                    const x = chartData.length > 1 ? 10 + (i / (chartData.length - 1)) * 280 : 150;
+                    const y = range > 0 ? 100 - ((d.weight - minWeightTick) / range) * 100 : 50;
+                    return <circle key={i} cx={x} cy={y} r="3" fill="#9333EA" />;
+                  })}
+                </svg>
+                <div className="flex justify-between text-xs text-gray-400 mt-1">
+                  {chartData.map((d, i) => (
+                    <span key={i}>{d.date?.toDate?.().toLocaleDateString("en-US", { month: "numeric", day: "numeric" }) || "N/A"}</span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Leaderboard */}
+        {liftName && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-4">
+            <div className="flex justify-between items-center mb-3">
+              <p className="text-sm font-semibold text-gray-700">
+                Leaderboard ({selectedReps} rep{selectedReps > 1 ? "s" : ""})
+              </p>
+              <div className="flex rounded-lg overflow-hidden border border-gray-200 text-xs">
+                <button
+                  onClick={() => setLeaderboardScope("gym")}
+                  className={`px-3 py-1.5 font-medium transition-colors ${
+                    leaderboardScope === "gym"
+                      ? "bg-purple-600 text-white"
+                      : "bg-white text-gray-600 hover:bg-gray-50"
+                  }`}
+                >
+                  Gym
+                </button>
+                <button
+                  onClick={() => setLeaderboardScope("everyone")}
+                  className={`px-3 py-1.5 font-medium transition-colors ${
+                    leaderboardScope === "everyone"
+                      ? "bg-purple-600 text-white"
+                      : "bg-white text-gray-600 hover:bg-gray-50"
+                  }`}
+                >
+                  Everyone
+                </button>
+              </div>
+            </div>
+
+            {loadingLeaderboard ? (
+              <div className="flex justify-center py-6">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-600"></div>
+              </div>
+            ) : leaderboard.length === 0 ? (
+              <p className="text-xs text-gray-500 text-center py-6">No entries yet</p>
+            ) : (
+              <div className="space-y-2">
+                {leaderboard.map((entry, index) => (
+                  <div key={entry.id} className="flex items-center gap-3 py-1.5">
+                    <div
+                      className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
+                        index < 3 ? getRankColor(index) + " text-white" : "bg-gray-100 text-gray-600"
+                      }`}
+                    >
+                      #{index + 1}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900 truncate">
+                        {entry.userName || "Unknown"}
+                        {entry.userId === user?.id && (
+                          <span className="text-purple-600 ml-1">(You)</span>
+                        )}
+                      </p>
+                      <p className="text-xs text-gray-400">
+                        {entry.date?.toDate?.().toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                      </p>
+                    </div>
+                    <span className="font-mono text-sm font-semibold text-gray-900">
+                      {entry.weight} lbs
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* History */}
+        {history.length > 0 && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+            <p className="text-sm font-semibold text-gray-700 mb-3">
+              History ({selectedReps} rep{selectedReps > 1 ? "s" : ""})
+            </p>
+            <div className="space-y-3">
+              {history.map((log) => (
+                <div key={log.id} className="py-2 border-b border-gray-100 last:border-0">
+                  {editingLogId === log.id ? (
+                    <div className="space-y-3">
+                      <div>
+                        <p className="text-xs text-gray-500 mb-1">Date</p>
+                        <input type="date" value={editDate} onChange={(e) => setEditDate(e.target.value)} className="w-full px-2 py-1 border border-gray-300 rounded text-sm text-gray-900" />
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500 mb-1">Weight (lbs)</p>
+                        <input type="number" value={editWeight} onChange={(e) => setEditWeight(e.target.value)} placeholder="Weight" className="w-full px-2 py-1 border border-gray-300 rounded text-center text-gray-900" />
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500 mb-1">Reps</p>
+                        <div className="flex rounded-lg overflow-hidden border border-gray-200 text-xs">
+                          {[1, 2, 3, 4, 5].map((rep) => (
+                            <button key={rep} onClick={() => setEditReps(rep)} className={`flex-1 px-2 py-1.5 font-medium ${editReps === rep ? "bg-purple-600 text-white" : "bg-white text-gray-600"}`}>
+                              {rep}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button onClick={() => saveEdit(log.id)} className="px-3 py-1.5 bg-purple-600 text-white rounded-lg text-sm font-medium">Save</button>
+                        <button onClick={cancelEdit} className="px-3 py-1.5 bg-gray-200 text-gray-700 rounded-lg text-sm font-medium">Cancel</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs text-gray-500">{log.date?.toDate().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</p>
+                        <p className="text-lg font-semibold text-gray-900">{log.weight} lbs</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <button onClick={() => startEditLog(log)} className="w-8 h-8 bg-purple-600 rounded-full flex items-center justify-center text-white text-sm">✎</button>
+                        <button onClick={() => deleteLog(log.id)} className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center text-white text-sm">✕</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );
