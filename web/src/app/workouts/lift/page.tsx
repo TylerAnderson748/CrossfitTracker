@@ -539,14 +539,14 @@ function LiftPageContent() {
                   <svg width="100%" height="100%" viewBox="0 0 350 140" preserveAspectRatio="none">
                     {/* Horizontal grid lines */}
                     {yTicks.map((_, i) => {
-                      const y = (i / (yTicks.length - 1)) * 140;
+                      const y = 5 + (i / (yTicks.length - 1)) * 130;
                       return <line key={i} x1="5" y1={y} x2="345" y2={y} stroke="#E5E7EB" strokeWidth="1" vectorEffect="non-scaling-stroke" />;
                     })}
                     {/* Vertical grid lines */}
                     {xAxisLabels.map((label, i) => {
                       const xPct = (label.date.getTime() - timeRangeStart.getTime()) / timeRangeMs;
                       const x = 5 + xPct * 340;
-                      return <line key={i} x1={x} y1="0" x2={x} y2="140" stroke="#E5E7EB" strokeWidth="1" vectorEffect="non-scaling-stroke" />;
+                      return <line key={i} x1={x} y1="5" x2={x} y2="135" stroke="#E5E7EB" strokeWidth="1" vectorEffect="non-scaling-stroke" />;
                     })}
                     {/* Data line */}
                     {chartData.length > 1 ? (
@@ -561,7 +561,7 @@ function LiftPageContent() {
                           const date = d.date?.toDate?.() || new Date();
                           const xPct = (date.getTime() - timeRangeStart.getTime()) / timeRangeMs;
                           const x = 5 + xPct * 340;
-                          const y = range > 0 ? (1 - (d.weight - minWeightTick) / range) * 140 : 70;
+                          const y = range > 0 ? 5 + (1 - (d.weight - minWeightTick) / range) * 130 : 70;
                           return { x, y };
                         }))}
                       />
@@ -571,7 +571,7 @@ function LiftPageContent() {
                       const date = d.date?.toDate?.() || new Date();
                       const xPct = (date.getTime() - timeRangeStart.getTime()) / timeRangeMs;
                       const x = 5 + xPct * 340;
-                      const y = range > 0 ? (1 - (d.weight - minWeightTick) / range) * 140 : 70;
+                      const y = range > 0 ? 5 + (1 - (d.weight - minWeightTick) / range) * 130 : 70;
                       return <circle key={i} cx={x} cy={y} r="4" fill="#9333EA" />;
                     })}
                   </svg>

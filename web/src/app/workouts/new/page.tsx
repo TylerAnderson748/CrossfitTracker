@@ -468,16 +468,17 @@ function NewWorkoutContent() {
   });
   const chartData = filteredHistory.slice(0, 50).reverse();
   const times = chartData.map((h) => h.timeInSeconds);
-  const dataMax = Math.max(...times, 1);
+  const dataMax = Math.max(...times, 60);
   const dataMin = Math.min(...times, 0);
-  // Round to nearest 10 seconds for nice tick marks
-  const tickInterval = 10;
+  // Choose tick interval based on data range for readable labels
+  const dataRange = dataMax - dataMin;
+  const tickInterval = dataRange > 600 ? 120 : dataRange > 300 ? 60 : dataRange > 120 ? 30 : 15;
   const minTime = Math.floor(dataMin / tickInterval) * tickInterval;
-  const maxTime = Math.ceil(dataMax / tickInterval) * tickInterval + tickInterval;
+  const maxTime = Math.ceil(dataMax / tickInterval) * tickInterval;
   const range = maxTime - minTime || 60;
-  // Generate Y-axis ticks at 10-second intervals
+  // Generate Y-axis ticks
   const numTicks = Math.ceil(range / tickInterval) + 1;
-  const yTicks = Array.from({ length: Math.min(numTicks, 7) }, (_, i) => maxTime - i * tickInterval);
+  const yTicks = Array.from({ length: Math.min(numTicks, 6) }, (_, i) => maxTime - i * tickInterval);
 
   // Generate x-axis labels for the full time range
   const getXAxisLabels = () => {
@@ -575,14 +576,14 @@ function NewWorkoutContent() {
                       <svg width="100%" height="100%" viewBox="0 0 350 140" preserveAspectRatio="none">
                         {/* Horizontal grid lines */}
                         {yTicks.map((_, i) => {
-                          const y = (i / (yTicks.length - 1)) * 140;
+                          const y = 5 + (i / (yTicks.length - 1)) * 130;
                           return <line key={i} x1="5" y1={y} x2="345" y2={y} stroke="#E5E7EB" strokeWidth="1" vectorEffect="non-scaling-stroke" />;
                         })}
                         {/* Vertical grid lines */}
                         {xAxisLabels.map((label, i) => {
                           const xPct = (label.date.getTime() - timeRangeStart.getTime()) / timeRangeMs;
                           const x = 5 + xPct * 340;
-                          return <line key={i} x1={x} y1="0" x2={x} y2="140" stroke="#E5E7EB" strokeWidth="1" vectorEffect="non-scaling-stroke" />;
+                          return <line key={i} x1={x} y1="5" x2={x} y2="135" stroke="#E5E7EB" strokeWidth="1" vectorEffect="non-scaling-stroke" />;
                         })}
                         {/* Data line */}
                         {chartData.length > 1 ? (
@@ -597,7 +598,7 @@ function NewWorkoutContent() {
                               const date = d.completedDate?.toDate?.() || new Date();
                               const xPct = (date.getTime() - timeRangeStart.getTime()) / timeRangeMs;
                               const x = 5 + xPct * 340;
-                              const y = range > 0 ? (1 - (d.timeInSeconds - minTime) / range) * 140 : 70;
+                              const y = range > 0 ? 5 + (1 - (d.timeInSeconds - minTime) / range) * 130 : 70;
                               return { x, y };
                             }))}
                           />
@@ -607,7 +608,7 @@ function NewWorkoutContent() {
                           const date = d.completedDate?.toDate?.() || new Date();
                           const xPct = (date.getTime() - timeRangeStart.getTime()) / timeRangeMs;
                           const x = 5 + xPct * 340;
-                          const y = range > 0 ? (1 - (d.timeInSeconds - minTime) / range) * 140 : 70;
+                          const y = range > 0 ? 5 + (1 - (d.timeInSeconds - minTime) / range) * 130 : 70;
                           const color = getCategoryHexColor(d.notes || "");
                           return <circle key={i} cx={x} cy={y} r="4" fill={color} />;
                         })}
