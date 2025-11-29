@@ -460,308 +460,271 @@ function NewWorkoutContent() {
   return (
     <div className="min-h-screen bg-gray-50">
       <Navigation />
-      <main className="max-w-lg mx-auto px-4 py-6">
+      <main className="max-w-5xl mx-auto px-4 py-6">
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg mb-4">
             {error}
           </div>
         )}
 
-        {/* Workout Info */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-4">
-          <input
-            type="text"
-            value={wodTitle}
-            onChange={(e) => setWodTitle(e.target.value)}
-            placeholder="Workout Name"
-            className="w-full text-xl font-bold text-gray-900 border-none focus:ring-0 p-0 mb-2 placeholder-gray-400"
-          />
-          <textarea
-            value={wodDescription}
-            onChange={(e) => setWodDescription(e.target.value)}
-            placeholder="21-15-9 Thrusters & Pull-ups"
-            rows={2}
-            className="w-full text-gray-500 text-sm border-none focus:ring-0 p-0 resize-none placeholder-gray-300"
-          />
-        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* LEFT COLUMN - Progress, Leaderboard, History */}
+          <div className="space-y-4 order-2 lg:order-1">
+            {/* Progress Line Chart */}
+            {chartData.length >= 1 && (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+                <p className="text-sm font-semibold text-gray-700 mb-3">Progress</p>
+                <div className="relative h-40">
+                  <div className="absolute left-0 top-0 bottom-4 w-10 flex flex-col justify-between text-xs text-gray-400">
+                    {yTicks.map((tick, i) => (
+                      <span key={i}>{formatTime(Math.round(tick))}</span>
+                    ))}
+                  </div>
+                  <div className="ml-12 h-full relative">
+                    <svg className="w-full h-full" viewBox="0 0 300 100" preserveAspectRatio="none">
+                      {chartData.length > 1 ? (
+                        <path
+                          fill="none"
+                          stroke="#3B82F6"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d={getSmoothPath(chartData.map((d, i) => ({
+                            x: 10 + (i / (chartData.length - 1)) * 280,
+                            y: range > 0 ? 100 - ((d.timeInSeconds - minTime) / range) * 100 : 50,
+                          })))}
+                        />
+                      ) : null}
+                      {chartData.map((d, i) => {
+                        const x = chartData.length > 1 ? 10 + (i / (chartData.length - 1)) * 280 : 150;
+                        const y = range > 0 ? 100 - ((d.timeInSeconds - minTime) / range) * 100 : 50;
+                        const color = getCategoryHexColor(d.notes || "");
+                        return <circle key={i} cx={x} cy={y} r="3" fill={color} />;
+                      })}
+                    </svg>
+                    <div className="flex justify-between text-xs text-gray-400 mt-1">
+                      {chartData.map((d, i) => (
+                        <span key={i}>{d.completedDate?.toDate?.().toLocaleDateString("en-US", { month: "numeric", day: "numeric" }) || "N/A"}</span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex justify-center gap-4 mt-6 pt-3 border-t border-gray-100 text-xs">
+                  <div className="flex items-center gap-1">
+                    <span className="w-3 h-3 rounded-full bg-blue-500"></span>
+                    <span className="text-gray-500">RX</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="w-3 h-3 rounded-full bg-gray-500"></span>
+                    <span className="text-gray-500">Scaled</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="w-3 h-3 rounded-full bg-green-500"></span>
+                    <span className="text-gray-500">Just For Fun</span>
+                  </div>
+                </div>
+              </div>
+            )}
 
-        {/* Category */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-4">
-          <p className="text-xs text-gray-500 mb-2">Category</p>
-          <div className="flex rounded-xl overflow-hidden border border-gray-200">
-            {categoryOrder.map((cat) => (
-              <button
-                key={cat}
-                onClick={() => setCategory(cat)}
-                className={`flex-1 py-2 text-xs font-semibold ${category === cat ? `${categoryColors[cat].bg} text-white` : "bg-white text-gray-600"}`}
-              >
-                {cat}
-              </button>
-            ))}
-          </div>
-        </div>
+            {/* Leaderboard */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-sm font-semibold text-gray-700">Leaderboard</p>
+                <div className="flex rounded-lg overflow-hidden border border-gray-200 text-xs">
+                  <button onClick={() => setLeaderboardFilter("gym")} className={`px-3 py-1.5 font-medium ${leaderboardFilter === "gym" ? "bg-blue-600 text-white" : "bg-white text-gray-600"}`}>Gym</button>
+                  <button onClick={() => setLeaderboardFilter("everyone")} className={`px-3 py-1.5 font-medium ${leaderboardFilter === "everyone" ? "bg-blue-600 text-white" : "bg-white text-gray-600"}`}>Everyone</button>
+                </div>
+              </div>
 
-        {/* Timer and Manual Entry - Side by Side */}
-        <div className="grid grid-cols-2 gap-4 mb-4">
-          {/* Timer */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-            <p className="text-xs text-gray-500 mb-2 font-semibold">Timer</p>
-            <div className="text-center mb-3">
-              <div className="text-4xl font-mono font-semibold text-gray-900">
-                {formatTimerDisplay(elapsedSeconds)}
+              <div className="flex flex-wrap items-center gap-2 mb-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-500">Gender:</span>
+                  <div className="flex rounded-lg overflow-hidden border border-gray-200 text-xs">
+                    {(["all", "Male", "Female"] as const).map((g) => (
+                      <button key={g} onClick={() => setGenderFilter(g)} className={`px-2 py-1 font-medium ${genderFilter === g ? "bg-blue-600 text-white" : "bg-white text-gray-600"}`}>
+                        {g === "all" ? "All" : g}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-500">Category:</span>
+                  <div className="flex rounded-lg overflow-hidden border border-gray-200 text-xs">
+                    {(["all", "RX", "Scaled", "Just For Fun"] as const).map((c) => (
+                      <button key={c} onClick={() => setCategoryFilter(c)} className={`px-2 py-1 font-medium whitespace-nowrap ${categoryFilter === c ? "bg-blue-600 text-white" : "bg-white text-gray-600"}`}>
+                        {c === "all" ? "All" : c}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
-            </div>
-            <div className="flex flex-col gap-2">
-              <button onClick={handleStartStop} className={`w-full py-2.5 rounded-xl font-semibold ${timerRunning ? "bg-red-500 text-white" : "bg-blue-600 text-white"}`}>
-                {timerRunning ? "Stop" : "Start"}
-              </button>
-              <div className="flex gap-2">
-                <button onClick={handleReset} className="flex-1 py-2 bg-gray-200 rounded-xl font-semibold text-gray-700 text-sm">Reset</button>
-                <button onClick={handleSaveTimer} disabled={submitting || elapsedSeconds === 0} className="flex-1 py-2 bg-green-500 rounded-xl font-semibold text-white text-sm disabled:bg-gray-300">Save</button>
-              </div>
-            </div>
-          </div>
 
-          {/* Manual Entry */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-            <p className="text-xs text-gray-500 mb-2 font-semibold">Manual Entry</p>
-            <div className="flex gap-2 mb-2">
-              <div className="flex-1">
-                <p className="text-xs text-gray-400 mb-1">Min</p>
-                <input type="number" value={manualMinutes} onChange={(e) => setManualMinutes(e.target.value)} placeholder="0" className="w-full px-2 py-2 border border-gray-300 rounded-lg text-center text-gray-900" />
-              </div>
-              <div className="flex-1">
-                <p className="text-xs text-gray-400 mb-1">Sec</p>
-                <input type="number" value={manualSeconds} onChange={(e) => setManualSeconds(e.target.value)} placeholder="0" className="w-full px-2 py-2 border border-gray-300 rounded-lg text-center text-gray-900" />
-              </div>
-            </div>
-            <div className="mb-2">
-              <p className="text-xs text-gray-400 mb-1">Date</p>
-              <input type="date" value={entryDate} onChange={(e) => setEntryDate(e.target.value)} className="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm text-gray-900" />
-            </div>
-            <button onClick={handleSaveManual} disabled={submitting || !isManualEntryValid()} className="w-full py-2.5 bg-blue-600 text-white rounded-xl font-semibold disabled:bg-gray-300">Save</button>
-          </div>
-        </div>
-
-        {/* Progress Line Chart */}
-        {chartData.length >= 1 && (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-4">
-            <p className="text-sm font-semibold text-gray-700 mb-3">Progress</p>
-            <div className="relative h-40">
-              {/* Y-axis labels */}
-              <div className="absolute left-0 top-0 bottom-4 w-10 flex flex-col justify-between text-xs text-gray-400">
-                {yTicks.map((tick, i) => (
-                  <span key={i}>{formatTime(Math.round(tick))}</span>
-                ))}
-              </div>
-              {/* Chart area */}
-              <div className="ml-12 h-full relative">
-                <svg className="w-full h-full" viewBox="0 0 300 100" preserveAspectRatio="none">
-                  {chartData.length > 1 ? (
-                    <path
-                      fill="none"
-                      stroke="#3B82F6"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d={getSmoothPath(chartData.map((d, i) => ({
-                        x: 10 + (i / (chartData.length - 1)) * 280,
-                        y: range > 0 ? 100 - ((d.timeInSeconds - minTime) / range) * 100 : 50,
-                      })))}
-                    />
-                  ) : null}
-                  {chartData.map((d, i) => {
-                    const x = chartData.length > 1 ? 10 + (i / (chartData.length - 1)) * 280 : 150;
-                    const y = range > 0 ? 100 - ((d.timeInSeconds - minTime) / range) * 100 : 50;
-                    const color = getCategoryHexColor(d.notes || "");
-                    return <circle key={i} cx={x} cy={y} r="3" fill={color} />;
+              {loadingLeaderboard ? (
+                <div className="flex justify-center py-6">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                </div>
+              ) : leaderboard.length === 0 ? (
+                <p className="text-xs text-gray-500 text-center py-6">No entries yet</p>
+              ) : (
+                <div className="space-y-2">
+                  {leaderboard.slice(0, 10).map((entry, index) => {
+                    const cat = entry.category as WODCategory;
+                    return (
+                      <div key={entry.id} className="flex items-center gap-3 py-1.5">
+                        <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold bg-gray-100 text-gray-600">
+                          #{index + 1}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-medium text-gray-900 truncate">
+                              {entry.userName}
+                              {entry.userId === user?.id && <span className="text-blue-600 ml-1">(You)</span>}
+                            </p>
+                            <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${categoryColors[cat]?.badge || "bg-blue-100 text-blue-700"}`}>
+                              {cat}
+                            </span>
+                          </div>
+                          <p className="text-xs text-gray-400">
+                            {entry.completedDate?.toDate?.().toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                          </p>
+                        </div>
+                        <span className="font-mono text-sm font-semibold text-gray-900">
+                          {formatTime(entry.timeInSeconds || 0)}
+                        </span>
+                      </div>
+                    );
                   })}
-                </svg>
-                {/* X-axis labels */}
-                <div className="flex justify-between text-xs text-gray-400 mt-1">
-                  {chartData.map((d, i) => (
-                    <span key={i}>{d.completedDate?.toDate?.().toLocaleDateString("en-US", { month: "numeric", day: "numeric" }) || "N/A"}</span>
+                </div>
+              )}
+            </div>
+
+            {/* History */}
+            {history.length > 0 && (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+                <p className="text-sm font-semibold text-gray-700 mb-3">History</p>
+                <div className="space-y-3">
+                  {history.map((log) => (
+                    <div key={log.id} className="py-2 border-b border-gray-100 last:border-0">
+                      {editingLogId === log.id ? (
+                        <div className="space-y-3">
+                          <p className="text-xs text-gray-500">{log.completedDate?.toDate().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</p>
+                          <div className="flex items-center gap-2">
+                            <input type="number" value={editMinutes} onChange={(e) => setEditMinutes(e.target.value)} placeholder="Min" className="w-16 px-2 py-1 border border-gray-300 rounded text-center text-gray-900" />
+                            <span>:</span>
+                            <input type="number" value={editSeconds} onChange={(e) => setEditSeconds(e.target.value)} placeholder="Sec" className="w-16 px-2 py-1 border border-gray-300 rounded text-center text-gray-900" />
+                          </div>
+                          <div className="flex rounded-lg overflow-hidden border border-gray-200 text-xs">
+                            {categoryOrder.map((cat) => (
+                              <button key={cat} onClick={() => setEditCategory(cat)} className={`flex-1 px-2 py-1.5 font-medium whitespace-nowrap ${editCategory === cat ? "bg-blue-600 text-white" : "bg-white text-gray-600"}`}>
+                                {cat}
+                              </button>
+                            ))}
+                          </div>
+                          <div className="flex gap-2">
+                            <button onClick={() => saveEdit(log.id)} className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm font-medium">Save</button>
+                            <button onClick={cancelEdit} className="px-3 py-1.5 bg-gray-200 text-gray-700 rounded-lg text-sm font-medium">Cancel</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-xs text-gray-500">{log.completedDate?.toDate().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</p>
+                            <div className="flex items-center gap-2">
+                              <p className="text-lg font-semibold text-gray-900">{formatTime(log.timeInSeconds)}</p>
+                              <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${categoryColors[log.notes as WODCategory]?.badge || "bg-gray-100 text-gray-600"}`}>
+                                {log.notes || "RX"}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <button onClick={() => startEditLog(log)} className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white text-sm">✎</button>
+                            <button onClick={() => deleteLog(log.id)} className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center text-white text-sm">✕</button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   ))}
                 </div>
               </div>
-            </div>
-            {/* Legend */}
-            <div className="flex justify-center gap-4 mt-6 pt-3 border-t border-gray-100 text-xs">
-              <div className="flex items-center gap-1">
-                <span className="w-3 h-3 rounded-full bg-blue-500"></span>
-                <span className="text-gray-500">RX</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <span className="w-3 h-3 rounded-full bg-gray-500"></span>
-                <span className="text-gray-500">Scaled</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <span className="w-3 h-3 rounded-full bg-green-500"></span>
-                <span className="text-gray-500">Just For Fun</span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Leaderboard */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-4">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-sm font-semibold text-gray-700">Leaderboard</p>
-            <div className="flex rounded-lg overflow-hidden border border-gray-200 text-xs">
-              <button onClick={() => setLeaderboardFilter("gym")} className={`px-3 py-1.5 font-medium ${leaderboardFilter === "gym" ? "bg-blue-600 text-white" : "bg-white text-gray-600"}`}>Gym</button>
-              <button onClick={() => setLeaderboardFilter("everyone")} className={`px-3 py-1.5 font-medium ${leaderboardFilter === "everyone" ? "bg-blue-600 text-white" : "bg-white text-gray-600"}`}>Everyone</button>
-            </div>
+            )}
           </div>
 
-          <div className="flex items-center gap-4 mb-3">
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-500">Gender:</span>
-              <div className="flex rounded-lg overflow-hidden border border-gray-200 text-xs">
-                {(["all", "Male", "Female"] as const).map((g) => (
-                  <button key={g} onClick={() => setGenderFilter(g)} className={`px-2 py-1 font-medium ${genderFilter === g ? "bg-blue-600 text-white" : "bg-white text-gray-600"}`}>
-                    {g === "all" ? "All" : g}
+          {/* RIGHT COLUMN - Workout Info, Category, Timer, Manual Entry */}
+          <div className="space-y-4 order-1 lg:order-2">
+            {/* Workout Info */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+              <input
+                type="text"
+                value={wodTitle}
+                onChange={(e) => setWodTitle(e.target.value)}
+                placeholder="Workout Name"
+                className="w-full text-xl font-bold text-gray-900 border-none focus:ring-0 p-0 mb-2 placeholder-gray-400"
+              />
+              <textarea
+                value={wodDescription}
+                onChange={(e) => setWodDescription(e.target.value)}
+                placeholder="21-15-9 Thrusters & Pull-ups"
+                rows={2}
+                className="w-full text-gray-500 text-sm border-none focus:ring-0 p-0 resize-none placeholder-gray-300"
+              />
+            </div>
+
+            {/* Category */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+              <p className="text-xs text-gray-500 mb-2">Category</p>
+              <div className="flex rounded-xl overflow-hidden border border-gray-200">
+                {categoryOrder.map((cat) => (
+                  <button
+                    key={cat}
+                    onClick={() => setCategory(cat)}
+                    className={`flex-1 py-2 text-xs font-semibold ${category === cat ? `${categoryColors[cat].bg} text-white` : "bg-white text-gray-600"}`}
+                  >
+                    {cat}
                   </button>
                 ))}
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-500">Category:</span>
-              <div className="flex rounded-lg overflow-hidden border border-gray-200 text-xs">
-                {(["all", "RX", "Scaled", "Just For Fun"] as const).map((c) => (
-                  <button key={c} onClick={() => setCategoryFilter(c)} className={`px-2 py-1 font-medium whitespace-nowrap ${categoryFilter === c ? "bg-blue-600 text-white" : "bg-white text-gray-600"}`}>
-                    {c === "all" ? "All" : c}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
 
-          {loadingLeaderboard ? (
-            <div className="flex justify-center py-6">
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-            </div>
-          ) : leaderboard.length === 0 ? (
-            <p className="text-xs text-gray-500 text-center py-6">No entries yet</p>
-          ) : (
-            <div className="space-y-2">
-              {leaderboard.slice(0, 10).map((entry, index) => {
-                const cat = entry.category as WODCategory;
-                return (
-                  <div key={entry.id} className="flex items-center gap-3 py-1.5">
-                    <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold bg-gray-100 text-gray-600">
-                      #{index + 1}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-medium text-gray-900 truncate">
-                          {entry.userName}
-                          {entry.userId === user?.id && <span className="text-blue-600 ml-1">(You)</span>}
-                        </p>
-                        <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${categoryColors[cat]?.badge || "bg-blue-100 text-blue-700"}`}>
-                          {cat}
-                        </span>
-                      </div>
-                      <p className="text-xs text-gray-400">
-                        {entry.completedDate?.toDate?.().toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                      </p>
-                    </div>
-                    <span className="font-mono text-sm font-semibold text-gray-900">
-                      {formatTime(entry.timeInSeconds || 0)}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* History */}
-        {history.length > 0 && (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-            <p className="text-sm font-semibold text-gray-700 mb-3">History</p>
-            <div className="space-y-3">
-              {history.map((log) => (
-                <div key={log.id} className="py-2 border-b border-gray-100 last:border-0">
-                  {editingLogId === log.id ? (
-                    // Edit mode
-                    <div className="space-y-3">
-                      <p className="text-xs text-gray-500">{log.completedDate?.toDate().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</p>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="number"
-                          value={editMinutes}
-                          onChange={(e) => setEditMinutes(e.target.value)}
-                          placeholder="Min"
-                          className="w-16 px-2 py-1 border border-gray-300 rounded text-center text-gray-900"
-                        />
-                        <span>:</span>
-                        <input
-                          type="number"
-                          value={editSeconds}
-                          onChange={(e) => setEditSeconds(e.target.value)}
-                          placeholder="Sec"
-                          className="w-16 px-2 py-1 border border-gray-300 rounded text-center text-gray-900"
-                        />
-                      </div>
-                      <div className="flex rounded-lg overflow-hidden border border-gray-200 text-xs">
-                        {categoryOrder.map((cat) => (
-                          <button
-                            key={cat}
-                            onClick={() => setEditCategory(cat)}
-                            className={`flex-1 px-2 py-1.5 font-medium whitespace-nowrap ${editCategory === cat ? "bg-blue-600 text-white" : "bg-white text-gray-600"}`}
-                          >
-                            {cat}
-                          </button>
-                        ))}
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => saveEdit(log.id)}
-                          className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm font-medium"
-                        >
-                          Save
-                        </button>
-                        <button
-                          onClick={cancelEdit}
-                          className="px-3 py-1.5 bg-gray-200 text-gray-700 rounded-lg text-sm font-medium"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    // View mode
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-xs text-gray-500">{log.completedDate?.toDate().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</p>
-                        <div className="flex items-center gap-2">
-                          <p className="text-lg font-semibold text-gray-900">{formatTime(log.timeInSeconds)}</p>
-                          <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${categoryColors[log.notes as WODCategory]?.badge || "bg-gray-100 text-gray-600"}`}>
-                            {log.notes || "RX"}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => startEditLog(log)}
-                          className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white text-sm"
-                        >
-                          ✎
-                        </button>
-                        <button
-                          onClick={() => deleteLog(log.id)}
-                          className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center text-white text-sm"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    </div>
-                  )}
+            {/* Timer */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+              <p className="text-xs text-gray-500 mb-2 font-semibold">Timer</p>
+              <div className="text-center mb-3">
+                <div className="text-5xl font-mono font-semibold text-gray-900">
+                  {formatTimerDisplay(elapsedSeconds)}
                 </div>
-              ))}
+              </div>
+              <div className="flex flex-col gap-2">
+                <button onClick={handleStartStop} className={`w-full py-2.5 rounded-xl font-semibold ${timerRunning ? "bg-red-500 text-white" : "bg-blue-600 text-white"}`}>
+                  {timerRunning ? "Stop" : "Start"}
+                </button>
+                <div className="flex gap-2">
+                  <button onClick={handleReset} className="flex-1 py-2 bg-gray-200 rounded-xl font-semibold text-gray-700 text-sm">Reset</button>
+                  <button onClick={handleSaveTimer} disabled={submitting || elapsedSeconds === 0} className="flex-1 py-2 bg-green-500 rounded-xl font-semibold text-white text-sm disabled:bg-gray-300">Save</button>
+                </div>
+              </div>
+            </div>
+
+            {/* Manual Entry */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+              <p className="text-xs text-gray-500 mb-2 font-semibold">Manual Entry</p>
+              <div className="flex gap-2 mb-2">
+                <div className="flex-1">
+                  <p className="text-xs text-gray-400 mb-1">Min</p>
+                  <input type="number" value={manualMinutes} onChange={(e) => setManualMinutes(e.target.value)} placeholder="0" className="w-full px-2 py-2 border border-gray-300 rounded-lg text-center text-gray-900" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-xs text-gray-400 mb-1">Sec</p>
+                  <input type="number" value={manualSeconds} onChange={(e) => setManualSeconds(e.target.value)} placeholder="0" className="w-full px-2 py-2 border border-gray-300 rounded-lg text-center text-gray-900" />
+                </div>
+              </div>
+              <div className="mb-2">
+                <p className="text-xs text-gray-400 mb-1">Date</p>
+                <input type="date" value={entryDate} onChange={(e) => setEntryDate(e.target.value)} className="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm text-gray-900" />
+              </div>
+              <button onClick={handleSaveManual} disabled={submitting || !isManualEntryValid()} className="w-full py-2.5 bg-blue-600 text-white rounded-xl font-semibold disabled:bg-gray-300">Save</button>
             </div>
           </div>
-        )}
+        </div>
       </main>
     </div>
   );
