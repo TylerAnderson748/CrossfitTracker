@@ -84,19 +84,25 @@ export default function LiftPage() {
     if (!liftName) return;
     setLoadingLeaderboard(true);
     try {
+      // Simple query to avoid compound index requirement
       const q = query(
         collection(db, "liftResults"),
         where("liftName", "==", liftName),
-        where("reps", "==", selectedReps),
-        orderBy("weight", "desc"),
-        limit(10)
+        limit(100)
       );
       const snapshot = await getDocs(q);
-      const results = snapshot.docs.map((doc) => ({
+      let results = snapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       })) as LiftResult[];
-      setLeaderboard(results);
+
+      // Filter by reps client-side
+      results = results.filter((r) => r.reps === selectedReps);
+
+      // Sort by weight descending
+      results.sort((a, b) => b.weight - a.weight);
+
+      setLeaderboard(results.slice(0, 10));
     } catch (err) {
       console.error("Error loading leaderboard:", err);
     } finally {

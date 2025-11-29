@@ -93,12 +93,12 @@ function NewWorkoutContent() {
     setLoadingLeaderboard(true);
     try {
       const normalized = normalizeWorkoutName(wodTitle.trim());
-      let q = query(
+
+      // Try simple query first (no compound index needed)
+      const q = query(
         collection(db, "leaderboardEntries"),
         where("normalizedWorkoutName", "==", normalized),
-        where("resultType", "==", "time"),
-        orderBy("timeInSeconds", "asc"),
-        limit(20)
+        limit(50)
       );
 
       const snapshot = await getDocs(q);
@@ -107,10 +107,16 @@ function NewWorkoutContent() {
         ...doc.data(),
       })) as LeaderboardEntry[];
 
+      // Filter and sort client-side to avoid index requirements
+      entries = entries.filter((e) => e.resultType === "time" && e.timeInSeconds);
+
       // Apply gender filter
       if (genderFilter !== "all") {
         entries = entries.filter((e) => e.userGender === genderFilter);
       }
+
+      // Sort by time (fastest first)
+      entries.sort((a, b) => (a.timeInSeconds || 0) - (b.timeInSeconds || 0));
 
       setLeaderboard(entries.slice(0, 10));
     } catch (err) {
