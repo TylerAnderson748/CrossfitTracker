@@ -31,7 +31,7 @@ function getCategoryHexColor(category: string): string {
   return "#3B82F6"; // default blue
 }
 
-// Generate smooth bezier curve path (like iOS Charts)
+// Generate smooth bezier curve path with gentle curves
 function getSmoothPath(points: { x: number; y: number }[]): string {
   if (points.length < 2) return "";
   if (points.length === 2) {
@@ -46,8 +46,8 @@ function getSmoothPath(points: { x: number; y: number }[]): string {
     const p2 = points[i + 1];
     const p3 = points[Math.min(points.length - 1, i + 2)];
 
-    // Catmull-Rom to Bezier conversion
-    const tension = 0.3;
+    // Lower tension = gentler curves that don't overshoot
+    const tension = 0.15;
     const cp1x = p1.x + (p2.x - p0.x) * tension;
     const cp1y = p1.y + (p2.y - p0.y) * tension;
     const cp2x = p2.x - (p3.x - p1.x) * tension;
