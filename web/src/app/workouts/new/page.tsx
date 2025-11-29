@@ -136,29 +136,7 @@ function NewWorkoutContent() {
         })
         .slice(0, 10);
 
-      // Fetch corresponding leaderboard entries to get accurate categories
-      const leaderboardQuery = query(
-        collection(db, "leaderboardEntries"),
-        where("userId", "==", user.id),
-        limit(100)
-      );
-      const leaderboardSnapshot = await getDocs(leaderboardQuery);
-      const leaderboardByLogId = new Map<string, string>();
-      leaderboardSnapshot.docs.forEach((docSnap) => {
-        const data = docSnap.data();
-        if (data.workoutLogId) {
-          // Normalize category the same way leaderboard does
-          leaderboardByLogId.set(data.workoutLogId, normalizeCategory((data.category || "").toString()));
-        }
-      });
-
-      // Merge leaderboard categories into history (use normalized category from leaderboard)
-      const historyWithCategories = filtered.map((log) => ({
-        ...log,
-        category: leaderboardByLogId.get(log.id) || normalizeCategory((log.notes || "").toString()),
-      }));
-
-      setHistory(historyWithCategories);
+      setHistory(filtered);
     } catch (err) {
       console.error("Error loading history:", err);
     }
@@ -349,7 +327,7 @@ function NewWorkoutContent() {
     setEditingLogId(log.id);
     setEditMinutes(mins.toString());
     setEditSeconds(secs.toString());
-    setEditCategory((log.category as WODCategory) || (log.notes as WODCategory) || "RX");
+    setEditCategory((log.notes as WODCategory) || "RX");
   };
 
   const cancelEdit = () => {
@@ -690,8 +668,8 @@ function NewWorkoutContent() {
                         <p className="text-xs text-gray-500">{log.completedDate?.toDate().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</p>
                         <div className="flex items-center gap-2">
                           <p className="text-lg font-semibold text-gray-900">{formatTime(log.timeInSeconds)}</p>
-                          <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${categoryColors[(log.category || log.notes) as WODCategory]?.badge || "bg-gray-100 text-gray-600"}`}>
-                            {log.category || log.notes || "RX"}
+                          <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${categoryColors[log.notes as WODCategory]?.badge || "bg-gray-100 text-gray-600"}`}>
+                            {log.notes || "RX"}
                           </span>
                         </div>
                       </div>
