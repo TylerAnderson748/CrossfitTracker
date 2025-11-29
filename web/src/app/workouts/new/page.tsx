@@ -10,9 +10,11 @@ import Navigation from "@/components/Navigation";
 
 interface WorkoutLog {
   id: string;
+  wodTitle?: string;
   timeInSeconds: number;
   completedDate: { toDate: () => Date };
   notes: string;
+  category?: string;
 }
 
 function formatTime(seconds: number): string {
@@ -95,19 +97,30 @@ function NewWorkoutContent() {
   const loadHistory = async () => {
     if (!user || !wodTitle) return;
     try {
+      // Simplified query to avoid index requirements
       const q = query(
         collection(db, "workoutLogs"),
         where("userId", "==", user.id),
-        where("wodTitle", "==", wodTitle.trim()),
-        orderBy("completedDate", "desc"),
-        limit(10)
+        limit(50)
       );
       const snapshot = await getDocs(q);
-      const results = snapshot.docs.map((doc) => ({
+      const allLogs = snapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       })) as WorkoutLog[];
-      setHistory(results);
+
+      // Filter client-side for this workout and sort
+      const filtered = allLogs
+        .filter((log) => log.wodTitle?.toLowerCase() === wodTitle.trim().toLowerCase())
+        .sort((a, b) => {
+          const dateA = a.completedDate?.toDate?.() || new Date(0);
+          const dateB = b.completedDate?.toDate?.() || new Date(0);
+          return dateB.getTime() - dateA.getTime();
+        })
+        .slice(0, 10);
+
+      console.log("History loaded:", filtered.length, "entries for", wodTitle);
+      setHistory(filtered);
     } catch (err) {
       console.error("Error loading history:", err);
     }
@@ -118,34 +131,34 @@ function NewWorkoutContent() {
     try {
       let entries: LeaderboardEntry[] = [];
 
+      // Always load all entries first (simpler, avoids index issues)
+      const allQuery = query(
+        collection(db, "leaderboardEntries"),
+        limit(200)
+      );
+      const allSnapshot = await getDocs(allQuery);
+      entries = allSnapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as LeaderboardEntry[];
+
+      console.log("Raw leaderboard entries:", entries.length);
+
+      // Filter for this workout if we have a title
       if (wodTitle) {
         const normalized = normalizeWorkoutName(wodTitle.trim());
-        const q = query(
-          collection(db, "leaderboardEntries"),
-          where("normalizedWorkoutName", "==", normalized),
-          limit(100)
+        const workoutEntries = entries.filter(
+          (e) => e.normalizedWorkoutName === normalized
         );
-        const snapshot = await getDocs(q);
-        entries = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        })) as LeaderboardEntry[];
+        if (workoutEntries.length > 0) {
+          entries = workoutEntries;
+          console.log("Filtered to workout:", workoutEntries.length);
+        }
       }
 
-      if (entries.length === 0) {
-        const allQuery = query(
-          collection(db, "leaderboardEntries"),
-          limit(100)
-        );
-        const allSnapshot = await getDocs(allQuery);
-        entries = allSnapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        })) as LeaderboardEntry[];
-      }
-
-      // Filter for time-based entries
-      entries = entries.filter((e) => e.resultType === "time" && e.timeInSeconds);
+      // Filter for entries with time data (be more lenient)
+      entries = entries.filter((e) => e.timeInSeconds && e.timeInSeconds > 0);
+      console.log("After time filter:", entries.length);
 
       // Apply gender filter
       if (genderFilter !== "all") {
@@ -161,10 +174,20 @@ function NewWorkoutContent() {
       };
 
       entries.forEach((entry) => {
-        // Map old category names to new ones
-        let cat = entry.category as WODCategory;
-        if (cat === "Just for Fun" as unknown) cat = "Just Happy To Be Here";
-        if (!grouped[cat]) grouped[cat] = [];
+        // Map various category names to standard ones
+        let cat: WODCategory = "RX"; // default
+        const entryCat = (entry.category || "").toString();
+
+        if (entryCat === "RX+" || entryCat === "rxPlus") {
+          cat = "RX+";
+        } else if (entryCat === "RX" || entryCat === "rx") {
+          cat = "RX";
+        } else if (entryCat === "Scaled" || entryCat === "scaled") {
+          cat = "Scaled";
+        } else if (entryCat === "Just Happy To Be Here" || entryCat === "Just for Fun" || entryCat === "happy") {
+          cat = "Just Happy To Be Here";
+        }
+
         grouped[cat].push(entry);
       });
 
@@ -173,6 +196,7 @@ function NewWorkoutContent() {
         grouped[cat as WODCategory].sort((a, b) => (a.timeInSeconds || 0) - (b.timeInSeconds || 0));
       });
 
+      console.log("Grouped entries:", Object.entries(grouped).map(([k, v]) => `${k}: ${v.length}`).join(", "));
       setLeaderboardByCategory(grouped);
     } catch (err) {
       console.error("Error loading leaderboard:", err);
@@ -353,7 +377,7 @@ function NewWorkoutContent() {
         </div>
 
         {/* Progress Line Chart */}
-        {chartData.length > 1 && (
+        {chartData.length >= 1 && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-4">
             <p className="text-sm font-semibold text-gray-700 mb-3">Progress</p>
             <div className="relative h-32">
@@ -366,26 +390,28 @@ function NewWorkoutContent() {
               {/* Chart area */}
               <div className="ml-12 h-full relative">
                 <svg className="w-full h-full" viewBox="0 0 300 100" preserveAspectRatio="none">
-                  <polyline
-                    fill="none"
-                    stroke="#3B82F6"
-                    strokeWidth="2"
-                    points={chartData.map((d, i) => {
-                      const x = (i / (chartData.length - 1)) * 300;
-                      const y = 100 - ((d.timeInSeconds - minTime) / range) * 100;
-                      return `${x},${y}`;
-                    }).join(" ")}
-                  />
+                  {chartData.length > 1 ? (
+                    <polyline
+                      fill="none"
+                      stroke="#3B82F6"
+                      strokeWidth="2"
+                      points={chartData.map((d, i) => {
+                        const x = chartData.length > 1 ? (i / (chartData.length - 1)) * 300 : 150;
+                        const y = range > 0 ? 100 - ((d.timeInSeconds - minTime) / range) * 100 : 50;
+                        return `${x},${y}`;
+                      }).join(" ")}
+                    />
+                  ) : null}
                   {chartData.map((d, i) => {
-                    const x = (i / (chartData.length - 1)) * 300;
-                    const y = 100 - ((d.timeInSeconds - minTime) / range) * 100;
-                    return <circle key={i} cx={x} cy={y} r="4" fill="#3B82F6" />;
+                    const x = chartData.length > 1 ? (i / (chartData.length - 1)) * 300 : 150;
+                    const y = range > 0 ? 100 - ((d.timeInSeconds - minTime) / range) * 100 : 50;
+                    return <circle key={i} cx={x} cy={y} r="6" fill="#3B82F6" />;
                   })}
                 </svg>
                 {/* X-axis labels */}
                 <div className="flex justify-between text-xs text-gray-400 mt-1">
                   {chartData.map((d, i) => (
-                    <span key={i}>{d.completedDate?.toDate().toLocaleDateString("en-US", { month: "numeric", day: "numeric" })}</span>
+                    <span key={i}>{d.completedDate?.toDate?.().toLocaleDateString("en-US", { month: "numeric", day: "numeric" }) || "N/A"}</span>
                   ))}
                 </div>
               </div>
