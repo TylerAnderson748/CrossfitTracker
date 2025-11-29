@@ -497,8 +497,8 @@ function NewWorkoutContent() {
             <button onClick={handleStartStop} className={`px-8 py-2.5 rounded-xl font-semibold ${timerRunning ? "bg-red-500 text-white" : "bg-blue-600 text-white"}`}>
               {timerRunning ? "Stop" : "Start"}
             </button>
-            <button onClick={handleReset} className="px-6 py-2.5 bg-gray-200 rounded-xl font-semibold">Reset</button>
-            <button onClick={handleSaveTimer} disabled={submitting || elapsedSeconds === 0} className="px-6 py-2.5 bg-gray-200 rounded-xl font-semibold disabled:opacity-50">Save</button>
+            <button onClick={handleReset} className="px-6 py-2.5 bg-gray-200 rounded-xl font-semibold text-gray-700">Reset</button>
+            <button onClick={handleSaveTimer} disabled={submitting || elapsedSeconds === 0} className="px-6 py-2.5 bg-gray-200 rounded-xl font-semibold text-gray-700 disabled:opacity-50">Save</button>
           </div>
 
           {/* Category */}
