@@ -97,6 +97,7 @@ function NewWorkoutContent() {
   const [genderFilter, setGenderFilter] = useState<"all" | "Male" | "Female">("all");
   const [categoryFilter, setCategoryFilter] = useState<"all" | WODCategory>("all");
   const [loadingLeaderboard, setLoadingLeaderboard] = useState(false);
+  const [chartTimeRange, setChartTimeRange] = useState<"1m" | "6m" | "1y" | "2y" | "5y">("1y");
 
   // Edit history state
   const [editingLogId, setEditingLogId] = useState<string | null>(null);
@@ -467,8 +468,24 @@ function NewWorkoutContent() {
     );
   }
 
-  // Progress chart data
-  const chartData = history.slice(0, 10).reverse();
+  // Progress chart data - filter by time range
+  const getTimeRangeDate = (range: string) => {
+    const now = new Date();
+    switch (range) {
+      case "1m": return new Date(now.setMonth(now.getMonth() - 1));
+      case "6m": return new Date(now.setMonth(now.getMonth() - 6));
+      case "1y": return new Date(now.setFullYear(now.getFullYear() - 1));
+      case "2y": return new Date(now.setFullYear(now.getFullYear() - 2));
+      case "5y": return new Date(now.setFullYear(now.getFullYear() - 5));
+      default: return new Date(now.setFullYear(now.getFullYear() - 1));
+    }
+  };
+  const timeRangeStart = getTimeRangeDate(chartTimeRange);
+  const filteredHistory = history.filter((h) => {
+    const date = h.completedDate?.toDate?.();
+    return date && date >= timeRangeStart;
+  });
+  const chartData = filteredHistory.slice(0, 20).reverse();
   const times = chartData.map((h) => h.timeInSeconds);
   const dataMax = Math.max(...times, 1);
   const dataMin = Math.min(...times, 0);
@@ -495,9 +512,32 @@ function NewWorkoutContent() {
           {/* LEFT COLUMN - Progress, Leaderboard, History */}
           <div className="space-y-4 order-2 lg:order-1">
             {/* Progress Line Chart */}
-            {chartData.length >= 1 && (
+            {filteredHistory.length >= 1 && (
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-                <p className="text-sm font-semibold text-gray-700 mb-3">Progress</p>
+                <div className="flex justify-between items-center mb-3">
+                  <p className="text-sm font-semibold text-gray-700">Progress</p>
+                  <div className="flex rounded-lg overflow-hidden border border-gray-200 text-xs">
+                    {[
+                      { key: "1m", label: "1M" },
+                      { key: "6m", label: "6M" },
+                      { key: "1y", label: "1Y" },
+                      { key: "2y", label: "2Y" },
+                      { key: "5y", label: "5Y" },
+                    ].map(({ key, label }) => (
+                      <button
+                        key={key}
+                        onClick={() => setChartTimeRange(key as typeof chartTimeRange)}
+                        className={`px-2 py-1 font-medium transition-colors ${
+                          chartTimeRange === key
+                            ? "bg-blue-600 text-white"
+                            : "bg-white text-gray-600 hover:bg-gray-50"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 <div className="relative h-40">
                   <div className="absolute left-0 top-0 bottom-4 w-10 flex flex-col justify-between text-xs text-gray-400">
                     {yTicks.map((tick, i) => (

@@ -37,6 +37,7 @@ function LiftPageContent() {
   const [leaderboard, setLeaderboard] = useState<LiftResult[]>([]);
   const [loadingLeaderboard, setLoadingLeaderboard] = useState(false);
   const [leaderboardScope, setLeaderboardScope] = useState<"gym" | "everyone">("everyone");
+  const [chartTimeRange, setChartTimeRange] = useState<"1m" | "6m" | "1y" | "2y" | "5y">("1y");
 
   // Edit history state
   const [editingLogId, setEditingLogId] = useState<string | null>(null);
@@ -274,8 +275,24 @@ function LiftPageContent() {
     ],
   ];
 
-  // Progress chart data
-  const chartData = history.slice(0, 10).reverse();
+  // Progress chart data - filter by time range
+  const getTimeRangeDate = (range: string) => {
+    const now = new Date();
+    switch (range) {
+      case "1m": return new Date(now.setMonth(now.getMonth() - 1));
+      case "6m": return new Date(now.setMonth(now.getMonth() - 6));
+      case "1y": return new Date(now.setFullYear(now.getFullYear() - 1));
+      case "2y": return new Date(now.setFullYear(now.getFullYear() - 2));
+      case "5y": return new Date(now.setFullYear(now.getFullYear() - 5));
+      default: return new Date(now.setFullYear(now.getFullYear() - 1));
+    }
+  };
+  const timeRangeStart = getTimeRangeDate(chartTimeRange);
+  const filteredHistory = history.filter((h) => {
+    const date = h.date?.toDate?.();
+    return date && date >= timeRangeStart;
+  });
+  const chartData = filteredHistory.slice(0, 20).reverse();
   const weights = chartData.map((h) => h.weight);
   const dataMax = weights.length > 0 ? Math.max(...weights) : 100;
   const dataMin = weights.length > 0 ? Math.min(...weights) : 0;
@@ -425,9 +442,32 @@ function LiftPageContent() {
         )}
 
         {/* Progress Line Chart */}
-        {chartData.length >= 1 && (
+        {filteredHistory.length >= 1 && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-4">
-            <p className="text-sm font-semibold text-gray-700 mb-3">Progress</p>
+            <div className="flex justify-between items-center mb-3">
+              <p className="text-sm font-semibold text-gray-700">Progress</p>
+              <div className="flex rounded-lg overflow-hidden border border-gray-200 text-xs">
+                {[
+                  { key: "1m", label: "1M" },
+                  { key: "6m", label: "6M" },
+                  { key: "1y", label: "1Y" },
+                  { key: "2y", label: "2Y" },
+                  { key: "5y", label: "5Y" },
+                ].map(({ key, label }) => (
+                  <button
+                    key={key}
+                    onClick={() => setChartTimeRange(key as typeof chartTimeRange)}
+                    className={`px-2 py-1 font-medium transition-colors ${
+                      chartTimeRange === key
+                        ? "bg-purple-600 text-white"
+                        : "bg-white text-gray-600 hover:bg-gray-50"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
             <div className="relative">
               <div className="flex">
                 <div className="w-10 h-32 flex flex-col justify-between text-xs text-gray-400 pr-2">
