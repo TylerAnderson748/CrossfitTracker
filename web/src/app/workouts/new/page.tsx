@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { collection, addDoc, query, where, orderBy, getDocs, Timestamp, limit } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
-import { WODCategory, normalizeWorkoutName, LeaderboardEntry } from "@/lib/types";
+import { WODCategory, normalizeWorkoutName, LeaderboardEntry, categoryOrder, categoryColors } from "@/lib/types";
 import Navigation from "@/components/Navigation";
 
 interface WorkoutLog {
@@ -54,7 +54,12 @@ function NewWorkoutContent() {
 
   // History and leaderboard
   const [history, setHistory] = useState<WorkoutLog[]>([]);
-  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [leaderboardByCategory, setLeaderboardByCategory] = useState<Record<WODCategory, LeaderboardEntry[]>>({
+    "RX+": [],
+    "RX": [],
+    "Scaled": [],
+    "Just Happy To Be Here": [],
+  });
   const [leaderboardFilter, setLeaderboardFilter] = useState<"everyone" | "gym">("everyone");
   const [genderFilter, setGenderFilter] = useState<"all" | "Male" | "Female">("all");
   const [loadingLeaderboard, setLoadingLeaderboard] = useState(false);
@@ -118,7 +123,7 @@ function NewWorkoutContent() {
         const q = query(
           collection(db, "leaderboardEntries"),
           where("normalizedWorkoutName", "==", normalized),
-          limit(50)
+          limit(100)
         );
         const snapshot = await getDocs(q);
         entries = snapshot.docs.map((doc) => ({
@@ -130,7 +135,7 @@ function NewWorkoutContent() {
       if (entries.length === 0) {
         const allQuery = query(
           collection(db, "leaderboardEntries"),
-          limit(50)
+          limit(100)
         );
         const allSnapshot = await getDocs(allQuery);
         entries = allSnapshot.docs.map((doc) => ({
@@ -139,14 +144,36 @@ function NewWorkoutContent() {
         })) as LeaderboardEntry[];
       }
 
+      // Filter for time-based entries
       entries = entries.filter((e) => e.resultType === "time" && e.timeInSeconds);
 
+      // Apply gender filter
       if (genderFilter !== "all") {
         entries = entries.filter((e) => e.userGender === genderFilter);
       }
 
-      entries.sort((a, b) => (a.timeInSeconds || 0) - (b.timeInSeconds || 0));
-      setLeaderboard(entries.slice(0, 10));
+      // Group by category and sort each group by fastest time
+      const grouped: Record<WODCategory, LeaderboardEntry[]> = {
+        "RX+": [],
+        "RX": [],
+        "Scaled": [],
+        "Just Happy To Be Here": [],
+      };
+
+      entries.forEach((entry) => {
+        // Map old category names to new ones
+        let cat = entry.category as WODCategory;
+        if (cat === "Just for Fun" as unknown) cat = "Just Happy To Be Here";
+        if (!grouped[cat]) grouped[cat] = [];
+        grouped[cat].push(entry);
+      });
+
+      // Sort each category by fastest time
+      Object.keys(grouped).forEach((cat) => {
+        grouped[cat as WODCategory].sort((a, b) => (a.timeInSeconds || 0) - (b.timeInSeconds || 0));
+      });
+
+      setLeaderboardByCategory(grouped);
     } catch (err) {
       console.error("Error loading leaderboard:", err);
     } finally {
@@ -290,13 +317,13 @@ function NewWorkoutContent() {
           <div className="mb-4">
             <p className="text-xs text-gray-500 mb-2">Category</p>
             <div className="flex rounded-xl overflow-hidden border border-gray-200">
-              {(["RX", "Scaled", "Just for Fun"] as const).map((cat) => (
+              {categoryOrder.map((cat) => (
                 <button
                   key={cat}
                   onClick={() => setCategory(cat)}
-                  className={`flex-1 py-2.5 text-sm font-semibold ${category === cat ? (cat === "RX" ? "bg-blue-600 text-white" : cat === "Scaled" ? "bg-gray-600 text-white" : "bg-green-600 text-white") : "bg-white text-gray-600"}`}
+                  className={`flex-1 py-2 text-xs font-semibold ${category === cat ? `${categoryColors[cat].bg} text-white` : "bg-white text-gray-600"}`}
                 >
-                  {cat}
+                  {cat === "Just Happy To Be Here" ? "Happy" : cat}
                 </button>
               ))}
             </div>
@@ -390,31 +417,42 @@ function NewWorkoutContent() {
             <div className="flex justify-center py-6">
               <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
             </div>
-          ) : leaderboard.length === 0 ? (
+          ) : categoryOrder.every((cat) => leaderboardByCategory[cat].length === 0) ? (
             <p className="text-xs text-gray-500 text-center py-6">No entries yet</p>
           ) : (
-            <div className="space-y-3">
-              {leaderboard.map((entry, index) => (
-                <div key={entry.id} className="flex items-start gap-3">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${index === 0 ? "bg-yellow-400 text-white" : index === 1 ? "bg-gray-300 text-white" : index === 2 ? "bg-amber-600 text-white" : "bg-gray-100 text-gray-600"}`}>
-                    {index + 1}
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-gray-900">
-                      {entry.userName}
-                      {entry.gymName && <span className="text-blue-600 ml-1">({entry.gymName})</span>}
-                      {entry.userId === user?.id && <span className="text-blue-600 ml-1">(You)</span>}
-                    </p>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-gray-700">{formatTime(entry.timeInSeconds || 0)}</span>
-                      <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${entry.category === "RX" ? "bg-blue-100 text-blue-700" : entry.category === "Scaled" ? "bg-gray-200 text-gray-700" : "bg-green-100 text-green-700"}`}>
-                        {entry.category}
-                      </span>
+            <div className="space-y-4">
+              {categoryOrder.map((cat) => {
+                const entries = leaderboardByCategory[cat];
+                if (entries.length === 0) return null;
+                return (
+                  <div key={cat}>
+                    <h4 className={`text-sm font-bold mb-2 ${categoryColors[cat].badge.includes("orange") ? "text-orange-600" : categoryColors[cat].badge.includes("blue") ? "text-blue-600" : categoryColors[cat].badge.includes("gray") ? "text-gray-600" : "text-green-600"}`}>
+                      {cat}
+                    </h4>
+                    <div className="space-y-2">
+                      {entries.slice(0, 10).map((entry, index) => (
+                        <div key={entry.id} className="flex items-center gap-3 py-1.5">
+                          <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold bg-gray-100 text-gray-600">
+                            #{index + 1}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-900 truncate">
+                              {entry.userName}
+                              {entry.userId === user?.id && <span className="text-blue-600 ml-1">(You)</span>}
+                            </p>
+                            <p className="text-xs text-gray-400">
+                              {entry.completedDate?.toDate?.().toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                            </p>
+                          </div>
+                          <span className="font-mono text-sm font-semibold text-gray-900">
+                            {formatTime(entry.timeInSeconds || 0)}
+                          </span>
+                        </div>
+                      ))}
                     </div>
-                    <p className="text-xs text-gray-400">{formatDateTime(entry.completedDate?.toDate?.() || new Date())}</p>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

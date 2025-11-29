@@ -23,12 +23,16 @@ export type WorkoutResultType = "time" | "rounds" | "weight" | "reps" | "other";
 export type RecurrenceType = "none" | "daily" | "weekly" | "monthly";
 
 // WOD Categories - matching iOS
-export type WODCategory = "RX" | "Scaled" | "Just for Fun";
+export type WODCategory = "RX+" | "RX" | "Scaled" | "Just Happy To Be Here";
 
-export const categoryColors: Record<WODCategory, string> = {
-  "RX": "bg-blue-500 text-white",
-  "Scaled": "bg-gray-500 text-white",
-  "Just for Fun": "bg-green-500 text-white",
+// Category order for leaderboard (highest tier first)
+export const categoryOrder: WODCategory[] = ["RX+", "RX", "Scaled", "Just Happy To Be Here"];
+
+export const categoryColors: Record<WODCategory, { bg: string; text: string; badge: string }> = {
+  "RX+": { bg: "bg-orange-500", text: "text-white", badge: "bg-orange-100 text-orange-700" },
+  "RX": { bg: "bg-blue-500", text: "text-white", badge: "bg-blue-100 text-blue-700" },
+  "Scaled": { bg: "bg-gray-500", text: "text-white", badge: "bg-gray-200 text-gray-700" },
+  "Just Happy To Be Here": { bg: "bg-green-500", text: "text-white", badge: "bg-green-100 text-green-700" },
 };
 
 export interface ScheduledWorkout {
