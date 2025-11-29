@@ -529,64 +529,62 @@ function LiftPageContent() {
               </div>
             </div>
             <div className="relative">
-              <svg width="100%" height="200" viewBox="0 0 400 200" preserveAspectRatio="none">
-                {/* Y-axis labels */}
-                {yTicks.map((tick, i) => {
-                  const y = 20 + (i / (yTicks.length - 1)) * 140;
-                  return (
-                    <text key={`y-${i}`} x="38" y={y + 4} textAnchor="end" fontSize="12" fill="#9CA3AF">
-                      {tick}
-                    </text>
-                  );
-                })}
-                {/* Horizontal grid lines */}
-                {yTicks.map((_, i) => {
-                  const y = 20 + (i / (yTicks.length - 1)) * 140;
-                  return <line key={i} x1="45" y1={y} x2="395" y2={y} stroke="#E5E7EB" strokeWidth="1" vectorEffect="non-scaling-stroke" />;
-                })}
-                {/* Vertical grid lines */}
-                {xAxisLabels.map((label, i) => {
-                  const xPct = (label.date.getTime() - timeRangeStart.getTime()) / timeRangeMs;
-                  const x = 45 + xPct * 350;
-                  return <line key={i} x1={x} y1="20" x2={x} y2="160" stroke="#E5E7EB" strokeWidth="1" vectorEffect="non-scaling-stroke" />;
-                })}
-                {/* Data line */}
-                {chartData.length > 1 ? (
-                  <path
-                    fill="none"
-                    stroke="#9333EA"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    vectorEffect="non-scaling-stroke"
-                    d={getLinePath(chartData.map((d) => {
+              <div className="flex">
+                <div className="w-10 flex flex-col justify-between text-xs text-gray-400 pr-1" style={{ height: "160px" }}>
+                  {yTicks.map((tick, i) => (
+                    <span key={i} className="text-right">{tick}</span>
+                  ))}
+                </div>
+                <div className="flex-1" style={{ height: "160px" }}>
+                  <svg width="100%" height="100%" viewBox="0 0 350 140" preserveAspectRatio="none">
+                    {/* Horizontal grid lines */}
+                    {yTicks.map((_, i) => {
+                      const y = (i / (yTicks.length - 1)) * 140;
+                      return <line key={i} x1="0" y1={y} x2="350" y2={y} stroke="#E5E7EB" strokeWidth="1" vectorEffect="non-scaling-stroke" />;
+                    })}
+                    {/* Vertical grid lines */}
+                    {xAxisLabels.map((label, i) => {
+                      const xPct = (label.date.getTime() - timeRangeStart.getTime()) / timeRangeMs;
+                      const x = xPct * 350;
+                      return <line key={i} x1={x} y1="0" x2={x} y2="140" stroke="#E5E7EB" strokeWidth="1" vectorEffect="non-scaling-stroke" />;
+                    })}
+                    {/* Data line */}
+                    {chartData.length > 1 ? (
+                      <path
+                        fill="none"
+                        stroke="#9333EA"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        vectorEffect="non-scaling-stroke"
+                        d={getLinePath(chartData.map((d) => {
+                          const date = d.date?.toDate?.() || new Date();
+                          const xPct = (date.getTime() - timeRangeStart.getTime()) / timeRangeMs;
+                          const x = xPct * 350;
+                          const y = range > 0 ? (1 - (d.weight - minWeightTick) / range) * 140 : 70;
+                          return { x, y };
+                        }))}
+                      />
+                    ) : null}
+                    {/* Data points */}
+                    {chartData.map((d, i) => {
                       const date = d.date?.toDate?.() || new Date();
                       const xPct = (date.getTime() - timeRangeStart.getTime()) / timeRangeMs;
-                      const x = 45 + xPct * 350;
-                      const y = range > 0 ? 20 + (1 - (d.weight - minWeightTick) / range) * 140 : 90;
-                      return { x, y };
-                    }))}
-                  />
-                ) : null}
-                {/* Data points */}
-                {chartData.map((d, i) => {
-                  const date = d.date?.toDate?.() || new Date();
-                  const xPct = (date.getTime() - timeRangeStart.getTime()) / timeRangeMs;
-                  const x = 45 + xPct * 350;
-                  const y = range > 0 ? 20 + (1 - (d.weight - minWeightTick) / range) * 140 : 90;
-                  return <circle key={i} cx={x} cy={y} r="5" fill="#9333EA" />;
-                })}
-                {/* X-axis labels */}
-                {xAxisLabels.map((label, i) => {
-                  const xPct = (label.date.getTime() - timeRangeStart.getTime()) / timeRangeMs;
-                  const x = 45 + xPct * 350;
-                  return (
-                    <text key={`x-${i}`} x={x} y="185" textAnchor="middle" fontSize="12" fill="#9CA3AF">
-                      {label.label}
-                    </text>
-                  );
-                })}
-              </svg>
+                      const x = xPct * 350;
+                      const y = range > 0 ? (1 - (d.weight - minWeightTick) / range) * 140 : 70;
+                      return <circle key={i} cx={x} cy={y} r="4" fill="#9333EA" />;
+                    })}
+                  </svg>
+                </div>
+              </div>
+              <div className="flex">
+                <div className="w-10"></div>
+                <div className="flex-1 flex justify-between text-xs text-gray-400 mt-1">
+                  {xAxisLabels.map((label, i) => (
+                    <span key={i}>{label.label}</span>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         )}
