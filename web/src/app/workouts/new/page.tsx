@@ -103,6 +103,7 @@ function NewWorkoutContent() {
   const [editMinutes, setEditMinutes] = useState("");
   const [editSeconds, setEditSeconds] = useState("");
   const [editCategory, setEditCategory] = useState<WODCategory>("RX");
+  const [editDate, setEditDate] = useState("");
 
   useEffect(() => {
     if (!loading && !user) {
@@ -370,12 +371,20 @@ function NewWorkoutContent() {
     setEditMinutes(mins.toString());
     setEditSeconds(secs.toString());
     setEditCategory((log.notes as WODCategory) || "RX");
+    // Initialize edit date from the log's completedDate
+    const logDate = log.completedDate?.toDate?.();
+    if (logDate) {
+      setEditDate(logDate.toISOString().split("T")[0]);
+    } else {
+      setEditDate(new Date().toISOString().split("T")[0]);
+    }
   };
 
   const cancelEdit = () => {
     setEditingLogId(null);
     setEditMinutes("");
     setEditSeconds("");
+    setEditDate("");
   };
 
   const saveEdit = async (logId: string) => {
@@ -385,9 +394,12 @@ function NewWorkoutContent() {
     if (newTime <= 0) return;
 
     try {
+      const newDate = Timestamp.fromDate(new Date(editDate));
+
       await updateDoc(doc(db, "workoutLogs", logId), {
         timeInSeconds: newTime,
         notes: editCategory,
+        completedDate: newDate,
       });
 
       // Also update leaderboard entry if exists
@@ -400,6 +412,7 @@ function NewWorkoutContent() {
         await updateDoc(doc(db, "leaderboardEntries", docSnap.id), {
           timeInSeconds: newTime,
           category: editCategory,
+          completedDate: newDate,
         });
       }
 
@@ -618,11 +631,17 @@ function NewWorkoutContent() {
                     <div key={log.id} className="py-2 border-b border-gray-100 last:border-0">
                       {editingLogId === log.id ? (
                         <div className="space-y-3">
-                          <p className="text-xs text-gray-500">{log.completedDate?.toDate().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</p>
-                          <div className="flex items-center gap-2">
-                            <input type="number" value={editMinutes} onChange={(e) => setEditMinutes(e.target.value)} placeholder="Min" className="w-16 px-2 py-1 border border-gray-300 rounded text-center text-gray-900" />
-                            <span>:</span>
-                            <input type="number" value={editSeconds} onChange={(e) => setEditSeconds(e.target.value)} placeholder="Sec" className="w-16 px-2 py-1 border border-gray-300 rounded text-center text-gray-900" />
+                          <div>
+                            <p className="text-xs text-gray-500 mb-1">Date</p>
+                            <input type="date" value={editDate} onChange={(e) => setEditDate(e.target.value)} className="w-full px-2 py-1 border border-gray-300 rounded text-sm text-gray-900" />
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500 mb-1">Time</p>
+                            <div className="flex items-center gap-2">
+                              <input type="number" value={editMinutes} onChange={(e) => setEditMinutes(e.target.value)} placeholder="Min" className="w-16 px-2 py-1 border border-gray-300 rounded text-center text-gray-900" />
+                              <span>:</span>
+                              <input type="number" value={editSeconds} onChange={(e) => setEditSeconds(e.target.value)} placeholder="Sec" className="w-16 px-2 py-1 border border-gray-300 rounded text-center text-gray-900" />
+                            </div>
                           </div>
                           <div className="flex rounded-lg overflow-hidden border border-gray-200 text-xs">
                             {categoryOrder.map((cat) => (
