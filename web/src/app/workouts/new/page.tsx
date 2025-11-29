@@ -669,59 +669,64 @@ function NewWorkoutContent() {
               />
             </div>
 
-            {/* Category */}
+            {/* Timer, Category & Manual Entry */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-              <p className="text-xs text-gray-500 mb-2">Category</p>
-              <div className="flex rounded-xl overflow-hidden border border-gray-200">
-                {categoryOrder.map((cat) => (
-                  <button
-                    key={cat}
-                    onClick={() => setCategory(cat)}
-                    className={`flex-1 py-2 text-xs font-semibold ${category === cat ? `${categoryColors[cat].bg} text-white` : "bg-white text-gray-600"}`}
-                  >
-                    {cat}
+              {/* Category */}
+              <div className="mb-4">
+                <p className="text-xs text-gray-500 mb-2">Category</p>
+                <div className="flex rounded-xl overflow-hidden border border-gray-200">
+                  {categoryOrder.map((cat) => (
+                    <button
+                      key={cat}
+                      onClick={() => setCategory(cat)}
+                      className={`flex-1 py-2 text-xs font-semibold ${category === cat ? `${categoryColors[cat].bg} text-white` : "bg-white text-gray-600"}`}
+                    >
+                      {cat}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Timer */}
+              <div className="mb-4">
+                <p className="text-xs text-gray-500 mb-2 font-semibold">Timer</p>
+                <div className="text-center mb-3">
+                  <div className="text-5xl font-mono font-semibold text-gray-900">
+                    {formatTimerDisplay(elapsedSeconds)}
+                  </div>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <button onClick={handleStartStop} className={`w-full py-2.5 rounded-xl font-semibold ${timerRunning ? "bg-red-500 text-white" : "bg-blue-600 text-white"}`}>
+                    {timerRunning ? "Stop" : "Start"}
                   </button>
-                ))}
+                  <div className="flex gap-2">
+                    <button onClick={handleReset} className="flex-1 py-2 bg-gray-200 rounded-xl font-semibold text-gray-700 text-sm">Reset</button>
+                    <button onClick={handleSaveTimer} disabled={submitting || elapsedSeconds === 0} className="flex-1 py-2 bg-green-500 rounded-xl font-semibold text-white text-sm disabled:bg-gray-300">Save</button>
+                  </div>
+                </div>
               </div>
-            </div>
 
-            {/* Timer */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-              <p className="text-xs text-gray-500 mb-2 font-semibold">Timer</p>
-              <div className="text-center mb-3">
-                <div className="text-5xl font-mono font-semibold text-gray-900">
-                  {formatTimerDisplay(elapsedSeconds)}
-                </div>
-              </div>
-              <div className="flex flex-col gap-2">
-                <button onClick={handleStartStop} className={`w-full py-2.5 rounded-xl font-semibold ${timerRunning ? "bg-red-500 text-white" : "bg-blue-600 text-white"}`}>
-                  {timerRunning ? "Stop" : "Start"}
-                </button>
-                <div className="flex gap-2">
-                  <button onClick={handleReset} className="flex-1 py-2 bg-gray-200 rounded-xl font-semibold text-gray-700 text-sm">Reset</button>
-                  <button onClick={handleSaveTimer} disabled={submitting || elapsedSeconds === 0} className="flex-1 py-2 bg-green-500 rounded-xl font-semibold text-white text-sm disabled:bg-gray-300">Save</button>
-                </div>
-              </div>
-            </div>
+              <div className="border-t border-gray-200 my-4"></div>
 
-            {/* Manual Entry */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-              <p className="text-xs text-gray-500 mb-2 font-semibold">Manual Entry</p>
-              <div className="flex gap-2 mb-2">
-                <div className="flex-1">
-                  <p className="text-xs text-gray-400 mb-1">Min</p>
-                  <input type="number" value={manualMinutes} onChange={(e) => setManualMinutes(e.target.value)} placeholder="0" className="w-full px-2 py-2 border border-gray-300 rounded-lg text-center text-gray-900" />
+              {/* Manual Entry */}
+              <div>
+                <p className="text-xs text-gray-500 mb-2 font-semibold">Manual Entry</p>
+                <div className="flex gap-2 mb-2">
+                  <div className="flex-1">
+                    <p className="text-xs text-gray-400 mb-1">Min</p>
+                    <input type="number" value={manualMinutes} onChange={(e) => setManualMinutes(e.target.value)} placeholder="0" className="w-full px-2 py-2 border border-gray-300 rounded-lg text-center text-gray-900" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-xs text-gray-400 mb-1">Sec</p>
+                    <input type="number" value={manualSeconds} onChange={(e) => setManualSeconds(e.target.value)} placeholder="0" className="w-full px-2 py-2 border border-gray-300 rounded-lg text-center text-gray-900" />
+                  </div>
                 </div>
-                <div className="flex-1">
-                  <p className="text-xs text-gray-400 mb-1">Sec</p>
-                  <input type="number" value={manualSeconds} onChange={(e) => setManualSeconds(e.target.value)} placeholder="0" className="w-full px-2 py-2 border border-gray-300 rounded-lg text-center text-gray-900" />
+                <div className="mb-2">
+                  <p className="text-xs text-gray-400 mb-1">Date</p>
+                  <input type="date" value={entryDate} onChange={(e) => setEntryDate(e.target.value)} className="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm text-gray-900" />
                 </div>
+                <button onClick={handleSaveManual} disabled={submitting || !isManualEntryValid()} className="w-full py-2.5 bg-blue-600 text-white rounded-xl font-semibold disabled:bg-gray-300">Save</button>
               </div>
-              <div className="mb-2">
-                <p className="text-xs text-gray-400 mb-1">Date</p>
-                <input type="date" value={entryDate} onChange={(e) => setEntryDate(e.target.value)} className="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm text-gray-900" />
-              </div>
-              <button onClick={handleSaveManual} disabled={submitting || !isManualEntryValid()} className="w-full py-2.5 bg-blue-600 text-white rounded-xl font-semibold disabled:bg-gray-300">Save</button>
             </div>
           </div>
         </div>
