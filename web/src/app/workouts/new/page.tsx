@@ -462,10 +462,15 @@ function NewWorkoutContent() {
                             #{index + 1}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-gray-900 truncate">
-                              {entry.userName}
-                              {entry.userId === user?.id && <span className="text-blue-600 ml-1">(You)</span>}
-                            </p>
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm font-medium text-gray-900 truncate">
+                                {entry.userName}
+                                {entry.userId === user?.id && <span className="text-blue-600 ml-1">(You)</span>}
+                              </p>
+                              <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${categoryColors[cat].badge}`}>
+                                {cat === "Just Happy To Be Here" ? "Happy" : cat}
+                              </span>
+                            </div>
                             <p className="text-xs text-gray-400">
                               {entry.completedDate?.toDate?.().toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                             </p>
