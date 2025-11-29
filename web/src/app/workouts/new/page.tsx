@@ -126,13 +126,15 @@ function NewWorkoutContent() {
   const getCategoryPriority = (cat: string): number => {
     if (cat === "RX" || cat === "rx" || cat === "RX+" || cat === "rxPlus") return 0;
     if (cat === "Scaled" || cat === "scaled") return 1;
-    return 2; // Just For Fun or anything else
+    if (cat === "Just For Fun" || cat === "Just for Fun" || cat === "fun" || cat === "Fun") return 2;
+    return 0; // Default to RX priority for unknown/empty
   };
 
   const normalizeCategory = (cat: string): WODCategory => {
-    if (cat === "RX" || cat === "rx" || cat === "RX+" || cat === "rxPlus") return "RX";
+    if (!cat || cat === "RX" || cat === "rx" || cat === "RX+" || cat === "rxPlus") return "RX";
     if (cat === "Scaled" || cat === "scaled") return "Scaled";
-    return "Just For Fun";
+    if (cat === "Just For Fun" || cat === "Just for Fun" || cat === "fun" || cat === "Fun" || cat === "Just Happy To Be Here" || cat === "happy") return "Just For Fun";
+    return "RX"; // Default to RX for unknown categories
   };
 
   const loadLeaderboard = async () => {
@@ -375,7 +377,7 @@ function NewWorkoutContent() {
                   onClick={() => setCategory(cat)}
                   className={`flex-1 py-2 text-xs font-semibold ${category === cat ? `${categoryColors[cat].bg} text-white` : "bg-white text-gray-600"}`}
                 >
-                  {cat === "Just For Fun" ? "Fun" : cat}
+                  {cat}
                 </button>
               ))}
             </div>
@@ -479,7 +481,7 @@ function NewWorkoutContent() {
                 Scaled
               </button>
               <button onClick={() => setCategoryFilter("Just For Fun")} className={`px-2 py-1.5 font-medium ${categoryFilter === "Just For Fun" ? "bg-blue-600 text-white" : "bg-white text-gray-600"}`}>
-                Fun
+                Just For Fun
               </button>
             </div>
           </div>
@@ -506,7 +508,7 @@ function NewWorkoutContent() {
                           {entry.userId === user?.id && <span className="text-blue-600 ml-1">(You)</span>}
                         </p>
                         <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${categoryColors[cat]?.badge || "bg-blue-100 text-blue-700"}`}>
-                          {cat === "Just For Fun" ? "Fun" : cat}
+                          {cat}
                         </span>
                       </div>
                       <p className="text-xs text-gray-400">
