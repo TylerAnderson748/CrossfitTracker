@@ -583,7 +583,7 @@ function NewWorkoutContent() {
               </div>
             </div>
             {/* Legend */}
-            <div className="flex justify-center gap-4 mt-3 text-xs">
+            <div className="flex justify-center gap-4 mt-6 pt-3 border-t border-gray-100 text-xs">
               <div className="flex items-center gap-1">
                 <span className="w-3 h-3 rounded-full bg-blue-500"></span>
                 <span className="text-gray-500">RX</span>
