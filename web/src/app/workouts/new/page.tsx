@@ -449,13 +449,14 @@ function NewWorkoutContent() {
   const times = chartData.map((h) => h.timeInSeconds);
   const dataMax = Math.max(...times, 1);
   const dataMin = Math.min(...times, 0);
-  // Add 10% padding above and below
-  const padding = (dataMax - dataMin) * 0.1 || 30;
-  const maxTime = dataMax + padding;
-  const minTime = Math.max(0, dataMin - padding);
+  // Round to nearest 10 seconds for nice tick marks
+  const tickInterval = 10;
+  const minTime = Math.floor(dataMin / tickInterval) * tickInterval;
+  const maxTime = Math.ceil(dataMax / tickInterval) * tickInterval + tickInterval;
   const range = maxTime - minTime || 60;
-  // Generate 5 evenly spaced Y-axis ticks
-  const yTicks = Array.from({ length: 5 }, (_, i) => maxTime - (i * range) / 4);
+  // Generate Y-axis ticks at 10-second intervals
+  const numTicks = Math.ceil(range / tickInterval) + 1;
+  const yTicks = Array.from({ length: Math.min(numTicks, 7) }, (_, i) => maxTime - i * tickInterval);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -483,9 +484,10 @@ function NewWorkoutContent() {
                   <div className="ml-12 h-full relative">
                     <svg className="w-full h-full" viewBox="0 0 300 100" preserveAspectRatio="none">
                       {/* Horizontal grid lines */}
-                      {[0, 25, 50, 75, 100].map((y) => (
-                        <line key={y} x1="10" y1={y} x2="290" y2={y} stroke="#E5E7EB" strokeWidth="1" />
-                      ))}
+                      {yTicks.map((_, i) => {
+                        const y = (i / (yTicks.length - 1)) * 100;
+                        return <line key={i} x1="10" y1={y} x2="290" y2={y} stroke="#E5E7EB" strokeWidth="1" />;
+                      })}
                       {/* Vertical grid lines */}
                       {chartData.map((_, i) => {
                         const x = chartData.length > 1 ? 10 + (i / (chartData.length - 1)) * 280 : 150;
