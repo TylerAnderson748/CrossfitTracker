@@ -37,6 +37,7 @@ function LiftPageContent() {
   const [leaderboard, setLeaderboard] = useState<LiftResult[]>([]);
   const [loadingLeaderboard, setLoadingLeaderboard] = useState(false);
   const [leaderboardScope, setLeaderboardScope] = useState<"gym" | "everyone">("everyone");
+  const [debugInfo, setDebugInfo] = useState<string>("");
 
   // Edit history state
   const [editingLogId, setEditingLogId] = useState<string | null>(null);
@@ -102,6 +103,10 @@ function LiftPageContent() {
         id: doc.id,
         ...doc.data(),
       })) as LiftResult[];
+
+      // Debug: show what lift names exist in the database
+      const uniqueLifts = [...new Set(results.map((r) => r.liftName))];
+      setDebugInfo(`Found ${results.length} total lift results. Unique lifts: ${uniqueLifts.join(", ")}. Looking for: "${liftName}"`);
 
       // Case-insensitive match for lift name
       const liftNameLower = liftName.toLowerCase().trim();
@@ -289,6 +294,13 @@ function LiftPageContent() {
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg mb-4">
             {error}
+          </div>
+        )}
+
+        {/* Debug info - remove after fixing */}
+        {debugInfo && (
+          <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded-lg mb-4 text-xs">
+            {debugInfo}
           </div>
         )}
 
