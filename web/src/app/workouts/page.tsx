@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { collection, query, where, orderBy, getDocs } from "firebase/firestore";
+import { collection, query, where, getDocs } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
 import { WorkoutLog, formatResult } from "@/lib/types";
@@ -52,16 +52,22 @@ export default function WorkoutsPage() {
     if (!user) return;
 
     try {
+      // Simplified query to avoid index requirements - sort client-side
       const logsQuery = query(
         collection(db, "workoutLogs"),
-        where("userId", "==", user.id),
-        orderBy("completedDate", "desc")
+        where("userId", "==", user.id)
       );
       const snapshot = await getDocs(logsQuery);
       const logs = snapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       })) as WorkoutLog[];
+      // Sort by completedDate descending client-side
+      logs.sort((a, b) => {
+        const dateA = a.completedDate?.toDate?.() || new Date(0);
+        const dateB = b.completedDate?.toDate?.() || new Date(0);
+        return dateB.getTime() - dateA.getTime();
+      });
       setRecentLogs(logs.slice(0, 10));
     } catch (error) {
       console.error("Error fetching logs:", error);
