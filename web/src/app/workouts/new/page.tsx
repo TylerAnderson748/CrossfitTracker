@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { collection, addDoc, query, where, orderBy, getDocs, Timestamp, limit } from "firebase/firestore";
+import { collection, addDoc, query, where, orderBy, getDocs, Timestamp, limit, doc, updateDoc, deleteDoc } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
 import { WODCategory, normalizeWorkoutName, LeaderboardEntry, categoryOrder, categoryColors } from "@/lib/types";
@@ -61,6 +61,12 @@ function NewWorkoutContent() {
   const [genderFilter, setGenderFilter] = useState<"all" | "Male" | "Female">("all");
   const [categoryFilter, setCategoryFilter] = useState<"all" | WODCategory>("all");
   const [loadingLeaderboard, setLoadingLeaderboard] = useState(false);
+
+  // Edit history state
+  const [editingLogId, setEditingLogId] = useState<string | null>(null);
+  const [editMinutes, setEditMinutes] = useState("");
+  const [editSeconds, setEditSeconds] = useState("");
+  const [editCategory, setEditCategory] = useState<WODCategory>("RX");
 
   useEffect(() => {
     if (!loading && !user) {
@@ -315,6 +321,79 @@ function NewWorkoutContent() {
     }
   };
 
+  const startEditLog = (log: WorkoutLog) => {
+    const mins = Math.floor(log.timeInSeconds / 60);
+    const secs = log.timeInSeconds % 60;
+    setEditingLogId(log.id);
+    setEditMinutes(mins.toString());
+    setEditSeconds(secs.toString());
+    setEditCategory((log.notes as WODCategory) || "RX");
+  };
+
+  const cancelEdit = () => {
+    setEditingLogId(null);
+    setEditMinutes("");
+    setEditSeconds("");
+  };
+
+  const saveEdit = async (logId: string) => {
+    const mins = parseInt(editMinutes) || 0;
+    const secs = parseInt(editSeconds) || 0;
+    const newTime = mins * 60 + secs;
+    if (newTime <= 0) return;
+
+    try {
+      await updateDoc(doc(db, "workoutLogs", logId), {
+        timeInSeconds: newTime,
+        notes: editCategory,
+      });
+
+      // Also update leaderboard entry if exists
+      const leaderboardQuery = query(
+        collection(db, "leaderboardEntries"),
+        where("workoutLogId", "==", logId)
+      );
+      const leaderboardSnapshot = await getDocs(leaderboardQuery);
+      for (const docSnap of leaderboardSnapshot.docs) {
+        await updateDoc(doc(db, "leaderboardEntries", docSnap.id), {
+          timeInSeconds: newTime,
+          category: editCategory,
+        });
+      }
+
+      setEditingLogId(null);
+      loadHistory();
+      loadLeaderboard();
+    } catch (err) {
+      console.error("Error updating log:", err);
+      setError("Failed to update entry.");
+    }
+  };
+
+  const deleteLog = async (logId: string) => {
+    if (!confirm("Are you sure you want to delete this entry?")) return;
+
+    try {
+      await deleteDoc(doc(db, "workoutLogs", logId));
+
+      // Also delete leaderboard entry if exists
+      const leaderboardQuery = query(
+        collection(db, "leaderboardEntries"),
+        where("workoutLogId", "==", logId)
+      );
+      const leaderboardSnapshot = await getDocs(leaderboardQuery);
+      for (const docSnap of leaderboardSnapshot.docs) {
+        await deleteDoc(doc(db, "leaderboardEntries", docSnap.id));
+      }
+
+      loadHistory();
+      loadLeaderboard();
+    } catch (err) {
+      console.error("Error deleting log:", err);
+      setError("Failed to delete entry.");
+    }
+  };
+
   if (loading || !user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -534,15 +613,78 @@ function NewWorkoutContent() {
             <p className="text-sm font-semibold text-gray-700 mb-3">History</p>
             <div className="space-y-3">
               {history.map((log) => (
-                <div key={log.id} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
-                  <div>
-                    <p className="text-xs text-gray-500">{log.completedDate?.toDate().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</p>
-                    <p className="text-lg font-semibold text-gray-900">{formatTime(log.timeInSeconds)}</p>
-                    <p className="text-xs text-gray-500">{log.notes}</p>
-                  </div>
-                  <button className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white">
-                    ✎
-                  </button>
+                <div key={log.id} className="py-2 border-b border-gray-100 last:border-0">
+                  {editingLogId === log.id ? (
+                    // Edit mode
+                    <div className="space-y-3">
+                      <p className="text-xs text-gray-500">{log.completedDate?.toDate().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</p>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          value={editMinutes}
+                          onChange={(e) => setEditMinutes(e.target.value)}
+                          placeholder="Min"
+                          className="w-16 px-2 py-1 border border-gray-300 rounded text-center"
+                        />
+                        <span>:</span>
+                        <input
+                          type="number"
+                          value={editSeconds}
+                          onChange={(e) => setEditSeconds(e.target.value)}
+                          placeholder="Sec"
+                          className="w-16 px-2 py-1 border border-gray-300 rounded text-center"
+                        />
+                      </div>
+                      <div className="flex rounded-lg overflow-hidden border border-gray-200 text-xs">
+                        {categoryOrder.map((cat) => (
+                          <button
+                            key={cat}
+                            onClick={() => setEditCategory(cat)}
+                            className={`flex-1 px-2 py-1.5 font-medium whitespace-nowrap ${editCategory === cat ? "bg-blue-600 text-white" : "bg-white text-gray-600"}`}
+                          >
+                            {cat}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => saveEdit(log.id)}
+                          className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm font-medium"
+                        >
+                          Save
+                        </button>
+                        <button
+                          onClick={cancelEdit}
+                          className="px-3 py-1.5 bg-gray-200 text-gray-700 rounded-lg text-sm font-medium"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    // View mode
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs text-gray-500">{log.completedDate?.toDate().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</p>
+                        <p className="text-lg font-semibold text-gray-900">{formatTime(log.timeInSeconds)}</p>
+                        <p className="text-xs text-gray-500">{log.notes}</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => startEditLog(log)}
+                          className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white text-sm"
+                        >
+                          ✎
+                        </button>
+                        <button
+                          onClick={() => deleteLog(log.id)}
+                          className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center text-white text-sm"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
