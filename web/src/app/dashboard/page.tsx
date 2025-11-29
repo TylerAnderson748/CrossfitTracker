@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { collection, query, where, orderBy, getDocs, Timestamp, limit } from "firebase/firestore";
+import { collection, query, where, getDocs, Timestamp, limit } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
 import { ScheduledWorkout, LeaderboardEntry, formatResult, normalizeWorkoutName } from "@/lib/types";
@@ -71,22 +71,27 @@ export default function DashboardPage() {
       })) as ScheduledWorkout[];
       setUpcomingWorkouts(workouts.slice(0, 14));
 
-      // Fetch logs for each workout
+      // Fetch logs for each workout - simplified query to avoid index requirements
       const logsMap: { [key: string]: LeaderboardEntry[] } = {};
       for (const workout of workouts.slice(0, 14)) {
         const normalized = normalizeWorkoutName(workout.wodTitle);
         const logsQuery = query(
           collection(db, "leaderboardEntries"),
           where("normalizedWorkoutName", "==", normalized),
-          orderBy("createdAt", "desc"),
-          limit(5)
+          limit(20)
         );
         const logsSnapshot = await getDocs(logsQuery);
         const logs = logsSnapshot.docs.map((doc) => ({
           id: doc.id,
           ...doc.data(),
         })) as LeaderboardEntry[];
-        logsMap[workout.id] = logs;
+        // Sort by createdAt descending client-side and take first 5
+        logs.sort((a, b) => {
+          const dateA = a.createdAt?.toDate?.() || new Date(0);
+          const dateB = b.createdAt?.toDate?.() || new Date(0);
+          return dateB.getTime() - dateA.getTime();
+        });
+        logsMap[workout.id] = logs.slice(0, 5);
       }
       setWorkoutLogs(logsMap);
     } catch (error) {

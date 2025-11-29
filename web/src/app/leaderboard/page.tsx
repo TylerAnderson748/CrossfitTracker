@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { collection, query, orderBy, getDocs } from "firebase/firestore";
+import { collection, query, getDocs } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
 import { LeaderboardEntry, formatResult, Gender } from "@/lib/types";
@@ -40,15 +40,22 @@ function LeaderboardContent() {
 
   const fetchLeaderboard = async () => {
     try {
+      // Simplified query to avoid index requirements - sort client-side
       const leaderboardQuery = query(
-        collection(db, "leaderboardEntries"),
-        orderBy("createdAt", "desc")
+        collection(db, "leaderboardEntries")
       );
       const snapshot = await getDocs(leaderboardQuery);
       const data = snapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       })) as LeaderboardEntry[];
+
+      // Sort by createdAt descending client-side
+      data.sort((a, b) => {
+        const dateA = a.createdAt?.toDate?.() || new Date(0);
+        const dateB = b.createdAt?.toDate?.() || new Date(0);
+        return dateB.getTime() - dateA.getTime();
+      });
 
       setEntries(data);
 
