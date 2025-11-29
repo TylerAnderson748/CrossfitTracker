@@ -90,7 +90,7 @@ struct WODTimerView: View {
                             Picker("Category", selection: $selectedCategory) {
                                 Text("RX").tag(WODCategory.rx)
                                 Text("Scaled").tag(WODCategory.scaled)
-                                Text("Happy").tag(WODCategory.happy)
+                                Text("Just for Fun").tag(WODCategory.happy)
                             }
                             .pickerStyle(.segmented)
                         }
@@ -331,7 +331,7 @@ struct WODTimerView: View {
                                                 Picker("Category", selection: $editCategory) {
                                                     Text("RX").tag(WODCategory.rx)
                                                     Text("Scaled").tag(WODCategory.scaled)
-                                                    Text("Happy").tag(WODCategory.happy)
+                                                    Text("Just for Fun").tag(WODCategory.happy)
                                                 }
                                                 .pickerStyle(.segmented)
                                             }
@@ -704,12 +704,20 @@ struct WODTimerView: View {
                     logs = logs.filter { userIdSet.contains($0.userId) }
                 }
 
-                // Get best time for each user
+                // Get best entry for each user (prefer higher category: RX > Scaled > Just for Fun)
                 var bestTimes: [String: WorkoutLog] = [:]
                 for log in logs {
                     guard let time = log.timeInSeconds else { continue }
+                    let logCategory = WODCategory(rawValue: log.notes ?? "") ?? .happy
+
                     if let existing = bestTimes[log.userId], let existingTime = existing.timeInSeconds {
-                        if time < existingTime {
+                        let existingCategory = WODCategory(rawValue: existing.notes ?? "") ?? .happy
+
+                        // Prefer better category (lower priority = better)
+                        if logCategory.priority < existingCategory.priority {
+                            bestTimes[log.userId] = log
+                        } else if logCategory.priority == existingCategory.priority && time < existingTime {
+                            // Same category, prefer better time
                             bestTimes[log.userId] = log
                         }
                     } else {
@@ -808,7 +816,19 @@ struct WODTimerView: View {
                                         print("📊 [Leaderboard] After gender filter (\(self.genderFilter)): \(filteredLogs.count) entries")
                                     }
 
-                                    let sortedLogs = filteredLogs.sorted { ($0.timeInSeconds ?? Double.infinity) < ($1.timeInSeconds ?? Double.infinity) }
+                                    // Sort by category first (RX > Scaled > Just for Fun), then by time within each category
+                                    let sortedLogs = filteredLogs.sorted { log1, log2 in
+                                        let cat1 = WODCategory(rawValue: log1.notes ?? "") ?? .happy
+                                        let cat2 = WODCategory(rawValue: log2.notes ?? "") ?? .happy
+
+                                        // First sort by category priority (lower = better, RX first)
+                                        if cat1.priority != cat2.priority {
+                                            return cat1.priority < cat2.priority
+                                        }
+
+                                        // Within same category, sort by time (lower = better)
+                                        return (log1.timeInSeconds ?? Double.infinity) < (log2.timeInSeconds ?? Double.infinity)
+                                    }
 
                                     // Convert to LeaderboardEntry with actual user names, genders, and gym names
                                     let entries = sortedLogs.compactMap { log -> LeaderboardEntry? in

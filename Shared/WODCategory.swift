@@ -9,7 +9,7 @@ import SwiftUI
 enum WODCategory: String, CaseIterable, Identifiable, Codable {
     case rx = "RX"
     case scaled = "Scaled"
-    case happy = "Just Happy To Be Here"
+    case happy = "Just for Fun"
 
     var id: String { rawValue }
 
