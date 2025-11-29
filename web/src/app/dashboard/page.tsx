@@ -165,7 +165,7 @@ export default function DashboardPage() {
                   <div className="space-y-4">
                     {dayWorkouts.map((workout) => {
                       const logs = workoutLogs[workout.id] || [];
-                      const isLift = workout.workoutType === "lift";
+                      const isLift = workout.workoutType?.toLowerCase().includes("lift");
 
                       return (
                         <div

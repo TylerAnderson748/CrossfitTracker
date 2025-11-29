@@ -120,7 +120,8 @@ export default function WeeklyPlanPage() {
   };
 
   const handleLogWorkout = (workout: ScheduledWorkout) => {
-    if (workout.workoutType === "lift") {
+    const isLift = workout.workoutType?.toLowerCase().includes("lift");
+    if (isLift) {
       router.push(`/workouts/lift?name=${encodeURIComponent(workout.wodTitle)}&description=${encodeURIComponent(workout.wodDescription || "")}`);
     } else {
       router.push(`/workouts/new?name=${encodeURIComponent(workout.wodTitle)}&description=${encodeURIComponent(workout.wodDescription || "")}`);
