@@ -396,26 +396,6 @@ function LiftPageContent() {
               Save
             </button>
           </div>
-
-          {/* Quick Weight Buttons */}
-          <div className="mt-4 pt-4 border-t border-gray-100">
-            <div className="flex flex-wrap gap-2">
-              {[45, 95, 135, 185, 225, 275, 315, 365, 405].map((w) => (
-                <button
-                  key={w}
-                  type="button"
-                  onClick={() => setWeight(w.toString())}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                    weight === w.toString()
-                      ? "bg-purple-600 text-white"
-                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                  }`}
-                >
-                  {w}
-                </button>
-              ))}
-            </div>
-          </div>
         </div>
 
         {/* Training Percentages - iOS style */}
