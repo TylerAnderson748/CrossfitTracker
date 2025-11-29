@@ -155,6 +155,15 @@ function NewWorkoutContent() {
 
       console.log("Raw leaderboard entries:", entries.length);
 
+      // Debug: log unique categories in raw data
+      const uniqueCategories = [...new Set(entries.map(e => e.category))];
+      console.log("Unique categories in data:", uniqueCategories);
+
+      // Debug: log a sample entry
+      if (entries.length > 0) {
+        console.log("Sample entry:", JSON.stringify(entries[0], null, 2));
+      }
+
       // Filter for this workout if we have a title
       if (wodTitle) {
         const normalized = normalizeWorkoutName(wodTitle.trim());
@@ -177,14 +186,28 @@ function NewWorkoutContent() {
       }
 
       // Normalize categories on all entries
-      entries = entries.map((e) => ({
-        ...e,
-        category: normalizeCategory((e.category || "").toString()),
-      }));
+      entries = entries.map((e) => {
+        const originalCat = (e.category || "").toString();
+        const normalizedCat = normalizeCategory(originalCat);
+        if (originalCat !== normalizedCat) {
+          console.log(`Category normalized: "${originalCat}" -> "${normalizedCat}"`);
+        }
+        return {
+          ...e,
+          category: normalizedCat,
+        };
+      });
+
+      // Debug: log categories after normalization
+      const normalizedCategories = [...new Set(entries.map(e => e.category))];
+      console.log("Categories after normalization:", normalizedCategories);
+      console.log("Category filter:", categoryFilter);
 
       // Apply category filter if not "all"
       if (categoryFilter !== "all") {
+        const beforeFilter = entries.length;
         entries = entries.filter((e) => e.category === categoryFilter);
+        console.log(`Category filter applied: ${beforeFilter} -> ${entries.length} entries`);
       }
 
       // Get best entry per user
