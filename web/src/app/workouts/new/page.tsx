@@ -56,11 +56,7 @@ function NewWorkoutContent() {
 
   // History and leaderboard
   const [history, setHistory] = useState<WorkoutLog[]>([]);
-  const [leaderboardByCategory, setLeaderboardByCategory] = useState<Record<WODCategory, LeaderboardEntry[]>>({
-    "RX": [],
-    "Scaled": [],
-    "Just Happy To Be Here": [],
-  });
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [leaderboardFilter, setLeaderboardFilter] = useState<"everyone" | "gym">("everyone");
   const [genderFilter, setGenderFilter] = useState<"all" | "Male" | "Female">("all");
   const [loadingLeaderboard, setLoadingLeaderboard] = useState(false);
@@ -125,6 +121,19 @@ function NewWorkoutContent() {
     }
   };
 
+  // Category priority: RX (0) > Scaled (1) > Just Happy To Be Here (2)
+  const getCategoryPriority = (cat: string): number => {
+    if (cat === "RX" || cat === "rx" || cat === "RX+" || cat === "rxPlus") return 0;
+    if (cat === "Scaled" || cat === "scaled") return 1;
+    return 2; // Just Happy To Be Here or anything else
+  };
+
+  const normalizeCategory = (cat: string): WODCategory => {
+    if (cat === "RX" || cat === "rx" || cat === "RX+" || cat === "rxPlus") return "RX";
+    if (cat === "Scaled" || cat === "scaled") return "Scaled";
+    return "Just Happy To Be Here";
+  };
+
   const loadLeaderboard = async () => {
     setLoadingLeaderboard(true);
     try {
@@ -155,7 +164,7 @@ function NewWorkoutContent() {
         }
       }
 
-      // Filter for entries with time data (be more lenient)
+      // Filter for entries with time data
       entries = entries.filter((e) => e.timeInSeconds && e.timeInSeconds > 0);
       console.log("After time filter:", entries.length);
 
@@ -164,36 +173,49 @@ function NewWorkoutContent() {
         entries = entries.filter((e) => e.userGender === genderFilter);
       }
 
-      // Group by category and sort each group by fastest time
-      const grouped: Record<WODCategory, LeaderboardEntry[]> = {
-        "RX": [],
-        "Scaled": [],
-        "Just Happy To Be Here": [],
-      };
+      // Normalize categories on all entries
+      entries = entries.map((e) => ({
+        ...e,
+        category: normalizeCategory((e.category || "").toString()),
+      }));
 
+      // Get best entry per user (RX > Scaled > Happy, then fastest time)
+      const bestByUser = new Map<string, LeaderboardEntry>();
       entries.forEach((entry) => {
-        // Map various category names to standard ones
-        let cat: WODCategory = "RX"; // default
-        const entryCat = (entry.category || "").toString();
+        const existing = bestByUser.get(entry.userId);
+        if (!existing) {
+          bestByUser.set(entry.userId, entry);
+        } else {
+          const existingPriority = getCategoryPriority((existing.category || "").toString());
+          const entryPriority = getCategoryPriority((entry.category || "").toString());
 
-        if (entryCat === "RX" || entryCat === "rx" || entryCat === "RX+" || entryCat === "rxPlus") {
-          cat = "RX";
-        } else if (entryCat === "Scaled" || entryCat === "scaled") {
-          cat = "Scaled";
-        } else if (entryCat === "Just Happy To Be Here" || entryCat === "Just for Fun" || entryCat === "happy") {
-          cat = "Just Happy To Be Here";
+          // Lower priority number = better category
+          if (entryPriority < existingPriority) {
+            // Better category wins
+            bestByUser.set(entry.userId, entry);
+          } else if (entryPriority === existingPriority) {
+            // Same category, faster time wins
+            if ((entry.timeInSeconds || 0) < (existing.timeInSeconds || 0)) {
+              bestByUser.set(entry.userId, entry);
+            }
+          }
+          // If existing has better category, keep it
         }
-
-        grouped[cat].push(entry);
       });
 
-      // Sort each category by fastest time
-      Object.keys(grouped).forEach((cat) => {
-        grouped[cat as WODCategory].sort((a, b) => (a.timeInSeconds || 0) - (b.timeInSeconds || 0));
+      // Convert to array and sort: by category priority first, then by time
+      const sortedEntries = Array.from(bestByUser.values()).sort((a, b) => {
+        const aPriority = getCategoryPriority((a.category || "").toString());
+        const bPriority = getCategoryPriority((b.category || "").toString());
+
+        if (aPriority !== bPriority) {
+          return aPriority - bPriority; // Better category first
+        }
+        return (a.timeInSeconds || 0) - (b.timeInSeconds || 0); // Faster time first
       });
 
-      console.log("Grouped entries:", Object.entries(grouped).map(([k, v]) => `${k}: ${v.length}`).join(", "));
-      setLeaderboardByCategory(grouped);
+      console.log("Final leaderboard entries:", sortedEntries.length);
+      setLeaderboard(sortedEntries);
     } catch (err) {
       console.error("Error loading leaderboard:", err);
     } finally {
@@ -439,44 +461,34 @@ function NewWorkoutContent() {
             <div className="flex justify-center py-6">
               <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
             </div>
-          ) : categoryOrder.every((cat) => leaderboardByCategory[cat].length === 0) ? (
+          ) : leaderboard.length === 0 ? (
             <p className="text-xs text-gray-500 text-center py-6">No entries yet</p>
           ) : (
-            <div className="space-y-4">
-              {categoryOrder.map((cat) => {
-                const entries = leaderboardByCategory[cat];
-                if (entries.length === 0) return null;
+            <div className="space-y-2">
+              {leaderboard.slice(0, 10).map((entry, index) => {
+                const cat = entry.category as WODCategory;
                 return (
-                  <div key={cat}>
-                    <h4 className={`text-sm font-bold mb-2 ${categoryColors[cat].badge.includes("orange") ? "text-orange-600" : categoryColors[cat].badge.includes("blue") ? "text-blue-600" : categoryColors[cat].badge.includes("gray") ? "text-gray-600" : "text-green-600"}`}>
-                      {cat}
-                    </h4>
-                    <div className="space-y-2">
-                      {entries.slice(0, 10).map((entry, index) => (
-                        <div key={entry.id} className="flex items-center gap-3 py-1.5">
-                          <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold bg-gray-100 text-gray-600">
-                            #{index + 1}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <p className="text-sm font-medium text-gray-900 truncate">
-                                {entry.userName}
-                                {entry.userId === user?.id && <span className="text-blue-600 ml-1">(You)</span>}
-                              </p>
-                              <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${categoryColors[cat].badge}`}>
-                                {cat === "Just Happy To Be Here" ? "Happy" : cat}
-                              </span>
-                            </div>
-                            <p className="text-xs text-gray-400">
-                              {entry.completedDate?.toDate?.().toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                            </p>
-                          </div>
-                          <span className="font-mono text-sm font-semibold text-gray-900">
-                            {formatTime(entry.timeInSeconds || 0)}
-                          </span>
-                        </div>
-                      ))}
+                  <div key={entry.id} className="flex items-center gap-3 py-1.5">
+                    <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold bg-gray-100 text-gray-600">
+                      #{index + 1}
                     </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium text-gray-900 truncate">
+                          {entry.userName}
+                          {entry.userId === user?.id && <span className="text-blue-600 ml-1">(You)</span>}
+                        </p>
+                        <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${categoryColors[cat]?.badge || "bg-blue-100 text-blue-700"}`}>
+                          {cat === "Just Happy To Be Here" ? "Happy" : cat}
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-400">
+                        {entry.completedDate?.toDate?.().toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                      </p>
+                    </div>
+                    <span className="font-mono text-sm font-semibold text-gray-900">
+                      {formatTime(entry.timeInSeconds || 0)}
+                    </span>
                   </div>
                 );
               })}
