@@ -71,8 +71,10 @@ function LiftPageContent() {
         ...doc.data(),
       })) as LiftResult[];
 
+      // Case-insensitive match for lift name
+      const liftNameLower = liftName.toLowerCase().trim();
       const filtered = allResults
-        .filter((r) => r.liftName === liftName && r.reps === selectedReps)
+        .filter((r) => r.liftName?.toLowerCase().trim() === liftNameLower && r.reps === selectedReps)
         .sort((a, b) => {
           const dateA = a.date?.toDate?.() || new Date(0);
           const dateB = b.date?.toDate?.() || new Date(0);
@@ -90,16 +92,20 @@ function LiftPageContent() {
     if (!liftName) return;
     setLoadingLeaderboard(true);
     try {
+      // Fetch all lift results and filter client-side for case-insensitive matching
       const q = query(
         collection(db, "liftResults"),
-        where("liftName", "==", liftName),
-        limit(100)
+        limit(500)
       );
       const snapshot = await getDocs(q);
       let results = snapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       })) as LiftResult[];
+
+      // Case-insensitive match for lift name
+      const liftNameLower = liftName.toLowerCase().trim();
+      results = results.filter((r) => r.liftName?.toLowerCase().trim() === liftNameLower);
 
       // Filter by reps
       results = results.filter((r) => r.reps === selectedReps);
