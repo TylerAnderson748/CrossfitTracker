@@ -2235,7 +2235,17 @@ final class AppStore: ObservableObject {
                                 // Now fetch gym memberships
                                 self.fetchGymNamesForUsers(userIds: userIds) { userGyms in
                                     let filteredLogs = bestTimes.values.filter { !usersToHide.contains($0.userId) }
-                                    let sortedLogs = filteredLogs.sorted { ($0.timeInSeconds ?? Double.infinity) < ($1.timeInSeconds ?? Double.infinity) }
+
+                                    // Sort by category first (RX > Scaled > Just for Fun), then by time
+                                    let sortedLogs = filteredLogs.sorted { log1, log2 in
+                                        let cat1 = WODCategory.fromNotes(log1.notes)
+                                        let cat2 = WODCategory.fromNotes(log2.notes)
+
+                                        if cat1.priority != cat2.priority {
+                                            return cat1.priority < cat2.priority
+                                        }
+                                        return (log1.timeInSeconds ?? Double.infinity) < (log2.timeInSeconds ?? Double.infinity)
+                                    }
 
                                     let entries = sortedLogs.compactMap { log -> LeaderboardEntry? in
                                         guard let time = log.timeInSeconds else { return nil }
