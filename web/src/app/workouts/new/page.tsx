@@ -564,27 +564,27 @@ function NewWorkoutContent() {
                     ))}
                   </div>
                 </div>
-                <div className="relative overflow-hidden">
-                  <svg width="100%" height="160" viewBox="0 0 320 160" preserveAspectRatio="xMidYMid meet">
+                <div className="relative">
+                  <svg width="100%" height="200" viewBox="0 0 400 200" preserveAspectRatio="none">
                     {/* Y-axis labels */}
                     {yTicks.map((tick, i) => {
-                      const y = 15 + (i / (yTicks.length - 1)) * 110;
+                      const y = 20 + (i / (yTicks.length - 1)) * 140;
                       return (
-                        <text key={`y-${i}`} x="40" y={y + 4} textAnchor="end" className="fill-gray-400 text-[10px]">
+                        <text key={`y-${i}`} x="42" y={y + 4} textAnchor="end" fontSize="12" fill="#9CA3AF">
                           {formatTime(Math.round(tick))}
                         </text>
                       );
                     })}
                     {/* Horizontal grid lines */}
                     {yTicks.map((_, i) => {
-                      const y = 15 + (i / (yTicks.length - 1)) * 110;
-                      return <line key={i} x1="50" y1={y} x2="310" y2={y} stroke="#E5E7EB" strokeWidth="1" />;
+                      const y = 20 + (i / (yTicks.length - 1)) * 140;
+                      return <line key={i} x1="50" y1={y} x2="395" y2={y} stroke="#E5E7EB" strokeWidth="1" vectorEffect="non-scaling-stroke" />;
                     })}
                     {/* Vertical grid lines */}
                     {xAxisLabels.map((label, i) => {
                       const xPct = (label.date.getTime() - timeRangeStart.getTime()) / timeRangeMs;
-                      const x = 50 + xPct * 260;
-                      return <line key={i} x1={x} y1="15" x2={x} y2="125" stroke="#E5E7EB" strokeWidth="1" />;
+                      const x = 50 + xPct * 345;
+                      return <line key={i} x1={x} y1="20" x2={x} y2="160" stroke="#E5E7EB" strokeWidth="1" vectorEffect="non-scaling-stroke" />;
                     })}
                     {/* Data line */}
                     {chartData.length > 1 ? (
@@ -594,11 +594,12 @@ function NewWorkoutContent() {
                         strokeWidth="2"
                         strokeLinecap="round"
                         strokeLinejoin="round"
+                        vectorEffect="non-scaling-stroke"
                         d={getLinePath(chartData.map((d) => {
                           const date = d.completedDate?.toDate?.() || new Date();
                           const xPct = (date.getTime() - timeRangeStart.getTime()) / timeRangeMs;
-                          const x = 50 + xPct * 260;
-                          const y = range > 0 ? 15 + (1 - (d.timeInSeconds - minTime) / range) * 110 : 70;
+                          const x = 50 + xPct * 345;
+                          const y = range > 0 ? 20 + (1 - (d.timeInSeconds - minTime) / range) * 140 : 90;
                           return { x, y };
                         }))}
                       />
@@ -607,17 +608,17 @@ function NewWorkoutContent() {
                     {chartData.map((d, i) => {
                       const date = d.completedDate?.toDate?.() || new Date();
                       const xPct = (date.getTime() - timeRangeStart.getTime()) / timeRangeMs;
-                      const x = 50 + xPct * 260;
-                      const y = range > 0 ? 15 + (1 - (d.timeInSeconds - minTime) / range) * 110 : 70;
+                      const x = 50 + xPct * 345;
+                      const y = range > 0 ? 20 + (1 - (d.timeInSeconds - minTime) / range) * 140 : 90;
                       const color = getCategoryHexColor(d.notes || "");
-                      return <circle key={i} cx={x} cy={y} r="4" fill={color} />;
+                      return <circle key={i} cx={x} cy={y} r="5" fill={color} />;
                     })}
                     {/* X-axis labels */}
                     {xAxisLabels.map((label, i) => {
                       const xPct = (label.date.getTime() - timeRangeStart.getTime()) / timeRangeMs;
-                      const x = 50 + xPct * 260;
+                      const x = 50 + xPct * 345;
                       return (
-                        <text key={`x-${i}`} x={x} y="145" textAnchor="middle" className="fill-gray-400 text-[10px]">
+                        <text key={`x-${i}`} x={x} y="185" textAnchor="middle" fontSize="12" fill="#9CA3AF">
                           {label.label}
                         </text>
                       );
