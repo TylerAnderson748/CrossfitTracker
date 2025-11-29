@@ -22,16 +22,16 @@ export type WorkoutType = "lift" | "wod";
 export type WorkoutResultType = "time" | "rounds" | "weight" | "reps" | "other";
 export type RecurrenceType = "none" | "daily" | "weekly" | "monthly";
 
-// WOD Categories - matching iOS
-export type WODCategory = "RX" | "Scaled" | "Just Happy To Be Here";
+// WOD Categories
+export type WODCategory = "RX" | "Scaled" | "Just For Fun";
 
 // Category order for leaderboard (highest tier first)
-export const categoryOrder: WODCategory[] = ["RX", "Scaled", "Just Happy To Be Here"];
+export const categoryOrder: WODCategory[] = ["RX", "Scaled", "Just For Fun"];
 
 export const categoryColors: Record<WODCategory, { bg: string; text: string; badge: string }> = {
   "RX": { bg: "bg-blue-500", text: "text-white", badge: "bg-blue-100 text-blue-700" },
   "Scaled": { bg: "bg-gray-500", text: "text-white", badge: "bg-gray-200 text-gray-700" },
-  "Just Happy To Be Here": { bg: "bg-green-500", text: "text-white", badge: "bg-green-100 text-green-700" },
+  "Just For Fun": { bg: "bg-green-500", text: "text-white", badge: "bg-green-100 text-green-700" },
 };
 
 export interface ScheduledWorkout {

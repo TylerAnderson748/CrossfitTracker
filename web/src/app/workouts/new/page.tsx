@@ -122,17 +122,17 @@ function NewWorkoutContent() {
     }
   };
 
-  // Category priority: RX (0) > Scaled (1) > Just Happy To Be Here (2)
+  // Category priority: RX (0) > Scaled (1) > Just For Fun (2)
   const getCategoryPriority = (cat: string): number => {
     if (cat === "RX" || cat === "rx" || cat === "RX+" || cat === "rxPlus") return 0;
     if (cat === "Scaled" || cat === "scaled") return 1;
-    return 2; // Just Happy To Be Here or anything else
+    return 2; // Just For Fun or anything else
   };
 
   const normalizeCategory = (cat: string): WODCategory => {
     if (cat === "RX" || cat === "rx" || cat === "RX+" || cat === "rxPlus") return "RX";
     if (cat === "Scaled" || cat === "scaled") return "Scaled";
-    return "Just Happy To Be Here";
+    return "Just For Fun";
   };
 
   const loadLeaderboard = async () => {
@@ -375,7 +375,7 @@ function NewWorkoutContent() {
                   onClick={() => setCategory(cat)}
                   className={`flex-1 py-2 text-xs font-semibold ${category === cat ? `${categoryColors[cat].bg} text-white` : "bg-white text-gray-600"}`}
                 >
-                  {cat === "Just Happy To Be Here" ? "Happy" : cat}
+                  {cat === "Just For Fun" ? "Fun" : cat}
                 </button>
               ))}
             </div>
@@ -478,8 +478,8 @@ function NewWorkoutContent() {
               <button onClick={() => setCategoryFilter("Scaled")} className={`px-2 py-1.5 font-medium ${categoryFilter === "Scaled" ? "bg-blue-600 text-white" : "bg-white text-gray-600"}`}>
                 Scaled
               </button>
-              <button onClick={() => setCategoryFilter("Just Happy To Be Here")} className={`px-2 py-1.5 font-medium ${categoryFilter === "Just Happy To Be Here" ? "bg-blue-600 text-white" : "bg-white text-gray-600"}`}>
-                Happy
+              <button onClick={() => setCategoryFilter("Just For Fun")} className={`px-2 py-1.5 font-medium ${categoryFilter === "Just For Fun" ? "bg-blue-600 text-white" : "bg-white text-gray-600"}`}>
+                Fun
               </button>
             </div>
           </div>
@@ -506,7 +506,7 @@ function NewWorkoutContent() {
                           {entry.userId === user?.id && <span className="text-blue-600 ml-1">(You)</span>}
                         </p>
                         <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${categoryColors[cat]?.badge || "bg-blue-100 text-blue-700"}`}>
-                          {cat === "Just Happy To Be Here" ? "Happy" : cat}
+                          {cat === "Just For Fun" ? "Fun" : cat}
                         </span>
                       </div>
                       <p className="text-xs text-gray-400">
