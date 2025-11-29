@@ -475,10 +475,14 @@ function NewWorkoutContent() {
   const tickInterval = dataRange > 600 ? 120 : dataRange > 300 ? 60 : dataRange > 120 ? 30 : 15;
   const minTime = Math.floor(dataMin / tickInterval) * tickInterval;
   const maxTime = Math.ceil(dataMax / tickInterval) * tickInterval;
-  const range = maxTime - minTime || 60;
+  const fullRange = maxTime - minTime || 60;
   // Generate Y-axis ticks
-  const numTicks = Math.ceil(range / tickInterval) + 1;
+  const numTicks = Math.ceil(fullRange / tickInterval) + 1;
   const yTicks = Array.from({ length: Math.min(numTicks, 6) }, (_, i) => maxTime - i * tickInterval);
+  // Use actual tick range for data positioning (yTicks may be capped at 6)
+  const chartMax = yTicks[0];
+  const chartMin = yTicks[yTicks.length - 1];
+  const range = chartMax - chartMin || 60;
 
   // Generate x-axis labels for the full time range
   const getXAxisLabels = () => {
@@ -598,7 +602,7 @@ function NewWorkoutContent() {
                               const date = d.completedDate?.toDate?.() || new Date();
                               const xPct = (date.getTime() - timeRangeStart.getTime()) / timeRangeMs;
                               const x = 5 + xPct * 340;
-                              const y = range > 0 ? 4 + (1 - (d.timeInSeconds - minTime) / range) * 152 : 80;
+                              const y = range > 0 ? 4 + (1 - (d.timeInSeconds - chartMin) / range) * 152 : 80;
                               return { x, y };
                             }))}
                           />
@@ -608,7 +612,7 @@ function NewWorkoutContent() {
                           const date = d.completedDate?.toDate?.() || new Date();
                           const xPct = (date.getTime() - timeRangeStart.getTime()) / timeRangeMs;
                           const x = 5 + xPct * 340;
-                          const y = range > 0 ? 4 + (1 - (d.timeInSeconds - minTime) / range) * 152 : 80;
+                          const y = range > 0 ? 4 + (1 - (d.timeInSeconds - chartMin) / range) * 152 : 80;
                           const color = getCategoryHexColor(d.notes || "");
                           return <circle key={i} cx={x} cy={y} r="4" fill={color} />;
                         })}

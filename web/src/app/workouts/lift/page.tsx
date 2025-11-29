@@ -308,9 +308,13 @@ function LiftPageContent() {
   const tickInterval = 10;
   const minWeightTick = Math.floor(dataMin / tickInterval) * tickInterval - tickInterval;
   const maxWeightTick = Math.ceil(dataMax / tickInterval) * tickInterval + tickInterval;
-  const range = maxWeightTick - minWeightTick || 50;
-  const numTicks = Math.ceil(range / tickInterval) + 1;
+  const fullRange = maxWeightTick - minWeightTick || 50;
+  const numTicks = Math.ceil(fullRange / tickInterval) + 1;
   const yTicks = Array.from({ length: Math.min(numTicks, 7) }, (_, i) => maxWeightTick - i * tickInterval);
+  // Use actual tick range for data positioning (yTicks may be capped at 7)
+  const chartMax = yTicks[0];
+  const chartMin = yTicks[yTicks.length - 1];
+  const range = chartMax - chartMin || 50;
 
   // Generate x-axis labels for the full time range
   const getXAxisLabels = () => {
@@ -561,7 +565,7 @@ function LiftPageContent() {
                           const date = d.date?.toDate?.() || new Date();
                           const xPct = (date.getTime() - timeRangeStart.getTime()) / timeRangeMs;
                           const x = 5 + xPct * 340;
-                          const y = range > 0 ? 4 + (1 - (d.weight - minWeightTick) / range) * 152 : 80;
+                          const y = range > 0 ? 4 + (1 - (d.weight - chartMin) / range) * 152 : 80;
                           return { x, y };
                         }))}
                       />
@@ -571,7 +575,7 @@ function LiftPageContent() {
                       const date = d.date?.toDate?.() || new Date();
                       const xPct = (date.getTime() - timeRangeStart.getTime()) / timeRangeMs;
                       const x = 5 + xPct * 340;
-                      const y = range > 0 ? 4 + (1 - (d.weight - minWeightTick) / range) * 152 : 80;
+                      const y = range > 0 ? 4 + (1 - (d.weight - chartMin) / range) * 152 : 80;
                       return <circle key={i} cx={x} cy={y} r="4" fill="#9333EA" />;
                     })}
                   </svg>
