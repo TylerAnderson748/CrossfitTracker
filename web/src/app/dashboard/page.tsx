@@ -9,6 +9,22 @@ import { db } from "@/lib/firebase";
 import { ScheduledWorkout, LeaderboardEntry, formatResult, normalizeWorkoutName } from "@/lib/types";
 import Navigation from "@/components/Navigation";
 
+// Combined result type for both WODs and lifts
+interface WorkoutResult {
+  id: string;
+  userName: string;
+  createdAt?: Timestamp;
+  // WOD fields
+  category?: string;
+  timeInSeconds?: number;
+  resultType?: string;
+  // Lift fields
+  weight?: number;
+  reps?: number;
+  date?: Timestamp;
+  isLift?: boolean;
+}
+
 function timeAgo(date: Date): string {
   const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
   const minutes = Math.floor(seconds / 60);
@@ -39,7 +55,7 @@ export default function DashboardPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
   const [upcomingWorkouts, setUpcomingWorkouts] = useState<ScheduledWorkout[]>([]);
-  const [workoutLogs, setWorkoutLogs] = useState<{ [key: string]: LeaderboardEntry[] }>({});
+  const [workoutLogs, setWorkoutLogs] = useState<{ [key: string]: WorkoutResult[] }>({});
   const [loadingData, setLoadingData] = useState(true);
 
   useEffect(() => {
@@ -71,27 +87,53 @@ export default function DashboardPage() {
       })) as ScheduledWorkout[];
       setUpcomingWorkouts(workouts.slice(0, 14));
 
-      // Fetch logs for each workout - simplified query to avoid index requirements
-      const logsMap: { [key: string]: LeaderboardEntry[] } = {};
+      // Fetch logs for each workout - handle both WODs and lifts
+      const logsMap: { [key: string]: WorkoutResult[] } = {};
       for (const workout of workouts.slice(0, 14)) {
-        const normalized = normalizeWorkoutName(workout.wodTitle);
-        const logsQuery = query(
-          collection(db, "leaderboardEntries"),
-          where("normalizedWorkoutName", "==", normalized),
-          limit(20)
-        );
-        const logsSnapshot = await getDocs(logsQuery);
-        const logs = logsSnapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        })) as LeaderboardEntry[];
-        // Sort by createdAt descending client-side and take first 5
-        logs.sort((a, b) => {
-          const dateA = a.createdAt?.toDate?.() || new Date(0);
-          const dateB = b.createdAt?.toDate?.() || new Date(0);
-          return dateB.getTime() - dateA.getTime();
-        });
-        logsMap[workout.id] = logs.slice(0, 5);
+        const isLift = workout.workoutType?.toLowerCase().includes("lift");
+
+        if (isLift) {
+          // Fetch from liftResults for lifts
+          const liftQuery = query(
+            collection(db, "liftResults"),
+            where("liftName", "==", workout.wodTitle),
+            limit(20)
+          );
+          const liftSnapshot = await getDocs(liftQuery);
+          const liftResults = liftSnapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+            isLift: true,
+          })) as WorkoutResult[];
+          // Sort by date descending
+          liftResults.sort((a, b) => {
+            const dateA = a.date?.toDate?.() || new Date(0);
+            const dateB = b.date?.toDate?.() || new Date(0);
+            return dateB.getTime() - dateA.getTime();
+          });
+          logsMap[workout.id] = liftResults.slice(0, 5);
+        } else {
+          // Fetch from leaderboardEntries for WODs
+          const normalized = normalizeWorkoutName(workout.wodTitle);
+          const logsQuery = query(
+            collection(db, "leaderboardEntries"),
+            where("normalizedWorkoutName", "==", normalized),
+            limit(20)
+          );
+          const logsSnapshot = await getDocs(logsQuery);
+          const logs = logsSnapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+            isLift: false,
+          })) as WorkoutResult[];
+          // Sort by createdAt descending client-side and take first 5
+          logs.sort((a, b) => {
+            const dateA = a.createdAt?.toDate?.() || new Date(0);
+            const dateB = b.createdAt?.toDate?.() || new Date(0);
+            return dateB.getTime() - dateA.getTime();
+          });
+          logsMap[workout.id] = logs.slice(0, 5);
+        }
       }
       setWorkoutLogs(logsMap);
     } catch (error) {
@@ -216,24 +258,37 @@ export default function DashboardPage() {
                                 {logs.map((log) => (
                                   <div key={log.id} className="flex items-center justify-between">
                                     <div className="flex items-center gap-3">
-                                      <div className="w-8 h-8 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-sm font-semibold">
+                                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold ${
+                                        log.isLift ? "bg-purple-100 text-purple-600" : "bg-blue-100 text-blue-600"
+                                      }`}>
                                         {log.userName?.charAt(0) || "?"}
                                       </div>
                                       <span className="text-sm font-medium text-gray-900">{log.userName}</span>
                                     </div>
                                     <div className="flex items-center gap-2">
-                                      <span className="font-mono text-sm font-semibold text-gray-900">{formatResult(log)}</span>
-                                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                                        log.category === "RX"
-                                          ? "bg-blue-100 text-blue-700"
-                                          : log.category === "Scaled"
-                                          ? "bg-gray-200 text-gray-700"
-                                          : "bg-green-100 text-green-700"
-                                      }`}>
-                                        {log.category}
-                                      </span>
+                                      {log.isLift ? (
+                                        <>
+                                          <span className="font-mono text-sm font-semibold text-gray-900">{log.weight} lbs</span>
+                                          <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-purple-100 text-purple-700">
+                                            {log.reps} rep{log.reps !== 1 ? "s" : ""}
+                                          </span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <span className="font-mono text-sm font-semibold text-gray-900">{formatResult(log as LeaderboardEntry)}</span>
+                                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                                            log.category === "RX"
+                                              ? "bg-blue-100 text-blue-700"
+                                              : log.category === "Scaled"
+                                              ? "bg-gray-200 text-gray-700"
+                                              : "bg-green-100 text-green-700"
+                                          }`}>
+                                            {log.category}
+                                          </span>
+                                        </>
+                                      )}
                                       <span className="text-xs text-gray-400">
-                                        {timeAgo(log.createdAt?.toDate?.() || new Date())}
+                                        {timeAgo((log.isLift ? log.date : log.createdAt)?.toDate?.() || new Date())}
                                       </span>
                                     </div>
                                   </div>
