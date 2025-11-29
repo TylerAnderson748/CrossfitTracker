@@ -24,6 +24,7 @@ struct LeaderboardEntry: Codable, Identifiable {
     var rounds: Int? // For AMRAP
     var reps: Int? // Additional reps in AMRAP or max reps
     var weight: Double? // Weight used (lbs or kg)
+    var category: String? // WOD category (RX, Scaled, Just for Fun)
 
     var completedDate: Date
     var createdAt: Date
@@ -43,6 +44,7 @@ struct LeaderboardEntry: Codable, Identifiable {
         rounds: Int? = nil,
         reps: Int? = nil,
         weight: Double? = nil,
+        category: String? = nil,
         completedDate: Date
     ) {
         self.id = id
@@ -59,12 +61,13 @@ struct LeaderboardEntry: Codable, Identifiable {
         self.rounds = rounds
         self.reps = reps
         self.weight = weight
+        self.category = category
         self.completedDate = completedDate
         self.createdAt = Date()
     }
 
     /// Create a leaderboard entry from a workout log
-    static func from(workoutLog: WorkoutLog, userName: String, userGender: String? = nil, gymName: String? = nil) -> LeaderboardEntry {
+    static func from(workoutLog: WorkoutLog, userName: String, userGender: String? = nil, gymName: String? = nil, category: String? = nil) -> LeaderboardEntry {
         return LeaderboardEntry(
             id: workoutLog.id,  // Use workout log ID for unique identification
             userId: workoutLog.userId,
@@ -80,6 +83,7 @@ struct LeaderboardEntry: Codable, Identifiable {
             rounds: workoutLog.rounds,
             reps: workoutLog.reps,
             weight: workoutLog.weight,
+            category: category ?? workoutLog.notes,
             completedDate: workoutLog.completedDate
         )
     }

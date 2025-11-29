@@ -257,12 +257,24 @@ struct WODTimerView: View {
 
                                         Spacer()
 
-                                        // Time
-                                        if let time = entry.timeInSeconds {
-                                            Text(formatTime(time))
-                                                .font(.caption)
-                                                .fontWeight(.semibold)
-                                                .foregroundColor(.primary)
+                                        // Time and Category
+                                        HStack(spacing: 4) {
+                                            if let time = entry.timeInSeconds {
+                                                Text(formatTime(time))
+                                                    .font(.caption)
+                                                    .fontWeight(.semibold)
+                                                    .foregroundColor(.primary)
+                                            }
+
+                                            // Category badge
+                                            let category = WODCategory.fromNotes(entry.category)
+                                            Text(category.shortName)
+                                                .font(.system(size: 9, weight: .medium))
+                                                .foregroundColor(.white)
+                                                .padding(.horizontal, 4)
+                                                .padding(.vertical, 2)
+                                                .background(category.color)
+                                                .cornerRadius(3)
                                         }
 
                                         // Date
@@ -708,10 +720,10 @@ struct WODTimerView: View {
                 var bestTimes: [String: WorkoutLog] = [:]
                 for log in logs {
                     guard let time = log.timeInSeconds else { continue }
-                    let logCategory = WODCategory(rawValue: log.notes ?? "") ?? .happy
+                    let logCategory = WODCategory.fromNotes(log.notes)
 
                     if let existing = bestTimes[log.userId], let existingTime = existing.timeInSeconds {
-                        let existingCategory = WODCategory(rawValue: existing.notes ?? "") ?? .happy
+                        let existingCategory = WODCategory.fromNotes(existing.notes)
 
                         // Prefer better category (lower priority = better)
                         if logCategory.priority < existingCategory.priority {
@@ -818,8 +830,8 @@ struct WODTimerView: View {
 
                                     // Sort by category first (RX > Scaled > Just for Fun), then by time within each category
                                     let sortedLogs = filteredLogs.sorted { log1, log2 in
-                                        let cat1 = WODCategory(rawValue: log1.notes ?? "") ?? .happy
-                                        let cat2 = WODCategory(rawValue: log2.notes ?? "") ?? .happy
+                                        let cat1 = WODCategory.fromNotes(log1.notes)
+                                        let cat2 = WODCategory.fromNotes(log2.notes)
 
                                         // First sort by category priority (lower = better, RX first)
                                         if cat1.priority != cat2.priority {

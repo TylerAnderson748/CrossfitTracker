@@ -30,4 +30,31 @@ enum WODCategory: String, CaseIterable, Identifiable, Codable {
         case .happy: return .green
         }
     }
+
+    /// Get category from notes string, handling legacy values
+    static func fromNotes(_ notes: String?) -> WODCategory {
+        guard let notes = notes, !notes.isEmpty else { return .happy }
+
+        // Check for exact matches first
+        if let category = WODCategory(rawValue: notes) {
+            return category
+        }
+
+        // Handle legacy "Just Happy To Be Here" value
+        if notes == "Just Happy To Be Here" {
+            return .happy
+        }
+
+        // Default to happy for unknown values
+        return .happy
+    }
+
+    /// Short display name for UI
+    var shortName: String {
+        switch self {
+        case .rx: return "RX"
+        case .scaled: return "Scaled"
+        case .happy: return "Fun"
+        }
+    }
 }
