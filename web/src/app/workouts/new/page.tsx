@@ -59,6 +59,7 @@ function NewWorkoutContent() {
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [leaderboardFilter, setLeaderboardFilter] = useState<"everyone" | "gym">("everyone");
   const [genderFilter, setGenderFilter] = useState<"all" | "Male" | "Female">("all");
+  const [categoryFilter, setCategoryFilter] = useState<"all" | WODCategory>("all");
   const [loadingLeaderboard, setLoadingLeaderboard] = useState(false);
 
   useEffect(() => {
@@ -87,7 +88,7 @@ function NewWorkoutContent() {
       }
       loadLeaderboard();
     }
-  }, [user, wodTitle, leaderboardFilter, genderFilter]);
+  }, [user, wodTitle, leaderboardFilter, genderFilter, categoryFilter]);
 
   const loadHistory = async () => {
     if (!user || !wodTitle) return;
@@ -179,39 +180,48 @@ function NewWorkoutContent() {
         category: normalizeCategory((e.category || "").toString()),
       }));
 
-      // Get best entry per user (RX > Scaled > Happy, then fastest time)
+      // Apply category filter if not "all"
+      if (categoryFilter !== "all") {
+        entries = entries.filter((e) => e.category === categoryFilter);
+      }
+
+      // Get best entry per user
       const bestByUser = new Map<string, LeaderboardEntry>();
       entries.forEach((entry) => {
         const existing = bestByUser.get(entry.userId);
         if (!existing) {
           bestByUser.set(entry.userId, entry);
-        } else {
+        } else if (categoryFilter === "all") {
+          // When showing all categories, RX > Scaled > Happy, then fastest time
           const existingPriority = getCategoryPriority((existing.category || "").toString());
           const entryPriority = getCategoryPriority((entry.category || "").toString());
 
-          // Lower priority number = better category
           if (entryPriority < existingPriority) {
-            // Better category wins
             bestByUser.set(entry.userId, entry);
           } else if (entryPriority === existingPriority) {
-            // Same category, faster time wins
             if ((entry.timeInSeconds || 0) < (existing.timeInSeconds || 0)) {
               bestByUser.set(entry.userId, entry);
             }
           }
-          // If existing has better category, keep it
+        } else {
+          // When filtering by specific category, just compare times
+          if ((entry.timeInSeconds || 0) < (existing.timeInSeconds || 0)) {
+            bestByUser.set(entry.userId, entry);
+          }
         }
       });
 
-      // Convert to array and sort: by category priority first, then by time
+      // Convert to array and sort
       const sortedEntries = Array.from(bestByUser.values()).sort((a, b) => {
-        const aPriority = getCategoryPriority((a.category || "").toString());
-        const bPriority = getCategoryPriority((b.category || "").toString());
-
-        if (aPriority !== bPriority) {
-          return aPriority - bPriority; // Better category first
+        if (categoryFilter === "all") {
+          // Sort by category priority first, then by time
+          const aPriority = getCategoryPriority((a.category || "").toString());
+          const bPriority = getCategoryPriority((b.category || "").toString());
+          if (aPriority !== bPriority) {
+            return aPriority - bPriority;
+          }
         }
-        return (a.timeInSeconds || 0) - (b.timeInSeconds || 0); // Faster time first
+        return (a.timeInSeconds || 0) - (b.timeInSeconds || 0);
       });
 
       console.log("Final leaderboard entries:", sortedEntries.length);
@@ -454,6 +464,23 @@ function NewWorkoutContent() {
                   {g === "all" ? "All" : g}
                 </button>
               ))}
+            </div>
+          </div>
+
+          <div className="flex justify-end mb-3">
+            <div className="flex rounded-lg overflow-hidden border border-gray-200 text-xs">
+              <button onClick={() => setCategoryFilter("all")} className={`px-2 py-1.5 font-medium ${categoryFilter === "all" ? "bg-blue-600 text-white" : "bg-white text-gray-600"}`}>
+                All
+              </button>
+              <button onClick={() => setCategoryFilter("RX")} className={`px-2 py-1.5 font-medium ${categoryFilter === "RX" ? "bg-blue-600 text-white" : "bg-white text-gray-600"}`}>
+                RX
+              </button>
+              <button onClick={() => setCategoryFilter("Scaled")} className={`px-2 py-1.5 font-medium ${categoryFilter === "Scaled" ? "bg-blue-600 text-white" : "bg-white text-gray-600"}`}>
+                Scaled
+              </button>
+              <button onClick={() => setCategoryFilter("Just Happy To Be Here")} className={`px-2 py-1.5 font-medium ${categoryFilter === "Just Happy To Be Here" ? "bg-blue-600 text-white" : "bg-white text-gray-600"}`}>
+                Happy
+              </button>
             </div>
           </div>
 
