@@ -111,23 +111,12 @@ function NewWorkoutContent() {
     }
   }, [user, loading, router]);
 
-  // Redirect to lift page if type=lift or if name matches a common lift
+  // Redirect to lift page if type=lift is passed
   useEffect(() => {
     const type = searchParams.get("type");
-    const name = searchParams.get("name") || "";
-    const description = searchParams.get("description") || "";
-
-    const commonLifts = [
-      "Back Squat", "Front Squat", "Deadlift", "Bench Press", "Overhead Press",
-      "Clean", "Clean & Jerk", "Snatch", "Power Clean", "Push Press", "Thruster",
-      "Squat", "Press", "Jerk", "Power Snatch", "Hang Clean", "Hang Snatch"
-    ];
-
-    const isLift = type === "lift" || commonLifts.some(lift =>
-      name.toLowerCase() === lift.toLowerCase()
-    );
-
-    if (isLift && name) {
+    if (type === "lift") {
+      const name = searchParams.get("name") || "";
+      const description = searchParams.get("description") || "";
       router.replace(`/workouts/lift?name=${encodeURIComponent(name)}&description=${encodeURIComponent(description)}`);
     }
   }, [searchParams, router]);
