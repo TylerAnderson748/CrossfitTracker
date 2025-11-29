@@ -104,9 +104,11 @@ function LiftPageContent() {
         ...doc.data(),
       })) as LiftResult[];
 
-      // Debug: show what lift names exist in the database
+      // Debug: show what fields and lift names exist in the database
       const uniqueLifts = [...new Set(results.map((r) => r.liftName))];
-      setDebugInfo(`Found ${results.length} total lift results. Unique lifts: ${uniqueLifts.join(", ")}. Looking for: "${liftName}"`);
+      const sampleResult = results[0] as Record<string, unknown> || {};
+      const fields = Object.keys(sampleResult).join(", ");
+      setDebugInfo(`Found ${results.length} results. Fields: [${fields}]. Sample: ${JSON.stringify(sampleResult).slice(0, 300)}`);
 
       // Case-insensitive match for lift name
       const liftNameLower = liftName.toLowerCase().trim();
