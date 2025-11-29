@@ -96,6 +96,21 @@ function NewWorkoutContent() {
     }
   }, [user, wodTitle, leaderboardFilter, genderFilter, categoryFilter]);
 
+  // Category priority: RX (0) > Scaled (1) > Just For Fun (2)
+  const getCategoryPriority = (cat: string): number => {
+    if (cat === "RX" || cat === "rx" || cat === "RX+" || cat === "rxPlus") return 0;
+    if (cat === "Scaled" || cat === "scaled") return 1;
+    if (cat === "Just For Fun" || cat === "Just for Fun" || cat === "fun" || cat === "Fun") return 2;
+    return 0; // Default to RX priority for unknown/empty
+  };
+
+  const normalizeCategory = (cat: string): WODCategory => {
+    if (!cat || cat === "RX" || cat === "rx" || cat === "RX+" || cat === "rxPlus") return "RX";
+    if (cat === "Scaled" || cat === "scaled") return "Scaled";
+    if (cat === "Just For Fun" || cat === "Just for Fun" || cat === "fun" || cat === "Fun" || cat === "Just Happy To Be Here" || cat === "happy") return "Just For Fun";
+    return "RX"; // Default to RX for unknown categories
+  };
+
   const loadHistory = async () => {
     if (!user || !wodTitle) return;
     try {
@@ -129,38 +144,24 @@ function NewWorkoutContent() {
       );
       const leaderboardSnapshot = await getDocs(leaderboardQuery);
       const leaderboardByLogId = new Map<string, string>();
-      leaderboardSnapshot.docs.forEach((doc) => {
-        const data = doc.data();
-        if (data.workoutLogId && data.category) {
-          leaderboardByLogId.set(data.workoutLogId, data.category);
+      leaderboardSnapshot.docs.forEach((docSnap) => {
+        const data = docSnap.data();
+        if (data.workoutLogId) {
+          // Normalize category the same way leaderboard does
+          leaderboardByLogId.set(data.workoutLogId, normalizeCategory((data.category || "").toString()));
         }
       });
 
-      // Merge leaderboard categories into history
+      // Merge leaderboard categories into history (use normalized category from leaderboard)
       const historyWithCategories = filtered.map((log) => ({
         ...log,
-        category: leaderboardByLogId.get(log.id) || log.notes,
+        category: leaderboardByLogId.get(log.id) || normalizeCategory((log.notes || "").toString()),
       }));
 
       setHistory(historyWithCategories);
     } catch (err) {
       console.error("Error loading history:", err);
     }
-  };
-
-  // Category priority: RX (0) > Scaled (1) > Just For Fun (2)
-  const getCategoryPriority = (cat: string): number => {
-    if (cat === "RX" || cat === "rx" || cat === "RX+" || cat === "rxPlus") return 0;
-    if (cat === "Scaled" || cat === "scaled") return 1;
-    if (cat === "Just For Fun" || cat === "Just for Fun" || cat === "fun" || cat === "Fun") return 2;
-    return 0; // Default to RX priority for unknown/empty
-  };
-
-  const normalizeCategory = (cat: string): WODCategory => {
-    if (!cat || cat === "RX" || cat === "rx" || cat === "RX+" || cat === "rxPlus") return "RX";
-    if (cat === "Scaled" || cat === "scaled") return "Scaled";
-    if (cat === "Just For Fun" || cat === "Just for Fun" || cat === "fun" || cat === "Fun" || cat === "Just Happy To Be Here" || cat === "happy") return "Just For Fun";
-    return "RX"; // Default to RX for unknown categories
   };
 
   const loadLeaderboard = async () => {
