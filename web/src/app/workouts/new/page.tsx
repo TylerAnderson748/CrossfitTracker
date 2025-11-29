@@ -23,6 +23,34 @@ function formatTime(seconds: number): string {
   return `${mins}:${secs.toString().padStart(2, "0")}`;
 }
 
+// Generate smooth bezier curve path (like iOS Charts)
+function getSmoothPath(points: { x: number; y: number }[]): string {
+  if (points.length < 2) return "";
+  if (points.length === 2) {
+    return `M ${points[0].x},${points[0].y} L ${points[1].x},${points[1].y}`;
+  }
+
+  let path = `M ${points[0].x},${points[0].y}`;
+
+  for (let i = 0; i < points.length - 1; i++) {
+    const p0 = points[Math.max(0, i - 1)];
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    const p3 = points[Math.min(points.length - 1, i + 2)];
+
+    // Catmull-Rom to Bezier conversion
+    const tension = 0.3;
+    const cp1x = p1.x + (p2.x - p0.x) * tension;
+    const cp1y = p1.y + (p2.y - p0.y) * tension;
+    const cp2x = p2.x - (p3.x - p1.x) * tension;
+    const cp2y = p2.y - (p3.y - p1.y) * tension;
+
+    path += ` C ${cp1x},${cp1y} ${cp2x},${cp2y} ${p2.x},${p2.y}`;
+  }
+
+  return path;
+}
+
 function formatDateTime(date: Date): string {
   return date.toLocaleDateString("en-US", {
     month: "short",
@@ -312,7 +340,13 @@ function NewWorkoutContent() {
         createdAt: now,
       });
 
-      router.push("/workouts");
+      // Stay on page - reset inputs and refresh data
+      setManualMinutes("");
+      setManualSeconds("");
+      setElapsedSeconds(0);
+      setTimerRunning(false);
+      loadHistory();
+      loadLeaderboard();
     } catch (err) {
       console.error("Error logging workout:", err);
       setError("Failed to log workout. Please try again.");
@@ -507,21 +541,22 @@ function NewWorkoutContent() {
               <div className="ml-12 h-full relative">
                 <svg className="w-full h-full" viewBox="0 0 300 100" preserveAspectRatio="none">
                   {chartData.length > 1 ? (
-                    <polyline
+                    <path
                       fill="none"
                       stroke="#3B82F6"
                       strokeWidth="2"
-                      points={chartData.map((d, i) => {
-                        const x = chartData.length > 1 ? (i / (chartData.length - 1)) * 300 : 150;
-                        const y = range > 0 ? 100 - ((d.timeInSeconds - minTime) / range) * 100 : 50;
-                        return `${x},${y}`;
-                      }).join(" ")}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d={getSmoothPath(chartData.map((d, i) => ({
+                        x: (i / (chartData.length - 1)) * 300,
+                        y: range > 0 ? 100 - ((d.timeInSeconds - minTime) / range) * 100 : 50,
+                      })))}
                     />
                   ) : null}
                   {chartData.map((d, i) => {
                     const x = chartData.length > 1 ? (i / (chartData.length - 1)) * 300 : 150;
                     const y = range > 0 ? 100 - ((d.timeInSeconds - minTime) / range) * 100 : 50;
-                    return <circle key={i} cx={x} cy={y} r="6" fill="#3B82F6" />;
+                    return <circle key={i} cx={x} cy={y} r="5" fill="#3B82F6" />;
                   })}
                 </svg>
                 {/* X-axis labels */}
