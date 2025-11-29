@@ -279,20 +279,23 @@ function LiftPageContent() {
   const getTimeRangeDate = (range: string) => {
     const now = new Date();
     switch (range) {
-      case "1m": return new Date(now.setMonth(now.getMonth() - 1));
-      case "6m": return new Date(now.setMonth(now.getMonth() - 6));
-      case "1y": return new Date(now.setFullYear(now.getFullYear() - 1));
-      case "2y": return new Date(now.setFullYear(now.getFullYear() - 2));
-      case "5y": return new Date(now.setFullYear(now.getFullYear() - 5));
-      default: return new Date(now.setFullYear(now.getFullYear() - 1));
+      case "1m": return new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+      case "6m": return new Date(now.getFullYear(), now.getMonth() - 6, now.getDate());
+      case "1y": return new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+      case "2y": return new Date(now.getFullYear() - 2, now.getMonth(), now.getDate());
+      case "5y": return new Date(now.getFullYear() - 5, now.getMonth(), now.getDate());
+      default: return new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
     }
   };
   const timeRangeStart = getTimeRangeDate(chartTimeRange);
+  const timeRangeEnd = new Date();
+  const timeRangeMs = timeRangeEnd.getTime() - timeRangeStart.getTime();
+
   const filteredHistory = history.filter((h) => {
     const date = h.date?.toDate?.();
     return date && date >= timeRangeStart;
   });
-  const chartData = filteredHistory.slice(0, 20).reverse();
+  const chartData = filteredHistory.slice(0, 50).reverse();
   const weights = chartData.map((h) => h.weight);
   const dataMax = weights.length > 0 ? Math.max(...weights) : 100;
   const dataMin = weights.length > 0 ? Math.min(...weights) : 0;
@@ -302,6 +305,57 @@ function LiftPageContent() {
   const range = maxWeightTick - minWeightTick || 50;
   const numTicks = Math.ceil(range / tickInterval) + 1;
   const yTicks = Array.from({ length: Math.min(numTicks, 7) }, (_, i) => maxWeightTick - i * tickInterval);
+
+  // Generate x-axis labels for the full time range
+  const getXAxisLabels = () => {
+    const labels: { date: Date; label: string }[] = [];
+    const now = new Date();
+    switch (chartTimeRange) {
+      case "1m":
+        // Weekly labels for 1 month
+        for (let i = 4; i >= 0; i--) {
+          const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i * 7);
+          labels.push({ date: d, label: `${d.getMonth() + 1}/${d.getDate()}` });
+        }
+        break;
+      case "6m":
+        // Monthly labels for 6 months
+        for (let i = 6; i >= 0; i--) {
+          const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+          labels.push({ date: d, label: d.toLocaleDateString("en-US", { month: "short" }) });
+        }
+        break;
+      case "1y":
+        // Bi-monthly labels for 1 year
+        for (let i = 12; i >= 0; i -= 2) {
+          const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+          labels.push({ date: d, label: d.toLocaleDateString("en-US", { month: "short" }) });
+        }
+        break;
+      case "2y":
+        // Quarterly labels for 2 years
+        for (let i = 24; i >= 0; i -= 6) {
+          const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+          labels.push({ date: d, label: d.toLocaleDateString("en-US", { month: "short", year: "2-digit" }) });
+        }
+        break;
+      case "5y":
+        // Yearly labels for 5 years
+        for (let i = 5; i >= 0; i--) {
+          const d = new Date(now.getFullYear() - i, now.getMonth(), 1);
+          labels.push({ date: d, label: d.getFullYear().toString() });
+        }
+        break;
+    }
+    return labels;
+  };
+  const xAxisLabels = getXAxisLabels();
+
+  // Calculate x position based on date within time range
+  const getXPosition = (date: Date) => {
+    const dateMs = date.getTime() - timeRangeStart.getTime();
+    return 10 + (dateMs / timeRangeMs) * 280;
+  };
 
   // Common lifts for selector (only shown when not from schedule)
   const commonLifts = [
@@ -482,9 +536,9 @@ function LiftPageContent() {
                     const y = (i / (yTicks.length - 1)) * 100;
                     return <line key={i} x1="10" y1={y} x2="290" y2={y} stroke="#E5E7EB" strokeWidth="1" />;
                   })}
-                  {/* Vertical grid lines */}
-                  {chartData.map((_, i) => {
-                    const x = chartData.length > 1 ? 10 + (i / (chartData.length - 1)) * 280 : 150;
+                  {/* Vertical grid lines at x-axis label positions */}
+                  {xAxisLabels.map((label, i) => {
+                    const x = getXPosition(label.date);
                     return <line key={i} x1={x} y1="0" x2={x} y2="100" stroke="#E5E7EB" strokeWidth="1" />;
                   })}
                   {chartData.length > 1 ? (
@@ -495,14 +549,16 @@ function LiftPageContent() {
                       strokeLinecap="round"
                       strokeLinejoin="round"
                       d={chartData.map((d, i) => {
-                        const x = 10 + (i / (chartData.length - 1)) * 280;
+                        const date = d.date?.toDate?.() || new Date();
+                        const x = getXPosition(date);
                         const y = range > 0 ? 100 - ((d.weight - minWeightTick) / range) * 100 : 50;
                         return `${i === 0 ? "M" : "L"} ${x},${y}`;
                       }).join(" ")}
                     />
                   ) : null}
                   {chartData.map((d, i) => {
-                    const x = chartData.length > 1 ? 10 + (i / (chartData.length - 1)) * 280 : 150;
+                    const date = d.date?.toDate?.() || new Date();
+                    const x = getXPosition(date);
                     const y = range > 0 ? 100 - ((d.weight - minWeightTick) / range) * 100 : 50;
                     return <circle key={i} cx={x} cy={y} r="3" fill="#9333EA" />;
                   })}
@@ -511,10 +567,20 @@ function LiftPageContent() {
               </div>
               <div className="flex">
                 <div className="w-10"></div>
-                <div className="flex-1 flex justify-between text-xs text-gray-400 mt-2">
-                  {chartData.map((d, i) => (
-                    <span key={i}>{d.date?.toDate?.().toLocaleDateString("en-US", { month: "numeric", day: "numeric" }) || "N/A"}</span>
-                  ))}
+                <div className="flex-1 relative h-4 text-xs text-gray-400 mt-2">
+                  {xAxisLabels.map((label, i) => {
+                    const x = getXPosition(label.date);
+                    const percent = ((x - 10) / 280) * 100;
+                    return (
+                      <span
+                        key={i}
+                        className="absolute transform -translate-x-1/2"
+                        style={{ left: `${percent}%` }}
+                      >
+                        {label.label}
+                      </span>
+                    );
+                  })}
                 </div>
               </div>
             </div>

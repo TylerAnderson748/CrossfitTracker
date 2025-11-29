@@ -472,20 +472,23 @@ function NewWorkoutContent() {
   const getTimeRangeDate = (range: string) => {
     const now = new Date();
     switch (range) {
-      case "1m": return new Date(now.setMonth(now.getMonth() - 1));
-      case "6m": return new Date(now.setMonth(now.getMonth() - 6));
-      case "1y": return new Date(now.setFullYear(now.getFullYear() - 1));
-      case "2y": return new Date(now.setFullYear(now.getFullYear() - 2));
-      case "5y": return new Date(now.setFullYear(now.getFullYear() - 5));
-      default: return new Date(now.setFullYear(now.getFullYear() - 1));
+      case "1m": return new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+      case "6m": return new Date(now.getFullYear(), now.getMonth() - 6, now.getDate());
+      case "1y": return new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+      case "2y": return new Date(now.getFullYear() - 2, now.getMonth(), now.getDate());
+      case "5y": return new Date(now.getFullYear() - 5, now.getMonth(), now.getDate());
+      default: return new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
     }
   };
   const timeRangeStart = getTimeRangeDate(chartTimeRange);
+  const timeRangeEnd = new Date();
+  const timeRangeMs = timeRangeEnd.getTime() - timeRangeStart.getTime();
+
   const filteredHistory = history.filter((h) => {
     const date = h.completedDate?.toDate?.();
     return date && date >= timeRangeStart;
   });
-  const chartData = filteredHistory.slice(0, 20).reverse();
+  const chartData = filteredHistory.slice(0, 50).reverse();
   const times = chartData.map((h) => h.timeInSeconds);
   const dataMax = Math.max(...times, 1);
   const dataMin = Math.min(...times, 0);
@@ -497,6 +500,51 @@ function NewWorkoutContent() {
   // Generate Y-axis ticks at 10-second intervals
   const numTicks = Math.ceil(range / tickInterval) + 1;
   const yTicks = Array.from({ length: Math.min(numTicks, 7) }, (_, i) => maxTime - i * tickInterval);
+
+  // Generate x-axis labels for the full time range
+  const getXAxisLabels = () => {
+    const labels: { date: Date; label: string }[] = [];
+    const now = new Date();
+    switch (chartTimeRange) {
+      case "1m":
+        for (let i = 4; i >= 0; i--) {
+          const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i * 7);
+          labels.push({ date: d, label: `${d.getMonth() + 1}/${d.getDate()}` });
+        }
+        break;
+      case "6m":
+        for (let i = 6; i >= 0; i--) {
+          const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+          labels.push({ date: d, label: d.toLocaleDateString("en-US", { month: "short" }) });
+        }
+        break;
+      case "1y":
+        for (let i = 12; i >= 0; i -= 2) {
+          const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+          labels.push({ date: d, label: d.toLocaleDateString("en-US", { month: "short" }) });
+        }
+        break;
+      case "2y":
+        for (let i = 24; i >= 0; i -= 6) {
+          const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+          labels.push({ date: d, label: d.toLocaleDateString("en-US", { month: "short", year: "2-digit" }) });
+        }
+        break;
+      case "5y":
+        for (let i = 5; i >= 0; i--) {
+          const d = new Date(now.getFullYear() - i, now.getMonth(), 1);
+          labels.push({ date: d, label: d.getFullYear().toString() });
+        }
+        break;
+    }
+    return labels;
+  };
+  const xAxisLabels = getXAxisLabels();
+
+  const getXPosition = (date: Date) => {
+    const dateMs = date.getTime() - timeRangeStart.getTime();
+    return 10 + (dateMs / timeRangeMs) * 280;
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -538,48 +586,67 @@ function NewWorkoutContent() {
                     ))}
                   </div>
                 </div>
-                <div className="relative h-40">
-                  <div className="absolute left-0 top-0 bottom-4 w-10 flex flex-col justify-between text-xs text-gray-400">
-                    {yTicks.map((tick, i) => (
-                      <span key={i}>{formatTime(Math.round(tick))}</span>
-                    ))}
-                  </div>
-                  <div className="ml-12 h-full relative">
-                    <svg className="w-full h-full" viewBox="0 0 300 100" preserveAspectRatio="none">
-                      {/* Horizontal grid lines */}
-                      {yTicks.map((_, i) => {
-                        const y = (i / (yTicks.length - 1)) * 100;
-                        return <line key={i} x1="10" y1={y} x2="290" y2={y} stroke="#E5E7EB" strokeWidth="1" />;
-                      })}
-                      {/* Vertical grid lines */}
-                      {chartData.map((_, i) => {
-                        const x = chartData.length > 1 ? 10 + (i / (chartData.length - 1)) * 280 : 150;
-                        return <line key={i} x1={x} y1="0" x2={x} y2="100" stroke="#E5E7EB" strokeWidth="1" />;
-                      })}
-                      {chartData.length > 1 ? (
-                        <path
-                          fill="none"
-                          stroke="#3B82F6"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          d={getSmoothPath(chartData.map((d, i) => ({
-                            x: 10 + (i / (chartData.length - 1)) * 280,
-                            y: range > 0 ? 100 - ((d.timeInSeconds - minTime) / range) * 100 : 50,
-                          })))}
-                        />
-                      ) : null}
-                      {chartData.map((d, i) => {
-                        const x = chartData.length > 1 ? 10 + (i / (chartData.length - 1)) * 280 : 150;
-                        const y = range > 0 ? 100 - ((d.timeInSeconds - minTime) / range) * 100 : 50;
-                        const color = getCategoryHexColor(d.notes || "");
-                        return <circle key={i} cx={x} cy={y} r="3" fill={color} />;
-                      })}
-                    </svg>
-                    <div className="flex justify-between text-xs text-gray-400 mt-1">
-                      {chartData.map((d, i) => (
-                        <span key={i}>{d.completedDate?.toDate?.().toLocaleDateString("en-US", { month: "numeric", day: "numeric" }) || "N/A"}</span>
+                <div className="relative">
+                  <div className="flex">
+                    <div className="w-12 h-32 flex flex-col justify-between text-xs text-gray-400 pr-2">
+                      {yTicks.map((tick, i) => (
+                        <span key={i}>{formatTime(Math.round(tick))}</span>
                       ))}
+                    </div>
+                    <div className="flex-1 h-32">
+                      <svg className="w-full h-full" viewBox="0 0 300 100" preserveAspectRatio="none">
+                        {/* Horizontal grid lines */}
+                        {yTicks.map((_, i) => {
+                          const y = (i / (yTicks.length - 1)) * 100;
+                          return <line key={i} x1="10" y1={y} x2="290" y2={y} stroke="#E5E7EB" strokeWidth="1" />;
+                        })}
+                        {/* Vertical grid lines at x-axis label positions */}
+                        {xAxisLabels.map((label, i) => {
+                          const x = getXPosition(label.date);
+                          return <line key={i} x1={x} y1="0" x2={x} y2="100" stroke="#E5E7EB" strokeWidth="1" />;
+                        })}
+                        {chartData.length > 1 ? (
+                          <path
+                            fill="none"
+                            stroke="#3B82F6"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d={getSmoothPath(chartData.map((d) => {
+                              const date = d.completedDate?.toDate?.() || new Date();
+                              return {
+                                x: getXPosition(date),
+                                y: range > 0 ? 100 - ((d.timeInSeconds - minTime) / range) * 100 : 50,
+                              };
+                            }))}
+                          />
+                        ) : null}
+                        {chartData.map((d, i) => {
+                          const date = d.completedDate?.toDate?.() || new Date();
+                          const x = getXPosition(date);
+                          const y = range > 0 ? 100 - ((d.timeInSeconds - minTime) / range) * 100 : 50;
+                          const color = getCategoryHexColor(d.notes || "");
+                          return <circle key={i} cx={x} cy={y} r="3" fill={color} />;
+                        })}
+                      </svg>
+                    </div>
+                  </div>
+                  <div className="flex">
+                    <div className="w-12"></div>
+                    <div className="flex-1 relative h-4 text-xs text-gray-400 mt-2">
+                      {xAxisLabels.map((label, i) => {
+                        const x = getXPosition(label.date);
+                        const percent = ((x - 10) / 280) * 100;
+                        return (
+                          <span
+                            key={i}
+                            className="absolute transform -translate-x-1/2"
+                            style={{ left: `${percent}%` }}
+                          >
+                            {label.label}
+                          </span>
+                        );
+                      })}
                     </div>
                   </div>
                 </div>
