@@ -477,15 +477,15 @@ function NewWorkoutContent() {
             <div className="flex items-end gap-2">
               <div className="flex-1">
                 <p className="text-xs text-gray-400 mb-1">Minutes</p>
-                <input type="number" value={manualMinutes} onChange={(e) => setManualMinutes(e.target.value)} placeholder="0" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-center" />
+                <input type="number" value={manualMinutes} onChange={(e) => setManualMinutes(e.target.value)} placeholder="0" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-center text-gray-900" />
               </div>
               <div className="flex-1">
                 <p className="text-xs text-gray-400 mb-1">Seconds</p>
-                <input type="number" value={manualSeconds} onChange={(e) => setManualSeconds(e.target.value)} placeholder="0" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-center" />
+                <input type="number" value={manualSeconds} onChange={(e) => setManualSeconds(e.target.value)} placeholder="0" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-center text-gray-900" />
               </div>
               <div className="flex-1">
                 <p className="text-xs text-gray-400 mb-1">Date</p>
-                <input type="date" value={entryDate} onChange={(e) => setEntryDate(e.target.value)} className="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" />
+                <input type="date" value={entryDate} onChange={(e) => setEntryDate(e.target.value)} className="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm text-gray-900" />
               </div>
               <button onClick={handleSaveManual} disabled={submitting || !isManualEntryValid()} className="px-5 py-2 bg-blue-600 text-white rounded-lg font-semibold disabled:bg-gray-300">Save</button>
             </div>
@@ -624,7 +624,7 @@ function NewWorkoutContent() {
                           value={editMinutes}
                           onChange={(e) => setEditMinutes(e.target.value)}
                           placeholder="Min"
-                          className="w-16 px-2 py-1 border border-gray-300 rounded text-center"
+                          className="w-16 px-2 py-1 border border-gray-300 rounded text-center text-gray-900"
                         />
                         <span>:</span>
                         <input
@@ -632,7 +632,7 @@ function NewWorkoutContent() {
                           value={editSeconds}
                           onChange={(e) => setEditSeconds(e.target.value)}
                           placeholder="Sec"
-                          className="w-16 px-2 py-1 border border-gray-300 rounded text-center"
+                          className="w-16 px-2 py-1 border border-gray-300 rounded text-center text-gray-900"
                         />
                       </div>
                       <div className="flex rounded-lg overflow-hidden border border-gray-200 text-xs">
