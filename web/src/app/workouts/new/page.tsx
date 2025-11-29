@@ -115,7 +115,6 @@ function NewWorkoutContent() {
         })
         .slice(0, 10);
 
-      console.log("History loaded:", filtered.length, "entries for", wodTitle);
       setHistory(filtered);
     } catch (err) {
       console.error("Error loading history:", err);
@@ -153,17 +152,6 @@ function NewWorkoutContent() {
         ...doc.data(),
       })) as LeaderboardEntry[];
 
-      console.log("Raw leaderboard entries:", entries.length);
-
-      // Debug: log unique categories in raw data
-      const uniqueCategories = [...new Set(entries.map(e => e.category))];
-      console.log("Unique categories in data:", uniqueCategories);
-
-      // Debug: log a sample entry
-      if (entries.length > 0) {
-        console.log("Sample entry:", JSON.stringify(entries[0], null, 2));
-      }
-
       // Filter for this workout if we have a title
       if (wodTitle) {
         const normalized = normalizeWorkoutName(wodTitle.trim());
@@ -172,13 +160,11 @@ function NewWorkoutContent() {
         );
         if (workoutEntries.length > 0) {
           entries = workoutEntries;
-          console.log("Filtered to workout:", workoutEntries.length);
         }
       }
 
       // Filter for entries with time data
       entries = entries.filter((e) => e.timeInSeconds && e.timeInSeconds > 0);
-      console.log("After time filter:", entries.length);
 
       // Apply gender filter
       if (genderFilter !== "all") {
@@ -186,58 +172,57 @@ function NewWorkoutContent() {
       }
 
       // Normalize categories on all entries
-      entries = entries.map((e) => {
-        const originalCat = (e.category || "").toString();
-        const normalizedCat = normalizeCategory(originalCat);
-        if (originalCat !== normalizedCat) {
-          console.log(`Category normalized: "${originalCat}" -> "${normalizedCat}"`);
+      entries = entries.map((e) => ({
+        ...e,
+        category: normalizeCategory((e.category || "").toString()),
+      }));
+
+      // First, determine each user's BEST category (across all their entries)
+      const userBestCategory = new Map<string, number>(); // userId -> best priority (lower is better)
+      entries.forEach((entry) => {
+        const priority = getCategoryPriority((entry.category || "").toString());
+        const existing = userBestCategory.get(entry.userId);
+        if (existing === undefined || priority < existing) {
+          userBestCategory.set(entry.userId, priority);
         }
-        return {
-          ...e,
-          category: normalizedCat,
-        };
       });
 
-      // Debug: log categories after normalization
-      const normalizedCategories = [...new Set(entries.map(e => e.category))];
-      console.log("Categories after normalization:", normalizedCategories);
-      console.log("Category filter:", categoryFilter);
-
-      // Apply category filter if not "all"
-      if (categoryFilter !== "all") {
-        const beforeFilter = entries.length;
-        entries = entries.filter((e) => e.category === categoryFilter);
-        console.log(`Category filter applied: ${beforeFilter} -> ${entries.length} entries`);
-      }
-
-      // Get best entry per user
+      // Get best entry per user (considering category priority, then time)
       const bestByUser = new Map<string, LeaderboardEntry>();
       entries.forEach((entry) => {
         const existing = bestByUser.get(entry.userId);
         if (!existing) {
           bestByUser.set(entry.userId, entry);
-        } else if (categoryFilter === "all") {
-          // When showing all categories, RX > Scaled > Happy, then fastest time
+        } else {
           const existingPriority = getCategoryPriority((existing.category || "").toString());
           const entryPriority = getCategoryPriority((entry.category || "").toString());
 
           if (entryPriority < existingPriority) {
+            // Better category wins
             bestByUser.set(entry.userId, entry);
           } else if (entryPriority === existingPriority) {
+            // Same category, faster time wins
             if ((entry.timeInSeconds || 0) < (existing.timeInSeconds || 0)) {
               bestByUser.set(entry.userId, entry);
             }
           }
-        } else {
-          // When filtering by specific category, just compare times
-          if ((entry.timeInSeconds || 0) < (existing.timeInSeconds || 0)) {
-            bestByUser.set(entry.userId, entry);
-          }
         }
       });
 
-      // Convert to array and sort
-      const sortedEntries = Array.from(bestByUser.values()).sort((a, b) => {
+      // Apply category filter - only show users whose BEST category matches
+      // (users with better categories don't appear in lower category filters)
+      let filteredEntries = Array.from(bestByUser.values());
+      if (categoryFilter !== "all") {
+        const filterPriority = getCategoryPriority(categoryFilter);
+        filteredEntries = filteredEntries.filter((entry) => {
+          const userBestPriority = userBestCategory.get(entry.userId) ?? 0;
+          // Only include if user's best category matches the filter
+          return userBestPriority === filterPriority;
+        });
+      }
+
+      // Sort the filtered entries
+      const sortedEntries = filteredEntries.sort((a, b) => {
         if (categoryFilter === "all") {
           // Sort by category priority first, then by time
           const aPriority = getCategoryPriority((a.category || "").toString());
@@ -249,7 +234,6 @@ function NewWorkoutContent() {
         return (a.timeInSeconds || 0) - (b.timeInSeconds || 0);
       });
 
-      console.log("Final leaderboard entries:", sortedEntries.length);
       setLeaderboard(sortedEntries);
     } catch (err) {
       console.error("Error loading leaderboard:", err);
