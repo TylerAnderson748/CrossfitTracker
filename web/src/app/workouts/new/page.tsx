@@ -562,16 +562,16 @@ function NewWorkoutContent() {
                       strokeLinecap="round"
                       strokeLinejoin="round"
                       d={getSmoothPath(chartData.map((d, i) => ({
-                        x: (i / (chartData.length - 1)) * 300,
+                        x: 10 + (i / (chartData.length - 1)) * 280,
                         y: range > 0 ? 100 - ((d.timeInSeconds - minTime) / range) * 100 : 50,
                       })))}
                     />
                   ) : null}
                   {chartData.map((d, i) => {
-                    const x = chartData.length > 1 ? (i / (chartData.length - 1)) * 300 : 150;
+                    const x = chartData.length > 1 ? 10 + (i / (chartData.length - 1)) * 280 : 150;
                     const y = range > 0 ? 100 - ((d.timeInSeconds - minTime) / range) * 100 : 50;
                     const color = getCategoryHexColor(d.notes || "");
-                    return <circle key={i} cx={x} cy={y} r="5" fill={color} />;
+                    return <circle key={i} cx={x} cy={y} r="3" fill={color} />;
                   })}
                 </svg>
                 {/* X-axis labels */}
