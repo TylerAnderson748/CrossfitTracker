@@ -482,6 +482,15 @@ function NewWorkoutContent() {
                   </div>
                   <div className="ml-12 h-full relative">
                     <svg className="w-full h-full" viewBox="0 0 300 100" preserveAspectRatio="none">
+                      {/* Horizontal grid lines */}
+                      {[0, 25, 50, 75, 100].map((y) => (
+                        <line key={y} x1="10" y1={y} x2="290" y2={y} stroke="#E5E7EB" strokeWidth="1" />
+                      ))}
+                      {/* Vertical grid lines */}
+                      {chartData.map((_, i) => {
+                        const x = chartData.length > 1 ? 10 + (i / (chartData.length - 1)) * 280 : 150;
+                        return <line key={i} x1={x} y1="0" x2={x} y2="100" stroke="#E5E7EB" strokeWidth="1" />;
+                      })}
                       {chartData.length > 1 ? (
                         <path
                           fill="none"
