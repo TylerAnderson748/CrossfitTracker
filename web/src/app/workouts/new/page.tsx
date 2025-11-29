@@ -564,69 +564,65 @@ function NewWorkoutContent() {
                     ))}
                   </div>
                 </div>
-                <div className="relative">
-                  <div className="flex">
-                    <div className="w-12 h-32 flex flex-col justify-between text-xs text-gray-400 pr-2">
-                      {yTicks.map((tick, i) => (
-                        <span key={i}>{formatTime(Math.round(tick))}</span>
-                      ))}
-                    </div>
-                    <div className="flex-1 h-32">
-                      <svg className="w-full h-full" viewBox="0 0 300 100" preserveAspectRatio="none">
-                        {/* Horizontal grid lines */}
-                        {yTicks.map((_, i) => {
-                          const y = (i / (yTicks.length - 1)) * 100;
-                          return <line key={i} x1="10" y1={y} x2="290" y2={y} stroke="#E5E7EB" strokeWidth="1" />;
-                        })}
-                        {/* Vertical grid lines at x-axis label positions */}
-                        {xAxisLabels.map((label, i) => {
-                          const x = getXPosition(label.date);
-                          return <line key={i} x1={x} y1="0" x2={x} y2="100" stroke="#E5E7EB" strokeWidth="1" />;
-                        })}
-                        {chartData.length > 1 ? (
-                          <path
-                            fill="none"
-                            stroke="#3B82F6"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d={getLinePath(chartData.map((d) => {
-                              const date = d.completedDate?.toDate?.() || new Date();
-                              return {
-                                x: getXPosition(date),
-                                y: range > 0 ? 100 - ((d.timeInSeconds - minTime) / range) * 100 : 50,
-                              };
-                            }))}
-                          />
-                        ) : null}
-                        {chartData.map((d, i) => {
+                <div className="relative overflow-hidden">
+                  <svg width="100%" height="160" viewBox="0 0 320 160" preserveAspectRatio="xMidYMid meet">
+                    {/* Y-axis labels */}
+                    {yTicks.map((tick, i) => {
+                      const y = 15 + (i / (yTicks.length - 1)) * 110;
+                      return (
+                        <text key={`y-${i}`} x="40" y={y + 4} textAnchor="end" className="fill-gray-400 text-[10px]">
+                          {formatTime(Math.round(tick))}
+                        </text>
+                      );
+                    })}
+                    {/* Horizontal grid lines */}
+                    {yTicks.map((_, i) => {
+                      const y = 15 + (i / (yTicks.length - 1)) * 110;
+                      return <line key={i} x1="50" y1={y} x2="310" y2={y} stroke="#E5E7EB" strokeWidth="1" />;
+                    })}
+                    {/* Vertical grid lines */}
+                    {xAxisLabels.map((label, i) => {
+                      const xPct = (label.date.getTime() - timeRangeStart.getTime()) / timeRangeMs;
+                      const x = 50 + xPct * 260;
+                      return <line key={i} x1={x} y1="15" x2={x} y2="125" stroke="#E5E7EB" strokeWidth="1" />;
+                    })}
+                    {/* Data line */}
+                    {chartData.length > 1 ? (
+                      <path
+                        fill="none"
+                        stroke="#3B82F6"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d={getLinePath(chartData.map((d) => {
                           const date = d.completedDate?.toDate?.() || new Date();
-                          const x = getXPosition(date);
-                          const y = range > 0 ? 100 - ((d.timeInSeconds - minTime) / range) * 100 : 50;
-                          const color = getCategoryHexColor(d.notes || "");
-                          return <circle key={i} cx={x} cy={y} r="3" fill={color} />;
-                        })}
-                      </svg>
-                    </div>
-                  </div>
-                  <div className="flex">
-                    <div className="w-12"></div>
-                    <div className="flex-1 relative h-4 text-xs text-gray-400 mt-2">
-                      {xAxisLabels.map((label, i) => {
-                        const x = getXPosition(label.date);
-                        const percent = ((x - 10) / 280) * 100;
-                        return (
-                          <span
-                            key={i}
-                            className="absolute transform -translate-x-1/2"
-                            style={{ left: `${percent}%` }}
-                          >
-                            {label.label}
-                          </span>
-                        );
-                      })}
-                    </div>
-                  </div>
+                          const xPct = (date.getTime() - timeRangeStart.getTime()) / timeRangeMs;
+                          const x = 50 + xPct * 260;
+                          const y = range > 0 ? 15 + (1 - (d.timeInSeconds - minTime) / range) * 110 : 70;
+                          return { x, y };
+                        }))}
+                      />
+                    ) : null}
+                    {/* Data points */}
+                    {chartData.map((d, i) => {
+                      const date = d.completedDate?.toDate?.() || new Date();
+                      const xPct = (date.getTime() - timeRangeStart.getTime()) / timeRangeMs;
+                      const x = 50 + xPct * 260;
+                      const y = range > 0 ? 15 + (1 - (d.timeInSeconds - minTime) / range) * 110 : 70;
+                      const color = getCategoryHexColor(d.notes || "");
+                      return <circle key={i} cx={x} cy={y} r="4" fill={color} />;
+                    })}
+                    {/* X-axis labels */}
+                    {xAxisLabels.map((label, i) => {
+                      const xPct = (label.date.getTime() - timeRangeStart.getTime()) / timeRangeMs;
+                      const x = 50 + xPct * 260;
+                      return (
+                        <text key={`x-${i}`} x={x} y="145" textAnchor="middle" className="fill-gray-400 text-[10px]">
+                          {label.label}
+                        </text>
+                      );
+                    })}
+                  </svg>
                 </div>
                 <div className="flex justify-center gap-4 mt-6 pt-3 border-t border-gray-100 text-xs">
                   <div className="flex items-center gap-1">
