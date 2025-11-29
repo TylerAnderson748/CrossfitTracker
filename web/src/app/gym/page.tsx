@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { collection, query, where, getDocs, addDoc, Timestamp } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
@@ -158,12 +159,13 @@ export default function GymPage() {
           ) : (
             <div className="space-y-4">
               {myGyms.map((gym) => (
-                <div
+                <Link
                   key={gym.id}
-                  className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 flex items-center justify-between"
+                  href={`/gym/${gym.id}`}
+                  className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 flex items-center justify-between hover:shadow-md transition-shadow block"
                 >
                   <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center text-xl">
+                    <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center text-xl">
                       🏢
                     </div>
                     <div>
@@ -173,10 +175,13 @@ export default function GymPage() {
                       </p>
                     </div>
                   </div>
-                  <span className={`px-3 py-1 rounded-full text-sm font-medium ${getRoleColor(gym.role)}`}>
-                    {gym.role}
-                  </span>
-                </div>
+                  <div className="flex items-center gap-3">
+                    <span className={`px-3 py-1 rounded-full text-sm font-medium ${getRoleColor(gym.role)}`}>
+                      {gym.role}
+                    </span>
+                    <span className="text-gray-400">→</span>
+                  </div>
+                </Link>
               ))}
             </div>
           )}
