@@ -439,9 +439,15 @@ function NewWorkoutContent() {
   // Progress chart data
   const chartData = history.slice(0, 10).reverse();
   const times = chartData.map((h) => h.timeInSeconds);
-  const maxTime = Math.max(...times, 1);
-  const minTime = Math.min(...times, 0);
+  const dataMax = Math.max(...times, 1);
+  const dataMin = Math.min(...times, 0);
+  // Add 10% padding above and below
+  const padding = (dataMax - dataMin) * 0.1 || 30;
+  const maxTime = dataMax + padding;
+  const minTime = Math.max(0, dataMin - padding);
   const range = maxTime - minTime || 60;
+  // Generate 5 evenly spaced Y-axis ticks
+  const yTicks = Array.from({ length: 5 }, (_, i) => maxTime - (i * range) / 4);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -530,12 +536,12 @@ function NewWorkoutContent() {
         {chartData.length >= 1 && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-4">
             <p className="text-sm font-semibold text-gray-700 mb-3">Progress</p>
-            <div className="relative h-32">
+            <div className="relative h-40">
               {/* Y-axis labels */}
               <div className="absolute left-0 top-0 bottom-4 w-10 flex flex-col justify-between text-xs text-gray-400">
-                <span>{formatTime(maxTime)}</span>
-                <span>{formatTime(Math.round((maxTime + minTime) / 2))}</span>
-                <span>{formatTime(minTime)}</span>
+                {yTicks.map((tick, i) => (
+                  <span key={i}>{formatTime(Math.round(tick))}</span>
+                ))}
               </div>
               {/* Chart area */}
               <div className="ml-12 h-full relative">
