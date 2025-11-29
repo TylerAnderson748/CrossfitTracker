@@ -185,7 +185,7 @@ export default function DashboardPage() {
                             <div className="flex gap-3 mt-4">
                               <Link
                                 href={isLift
-                                  ? `/workouts/lift`
+                                  ? `/workouts/lift?name=${encodeURIComponent(workout.wodTitle)}&description=${encodeURIComponent(workout.wodDescription || "")}`
                                   : `/workouts/new?name=${encodeURIComponent(workout.wodTitle)}&description=${encodeURIComponent(workout.wodDescription || "")}`}
                                 className={`flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 text-white text-sm font-semibold rounded-xl transition-colors ${
                                   isLift

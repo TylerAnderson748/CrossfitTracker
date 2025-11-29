@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { collection, addDoc, query, where, getDocs, Timestamp, limit, doc, updateDoc, deleteDoc } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
@@ -31,11 +31,12 @@ interface LiftResult {
   date: { toDate: () => Date };
 }
 
-export default function LiftPage() {
+function LiftPageContent() {
   const { user, loading } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
 
-  const [liftName, setLiftName] = useState("");
+  const [liftName, setLiftName] = useState(searchParams.get("name") || "");
   const [selectedReps, setSelectedReps] = useState(1);
   const [weight, setWeight] = useState("");
   const [entryDate, setEntryDate] = useState(new Date().toISOString().split("T")[0]);
@@ -566,5 +567,13 @@ export default function LiftPage() {
         </div>
       </main>
     </div>
+  );
+}
+
+export default function LiftPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-gray-50"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div></div>}>
+      <LiftPageContent />
+    </Suspense>
   );
 }
