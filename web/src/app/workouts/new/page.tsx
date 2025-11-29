@@ -481,7 +481,7 @@ function NewWorkoutContent() {
               <span className="text-xs text-gray-500">Category:</span>
               <div className="flex rounded-lg overflow-hidden border border-gray-200 text-xs">
                 {(["all", "RX", "Scaled", "Just For Fun"] as const).map((c) => (
-                  <button key={c} onClick={() => setCategoryFilter(c)} className={`px-2 py-1 font-medium ${categoryFilter === c ? "bg-blue-600 text-white" : "bg-white text-gray-600"}`}>
+                  <button key={c} onClick={() => setCategoryFilter(c)} className={`px-2 py-1 font-medium whitespace-nowrap ${categoryFilter === c ? "bg-blue-600 text-white" : "bg-white text-gray-600"}`}>
                     {c === "all" ? "All" : c}
                   </button>
                 ))}
