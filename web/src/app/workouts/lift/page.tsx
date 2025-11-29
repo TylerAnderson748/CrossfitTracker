@@ -249,20 +249,29 @@ function LiftPageContent() {
     );
   }
 
-  // Calculate training percentages
-  const percentages = [
-    { pct: 100, color: "text-red-600" },
-    { pct: 95, color: "text-red-500" },
-    { pct: 90, color: "text-red-400" },
-    { pct: 85, color: "text-orange-500" },
-    { pct: 80, color: "text-orange-400" },
-    { pct: 75, color: "text-yellow-500" },
-    { pct: 70, color: "text-yellow-400" },
-    { pct: 65, color: "text-green-500" },
-    { pct: 60, color: "text-green-400" },
-    { pct: 55, color: "text-green-400" },
-    { pct: 50, color: "text-blue-400" },
-    { pct: 45, color: "text-blue-300" },
+  // Calculate training percentages - 3 columns like iOS app
+  const percentageColumns = [
+    // Column 1 - Red (high intensity)
+    [
+      { pct: 100, color: "text-red-500" },
+      { pct: 95, color: "text-red-500" },
+      { pct: 90, color: "text-red-500" },
+      { pct: 85, color: "text-red-500" },
+    ],
+    // Column 2 - Yellow/Orange (medium intensity)
+    [
+      { pct: 80, color: "text-yellow-500" },
+      { pct: 75, color: "text-yellow-500" },
+      { pct: 70, color: "text-yellow-500" },
+      { pct: 65, color: "text-yellow-500" },
+    ],
+    // Column 3 - Green (low intensity)
+    [
+      { pct: 60, color: "text-green-500" },
+      { pct: 55, color: "text-green-500" },
+      { pct: 50, color: "text-green-500" },
+      { pct: 45, color: "text-green-500" },
+    ],
   ];
 
   // Progress chart data
@@ -409,22 +418,26 @@ function LiftPageContent() {
           </div>
         </div>
 
-        {/* Training Percentages */}
+        {/* Training Percentages - iOS style */}
         {latestWeight && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-4">
             <div className="flex justify-between items-center mb-3">
               <p className="text-sm font-semibold text-gray-700">Training %</p>
-              <p className="text-xs text-purple-600 font-medium">
-                Based on {latestWeight} lbs x {selectedReps}
+              <p className="text-sm text-purple-600 font-medium">
+                Latest: {latestWeight} × {selectedReps}
               </p>
             </div>
-            <div className="grid grid-cols-4 gap-x-4 gap-y-1">
-              {percentages.map(({ pct, color }) => (
-                <div key={pct} className="flex justify-between items-center">
-                  <span className={`text-xs font-mono ${color}`}>{pct}%</span>
-                  <span className="text-xs font-mono text-gray-600">
-                    {Math.round(latestWeight * (pct / 100))}
-                  </span>
+            <div className="grid grid-cols-3 gap-x-6">
+              {percentageColumns.map((column, colIndex) => (
+                <div key={colIndex} className="space-y-1">
+                  {column.map(({ pct, color }) => (
+                    <div key={pct} className="flex justify-between items-center">
+                      <span className={`text-sm font-medium ${color}`}>{pct}%</span>
+                      <span className="text-sm text-gray-700">
+                        {Math.round(latestWeight * (pct / 100))}
+                      </span>
+                    </div>
+                  ))}
                 </div>
               ))}
             </div>
