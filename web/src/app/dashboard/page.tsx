@@ -93,10 +93,10 @@ export default function DashboardPage() {
         const isLift = workout.workoutType?.toLowerCase().includes("lift");
 
         if (isLift) {
-          // Fetch from liftResults for lifts
+          // Fetch from liftResults for lifts (iOS uses liftTitle field)
           const liftQuery = query(
             collection(db, "liftResults"),
-            where("liftName", "==", workout.wodTitle),
+            where("liftTitle", "==", workout.wodTitle),
             limit(20)
           );
           const liftSnapshot = await getDocs(liftQuery);

@@ -9,7 +9,7 @@ import Navigation from "@/components/Navigation";
 
 interface LiftResult {
   id: string;
-  liftName: string;
+  liftTitle: string;  // iOS app uses liftTitle, not liftName
   weight: number;
   reps: number;
   userId: string;
@@ -37,7 +37,6 @@ function LiftPageContent() {
   const [leaderboard, setLeaderboard] = useState<LiftResult[]>([]);
   const [loadingLeaderboard, setLoadingLeaderboard] = useState(false);
   const [leaderboardScope, setLeaderboardScope] = useState<"gym" | "everyone">("everyone");
-  const [debugInfo, setDebugInfo] = useState<string>("");
 
   // Edit history state
   const [editingLogId, setEditingLogId] = useState<string | null>(null);
@@ -75,7 +74,7 @@ function LiftPageContent() {
       // Case-insensitive match for lift name
       const liftNameLower = liftName.toLowerCase().trim();
       const filtered = allResults
-        .filter((r) => r.liftName?.toLowerCase().trim() === liftNameLower && r.reps === selectedReps)
+        .filter((r) => r.liftTitle?.toLowerCase().trim() === liftNameLower && r.reps === selectedReps)
         .sort((a, b) => {
           const dateA = a.date?.toDate?.() || new Date(0);
           const dateB = b.date?.toDate?.() || new Date(0);
@@ -104,15 +103,9 @@ function LiftPageContent() {
         ...doc.data(),
       })) as LiftResult[];
 
-      // Debug: show what fields and lift names exist in the database
-      const uniqueLifts = [...new Set(results.map((r) => r.liftName))];
-      const sampleResult = results[0] as Record<string, unknown> || {};
-      const fields = Object.keys(sampleResult).join(", ");
-      setDebugInfo(`Found ${results.length} results. Fields: [${fields}]. Sample: ${JSON.stringify(sampleResult).slice(0, 300)}`);
-
-      // Case-insensitive match for lift name
+      // Case-insensitive match for lift name (iOS uses liftTitle field)
       const liftNameLower = liftName.toLowerCase().trim();
-      results = results.filter((r) => r.liftName?.toLowerCase().trim() === liftNameLower);
+      results = results.filter((r) => r.liftTitle?.toLowerCase().trim() === liftNameLower);
 
       // Filter by reps
       results = results.filter((r) => r.reps === selectedReps);
@@ -159,7 +152,7 @@ function LiftPageContent() {
         userId: user.id,
         userName: user.displayName || `${user.firstName} ${user.lastName}`,
         gymId: user.gymId || null,
-        liftName: liftName.trim(),
+        liftTitle: liftName.trim(),  // iOS app uses liftTitle
         weight: parseFloat(weight),
         reps: selectedReps,
         date: workoutDate,
@@ -296,13 +289,6 @@ function LiftPageContent() {
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg mb-4">
             {error}
-          </div>
-        )}
-
-        {/* Debug info - remove after fixing */}
-        {debugInfo && (
-          <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded-lg mb-4 text-xs">
-            {debugInfo}
           </div>
         )}
 
