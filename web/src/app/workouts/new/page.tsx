@@ -466,7 +466,7 @@ function NewWorkoutContent() {
             </div>
           </div>
 
-          <div className="flex items-center gap-4 mb-3 flex-wrap">
+          <div className="flex items-center gap-4 mb-3">
             <div className="flex items-center gap-2">
               <span className="text-xs text-gray-500">Gender:</span>
               <div className="flex rounded-lg overflow-hidden border border-gray-200 text-xs">
