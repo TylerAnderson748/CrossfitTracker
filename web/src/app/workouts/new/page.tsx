@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { collection, addDoc, Timestamp } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
-import { WODCategory, WorkoutResultType, normalizeWorkoutName } from "@/lib/types";
+import { WODCategory, normalizeWorkoutName } from "@/lib/types";
 import Navigation from "@/components/Navigation";
 
 function NewWorkoutContent() {
@@ -15,9 +15,7 @@ function NewWorkoutContent() {
 
   const [wodTitle, setWodTitle] = useState(searchParams.get("name") || "");
   const [wodDescription, setWodDescription] = useState(searchParams.get("description") || "");
-  const [resultType, setResultType] = useState<WorkoutResultType>("time");
   const [category, setCategory] = useState<WODCategory>("RX");
-  const [isPersonalRecord, setIsPersonalRecord] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -26,13 +24,8 @@ function NewWorkoutContent() {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [manualMinutes, setManualMinutes] = useState("");
   const [manualSeconds, setManualSeconds] = useState("");
-  const [useManualTime, setUseManualTime] = useState(false);
+  const [entryDate, setEntryDate] = useState(new Date().toISOString().split("T")[0]);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Other result types
-  const [rounds, setRounds] = useState("");
-  const [reps, setReps] = useState("");
-  const [weight, setWeight] = useState("");
 
   useEffect(() => {
     if (!loading && !user) {
@@ -61,7 +54,6 @@ function NewWorkoutContent() {
 
   const handleStartStop = () => {
     setTimerRunning(!timerRunning);
-    setUseManualTime(false);
   };
 
   const handleReset = () => {
@@ -69,73 +61,69 @@ function NewWorkoutContent() {
     setElapsedSeconds(0);
   };
 
-  const getFinalTimeInSeconds = (): number => {
-    if (useManualTime) {
-      const mins = parseInt(manualMinutes) || 0;
-      const secs = parseInt(manualSeconds) || 0;
-      return mins * 60 + secs;
-    }
-    return elapsedSeconds;
+  const getTimeFromManual = (): number => {
+    const mins = parseInt(manualMinutes) || 0;
+    const secs = parseInt(manualSeconds) || 0;
+    return mins * 60 + secs;
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
+  const isManualEntryValid = () => {
+    const mins = parseInt(manualMinutes) || 0;
+    const secs = parseInt(manualSeconds) || 0;
+    return mins > 0 || secs > 0;
+  };
 
-    if (!user) return;
-
-    if (!wodTitle.trim()) {
-      setError("Please enter a workout name");
+  const handleSaveTimer = async () => {
+    if (!user || !wodTitle.trim()) return;
+    if (elapsedSeconds === 0) {
+      setError("Please start the timer or enter a time manually");
       return;
     }
+    await saveWorkout(elapsedSeconds);
+  };
 
+  const handleSaveManual = async () => {
+    if (!user || !wodTitle.trim()) return;
+    if (!isManualEntryValid()) {
+      setError("Please enter a valid time");
+      return;
+    }
+    await saveWorkout(getTimeFromManual());
+  };
+
+  const saveWorkout = async (timeInSeconds: number) => {
+    setError("");
     setSubmitting(true);
 
     try {
       const now = Timestamp.now();
-      const timeInSeconds = getFinalTimeInSeconds();
-
-      // Create workout log data
-      const logData: Record<string, unknown> = {
-        userId: user.id,
-        wodTitle: wodTitle.trim(),
-        wodDescription: wodDescription.trim(),
-        resultType,
-        notes: category,
-        isPersonalRecord,
-        workoutDate: now,
-        completedDate: now,
-      };
-
-      // Add result based on type
-      if (resultType === "time") {
-        logData.timeInSeconds = timeInSeconds;
-      } else if (resultType === "rounds") {
-        logData.rounds = parseInt(rounds) || 0;
-      } else if (resultType === "reps") {
-        logData.reps = parseInt(reps) || 0;
-      } else if (resultType === "weight") {
-        logData.weight = parseFloat(weight) || 0;
-      }
+      const workoutDate = Timestamp.fromDate(new Date(entryDate));
 
       // Add to workoutLogs
-      const workoutLogRef = await addDoc(collection(db, "workoutLogs"), logData);
+      const workoutLogRef = await addDoc(collection(db, "workoutLogs"), {
+        userId: user!.id,
+        wodTitle: wodTitle.trim(),
+        wodDescription: wodDescription.trim(),
+        resultType: "time",
+        timeInSeconds,
+        notes: category,
+        isPersonalRecord: false,
+        workoutDate,
+        completedDate: now,
+      });
 
       // Add to leaderboardEntries
       await addDoc(collection(db, "leaderboardEntries"), {
-        userId: user.id,
-        userName: user.displayName || `${user.firstName} ${user.lastName}`,
-        userGender: user.gender,
+        userId: user!.id,
+        userName: user!.displayName || `${user!.firstName} ${user!.lastName}`,
+        userGender: user!.gender,
         workoutLogId: workoutLogRef.id,
         normalizedWorkoutName: normalizeWorkoutName(wodTitle.trim()),
         originalWorkoutName: wodTitle.trim(),
-        resultType,
-        timeInSeconds: resultType === "time" ? timeInSeconds : undefined,
-        rounds: resultType === "rounds" ? parseInt(rounds) || 0 : undefined,
-        reps: resultType === "reps" ? parseInt(reps) || 0 : undefined,
-        weight: resultType === "weight" ? parseFloat(weight) || 0 : undefined,
+        resultType: "time",
+        timeInSeconds,
         category,
-        completedDate: now,
+        completedDate: workoutDate,
         createdAt: now,
       });
 
@@ -151,7 +139,7 @@ function NewWorkoutContent() {
   if (loading || !user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <p className="text-gray-500">Loading...</p>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
       </div>
     );
   }
@@ -159,199 +147,88 @@ function NewWorkoutContent() {
   return (
     <div className="min-h-screen bg-gray-50">
       <Navigation />
-      <main className="max-w-2xl mx-auto px-4 py-8">
-        <h1 className="text-2xl font-bold text-gray-900 mb-8">Log Workout</h1>
+      <main className="max-w-lg mx-auto px-4 py-6">
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg mb-4">
+            {error}
+          </div>
+        )}
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg">
-              {error}
-            </div>
-          )}
+        {/* Workout Info */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-4">
+          <input
+            type="text"
+            value={wodTitle}
+            onChange={(e) => setWodTitle(e.target.value)}
+            placeholder="Workout Name"
+            className="w-full text-xl font-bold text-gray-900 border-none focus:ring-0 p-0 mb-2 placeholder-gray-400"
+          />
+          <textarea
+            value={wodDescription}
+            onChange={(e) => setWodDescription(e.target.value)}
+            placeholder="21-15-9 Thrusters & Pull-ups"
+            rows={2}
+            className="w-full text-gray-500 text-sm border-none focus:ring-0 p-0 resize-none placeholder-gray-300"
+          />
+        </div>
 
-          {/* Workout Info */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Workout Name
-              </label>
-              <input
-                type="text"
-                value={wodTitle}
-                onChange={(e) => setWodTitle(e.target.value)}
-                placeholder="e.g., Fran, Murph, Back Squat"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Description
-              </label>
-              <textarea
-                value={wodDescription}
-                onChange={(e) => setWodDescription(e.target.value)}
-                placeholder="e.g., 21-15-9 Thrusters & Pull-ups"
-                rows={2}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
+        {/* Timer Display */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-4">
+          <div className="text-center mb-4">
+            <div className="text-5xl font-mono font-semibold text-gray-900 tracking-tight">
+              {formatTimerDisplay(elapsedSeconds)}
             </div>
           </div>
 
-          {/* Result Type */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <label className="block text-sm font-medium text-gray-700 mb-3">
-              Result Type
-            </label>
-            <div className="flex flex-wrap gap-2">
-              {(["time", "rounds", "reps", "weight"] as const).map((type) => (
-                <button
-                  key={type}
-                  type="button"
-                  onClick={() => setResultType(type)}
-                  className={`px-4 py-2 rounded-lg font-medium capitalize transition-colors ${
-                    resultType === type
-                      ? "bg-blue-600 text-white"
-                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                  }`}
-                >
-                  {type}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Timer / Result Input */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            {resultType === "time" ? (
-              <>
-                <div className="text-center mb-6">
-                  <div className="text-6xl font-mono text-blue-600 mb-4">
-                    {formatTimerDisplay(elapsedSeconds)}
-                  </div>
-                  <div className="flex justify-center gap-4">
-                    <button
-                      type="button"
-                      onClick={handleStartStop}
-                      className={`px-6 py-2 rounded-lg font-medium transition-colors ${
-                        timerRunning
-                          ? "bg-red-500 hover:bg-red-600 text-white"
-                          : "bg-green-500 hover:bg-green-600 text-white"
-                      }`}
-                    >
-                      {timerRunning ? "Stop" : "Start"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleReset}
-                      className="px-6 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg font-medium transition-colors"
-                    >
-                      Reset
-                    </button>
-                  </div>
-                </div>
-
-                <div className="border-t border-gray-200 pt-4">
-                  <label className="flex items-center gap-2 text-sm text-gray-600 mb-2">
-                    <input
-                      type="checkbox"
-                      checked={useManualTime}
-                      onChange={(e) => setUseManualTime(e.target.checked)}
-                      className="rounded text-blue-600"
-                    />
-                    Enter time manually
-                  </label>
-                  {useManualTime && (
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="number"
-                        value={manualMinutes}
-                        onChange={(e) => setManualMinutes(e.target.value)}
-                        placeholder="0"
-                        min="0"
-                        className="w-20 px-3 py-2 border border-gray-300 rounded-lg text-center"
-                      />
-                      <span className="text-gray-500">min</span>
-                      <input
-                        type="number"
-                        value={manualSeconds}
-                        onChange={(e) => setManualSeconds(e.target.value)}
-                        placeholder="0"
-                        min="0"
-                        max="59"
-                        className="w-20 px-3 py-2 border border-gray-300 rounded-lg text-center"
-                      />
-                      <span className="text-gray-500">sec</span>
-                    </div>
-                  )}
-                </div>
-              </>
-            ) : resultType === "rounds" ? (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Rounds Completed
-                </label>
-                <input
-                  type="number"
-                  value={rounds}
-                  onChange={(e) => setRounds(e.target.value)}
-                  placeholder="0"
-                  min="0"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg text-2xl text-center"
-                />
-              </div>
-            ) : resultType === "reps" ? (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Total Reps
-                </label>
-                <input
-                  type="number"
-                  value={reps}
-                  onChange={(e) => setReps(e.target.value)}
-                  placeholder="0"
-                  min="0"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg text-2xl text-center"
-                />
-              </div>
-            ) : (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Weight (lbs)
-                </label>
-                <input
-                  type="number"
-                  value={weight}
-                  onChange={(e) => setWeight(e.target.value)}
-                  placeholder="0"
-                  min="0"
-                  step="2.5"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg text-2xl text-center"
-                />
-              </div>
+          {/* Timer Controls */}
+          <div className="flex justify-center gap-3 mb-4">
+            <button
+              type="button"
+              onClick={handleStartStop}
+              className={`px-8 py-2.5 rounded-xl font-semibold transition-colors ${
+                timerRunning
+                  ? "bg-red-500 hover:bg-red-600 text-white"
+                  : "bg-green-500 hover:bg-green-600 text-white"
+              }`}
+            >
+              {timerRunning ? "Stop" : "Start"}
+            </button>
+            <button
+              type="button"
+              onClick={handleReset}
+              className="px-6 py-2.5 bg-gray-200 hover:bg-gray-300 rounded-xl font-semibold transition-colors"
+            >
+              Reset
+            </button>
+            {elapsedSeconds > 0 && !timerRunning && (
+              <button
+                type="button"
+                onClick={handleSaveTimer}
+                disabled={submitting}
+                className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold transition-colors disabled:bg-blue-300"
+              >
+                Save
+              </button>
             )}
           </div>
 
-          {/* Category */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <label className="block text-sm font-medium text-gray-700 mb-3">
-              Category
-            </label>
-            <div className="flex flex-wrap gap-2">
+          {/* Category Picker */}
+          <div className="mb-4">
+            <p className="text-xs text-gray-500 mb-2 font-medium">Category</p>
+            <div className="flex rounded-xl overflow-hidden border border-gray-200">
               {(["RX", "Scaled", "Just for Fun"] as const).map((cat) => (
                 <button
                   key={cat}
                   type="button"
                   onClick={() => setCategory(cat)}
-                  className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                  className={`flex-1 py-2.5 text-sm font-semibold transition-colors ${
                     category === cat
                       ? cat === "RX"
                         ? "bg-blue-600 text-white"
                         : cat === "Scaled"
                         ? "bg-gray-600 text-white"
                         : "bg-green-600 text-white"
-                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                      : "bg-white text-gray-600 hover:bg-gray-50"
                   }`}
                 >
                   {cat}
@@ -360,26 +237,56 @@ function NewWorkoutContent() {
             </div>
           </div>
 
-          {/* Personal Record */}
-          <label className="flex items-center gap-3 p-4 bg-white rounded-xl shadow-sm border border-gray-200">
-            <input
-              type="checkbox"
-              checked={isPersonalRecord}
-              onChange={(e) => setIsPersonalRecord(e.target.checked)}
-              className="w-5 h-5 rounded text-yellow-500"
-            />
-            <span className="font-medium text-gray-700">👑 This is a Personal Record (PR)</span>
-          </label>
+          {/* Divider */}
+          <div className="border-t border-gray-200 my-4"></div>
 
-          {/* Submit */}
-          <button
-            type="submit"
-            disabled={submitting}
-            className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-semibold rounded-lg transition-colors"
-          >
-            {submitting ? "Saving..." : "Save Workout"}
-          </button>
-        </form>
+          {/* Manual Entry */}
+          <div>
+            <p className="text-xs text-gray-500 mb-2 font-semibold">Manual Entry</p>
+            <div className="flex items-end gap-2">
+              <div className="flex-1">
+                <p className="text-xs text-gray-400 mb-1">Minutes</p>
+                <input
+                  type="number"
+                  value={manualMinutes}
+                  onChange={(e) => setManualMinutes(e.target.value)}
+                  placeholder="0"
+                  min="0"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-center"
+                />
+              </div>
+              <div className="flex-1">
+                <p className="text-xs text-gray-400 mb-1">Seconds</p>
+                <input
+                  type="number"
+                  value={manualSeconds}
+                  onChange={(e) => setManualSeconds(e.target.value)}
+                  placeholder="0"
+                  min="0"
+                  max="59"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-center"
+                />
+              </div>
+              <div className="flex-1">
+                <p className="text-xs text-gray-400 mb-1">Date</p>
+                <input
+                  type="date"
+                  value={entryDate}
+                  onChange={(e) => setEntryDate(e.target.value)}
+                  className="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={handleSaveManual}
+                disabled={submitting || !isManualEntryValid() || !wodTitle.trim()}
+                className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-colors disabled:bg-gray-300"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
       </main>
     </div>
   );
@@ -389,7 +296,7 @@ export default function NewWorkoutPage() {
   return (
     <Suspense fallback={
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <p className="text-gray-500">Loading...</p>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
       </div>
     }>
       <NewWorkoutContent />
