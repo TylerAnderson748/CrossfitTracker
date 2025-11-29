@@ -186,7 +186,15 @@ struct WorkoutLeaderboardDetailView: View {
 
     var sortedEntries: [LeaderboardEntry] {
         filteredEntries.sorted { entry1, entry2 in
-            // Sort by result type
+            // First sort by category (RX > Scaled > Just for Fun)
+            let cat1 = WODCategory.fromNotes(entry1.category)
+            let cat2 = WODCategory.fromNotes(entry2.category)
+
+            if cat1.priority != cat2.priority {
+                return cat1.priority < cat2.priority
+            }
+
+            // Within same category, sort by result type
             switch entry1.resultType {
             case .time:
                 // For time-based workouts, lower is better
@@ -295,10 +303,20 @@ struct WorkoutLeaderboardDetailView: View {
                                     }
                                 }
 
-                                HStack {
+                                HStack(spacing: 4) {
                                     Text(entry.resultSummary)
                                         .font(.subheadline)
                                         .foregroundColor(.secondary)
+
+                                    // Category badge
+                                    let category = WODCategory.fromNotes(entry.category)
+                                    Text(category.shortName)
+                                        .font(.system(size: 10, weight: .medium))
+                                        .foregroundColor(.white)
+                                        .padding(.horizontal, 5)
+                                        .padding(.vertical, 2)
+                                        .background(category.color)
+                                        .cornerRadius(4)
 
                                     if entry.userId == store.currentUser?.uid {
                                         Text("(You)")
