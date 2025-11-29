@@ -257,16 +257,16 @@ export default function LiftPage() {
   // Progress chart data
   const chartData = history.slice(0, 10).reverse();
   const weights = chartData.map((h) => h.weight);
-  const dataMax = Math.max(...weights, 1);
-  const dataMin = Math.min(...weights, 0);
+  const dataMax = weights.length > 0 ? Math.max(...weights) : 100;
+  const dataMin = weights.length > 0 ? Math.min(...weights) : 0;
   // Round to nearest 10 lbs for nice tick marks
   const tickInterval = 10;
-  const minWeight = Math.floor(dataMin / tickInterval) * tickInterval;
-  const maxWeight = Math.ceil(dataMax / tickInterval) * tickInterval + tickInterval;
-  const range = maxWeight - minWeight || 50;
+  const minWeightTick = Math.floor(dataMin / tickInterval) * tickInterval - tickInterval;
+  const maxWeightTick = Math.ceil(dataMax / tickInterval) * tickInterval + tickInterval;
+  const range = maxWeightTick - minWeightTick || 50;
   // Generate Y-axis ticks at 10-lb intervals
   const numTicks = Math.ceil(range / tickInterval) + 1;
-  const yTicks = Array.from({ length: Math.min(numTicks, 7) }, (_, i) => maxWeight - i * tickInterval);
+  const yTicks = Array.from({ length: Math.min(numTicks, 7) }, (_, i) => maxWeightTick - i * tickInterval);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -312,14 +312,14 @@ export default function LiftPage() {
                           strokeLinejoin="round"
                           d={chartData.map((d, i) => {
                             const x = 10 + (i / (chartData.length - 1)) * 280;
-                            const y = range > 0 ? 100 - ((d.weight - minWeight) / range) * 100 : 50;
+                            const y = range > 0 ? 100 - ((d.weight - minWeightTick) / range) * 100 : 50;
                             return `${i === 0 ? "M" : "L"} ${x},${y}`;
                           }).join(" ")}
                         />
                       ) : null}
                       {chartData.map((d, i) => {
                         const x = chartData.length > 1 ? 10 + (i / (chartData.length - 1)) * 280 : 150;
-                        const y = range > 0 ? 100 - ((d.weight - minWeight) / range) * 100 : 50;
+                        const y = range > 0 ? 100 - ((d.weight - minWeightTick) / range) * 100 : 50;
                         return <circle key={i} cx={x} cy={y} r="3" fill="#9333EA" />;
                       })}
                     </svg>
@@ -371,25 +371,28 @@ export default function LiftPage() {
                 ) : (
                   <div className="space-y-2">
                     {leaderboard.map((entry, index) => (
-                      <div key={entry.id} className="flex items-center gap-3 py-2">
+                      <div key={entry.id} className="flex items-center gap-3 py-1.5">
                         <div
-                          className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+                          className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
                             index < 3 ? getRankColor(index) + " text-white" : "bg-gray-100 text-gray-600"
                           }`}
                         >
-                          {index + 1}
+                          #{index + 1}
                         </div>
-                        <div className="flex-1">
-                          <p className="text-sm font-medium text-gray-900">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">
                             {entry.userName || "Unknown"}
                             {entry.userId === user?.id && (
-                              <span className="text-purple-600 text-xs ml-1">(You)</span>
+                              <span className="text-purple-600 ml-1">(You)</span>
                             )}
                           </p>
-                          <span className="text-xs text-gray-500 font-mono">
-                            {entry.weight} lbs
-                          </span>
+                          <p className="text-xs text-gray-400">
+                            {entry.date?.toDate?.().toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                          </p>
                         </div>
+                        <span className="font-mono text-sm font-semibold text-gray-900">
+                          {entry.weight} lbs
+                        </span>
                       </div>
                     ))}
                   </div>
