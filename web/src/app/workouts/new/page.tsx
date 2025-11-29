@@ -666,8 +666,12 @@ function NewWorkoutContent() {
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="text-xs text-gray-500">{log.completedDate?.toDate().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</p>
-                        <p className="text-lg font-semibold text-gray-900">{formatTime(log.timeInSeconds)}</p>
-                        <p className="text-xs text-gray-500">{log.notes}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="text-lg font-semibold text-gray-900">{formatTime(log.timeInSeconds)}</p>
+                          <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${categoryColors[log.notes as WODCategory]?.badge || "bg-gray-100 text-gray-600"}`}>
+                            {log.notes || "RX"}
+                          </span>
+                        </div>
                       </div>
                       <div className="flex gap-2">
                         <button
