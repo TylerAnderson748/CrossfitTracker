@@ -61,8 +61,10 @@ function NewWorkoutContent() {
   }, [timerRunning]);
 
   useEffect(() => {
-    if (user && wodTitle) {
-      loadHistory();
+    if (user) {
+      if (wodTitle) {
+        loadHistory();
+      }
       loadLeaderboard();
     }
   }, [user, wodTitle, leaderboardFilter, genderFilter]);
@@ -89,25 +91,45 @@ function NewWorkoutContent() {
   };
 
   const loadLeaderboard = async () => {
-    if (!wodTitle) return;
     setLoadingLeaderboard(true);
     try {
-      const normalized = normalizeWorkoutName(wodTitle.trim());
+      let entries: LeaderboardEntry[] = [];
 
-      // Try simple query first (no compound index needed)
-      const q = query(
-        collection(db, "leaderboardEntries"),
-        where("normalizedWorkoutName", "==", normalized),
-        limit(50)
-      );
+      if (wodTitle) {
+        // Try to match by normalized workout name
+        const normalized = normalizeWorkoutName(wodTitle.trim());
+        console.log("Looking for workout:", normalized);
 
-      const snapshot = await getDocs(q);
-      let entries = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      })) as LeaderboardEntry[];
+        const q = query(
+          collection(db, "leaderboardEntries"),
+          where("normalizedWorkoutName", "==", normalized),
+          limit(50)
+        );
 
-      // Filter and sort client-side to avoid index requirements
+        const snapshot = await getDocs(q);
+        entries = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        })) as LeaderboardEntry[];
+
+        console.log("Found entries:", entries.length);
+      }
+
+      // If no workout specified or no matches, show all recent entries
+      if (entries.length === 0) {
+        const allQuery = query(
+          collection(db, "leaderboardEntries"),
+          limit(50)
+        );
+        const allSnapshot = await getDocs(allQuery);
+        entries = allSnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        })) as LeaderboardEntry[];
+        console.log("Loaded all entries:", entries.length);
+      }
+
+      // Filter to only time-based results
       entries = entries.filter((e) => e.resultType === "time" && e.timeInSeconds);
 
       // Apply gender filter
