@@ -57,7 +57,6 @@ function NewWorkoutContent() {
   // History and leaderboard
   const [history, setHistory] = useState<WorkoutLog[]>([]);
   const [leaderboardByCategory, setLeaderboardByCategory] = useState<Record<WODCategory, LeaderboardEntry[]>>({
-    "RX+": [],
     "RX": [],
     "Scaled": [],
     "Just Happy To Be Here": [],
@@ -167,7 +166,6 @@ function NewWorkoutContent() {
 
       // Group by category and sort each group by fastest time
       const grouped: Record<WODCategory, LeaderboardEntry[]> = {
-        "RX+": [],
         "RX": [],
         "Scaled": [],
         "Just Happy To Be Here": [],
@@ -178,9 +176,7 @@ function NewWorkoutContent() {
         let cat: WODCategory = "RX"; // default
         const entryCat = (entry.category || "").toString();
 
-        if (entryCat === "RX+" || entryCat === "rxPlus") {
-          cat = "RX+";
-        } else if (entryCat === "RX" || entryCat === "rx") {
+        if (entryCat === "RX" || entryCat === "rx" || entryCat === "RX+" || entryCat === "rxPlus") {
           cat = "RX";
         } else if (entryCat === "Scaled" || entryCat === "scaled") {
           cat = "Scaled";
