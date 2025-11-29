@@ -115,6 +115,16 @@ function LiftPageContent() {
         results = results.filter((r) => r.gymId === user.gymId);
       }
 
+      // Get max weight per user (only 1 entry per user - their best)
+      const userBestMap = new Map<string, LiftResult>();
+      for (const result of results) {
+        const existing = userBestMap.get(result.userId);
+        if (!existing || result.weight > existing.weight) {
+          userBestMap.set(result.userId, result);
+        }
+      }
+      results = Array.from(userBestMap.values());
+
       // Sort by weight descending
       results.sort((a, b) => b.weight - a.weight);
 
