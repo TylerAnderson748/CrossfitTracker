@@ -2,11 +2,18 @@
 
 import { useState, useEffect, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { collection, addDoc, Timestamp } from "firebase/firestore";
+import { collection, addDoc, query, where, orderBy, getDocs, Timestamp, limit } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
-import { WODCategory, normalizeWorkoutName } from "@/lib/types";
+import { WODCategory, normalizeWorkoutName, LeaderboardEntry, formatResult } from "@/lib/types";
 import Navigation from "@/components/Navigation";
+
+interface WorkoutLog {
+  id: string;
+  timeInSeconds: number;
+  completedDate: { toDate: () => Date };
+  notes: string;
+}
 
 function NewWorkoutContent() {
   const { user, loading } = useAuth();
@@ -27,6 +34,13 @@ function NewWorkoutContent() {
   const [entryDate, setEntryDate] = useState(new Date().toISOString().split("T")[0]);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
+  // History and leaderboard
+  const [history, setHistory] = useState<WorkoutLog[]>([]);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [leaderboardFilter, setLeaderboardFilter] = useState<"everyone" | "gym">("everyone");
+  const [genderFilter, setGenderFilter] = useState<"all" | "Male" | "Female">("all");
+  const [loadingLeaderboard, setLoadingLeaderboard] = useState(false);
+
   useEffect(() => {
     if (!loading && !user) {
       router.push("/login");
@@ -45,6 +59,66 @@ function NewWorkoutContent() {
       if (timerRef.current) clearInterval(timerRef.current);
     };
   }, [timerRunning]);
+
+  useEffect(() => {
+    if (user && wodTitle) {
+      loadHistory();
+      loadLeaderboard();
+    }
+  }, [user, wodTitle, leaderboardFilter, genderFilter]);
+
+  const loadHistory = async () => {
+    if (!user || !wodTitle) return;
+    try {
+      const q = query(
+        collection(db, "workoutLogs"),
+        where("userId", "==", user.id),
+        where("wodTitle", "==", wodTitle.trim()),
+        orderBy("completedDate", "desc"),
+        limit(10)
+      );
+      const snapshot = await getDocs(q);
+      const results = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as WorkoutLog[];
+      setHistory(results);
+    } catch (err) {
+      console.error("Error loading history:", err);
+    }
+  };
+
+  const loadLeaderboard = async () => {
+    if (!wodTitle) return;
+    setLoadingLeaderboard(true);
+    try {
+      const normalized = normalizeWorkoutName(wodTitle.trim());
+      let q = query(
+        collection(db, "leaderboardEntries"),
+        where("normalizedWorkoutName", "==", normalized),
+        where("resultType", "==", "time"),
+        orderBy("timeInSeconds", "asc"),
+        limit(20)
+      );
+
+      const snapshot = await getDocs(q);
+      let entries = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as LeaderboardEntry[];
+
+      // Apply gender filter
+      if (genderFilter !== "all") {
+        entries = entries.filter((e) => e.userGender === genderFilter);
+      }
+
+      setLeaderboard(entries.slice(0, 10));
+    } catch (err) {
+      console.error("Error loading leaderboard:", err);
+    } finally {
+      setLoadingLeaderboard(false);
+    }
+  };
 
   const formatTimerDisplay = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -134,6 +208,13 @@ function NewWorkoutContent() {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const getRankColor = (index: number) => {
+    if (index === 0) return "bg-yellow-400";
+    if (index === 1) return "bg-gray-300";
+    if (index === 2) return "bg-amber-600";
+    return "bg-gray-100";
   };
 
   if (loading || !user) {
@@ -287,6 +368,123 @@ function NewWorkoutContent() {
             </div>
           </div>
         </div>
+
+        {/* Progress Chart */}
+        {history.length > 0 && (
+          <div className="bg-gray-100 rounded-xl p-4 mb-4">
+            <p className="text-sm font-semibold text-gray-700 mb-3">Progress</p>
+            {history.length > 1 ? (
+              <div className="h-24 flex items-end gap-1">
+                {history.slice(0, 10).reverse().map((log, i) => {
+                  const maxTime = Math.max(...history.map((h) => h.timeInSeconds));
+                  const height = (log.timeInSeconds / maxTime) * 100;
+                  return (
+                    <div key={log.id} className="flex-1 flex flex-col items-center">
+                      <div
+                        className="w-full bg-blue-500 rounded-t"
+                        style={{ height: `${height}%`, minHeight: "4px" }}
+                        title={formatTimerDisplay(log.timeInSeconds)}
+                      ></div>
+                      <span className="text-[10px] text-gray-400 mt-1">
+                        {log.completedDate?.toDate().toLocaleDateString("en-US", { month: "numeric", day: "numeric" })}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-xs text-gray-500 text-center py-4">Add more entries to see progress chart</p>
+            )}
+          </div>
+        )}
+
+        {/* Leaderboard */}
+        {wodTitle && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-sm font-semibold text-gray-700">Leaderboard</p>
+              <div className="flex rounded-lg overflow-hidden border border-gray-200 text-xs">
+                <button
+                  onClick={() => setLeaderboardFilter("gym")}
+                  className={`px-3 py-1.5 font-medium ${
+                    leaderboardFilter === "gym" ? "bg-blue-600 text-white" : "bg-white text-gray-600"
+                  }`}
+                >
+                  Gym
+                </button>
+                <button
+                  onClick={() => setLeaderboardFilter("everyone")}
+                  className={`px-3 py-1.5 font-medium ${
+                    leaderboardFilter === "everyone" ? "bg-blue-600 text-white" : "bg-white text-gray-600"
+                  }`}
+                >
+                  Everyone
+                </button>
+              </div>
+            </div>
+
+            {/* Gender Filter */}
+            <div className="flex justify-end mb-3">
+              <div className="flex rounded-lg overflow-hidden border border-gray-200 text-xs">
+                {(["all", "Male", "Female"] as const).map((g) => (
+                  <button
+                    key={g}
+                    onClick={() => setGenderFilter(g)}
+                    className={`px-3 py-1.5 font-medium ${
+                      genderFilter === g ? "bg-blue-600 text-white" : "bg-white text-gray-600"
+                    }`}
+                  >
+                    {g === "all" ? "All" : g}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {loadingLeaderboard ? (
+              <div className="flex justify-center py-6">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+              </div>
+            ) : leaderboard.length === 0 ? (
+              <p className="text-xs text-gray-500 text-center py-6">No entries yet</p>
+            ) : (
+              <div className="space-y-2">
+                {leaderboard.map((entry, index) => (
+                  <div key={entry.id} className="flex items-center gap-3 py-2">
+                    <div
+                      className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+                        index < 3 ? getRankColor(index) + " text-white" : "bg-gray-100 text-gray-600"
+                      }`}
+                    >
+                      {index + 1}
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-gray-900">
+                        {entry.userName}
+                        {entry.userId === user?.id && (
+                          <span className="text-blue-600 text-xs ml-1">(You)</span>
+                        )}
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-gray-500 font-mono">
+                          {formatTimerDisplay(entry.timeInSeconds || 0)}
+                        </span>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
+                          entry.category === "RX"
+                            ? "bg-blue-100 text-blue-700"
+                            : entry.category === "Scaled"
+                            ? "bg-gray-200 text-gray-700"
+                            : "bg-green-100 text-green-700"
+                        }`}>
+                          {entry.category}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </main>
     </div>
   );

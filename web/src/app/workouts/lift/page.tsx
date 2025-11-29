@@ -26,6 +26,8 @@ interface LiftResult {
   liftName: string;
   weight: number;
   reps: number;
+  userId: string;
+  userName?: string;
   date: { toDate: () => Date };
 }
 
@@ -40,6 +42,8 @@ export default function LiftPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [history, setHistory] = useState<LiftResult[]>([]);
+  const [leaderboard, setLeaderboard] = useState<LiftResult[]>([]);
+  const [loadingLeaderboard, setLoadingLeaderboard] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -50,6 +54,7 @@ export default function LiftPage() {
   useEffect(() => {
     if (user && liftName) {
       loadHistory();
+      loadLeaderboard();
     }
   }, [user, liftName, selectedReps]);
 
@@ -72,6 +77,30 @@ export default function LiftPage() {
       setHistory(results);
     } catch (err) {
       console.error("Error loading history:", err);
+    }
+  };
+
+  const loadLeaderboard = async () => {
+    if (!liftName) return;
+    setLoadingLeaderboard(true);
+    try {
+      const q = query(
+        collection(db, "liftResults"),
+        where("liftName", "==", liftName),
+        where("reps", "==", selectedReps),
+        orderBy("weight", "desc"),
+        limit(10)
+      );
+      const snapshot = await getDocs(q);
+      const results = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as LiftResult[];
+      setLeaderboard(results);
+    } catch (err) {
+      console.error("Error loading leaderboard:", err);
+    } finally {
+      setLoadingLeaderboard(false);
     }
   };
 
@@ -99,6 +128,7 @@ export default function LiftPage() {
 
       await addDoc(collection(db, "liftResults"), {
         userId: user.id,
+        userName: user.displayName || `${user.firstName} ${user.lastName}`,
         liftName: liftName.trim(),
         weight: parseFloat(weight),
         reps: selectedReps,
@@ -113,6 +143,13 @@ export default function LiftPage() {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const getRankColor = (index: number) => {
+    if (index === 0) return "bg-yellow-400";
+    if (index === 1) return "bg-gray-300";
+    if (index === 2) return "bg-amber-600";
+    return "bg-gray-100";
   };
 
   if (loading || !user) {
@@ -255,6 +292,75 @@ export default function LiftPage() {
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* Progress Chart */}
+        {history.length > 1 && (
+          <div className="bg-gray-100 rounded-xl p-4 mb-4">
+            <p className="text-sm font-semibold text-gray-700 mb-3">Progress</p>
+            <div className="h-24 flex items-end gap-1">
+              {history.slice(0, 10).reverse().map((log) => {
+                const maxWeight = Math.max(...history.map((h) => h.weight));
+                const minWeight = Math.min(...history.map((h) => h.weight));
+                const range = maxWeight - minWeight || 1;
+                const height = ((log.weight - minWeight) / range) * 80 + 20;
+                return (
+                  <div key={log.id} className="flex-1 flex flex-col items-center">
+                    <div
+                      className="w-full bg-purple-500 rounded-t"
+                      style={{ height: `${height}%`, minHeight: "4px" }}
+                      title={`${log.weight} lbs`}
+                    ></div>
+                    <span className="text-[10px] text-gray-400 mt-1">
+                      {log.date?.toDate().toLocaleDateString("en-US", { month: "numeric", day: "numeric" })}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Leaderboard */}
+        {liftName && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-4">
+            <p className="text-sm font-semibold text-gray-700 mb-3">
+              Leaderboard - {liftName} ({selectedReps} rep{selectedReps > 1 ? "s" : ""})
+            </p>
+
+            {loadingLeaderboard ? (
+              <div className="flex justify-center py-6">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-600"></div>
+              </div>
+            ) : leaderboard.length === 0 ? (
+              <p className="text-xs text-gray-500 text-center py-6">No entries yet</p>
+            ) : (
+              <div className="space-y-2">
+                {leaderboard.map((entry, index) => (
+                  <div key={entry.id} className="flex items-center gap-3 py-2">
+                    <div
+                      className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+                        index < 3 ? getRankColor(index) + " text-white" : "bg-gray-100 text-gray-600"
+                      }`}
+                    >
+                      {index + 1}
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-gray-900">
+                        {entry.userName || "Unknown"}
+                        {entry.userId === user?.id && (
+                          <span className="text-purple-600 text-xs ml-1">(You)</span>
+                        )}
+                      </p>
+                      <span className="text-xs text-gray-500 font-mono">
+                        {entry.weight} lbs
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
