@@ -428,14 +428,15 @@ function LiftPageContent() {
         {chartData.length >= 1 && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-4">
             <p className="text-sm font-semibold text-gray-700 mb-3">Progress</p>
-            <div className="relative h-40">
-              <div className="absolute left-0 top-0 bottom-4 w-10 flex flex-col justify-between text-xs text-gray-400">
-                {yTicks.map((tick, i) => (
-                  <span key={i}>{tick}</span>
-                ))}
-              </div>
-              <div className="ml-12 h-full relative">
-                <svg className="w-full h-full" viewBox="0 0 300 100" preserveAspectRatio="none">
+            <div className="relative">
+              <div className="flex">
+                <div className="w-10 h-32 flex flex-col justify-between text-xs text-gray-400 pr-2">
+                  {yTicks.map((tick, i) => (
+                    <span key={i}>{tick}</span>
+                  ))}
+                </div>
+                <div className="flex-1 h-32">
+                  <svg className="w-full h-full" viewBox="0 0 300 100" preserveAspectRatio="none">
                   {/* Horizontal grid lines */}
                   {yTicks.map((_, i) => {
                     const y = (i / (yTicks.length - 1)) * 100;
@@ -466,7 +467,11 @@ function LiftPageContent() {
                     return <circle key={i} cx={x} cy={y} r="3" fill="#9333EA" />;
                   })}
                 </svg>
-                <div className="flex justify-between text-xs text-gray-400 mt-1">
+                </div>
+              </div>
+              <div className="flex">
+                <div className="w-10"></div>
+                <div className="flex-1 flex justify-between text-xs text-gray-400 mt-2">
                   {chartData.map((d, i) => (
                     <span key={i}>{d.date?.toDate?.().toLocaleDateString("en-US", { month: "numeric", day: "numeric" }) || "N/A"}</span>
                   ))}
