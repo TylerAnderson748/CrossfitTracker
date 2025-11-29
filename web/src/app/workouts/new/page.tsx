@@ -576,12 +576,12 @@ function NewWorkoutContent() {
                         {/* Horizontal grid lines */}
                         {yTicks.map((_, i) => {
                           const y = (i / (yTicks.length - 1)) * 140;
-                          return <line key={i} x1="0" y1={y} x2="350" y2={y} stroke="#E5E7EB" strokeWidth="1" vectorEffect="non-scaling-stroke" />;
+                          return <line key={i} x1="5" y1={y} x2="345" y2={y} stroke="#E5E7EB" strokeWidth="1" vectorEffect="non-scaling-stroke" />;
                         })}
                         {/* Vertical grid lines */}
                         {xAxisLabels.map((label, i) => {
                           const xPct = (label.date.getTime() - timeRangeStart.getTime()) / timeRangeMs;
-                          const x = xPct * 350;
+                          const x = 5 + xPct * 340;
                           return <line key={i} x1={x} y1="0" x2={x} y2="140" stroke="#E5E7EB" strokeWidth="1" vectorEffect="non-scaling-stroke" />;
                         })}
                         {/* Data line */}
@@ -596,7 +596,7 @@ function NewWorkoutContent() {
                             d={getLinePath(chartData.map((d) => {
                               const date = d.completedDate?.toDate?.() || new Date();
                               const xPct = (date.getTime() - timeRangeStart.getTime()) / timeRangeMs;
-                              const x = xPct * 350;
+                              const x = 5 + xPct * 340;
                               const y = range > 0 ? (1 - (d.timeInSeconds - minTime) / range) * 140 : 70;
                               return { x, y };
                             }))}
@@ -606,7 +606,7 @@ function NewWorkoutContent() {
                         {chartData.map((d, i) => {
                           const date = d.completedDate?.toDate?.() || new Date();
                           const xPct = (date.getTime() - timeRangeStart.getTime()) / timeRangeMs;
-                          const x = xPct * 350;
+                          const x = 5 + xPct * 340;
                           const y = range > 0 ? (1 - (d.timeInSeconds - minTime) / range) * 140 : 70;
                           const color = getCategoryHexColor(d.notes || "");
                           return <circle key={i} cx={x} cy={y} r="4" fill={color} />;
