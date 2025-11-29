@@ -530,23 +530,23 @@ function LiftPageContent() {
             </div>
             <div className="relative">
               <div className="flex">
-                <div className="w-10 flex flex-col justify-between text-xs text-gray-400 pr-1" style={{ height: "160px" }}>
+                <div className="w-10 flex flex-col justify-between text-xs text-gray-400 pr-1 py-1" style={{ height: "160px" }}>
                   {yTicks.map((tick, i) => (
                     <span key={i} className="text-right">{tick}</span>
                   ))}
                 </div>
                 <div className="flex-1" style={{ height: "160px" }}>
-                  <svg width="100%" height="100%" viewBox="0 0 350 140" preserveAspectRatio="none">
+                  <svg width="100%" height="100%" viewBox="0 0 350 160" preserveAspectRatio="none">
                     {/* Horizontal grid lines */}
                     {yTicks.map((_, i) => {
-                      const y = 5 + (i / (yTicks.length - 1)) * 130;
+                      const y = 4 + (i / (yTicks.length - 1)) * 152;
                       return <line key={i} x1="5" y1={y} x2="345" y2={y} stroke="#E5E7EB" strokeWidth="1" vectorEffect="non-scaling-stroke" />;
                     })}
                     {/* Vertical grid lines */}
                     {xAxisLabels.map((label, i) => {
                       const xPct = (label.date.getTime() - timeRangeStart.getTime()) / timeRangeMs;
                       const x = 5 + xPct * 340;
-                      return <line key={i} x1={x} y1="5" x2={x} y2="135" stroke="#E5E7EB" strokeWidth="1" vectorEffect="non-scaling-stroke" />;
+                      return <line key={i} x1={x} y1="4" x2={x} y2="156" stroke="#E5E7EB" strokeWidth="1" vectorEffect="non-scaling-stroke" />;
                     })}
                     {/* Data line */}
                     {chartData.length > 1 ? (
@@ -561,7 +561,7 @@ function LiftPageContent() {
                           const date = d.date?.toDate?.() || new Date();
                           const xPct = (date.getTime() - timeRangeStart.getTime()) / timeRangeMs;
                           const x = 5 + xPct * 340;
-                          const y = range > 0 ? 5 + (1 - (d.weight - minWeightTick) / range) * 130 : 70;
+                          const y = range > 0 ? 4 + (1 - (d.weight - minWeightTick) / range) * 152 : 80;
                           return { x, y };
                         }))}
                       />
@@ -571,7 +571,7 @@ function LiftPageContent() {
                       const date = d.date?.toDate?.() || new Date();
                       const xPct = (date.getTime() - timeRangeStart.getTime()) / timeRangeMs;
                       const x = 5 + xPct * 340;
-                      const y = range > 0 ? 5 + (1 - (d.weight - minWeightTick) / range) * 130 : 70;
+                      const y = range > 0 ? 4 + (1 - (d.weight - minWeightTick) / range) * 152 : 80;
                       return <circle key={i} cx={x} cy={y} r="4" fill="#9333EA" />;
                     })}
                   </svg>
