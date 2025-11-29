@@ -2159,12 +2159,20 @@ final class AppStore: ObservableObject {
 
                 print("📊 [fetchLeaderboardForWorkout] Found \(logs.count) workout logs")
 
-                // Get best time for each user
+                // Get best entry for each user (prefer higher category: RX > Scaled > Just for Fun)
                 var bestTimes: [String: WorkoutLog] = [:]
                 for log in logs {
                     guard let time = log.timeInSeconds else { continue }
+                    let logCategory = WODCategory.fromNotes(log.notes)
+
                     if let existing = bestTimes[log.userId], let existingTime = existing.timeInSeconds {
-                        if time < existingTime {
+                        let existingCategory = WODCategory.fromNotes(existing.notes)
+
+                        // Prefer better category (lower priority = better)
+                        if logCategory.priority < existingCategory.priority {
+                            bestTimes[log.userId] = log
+                        } else if logCategory.priority == existingCategory.priority && time < existingTime {
+                            // Same category, prefer better time
                             bestTimes[log.userId] = log
                         }
                     } else {
