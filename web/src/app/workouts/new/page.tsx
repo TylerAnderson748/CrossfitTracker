@@ -23,6 +23,14 @@ function formatTime(seconds: number): string {
   return `${mins}:${secs.toString().padStart(2, "0")}`;
 }
 
+// Get hex color for category
+function getCategoryHexColor(category: string): string {
+  if (category === "RX" || category === "rx" || category === "RX+") return "#3B82F6"; // blue
+  if (category === "Scaled" || category === "scaled") return "#6B7280"; // gray
+  if (category === "Just For Fun" || category === "Just for Fun" || category === "fun") return "#22C55E"; // green
+  return "#3B82F6"; // default blue
+}
+
 // Generate smooth bezier curve path (like iOS Charts)
 function getSmoothPath(points: { x: number; y: number }[]): string {
   if (points.length < 2) return "";
@@ -562,7 +570,8 @@ function NewWorkoutContent() {
                   {chartData.map((d, i) => {
                     const x = chartData.length > 1 ? (i / (chartData.length - 1)) * 300 : 150;
                     const y = range > 0 ? 100 - ((d.timeInSeconds - minTime) / range) * 100 : 50;
-                    return <circle key={i} cx={x} cy={y} r="5" fill="#3B82F6" />;
+                    const color = getCategoryHexColor(d.notes || "");
+                    return <circle key={i} cx={x} cy={y} r="5" fill={color} />;
                   })}
                 </svg>
                 {/* X-axis labels */}
@@ -571,6 +580,21 @@ function NewWorkoutContent() {
                     <span key={i}>{d.completedDate?.toDate?.().toLocaleDateString("en-US", { month: "numeric", day: "numeric" }) || "N/A"}</span>
                   ))}
                 </div>
+              </div>
+            </div>
+            {/* Legend */}
+            <div className="flex justify-center gap-4 mt-3 text-xs">
+              <div className="flex items-center gap-1">
+                <span className="w-3 h-3 rounded-full bg-blue-500"></span>
+                <span className="text-gray-500">RX</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="w-3 h-3 rounded-full bg-gray-500"></span>
+                <span className="text-gray-500">Scaled</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="w-3 h-3 rounded-full bg-green-500"></span>
+                <span className="text-gray-500">Just For Fun</span>
               </div>
             </div>
           </div>
