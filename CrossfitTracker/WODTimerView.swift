@@ -230,66 +230,74 @@ struct WODTimerView: View {
                                 .frame(maxWidth: .infinity, alignment: .center)
                                 .padding(.vertical, 20)
                         } else {
-                            VStack(spacing: 4) {
+                            List {
                                 ForEach(Array(leaderboardEntries.prefix(10).enumerated()), id: \.element.id) { index, entry in
-                                    HStack(spacing: 8) {
-                                        // Rank
-                                        Text("\(index + 1)")
-                                            .font(.caption)
-                                            .fontWeight(.bold)
-                                            .foregroundColor(index < 3 ? .blue : .secondary)
-                                            .frame(width: 25, alignment: .leading)
-
-                                        // Name and Gym
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            Text(entry.userName)
-                                                .font(.caption)
-                                                .foregroundColor(.primary)
-                                                .lineLimit(1)
-
-                                            if let gymName = entry.gymName {
-                                                Text(gymName)
-                                                    .font(.caption2)
-                                                    .foregroundColor(.blue)
-                                                    .lineLimit(1)
+                                    HStack(spacing: 12) {
+                                        // Rank badge
+                                        ZStack {
+                                            if index < 3 {
+                                                Circle()
+                                                    .fill(rankColor(for: index))
+                                                    .frame(width: 40, height: 40)
+                                            } else {
+                                                Circle()
+                                                    .stroke(Color.gray, lineWidth: 2)
+                                                    .frame(width: 40, height: 40)
                                             }
+
+                                            Text("\(index + 1)")
+                                                .font(.headline)
+                                                .foregroundColor(index < 3 ? .white : .primary)
+                                        }
+
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            HStack(spacing: 4) {
+                                                Text(entry.userName)
+                                                    .font(.headline)
+
+                                                if let gymName = entry.gymName {
+                                                    Text("(\(gymName))")
+                                                        .font(.caption)
+                                                        .foregroundColor(.blue)
+                                                }
+                                            }
+
+                                            HStack(spacing: 4) {
+                                                if let time = entry.timeInSeconds {
+                                                    Text(formatTime(time))
+                                                        .font(.subheadline)
+                                                        .foregroundColor(.secondary)
+                                                }
+
+                                                // Category badge
+                                                let category = WODCategory.fromNotes(entry.category)
+                                                Text(category.shortName)
+                                                    .font(.system(size: 10, weight: .medium))
+                                                    .foregroundColor(.white)
+                                                    .padding(.horizontal, 5)
+                                                    .padding(.vertical, 2)
+                                                    .background(category.color)
+                                                    .cornerRadius(4)
+
+                                                if entry.userId == store.currentUser?.uid {
+                                                    Text("(You)")
+                                                        .font(.caption)
+                                                        .foregroundColor(.blue)
+                                                }
+                                            }
+
+                                            Text(formatLeaderboardDate(entry.completedDate))
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
                                         }
 
                                         Spacer()
-
-                                        // Time and Category
-                                        HStack(spacing: 4) {
-                                            if let time = entry.timeInSeconds {
-                                                Text(formatTime(time))
-                                                    .font(.caption)
-                                                    .fontWeight(.semibold)
-                                                    .foregroundColor(.primary)
-                                            }
-
-                                            // Category badge
-                                            let category = WODCategory.fromNotes(entry.category)
-                                            Text(category.shortName)
-                                                .font(.system(size: 9, weight: .medium))
-                                                .foregroundColor(.white)
-                                                .padding(.horizontal, 4)
-                                                .padding(.vertical, 2)
-                                                .background(category.color)
-                                                .cornerRadius(3)
-                                        }
-
-                                        // Date
-                                        Text(entry.completedDate, style: .date)
-                                            .font(.caption2)
-                                            .foregroundColor(.secondary)
-                                            .frame(width: 70, alignment: .trailing)
                                     }
-                                    .padding(.horizontal, 10)
                                     .padding(.vertical, 4)
-                                    .background(index % 2 == 0 ? Color(.systemGray6) : Color.clear)
-                                    .cornerRadius(4)
                                 }
                             }
-                            .padding(.horizontal, 6)
+                            .listStyle(.plain)
+                            .frame(height: CGFloat(min(leaderboardEntries.count, 10) * 80))
                         }
                     }
                     .padding(.vertical, 6)
@@ -615,6 +623,22 @@ struct WODTimerView: View {
         let m = Int(t) / 60
         let s = Int(t) % 60
         return String(format: "%d:%02d", m, s)
+    }
+
+    private func rankColor(for index: Int) -> Color {
+        switch index {
+        case 0: return Color(red: 1.0, green: 0.84, blue: 0.0) // Gold
+        case 1: return Color(red: 0.75, green: 0.75, blue: 0.75) // Silver
+        case 2: return Color(red: 0.8, green: 0.5, blue: 0.2) // Bronze
+        default: return Color.gray
+        }
+    }
+
+    private func formatLeaderboardDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
     }
 
     // MARK: - History Helper
