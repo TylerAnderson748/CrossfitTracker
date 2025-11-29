@@ -466,30 +466,26 @@ function NewWorkoutContent() {
             </div>
           </div>
 
-          <div className="flex justify-end mb-3">
-            <div className="flex rounded-lg overflow-hidden border border-gray-200 text-xs">
-              {(["all", "Male", "Female"] as const).map((g) => (
-                <button key={g} onClick={() => setGenderFilter(g)} className={`px-3 py-1.5 font-medium ${genderFilter === g ? "bg-blue-600 text-white" : "bg-white text-gray-600"}`}>
-                  {g === "all" ? "All" : g}
-                </button>
-              ))}
+          <div className="flex items-center gap-4 mb-3 flex-wrap">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-500">Gender:</span>
+              <div className="flex rounded-lg overflow-hidden border border-gray-200 text-xs">
+                {(["all", "Male", "Female"] as const).map((g) => (
+                  <button key={g} onClick={() => setGenderFilter(g)} className={`px-2 py-1 font-medium ${genderFilter === g ? "bg-blue-600 text-white" : "bg-white text-gray-600"}`}>
+                    {g === "all" ? "All" : g}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
-
-          <div className="flex justify-end mb-3">
-            <div className="flex rounded-lg overflow-hidden border border-gray-200 text-xs">
-              <button onClick={() => setCategoryFilter("all")} className={`px-2 py-1.5 font-medium ${categoryFilter === "all" ? "bg-blue-600 text-white" : "bg-white text-gray-600"}`}>
-                All
-              </button>
-              <button onClick={() => setCategoryFilter("RX")} className={`px-2 py-1.5 font-medium ${categoryFilter === "RX" ? "bg-blue-600 text-white" : "bg-white text-gray-600"}`}>
-                RX
-              </button>
-              <button onClick={() => setCategoryFilter("Scaled")} className={`px-2 py-1.5 font-medium ${categoryFilter === "Scaled" ? "bg-blue-600 text-white" : "bg-white text-gray-600"}`}>
-                Scaled
-              </button>
-              <button onClick={() => setCategoryFilter("Just For Fun")} className={`px-2 py-1.5 font-medium ${categoryFilter === "Just For Fun" ? "bg-blue-600 text-white" : "bg-white text-gray-600"}`}>
-                Just For Fun
-              </button>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-500">Category:</span>
+              <div className="flex rounded-lg overflow-hidden border border-gray-200 text-xs">
+                {(["all", "RX", "Scaled", "Just For Fun"] as const).map((c) => (
+                  <button key={c} onClick={() => setCategoryFilter(c)} className={`px-2 py-1 font-medium ${categoryFilter === c ? "bg-blue-600 text-white" : "bg-white text-gray-600"}`}>
+                    {c === "all" ? "All" : c}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
