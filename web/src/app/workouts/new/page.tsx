@@ -1,20 +1,22 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, useRef, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { collection, addDoc, Timestamp } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
-import { normalizeWorkoutName } from "@/lib/types";
+import { WODCategory, WorkoutResultType, normalizeWorkoutName } from "@/lib/types";
 import Navigation from "@/components/Navigation";
 
-export default function NewWorkoutPage() {
+function NewWorkoutContent() {
   const { user, loading } = useAuth();
   const router = useRouter();
-  const [wodTitle, setWodTitle] = useState("");
-  const [wodDescription, setWodDescription] = useState("");
-  const [notes, setNotes] = useState("RX");
-  const [resultType, setResultType] = useState<"time" | "reps" | "rounds">("time");
+  const searchParams = useSearchParams();
+
+  const [wodTitle, setWodTitle] = useState(searchParams.get("name") || "");
+  const [wodDescription, setWodDescription] = useState(searchParams.get("description") || "");
+  const [resultType, setResultType] = useState<WorkoutResultType>("time");
+  const [category, setCategory] = useState<WODCategory>("RX");
   const [isPersonalRecord, setIsPersonalRecord] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -26,6 +28,11 @@ export default function NewWorkoutPage() {
   const [manualSeconds, setManualSeconds] = useState("");
   const [useManualTime, setUseManualTime] = useState(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Other result types
+  const [rounds, setRounds] = useState("");
+  const [reps, setReps] = useState("");
+  const [weight, setWeight] = useState("");
 
   useEffect(() => {
     if (!loading && !user) {
@@ -82,41 +89,54 @@ export default function NewWorkoutPage() {
       return;
     }
 
-    const timeInSeconds = getFinalTimeInSeconds();
-    if (timeInSeconds <= 0) {
-      setError("Please enter a valid time");
-      return;
-    }
-
     setSubmitting(true);
 
     try {
       const now = Timestamp.now();
+      const timeInSeconds = getFinalTimeInSeconds();
 
-      // Add to workoutLogs
-      const workoutLogRef = await addDoc(collection(db, "workoutLogs"), {
+      // Create workout log data
+      const logData: Record<string, unknown> = {
+        userId: user.id,
         wodTitle: wodTitle.trim(),
         wodDescription: wodDescription.trim(),
-        timeInSeconds,
         resultType,
-        notes,
+        notes: category,
         isPersonalRecord,
-        userId: user.id,
-        completedDate: now,
         workoutDate: now,
-      });
+        completedDate: now,
+      };
+
+      // Add result based on type
+      if (resultType === "time") {
+        logData.timeInSeconds = timeInSeconds;
+      } else if (resultType === "rounds") {
+        logData.rounds = parseInt(rounds) || 0;
+      } else if (resultType === "reps") {
+        logData.reps = parseInt(reps) || 0;
+      } else if (resultType === "weight") {
+        logData.weight = parseFloat(weight) || 0;
+      }
+
+      // Add to workoutLogs
+      const workoutLogRef = await addDoc(collection(db, "workoutLogs"), logData);
 
       // Add to leaderboardEntries
       await addDoc(collection(db, "leaderboardEntries"), {
-        userName: user.displayName || `${user.firstName} ${user.lastName}`,
         userId: user.id,
-        timeInSeconds,
-        resultType,
-        originalWorkoutName: wodTitle.trim(),
+        userName: user.displayName || `${user.firstName} ${user.lastName}`,
+        userGender: user.gender,
+        workoutLogId: workoutLogRef.id,
         normalizedWorkoutName: normalizeWorkoutName(wodTitle.trim()),
+        originalWorkoutName: wodTitle.trim(),
+        resultType,
+        timeInSeconds: resultType === "time" ? timeInSeconds : undefined,
+        rounds: resultType === "rounds" ? parseInt(rounds) || 0 : undefined,
+        reps: resultType === "reps" ? parseInt(reps) || 0 : undefined,
+        weight: resultType === "weight" ? parseFloat(weight) || 0 : undefined,
+        category,
         completedDate: now,
         createdAt: now,
-        workoutLogId: workoutLogRef.id,
       });
 
       router.push("/workouts");
@@ -130,186 +150,249 @@ export default function NewWorkoutPage() {
 
   if (loading || !user) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p className="text-gray-400">Loading...</p>
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <p className="text-gray-500">Loading...</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-900">
+    <div className="min-h-screen bg-gray-50">
       <Navigation />
       <main className="max-w-2xl mx-auto px-4 py-8">
-        <h1 className="text-3xl font-bold mb-8">Log Workout</h1>
+        <h1 className="text-2xl font-bold text-gray-900 mb-8">Log Workout</h1>
 
         <form onSubmit={handleSubmit} className="space-y-6">
           {error && (
-            <div className="bg-red-500/20 border border-red-500 text-red-400 px-4 py-2 rounded">
+            <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg">
               {error}
             </div>
           )}
 
-          {/* Workout Name */}
-          <div>
-            <label htmlFor="wodTitle" className="block text-sm font-medium text-gray-300 mb-1">
-              Workout Name
-            </label>
-            <input
-              type="text"
-              id="wodTitle"
-              value={wodTitle}
-              onChange={(e) => setWodTitle(e.target.value)}
-              placeholder="e.g., Fran, Murph, Kelly..."
-              className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent text-white"
-              required
-            />
-          </div>
-
-          {/* Workout Description */}
-          <div>
-            <label htmlFor="wodDescription" className="block text-sm font-medium text-gray-300 mb-1">
-              Description
-            </label>
-            <textarea
-              id="wodDescription"
-              value={wodDescription}
-              onChange={(e) => setWodDescription(e.target.value)}
-              placeholder="e.g., 21-15-9 Thrusters & Pull-ups"
-              rows={3}
-              className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent text-white"
-            />
-          </div>
-
-          {/* Timer Section */}
-          <div className="bg-gray-800 rounded-lg p-6">
-            <h2 className="text-lg font-semibold mb-4">Timer</h2>
-
-            {/* Timer Display */}
-            <div className="text-center mb-6">
-              <div className="text-6xl font-mono text-orange-500 mb-4">
-                {formatTimerDisplay(elapsedSeconds)}
-              </div>
-              <div className="flex justify-center gap-4">
-                <button
-                  type="button"
-                  onClick={handleStartStop}
-                  className={`px-6 py-2 rounded-lg font-medium transition-colors ${
-                    timerRunning
-                      ? "bg-red-500 hover:bg-red-600"
-                      : "bg-green-500 hover:bg-green-600"
-                  }`}
-                >
-                  {timerRunning ? "Stop" : "Start"}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleReset}
-                  className="px-6 py-2 bg-gray-600 hover:bg-gray-500 rounded-lg font-medium transition-colors"
-                >
-                  Reset
-                </button>
-              </div>
+          {/* Workout Info */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Workout Name
+              </label>
+              <input
+                type="text"
+                value={wodTitle}
+                onChange={(e) => setWodTitle(e.target.value)}
+                placeholder="e.g., Fran, Murph, Back Squat"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                required
+              />
             </div>
 
-            {/* Manual Time Entry */}
-            <div className="border-t border-gray-700 pt-4">
-              <label className="flex items-center gap-2 text-sm text-gray-400 mb-2">
-                <input
-                  type="checkbox"
-                  checked={useManualTime}
-                  onChange={(e) => setUseManualTime(e.target.checked)}
-                  className="rounded"
-                />
-                Enter time manually
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Description
               </label>
-              {useManualTime && (
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    value={manualMinutes}
-                    onChange={(e) => setManualMinutes(e.target.value)}
-                    placeholder="0"
-                    min="0"
-                    className="w-20 px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-center text-white"
-                  />
-                  <span className="text-gray-400">min</span>
-                  <input
-                    type="number"
-                    value={manualSeconds}
-                    onChange={(e) => setManualSeconds(e.target.value)}
-                    placeholder="0"
-                    min="0"
-                    max="59"
-                    className="w-20 px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-center text-white"
-                  />
-                  <span className="text-gray-400">sec</span>
-                </div>
-              )}
+              <textarea
+                value={wodDescription}
+                onChange={(e) => setWodDescription(e.target.value)}
+                placeholder="e.g., 21-15-9 Thrusters & Pull-ups"
+                rows={2}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
             </div>
           </div>
 
           {/* Result Type */}
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">Result Type</label>
-            <div className="flex gap-4">
-              {(["time", "reps", "rounds"] as const).map((type) => (
-                <label key={type} className="flex items-center gap-2">
-                  <input
-                    type="radio"
-                    name="resultType"
-                    value={type}
-                    checked={resultType === type}
-                    onChange={(e) => setResultType(e.target.value as typeof resultType)}
-                    className="text-orange-500"
-                  />
-                  <span className="capitalize">{type}</span>
-                </label>
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <label className="block text-sm font-medium text-gray-700 mb-3">
+              Result Type
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {(["time", "rounds", "reps", "weight"] as const).map((type) => (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => setResultType(type)}
+                  className={`px-4 py-2 rounded-lg font-medium capitalize transition-colors ${
+                    resultType === type
+                      ? "bg-blue-600 text-white"
+                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  }`}
+                >
+                  {type}
+                </button>
               ))}
             </div>
           </div>
 
-          {/* Category / Notes */}
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">Category</label>
+          {/* Timer / Result Input */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            {resultType === "time" ? (
+              <>
+                <div className="text-center mb-6">
+                  <div className="text-6xl font-mono text-blue-600 mb-4">
+                    {formatTimerDisplay(elapsedSeconds)}
+                  </div>
+                  <div className="flex justify-center gap-4">
+                    <button
+                      type="button"
+                      onClick={handleStartStop}
+                      className={`px-6 py-2 rounded-lg font-medium transition-colors ${
+                        timerRunning
+                          ? "bg-red-500 hover:bg-red-600 text-white"
+                          : "bg-green-500 hover:bg-green-600 text-white"
+                      }`}
+                    >
+                      {timerRunning ? "Stop" : "Start"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleReset}
+                      className="px-6 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg font-medium transition-colors"
+                    >
+                      Reset
+                    </button>
+                  </div>
+                </div>
+
+                <div className="border-t border-gray-200 pt-4">
+                  <label className="flex items-center gap-2 text-sm text-gray-600 mb-2">
+                    <input
+                      type="checkbox"
+                      checked={useManualTime}
+                      onChange={(e) => setUseManualTime(e.target.checked)}
+                      className="rounded text-blue-600"
+                    />
+                    Enter time manually
+                  </label>
+                  {useManualTime && (
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        value={manualMinutes}
+                        onChange={(e) => setManualMinutes(e.target.value)}
+                        placeholder="0"
+                        min="0"
+                        className="w-20 px-3 py-2 border border-gray-300 rounded-lg text-center"
+                      />
+                      <span className="text-gray-500">min</span>
+                      <input
+                        type="number"
+                        value={manualSeconds}
+                        onChange={(e) => setManualSeconds(e.target.value)}
+                        placeholder="0"
+                        min="0"
+                        max="59"
+                        className="w-20 px-3 py-2 border border-gray-300 rounded-lg text-center"
+                      />
+                      <span className="text-gray-500">sec</span>
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : resultType === "rounds" ? (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Rounds Completed
+                </label>
+                <input
+                  type="number"
+                  value={rounds}
+                  onChange={(e) => setRounds(e.target.value)}
+                  placeholder="0"
+                  min="0"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg text-2xl text-center"
+                />
+              </div>
+            ) : resultType === "reps" ? (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Total Reps
+                </label>
+                <input
+                  type="number"
+                  value={reps}
+                  onChange={(e) => setReps(e.target.value)}
+                  placeholder="0"
+                  min="0"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg text-2xl text-center"
+                />
+              </div>
+            ) : (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Weight (lbs)
+                </label>
+                <input
+                  type="number"
+                  value={weight}
+                  onChange={(e) => setWeight(e.target.value)}
+                  placeholder="0"
+                  min="0"
+                  step="2.5"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg text-2xl text-center"
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Category */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <label className="block text-sm font-medium text-gray-700 mb-3">
+              Category
+            </label>
             <div className="flex flex-wrap gap-2">
-              {["RX+", "RX", "Scaled", "Just Happy To Be Here"].map((category) => (
+              {(["RX", "Scaled", "Just for Fun"] as const).map((cat) => (
                 <button
-                  key={category}
+                  key={cat}
                   type="button"
-                  onClick={() => setNotes(category)}
+                  onClick={() => setCategory(cat)}
                   className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                    notes === category
-                      ? "bg-orange-500 text-white"
-                      : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                    category === cat
+                      ? cat === "RX"
+                        ? "bg-blue-600 text-white"
+                        : cat === "Scaled"
+                        ? "bg-gray-600 text-white"
+                        : "bg-green-600 text-white"
+                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                   }`}
                 >
-                  {category}
+                  {cat}
                 </button>
               ))}
             </div>
           </div>
 
           {/* Personal Record */}
-          <label className="flex items-center gap-2">
+          <label className="flex items-center gap-3 p-4 bg-white rounded-xl shadow-sm border border-gray-200">
             <input
               type="checkbox"
               checked={isPersonalRecord}
               onChange={(e) => setIsPersonalRecord(e.target.checked)}
-              className="rounded text-orange-500"
+              className="w-5 h-5 rounded text-yellow-500"
             />
-            <span>This is a Personal Record (PR)</span>
+            <span className="font-medium text-gray-700">👑 This is a Personal Record (PR)</span>
           </label>
 
           {/* Submit */}
           <button
             type="submit"
             disabled={submitting}
-            className="w-full py-3 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-500/50 text-white font-semibold rounded-lg transition-colors"
+            className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-semibold rounded-lg transition-colors"
           >
             {submitting ? "Saving..." : "Save Workout"}
           </button>
         </form>
       </main>
     </div>
+  );
+}
+
+export default function NewWorkoutPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <p className="text-gray-500">Loading...</p>
+      </div>
+    }>
+      <NewWorkoutContent />
+    </Suspense>
   );
 }

@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { doc, updateDoc } from "firebase/firestore";
+import { doc, updateDoc, collection, query, where, getDocs } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
+import { Gym, Gender } from "@/lib/types";
 import Navigation from "@/components/Navigation";
 
 export default function ProfilePage() {
@@ -12,11 +13,12 @@ export default function ProfilePage() {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [myGyms, setMyGyms] = useState<(Gym & { role: string })[]>([]);
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
     username: "",
-    gender: "",
+    gender: "Male" as Gender,
     hideFromLeaderboards: false,
   });
 
@@ -32,11 +34,43 @@ export default function ProfilePage() {
         firstName: user.firstName || "",
         lastName: user.lastName || "",
         username: user.username || "",
-        gender: user.gender || "",
+        gender: user.gender || "Male",
         hideFromLeaderboards: user.hideFromLeaderboards || false,
       });
+      fetchGyms();
     }
   }, [user]);
+
+  const fetchGyms = async () => {
+    if (!user) return;
+
+    try {
+      const gymsSnapshot = await getDocs(collection(db, "gyms"));
+      const gyms = gymsSnapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as Gym[];
+
+      const userGyms = gyms
+        .filter(
+          (gym) =>
+            gym.ownerId === user.id ||
+            gym.coachIds?.includes(user.id) ||
+            gym.memberIds?.includes(user.id)
+        )
+        .map((gym) => ({
+          ...gym,
+          role: gym.ownerId === user.id
+            ? "Owner"
+            : gym.coachIds?.includes(user.id)
+            ? "Coach"
+            : "Member",
+        }));
+      setMyGyms(userGyms);
+    } catch (error) {
+      console.error("Error fetching gyms:", error);
+    }
+  };
 
   const handleSave = async () => {
     if (!user) return;
@@ -52,7 +86,6 @@ export default function ProfilePage() {
         hideFromLeaderboards: formData.hideFromLeaderboards,
       });
       setEditing(false);
-      // Refresh page to get updated user data
       window.location.reload();
     } catch (error) {
       console.error("Error updating profile:", error);
@@ -66,30 +99,42 @@ export default function ProfilePage() {
     router.push("/login");
   };
 
+  const getRoleColor = (role: string) => {
+    switch (role) {
+      case "Owner":
+        return "bg-purple-100 text-purple-600";
+      case "Coach":
+        return "bg-blue-100 text-blue-600";
+      default:
+        return "bg-green-100 text-green-600";
+    }
+  };
+
   if (loading || !user) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p className="text-gray-400">Loading...</p>
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <p className="text-gray-500">Loading...</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-900">
+    <div className="min-h-screen bg-gray-50">
       <Navigation />
       <main className="max-w-2xl mx-auto px-4 py-8">
-        <h1 className="text-3xl font-bold mb-8">Profile</h1>
+        <h1 className="text-2xl font-bold text-gray-900 mb-8">Profile</h1>
 
-        <div className="bg-gray-800 rounded-lg p-6">
-          {/* Avatar placeholder */}
+        {/* Profile Card */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+          {/* Avatar & Name */}
           <div className="flex items-center gap-4 mb-6">
-            <div className="w-20 h-20 bg-orange-500 rounded-full flex items-center justify-center text-3xl font-bold">
-              {user.firstName?.charAt(0) || user.displayName?.charAt(0) || "?"}
+            <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center text-2xl text-gray-500">
+              👤
             </div>
             <div>
-              <h2 className="text-xl font-semibold">{user.displayName}</h2>
-              <p className="text-gray-400">@{user.username}</p>
-              <p className="text-sm text-gray-500">{user.email}</p>
+              <h2 className="text-xl font-semibold text-gray-900">{user.displayName}</h2>
+              <p className="text-gray-500">@{user.username}</p>
+              <p className="text-gray-400 text-sm">{user.email}</p>
             </div>
           </div>
 
@@ -97,53 +142,52 @@ export default function ProfilePage() {
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
                     First Name
                   </label>
                   <input
                     type="text"
                     value={formData.firstName}
                     onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
-                    className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
                     Last Name
                   </label>
                   <input
                     type="text"
                     value={formData.lastName}
                     onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
-                    className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
                   Username
                 </label>
                 <input
                   type="text"
                   value={formData.username}
                   onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                  className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
                   Gender
                 </label>
                 <select
                   value={formData.gender}
-                  onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
-                  className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white"
+                  onChange={(e) => setFormData({ ...formData, gender: e.target.value as Gender })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
                   <option value="Male">Male</option>
                   <option value="Female">Female</option>
-                  <option value="Other">Other</option>
                 </select>
               </div>
 
@@ -154,22 +198,22 @@ export default function ProfilePage() {
                   onChange={(e) =>
                     setFormData({ ...formData, hideFromLeaderboards: e.target.checked })
                   }
-                  className="rounded text-orange-500"
+                  className="rounded text-blue-600"
                 />
-                <span>Hide from leaderboards</span>
+                <span className="text-gray-700">Hide from leaderboards</span>
               </label>
 
-              <div className="flex gap-4 pt-4">
+              <div className="flex gap-3 pt-4">
                 <button
                   onClick={() => setEditing(false)}
-                  className="flex-1 py-2 bg-gray-600 hover:bg-gray-500 rounded-lg font-medium transition-colors"
+                  className="flex-1 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleSave}
                   disabled={saving}
-                  className="flex-1 py-2 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-500/50 rounded-lg font-medium transition-colors"
+                  className="flex-1 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-blue-300 transition-colors"
                 >
                   {saving ? "Saving..." : "Save Changes"}
                 </button>
@@ -179,66 +223,86 @@ export default function ProfilePage() {
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <div className="text-sm text-gray-400">First Name</div>
-                  <div className="font-medium">{user.firstName}</div>
+                  <div className="text-sm text-gray-500">First Name</div>
+                  <div className="font-medium text-gray-900">{user.firstName || "-"}</div>
                 </div>
                 <div>
-                  <div className="text-sm text-gray-400">Last Name</div>
-                  <div className="font-medium">{user.lastName}</div>
+                  <div className="text-sm text-gray-500">Last Name</div>
+                  <div className="font-medium text-gray-900">{user.lastName || "-"}</div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <div className="text-sm text-gray-500">Gender</div>
+                  <div className="font-medium text-gray-900">{user.gender || "-"}</div>
+                </div>
+                <div>
+                  <div className="text-sm text-gray-500">Role</div>
+                  <div className="font-medium text-gray-900 capitalize">{user.role}</div>
                 </div>
               </div>
 
               <div>
-                <div className="text-sm text-gray-400">Gender</div>
-                <div className="font-medium">{user.gender}</div>
-              </div>
-
-              <div>
-                <div className="text-sm text-gray-400">Role</div>
-                <div className="font-medium capitalize">{user.role}</div>
-              </div>
-
-              <div>
-                <div className="text-sm text-gray-400">Leaderboard Visibility</div>
-                <div className="font-medium">
+                <div className="text-sm text-gray-500">Leaderboard Visibility</div>
+                <div className="font-medium text-gray-900">
                   {user.hideFromLeaderboards ? "Hidden" : "Visible"}
                 </div>
               </div>
 
-              <div className="flex gap-4 pt-4">
-                <button
-                  onClick={() => setEditing(true)}
-                  className="flex-1 py-2 bg-gray-600 hover:bg-gray-500 rounded-lg font-medium transition-colors"
-                >
-                  Edit Profile
-                </button>
-                <button
-                  onClick={handleSignOut}
-                  className="flex-1 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg font-medium transition-colors"
-                >
-                  Sign Out
-                </button>
-              </div>
+              <button
+                onClick={() => setEditing(true)}
+                className="w-full py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
+              >
+                ✏️ Edit Profile
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* My Gyms */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">My Gyms</h3>
+          {myGyms.length === 0 ? (
+            <p className="text-gray-500 text-sm">Not a member of any gym</p>
+          ) : (
+            <div className="space-y-3">
+              {myGyms.map((gym) => (
+                <div key={gym.id} className="flex items-center justify-between">
+                  <span className="font-medium text-gray-900">{gym.name}</span>
+                  <span className={`px-2 py-1 text-xs font-medium rounded ${getRoleColor(gym.role)}`}>
+                    {gym.role}
+                  </span>
+                </div>
+              ))}
             </div>
           )}
         </div>
 
         {/* Account Info */}
-        <div className="bg-gray-800 rounded-lg p-6 mt-6">
-          <h3 className="text-lg font-semibold mb-4">Account Information</h3>
-          <div className="space-y-2 text-sm">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Account</h3>
+          <div className="space-y-3 text-sm">
             <div className="flex justify-between">
-              <span className="text-gray-400">Email</span>
-              <span>{user.email}</span>
+              <span className="text-gray-500">Email</span>
+              <span className="text-gray-900">{user.email}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-400">Member since</span>
-              <span>
+              <span className="text-gray-500">Member since</span>
+              <span className="text-gray-900">
                 {user.createdAt?.toDate?.()?.toLocaleDateString() || "Unknown"}
               </span>
             </div>
           </div>
         </div>
+
+        {/* Sign Out */}
+        <button
+          onClick={handleSignOut}
+          className="w-full py-3 bg-red-50 text-red-600 font-medium rounded-lg hover:bg-red-100 transition-colors"
+        >
+          Sign Out
+        </button>
       </main>
     </div>
   );
