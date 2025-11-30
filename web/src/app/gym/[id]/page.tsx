@@ -6,7 +6,7 @@ import Link from "next/link";
 import { doc, getDoc, collection, query, where, getDocs, updateDoc, arrayUnion, arrayRemove, deleteDoc, addDoc, Timestamp } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
-import { Gym, WorkoutGroup, AppUser, ScheduledWorkout, WorkoutLog, WorkoutComponent, WorkoutComponentType, workoutComponentLabels, workoutComponentColors } from "@/lib/types";
+import { Gym, WorkoutGroup, AppUser, ScheduledWorkout, WorkoutLog, WorkoutComponent, WorkoutComponentType, workoutComponentLabels, workoutComponentColors, LiftResult } from "@/lib/types";
 import Navigation from "@/components/Navigation";
 
 interface MembershipRequest {
@@ -31,6 +31,7 @@ export default function GymDetailPage() {
   const [requests, setRequests] = useState<MembershipRequest[]>([]);
   const [scheduledWorkouts, setScheduledWorkouts] = useState<ScheduledWorkout[]>([]);
   const [workoutLogs, setWorkoutLogs] = useState<WorkoutLog[]>([]);
+  const [liftResults, setLiftResults] = useState<LiftResult[]>([]);
   const [loadingData, setLoadingData] = useState(true);
   const [activeTab, setActiveTab] = useState<"members" | "coaches" | "groups" | "programming" | "requests">("members");
   const [showAddGroupModal, setShowAddGroupModal] = useState(false);
@@ -161,26 +162,23 @@ export default function GymDetailPage() {
         setScheduledWorkouts(workoutsData);
       }
 
-      // Fetch workout logs from gym members for suggestions
-      const allMemberIds = [
-        gymData.ownerId,
-        ...(gymData.coachIds || []),
-        ...(gymData.memberIds || []),
-      ].filter(Boolean);
+      // Fetch ALL workout logs for suggestions (not limited to gym members)
+      const logsQuery = query(collection(db, "workoutLogs"));
+      const logsSnapshot = await getDocs(logsQuery);
+      const logsData = logsSnapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as WorkoutLog[];
+      setWorkoutLogs(logsData);
 
-      if (allMemberIds.length > 0) {
-        // Fetch workout logs from gym members (limit to first 10 members due to Firestore limit)
-        const logsQuery = query(
-          collection(db, "workoutLogs"),
-          where("userId", "in", allMemberIds.slice(0, 10))
-        );
-        const logsSnapshot = await getDocs(logsQuery);
-        const logsData = logsSnapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        })) as WorkoutLog[];
-        setWorkoutLogs(logsData);
-      }
+      // Fetch ALL lift results for suggestions
+      const liftsQuery = query(collection(db, "liftResults"));
+      const liftsSnapshot = await getDocs(liftsQuery);
+      const liftsData = liftsSnapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as LiftResult[];
+      setLiftResults(liftsData);
     } catch (error) {
       console.error("Error fetching gym data:", error);
     } finally {
@@ -452,6 +450,16 @@ export default function GymDetailPage() {
         workoutMap.set(w.wodTitle.toLowerCase(), {
           title: w.wodTitle,
           description: w.wodDescription || "",
+        });
+      }
+    });
+
+    // Add from lift results
+    liftResults.forEach((lift) => {
+      if (lift.liftName && !workoutMap.has(lift.liftName.toLowerCase())) {
+        workoutMap.set(lift.liftName.toLowerCase(), {
+          title: lift.liftName,
+          description: "",
         });
       }
     });
