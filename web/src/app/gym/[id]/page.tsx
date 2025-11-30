@@ -89,10 +89,10 @@ export default function GymDetailPage() {
         id: doc.id,
         ...doc.data(),
       })) as WorkoutGroup[];
-      // Sort groups: default groups first, then by name
+      // Sort groups: "Members" group first, then by name
       groupsData.sort((a, b) => {
-        if (a.type === "default" && b.type !== "default") return -1;
-        if (a.type !== "default" && b.type === "default") return 1;
+        if (a.name === "Members" && b.name !== "Members") return -1;
+        if (a.name !== "Members" && b.name === "Members") return 1;
         return a.name.localeCompare(b.name);
       });
       setGroups(groupsData);
@@ -421,7 +421,7 @@ export default function GymDetailPage() {
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        {isCoach && group.type !== "default" && group.isDeletable !== false && (
+                        {isCoach && group.name !== "Members" && group.isDeletable !== false && (
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
