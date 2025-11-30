@@ -45,6 +45,11 @@ export default function GymDetailPage() {
   const [newWorkoutType, setNewWorkoutType] = useState<WorkoutType>("wod");
   const [calendarRange, setCalendarRange] = useState<"thisWeek" | "nextWeek" | "2weeks" | "month">("thisWeek");
   const [showTitleSuggestions, setShowTitleSuggestions] = useState(false);
+  // Recurrence state
+  const [recurrenceType, setRecurrenceType] = useState<"none" | "daily" | "weekly" | "monthly">("none");
+  const [repeatDays, setRepeatDays] = useState<number[]>([1]); // 0=Sun, 1=Mon, etc.
+  const [hasEndDate, setHasEndDate] = useState(false);
+  const [endDate, setEndDate] = useState("");
 
   const isOwner = gym?.ownerId === user?.id;
   const isCoach = gym?.coachIds?.includes(user?.id || "") || isOwner;
@@ -286,24 +291,63 @@ export default function GymDetailPage() {
   const handleCreateWorkout = async () => {
     if (!user || !newWorkoutTitle.trim() || !newWorkoutDate || newWorkoutGroupIds.length === 0) return;
     try {
-      const workoutDate = new Date(newWorkoutDate);
-      await addDoc(collection(db, "scheduledWorkouts"), {
-        wodTitle: newWorkoutTitle.trim(),
-        wodDescription: newWorkoutDescription.trim(),
-        date: Timestamp.fromDate(workoutDate),
-        workoutType: newWorkoutType,
-        groupIds: newWorkoutGroupIds,
-        createdBy: user.id,
-        recurrenceType: "none",
-        hideDetails: false,
-        gymId: gymId,
-      });
+      const startDate = new Date(newWorkoutDate);
+      const workoutDates: Date[] = [];
+
+      if (recurrenceType === "none") {
+        workoutDates.push(startDate);
+      } else {
+        const finalEndDate = hasEndDate && endDate
+          ? new Date(endDate)
+          : new Date(startDate.getTime() + 365 * 24 * 60 * 60 * 1000); // Default 1 year max
+
+        const currentDate = new Date(startDate);
+
+        while (currentDate <= finalEndDate) {
+          if (recurrenceType === "daily") {
+            workoutDates.push(new Date(currentDate));
+            currentDate.setDate(currentDate.getDate() + 1);
+          } else if (recurrenceType === "weekly") {
+            if (repeatDays.includes(currentDate.getDay())) {
+              workoutDates.push(new Date(currentDate));
+            }
+            currentDate.setDate(currentDate.getDate() + 1);
+          } else if (recurrenceType === "monthly") {
+            workoutDates.push(new Date(currentDate));
+            currentDate.setMonth(currentDate.getMonth() + 1);
+          }
+
+          // Safety limit: max 100 workouts
+          if (workoutDates.length >= 100) break;
+        }
+      }
+
+      // Create all workout documents
+      for (const date of workoutDates) {
+        await addDoc(collection(db, "scheduledWorkouts"), {
+          wodTitle: newWorkoutTitle.trim(),
+          wodDescription: newWorkoutDescription.trim(),
+          date: Timestamp.fromDate(date),
+          workoutType: newWorkoutType,
+          groupIds: newWorkoutGroupIds,
+          createdBy: user.id,
+          recurrenceType: recurrenceType,
+          hideDetails: false,
+          gymId: gymId,
+        });
+      }
+
+      // Reset form
       setShowAddWorkoutModal(false);
       setNewWorkoutTitle("");
       setNewWorkoutDescription("");
       setNewWorkoutDate("");
       setNewWorkoutGroupIds([]);
       setNewWorkoutType("wod");
+      setRecurrenceType("none");
+      setRepeatDays([1]);
+      setHasEndDate(false);
+      setEndDate("");
       fetchGymData();
     } catch (error) {
       console.error("Error creating workout:", error);
@@ -1032,6 +1076,109 @@ export default function GymDetailPage() {
                   <p className="text-gray-500 text-sm mt-2">No groups available. Create groups first.</p>
                 )}
               </div>
+
+              {/* Recurrence Section */}
+              <div className="border-t border-gray-200 pt-4">
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-3">Recurrence</p>
+
+                {/* Repeat Type */}
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Repeat
+                  </label>
+                  <select
+                    value={recurrenceType}
+                    onChange={(e) => setRecurrenceType(e.target.value as typeof recurrenceType)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="none">Does not repeat</option>
+                    <option value="daily">Daily</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="monthly">Monthly</option>
+                  </select>
+                </div>
+
+                {/* Day Selection (for weekly) */}
+                {recurrenceType === "weekly" && (
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Repeat on
+                    </label>
+                    <div className="flex gap-1">
+                      {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day, index) => (
+                        <button
+                          key={day}
+                          type="button"
+                          onClick={() => {
+                            if (repeatDays.includes(index)) {
+                              // Don't allow removing the last day
+                              if (repeatDays.length > 1) {
+                                setRepeatDays(repeatDays.filter((d) => d !== index));
+                              }
+                            } else {
+                              setRepeatDays([...repeatDays, index].sort());
+                            }
+                          }}
+                          className={`w-10 h-10 rounded-full text-sm font-medium transition-colors ${
+                            repeatDays.includes(index)
+                              ? "bg-blue-600 text-white"
+                              : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                          }`}
+                        >
+                          {day.charAt(0)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* End Date */}
+                {recurrenceType !== "none" && (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="text-sm font-medium text-gray-700">
+                        Set end date
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setHasEndDate(!hasEndDate)}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                          hasEndDate ? "bg-blue-600" : "bg-gray-200"
+                        }`}
+                      >
+                        <span
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                            hasEndDate ? "translate-x-6" : "translate-x-1"
+                          }`}
+                        />
+                      </button>
+                    </div>
+
+                    {hasEndDate && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Ends on
+                        </label>
+                        <input
+                          type="date"
+                          value={endDate}
+                          onChange={(e) => setEndDate(e.target.value)}
+                          min={newWorkoutDate}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+                    )}
+
+                    {/* Summary text */}
+                    <p className="text-sm text-gray-500">
+                      {recurrenceType === "daily" && "Repeats every day"}
+                      {recurrenceType === "weekly" && `Repeats on ${repeatDays.map(d => ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d]).join(", ")}`}
+                      {recurrenceType === "monthly" && "Repeats monthly on the same date"}
+                      {hasEndDate && endDate && ` until ${new Date(endDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`}
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
             <div className="flex gap-3 mt-6">
               <button
@@ -1042,6 +1189,10 @@ export default function GymDetailPage() {
                   setNewWorkoutDate("");
                   setNewWorkoutGroupIds([]);
                   setNewWorkoutType("wod");
+                  setRecurrenceType("none");
+                  setRepeatDays([1]);
+                  setHasEndDate(false);
+                  setEndDate("");
                 }}
                 className="flex-1 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
               >
