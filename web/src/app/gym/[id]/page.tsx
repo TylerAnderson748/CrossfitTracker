@@ -659,9 +659,12 @@ export default function GymDetailPage() {
         });
 
         if (allDefaultSlots.length > 0) {
+          const sortedSlots = allDefaultSlots.sort((a, b) => a.hour * 60 + a.minute - (b.hour * 60 + b.minute));
+          console.log("Saving timeSlots for workout:", workout.id, sortedSlots);
           await updateDoc(doc(db, "scheduledWorkouts", workout.id), {
-            timeSlots: allDefaultSlots.sort((a, b) => a.hour * 60 + a.minute - (b.hour * 60 + b.minute)),
+            timeSlots: sortedSlots,
           });
+          console.log("Saved successfully for workout:", workout.id);
           updatedCount++;
         }
       }
