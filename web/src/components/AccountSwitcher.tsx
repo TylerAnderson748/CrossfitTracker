@@ -148,11 +148,13 @@ export default function AccountSwitcher() {
               {storedAccounts
                 .filter((a) => !isCurrentAccount(a.id))
                 .map((account) => (
-                  <button
+                  <div
                     key={account.id}
-                    onClick={() => handleSwitchAccount(account.id)}
-                    disabled={switching}
-                    className="w-full px-4 py-2 hover:bg-gray-50 transition-colors disabled:opacity-50"
+                    onClick={() => !switching && handleSwitchAccount(account.id)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => e.key === "Enter" && !switching && handleSwitchAccount(account.id)}
+                    className={`w-full px-4 py-2 hover:bg-gray-50 transition-colors cursor-pointer ${switching ? "opacity-50 pointer-events-none" : ""}`}
                   >
                     <div className="flex items-center space-x-3">
                       <div className="w-10 h-10 bg-gray-400 rounded-full flex items-center justify-center text-white font-medium">
@@ -179,7 +181,7 @@ export default function AccountSwitcher() {
                         </svg>
                       </button>
                     </div>
-                  </button>
+                  </div>
                 ))}
             </>
           )}
