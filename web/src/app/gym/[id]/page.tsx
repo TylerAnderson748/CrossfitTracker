@@ -6,7 +6,7 @@ import Link from "next/link";
 import { doc, getDoc, collection, query, where, getDocs, updateDoc, arrayUnion, arrayRemove, deleteDoc, addDoc, Timestamp } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
-import { Gym, WorkoutGroup, AppUser, ScheduledWorkout } from "@/lib/types";
+import { Gym, WorkoutGroup, AppUser, ScheduledWorkout, WorkoutLog, WorkoutType } from "@/lib/types";
 import Navigation from "@/components/Navigation";
 
 interface MembershipRequest {
@@ -30,6 +30,7 @@ export default function GymDetailPage() {
   const [groups, setGroups] = useState<WorkoutGroup[]>([]);
   const [requests, setRequests] = useState<MembershipRequest[]>([]);
   const [scheduledWorkouts, setScheduledWorkouts] = useState<ScheduledWorkout[]>([]);
+  const [workoutLogs, setWorkoutLogs] = useState<WorkoutLog[]>([]);
   const [loadingData, setLoadingData] = useState(true);
   const [activeTab, setActiveTab] = useState<"members" | "coaches" | "groups" | "programming" | "requests">("members");
   const [showAddGroupModal, setShowAddGroupModal] = useState(false);
@@ -41,6 +42,7 @@ export default function GymDetailPage() {
   const [newWorkoutDescription, setNewWorkoutDescription] = useState("");
   const [newWorkoutDate, setNewWorkoutDate] = useState("");
   const [newWorkoutGroupIds, setNewWorkoutGroupIds] = useState<string[]>([]);
+  const [newWorkoutType, setNewWorkoutType] = useState<WorkoutType>("wod");
   const [calendarRange, setCalendarRange] = useState<"thisWeek" | "nextWeek" | "2weeks" | "month">("thisWeek");
   const [showTitleSuggestions, setShowTitleSuggestions] = useState(false);
 
@@ -150,6 +152,27 @@ export default function GymDetailPage() {
             return dateA.getTime() - dateB.getTime();
           }) as ScheduledWorkout[];
         setScheduledWorkouts(workoutsData);
+      }
+
+      // Fetch workout logs from gym members for suggestions
+      const allMemberIds = [
+        gymData.ownerId,
+        ...(gymData.coachIds || []),
+        ...(gymData.memberIds || []),
+      ].filter(Boolean);
+
+      if (allMemberIds.length > 0) {
+        // Fetch workout logs from gym members (limit to first 10 members due to Firestore limit)
+        const logsQuery = query(
+          collection(db, "workoutLogs"),
+          where("userId", "in", allMemberIds.slice(0, 10))
+        );
+        const logsSnapshot = await getDocs(logsQuery);
+        const logsData = logsSnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        })) as WorkoutLog[];
+        setWorkoutLogs(logsData);
       }
     } catch (error) {
       console.error("Error fetching gym data:", error);
@@ -268,7 +291,7 @@ export default function GymDetailPage() {
         wodTitle: newWorkoutTitle.trim(),
         wodDescription: newWorkoutDescription.trim(),
         date: Timestamp.fromDate(workoutDate),
-        workoutType: "wod",
+        workoutType: newWorkoutType,
         groupIds: newWorkoutGroupIds,
         createdBy: user.id,
         recurrenceType: "none",
@@ -280,6 +303,7 @@ export default function GymDetailPage() {
       setNewWorkoutDescription("");
       setNewWorkoutDate("");
       setNewWorkoutGroupIds([]);
+      setNewWorkoutType("wod");
       fetchGymData();
     } catch (error) {
       console.error("Error creating workout:", error);
@@ -318,16 +342,29 @@ export default function GymDetailPage() {
 
   // Get unique workout titles and their descriptions for autocomplete
   const getUniqueWorkouts = () => {
-    const workoutMap = new Map<string, string>();
+    const workoutMap = new Map<string, { title: string; description: string }>();
+
+    // Add from scheduled workouts
     scheduledWorkouts.forEach((w) => {
       if (w.wodTitle && !workoutMap.has(w.wodTitle.toLowerCase())) {
-        workoutMap.set(w.wodTitle.toLowerCase(), w.wodDescription || "");
+        workoutMap.set(w.wodTitle.toLowerCase(), {
+          title: w.wodTitle,
+          description: w.wodDescription || "",
+        });
       }
     });
-    return Array.from(workoutMap.entries()).map(([title, description]) => ({
-      title: scheduledWorkouts.find((w) => w.wodTitle.toLowerCase() === title)?.wodTitle || title,
-      description,
-    }));
+
+    // Add from workout logs
+    workoutLogs.forEach((w) => {
+      if (w.wodTitle && !workoutMap.has(w.wodTitle.toLowerCase())) {
+        workoutMap.set(w.wodTitle.toLowerCase(), {
+          title: w.wodTitle,
+          description: w.wodDescription || "",
+        });
+      }
+    });
+
+    return Array.from(workoutMap.values());
   };
 
   const uniqueWorkouts = getUniqueWorkouts();
@@ -760,6 +797,13 @@ export default function GymDetailPage() {
                                 <div className="flex items-start justify-between">
                                   <div className="flex-1">
                                     <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                      <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${
+                                        workout.workoutType === "lift"
+                                          ? "bg-purple-100 text-purple-700"
+                                          : "bg-orange-100 text-orange-700"
+                                      }`}>
+                                        {workout.workoutType === "lift" ? "Lift" : "WOD"}
+                                      </span>
                                       {workout.groupIds?.map((gId) => (
                                         <span key={gId} className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full">
                                           {getGroupName(gId)}
@@ -911,6 +955,35 @@ export default function GymDetailPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Workout Type *
+                </label>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setNewWorkoutType("wod")}
+                    className={`flex-1 py-2 px-4 rounded-lg font-medium transition-colors ${
+                      newWorkoutType === "wod"
+                        ? "bg-blue-600 text-white"
+                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                    }`}
+                  >
+                    WOD
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNewWorkoutType("lift")}
+                    className={`flex-1 py-2 px-4 rounded-lg font-medium transition-colors ${
+                      newWorkoutType === "lift"
+                        ? "bg-blue-600 text-white"
+                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                    }`}
+                  >
+                    Lift
+                  </button>
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
                   Description
                 </label>
                 <textarea
@@ -968,6 +1041,7 @@ export default function GymDetailPage() {
                   setNewWorkoutDescription("");
                   setNewWorkoutDate("");
                   setNewWorkoutGroupIds([]);
+                  setNewWorkoutType("wod");
                 }}
                 className="flex-1 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
               >
