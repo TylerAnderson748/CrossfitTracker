@@ -144,10 +144,14 @@ export default function WeeklyPlanPage() {
         orderBy("date", "asc")
       );
       const snapshot = await getDocs(workoutsQuery);
-      const allWorkouts = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      })) as ScheduledWorkout[];
+      const allWorkouts = snapshot.docs.map((doc) => {
+        const data = doc.data();
+        console.log("Workout from Firestore:", doc.id, "timeSlots:", data.timeSlots);
+        return {
+          id: doc.id,
+          ...data,
+        };
+      }) as ScheduledWorkout[];
 
       // Filter to only show workouts for groups the user belongs to
       const filteredWorkouts = allWorkouts.filter((workout) => {
@@ -420,6 +424,18 @@ export default function WeeklyPlanPage() {
                                       <p className="text-gray-600 text-sm mt-1 whitespace-pre-wrap line-clamp-2">{workout.wodDescription}</p>
                                     )}
                                   </>
+                                )}
+
+                                {/* Debug: Show workout info */}
+                                <p className="text-xs text-gray-400 mt-2">ID: {workout.id}</p>
+                                {!workout.timeSlots && (
+                                  <p className="text-xs text-red-400">No timeSlots field</p>
+                                )}
+                                {workout.timeSlots && workout.timeSlots.length === 0 && (
+                                  <p className="text-xs text-orange-400">timeSlots is empty array</p>
+                                )}
+                                {workout.timeSlots && workout.timeSlots.length > 0 && (
+                                  <p className="text-xs text-green-400">Has {workout.timeSlots.length} time slots</p>
                                 )}
 
                                 {/* Time Slots */}

@@ -1253,6 +1253,8 @@ export default function GymDetailPage() {
                                         )}
                                       </>
                                     )}
+                                    {/* Debug: Show workout ID */}
+                                    <p className="text-xs text-gray-400 mt-1">ID: {workout.id}</p>
                                     {/* Time Slots Display */}
                                     {workout.timeSlots && workout.timeSlots.length > 0 && (
                                       <div className="mt-2 pt-2 border-t border-gray-200">
@@ -1267,6 +1269,9 @@ export default function GymDetailPage() {
                                             ))}
                                         </div>
                                       </div>
+                                    )}
+                                    {!workout.timeSlots && (
+                                      <p className="text-xs text-red-400 mt-1">No timeSlots</p>
                                     )}
                                   </div>
                                   <div className="flex items-center gap-1">
