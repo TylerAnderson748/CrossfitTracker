@@ -659,12 +659,19 @@ export default function GymDetailPage() {
         const allDefaultSlots: ScheduledTimeSlot[] = [];
         const seenTimes = new Set<string>();
 
+        console.log("=== Processing workout:", workout.id, workout.wodTitle, "===");
+        console.log("Workout groupIds:", workout.groupIds);
+        console.log("Found groups:", workoutGroups.map(g => ({ name: g.name, id: g.id })));
+
         workoutGroups.forEach((group) => {
+          console.log("Group:", group.name, "raw defaultTimeSlots:", group.defaultTimeSlots);
           if (group.defaultTimeSlots?.length > 0) {
-            group.defaultTimeSlots.forEach((slot) => {
+            group.defaultTimeSlots.forEach((slot: any) => {
+              console.log("  Raw slot:", slot, "typeof hour:", typeof slot.hour, "typeof minute:", typeof slot.minute);
               // Explicitly extract hour and minute to ensure they're copied
               const hour = typeof slot.hour === 'number' ? slot.hour : parseInt(slot.hour) || 0;
               const minute = typeof slot.minute === 'number' ? slot.minute : parseInt(slot.minute) || 0;
+              console.log("  Extracted - hour:", hour, "minute:", minute);
               const timeKey = `${hour}:${minute}`;
               if (!seenTimes.has(timeKey)) {
                 seenTimes.add(timeKey);
