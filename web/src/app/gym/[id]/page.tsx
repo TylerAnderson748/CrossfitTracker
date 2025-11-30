@@ -41,6 +41,7 @@ export default function GymDetailPage() {
   const [newWorkoutDescription, setNewWorkoutDescription] = useState("");
   const [newWorkoutDate, setNewWorkoutDate] = useState("");
   const [newWorkoutGroupIds, setNewWorkoutGroupIds] = useState<string[]>([]);
+  const [calendarRange, setCalendarRange] = useState<"thisWeek" | "nextWeek" | "2weeks" | "month">("thisWeek");
 
   const isOwner = gym?.ownerId === user?.id;
   const isCoach = gym?.coachIds?.includes(user?.id || "") || isOwner;
@@ -314,6 +315,98 @@ export default function GymDetailPage() {
     return group?.name || "Unknown";
   };
 
+  // Calendar helper functions
+  const getStartOfWeek = (date: Date) => {
+    const d = new Date(date);
+    const day = d.getDay();
+    const diff = d.getDate() - day;
+    d.setDate(diff);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  };
+
+  const getDateRange = () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const startOfThisWeek = getStartOfWeek(today);
+
+    let start: Date;
+    let end: Date;
+
+    switch (calendarRange) {
+      case "thisWeek":
+        start = startOfThisWeek;
+        end = new Date(startOfThisWeek);
+        end.setDate(end.getDate() + 6);
+        break;
+      case "nextWeek":
+        start = new Date(startOfThisWeek);
+        start.setDate(start.getDate() + 7);
+        end = new Date(start);
+        end.setDate(end.getDate() + 6);
+        break;
+      case "2weeks":
+        start = startOfThisWeek;
+        end = new Date(startOfThisWeek);
+        end.setDate(end.getDate() + 13);
+        break;
+      case "month":
+        start = startOfThisWeek;
+        end = new Date(startOfThisWeek);
+        end.setDate(end.getDate() + 29);
+        break;
+      default:
+        start = startOfThisWeek;
+        end = new Date(startOfThisWeek);
+        end.setDate(end.getDate() + 6);
+    }
+    return { start, end };
+  };
+
+  const getDaysInRange = () => {
+    const { start, end } = getDateRange();
+    const days: Date[] = [];
+    const current = new Date(start);
+    while (current <= end) {
+      days.push(new Date(current));
+      current.setDate(current.getDate() + 1);
+    }
+    return days;
+  };
+
+  const getWorkoutsForDate = (date: Date) => {
+    return scheduledWorkouts.filter((w) => {
+      const workoutDate = w.date?.toDate?.();
+      if (!workoutDate) return false;
+      return workoutDate.toDateString() === date.toDateString();
+    });
+  };
+
+  const formatDayHeader = (date: Date) => {
+    const today = new Date();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    if (date.toDateString() === today.toDateString()) {
+      return { day: "Today", date: date.toLocaleDateString("en-US", { month: "short", day: "numeric" }) };
+    }
+    if (date.toDateString() === tomorrow.toDateString()) {
+      return { day: "Tomorrow", date: date.toLocaleDateString("en-US", { month: "short", day: "numeric" }) };
+    }
+    return {
+      day: date.toLocaleDateString("en-US", { weekday: "short" }),
+      date: date.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+    };
+  };
+
+  const { start: rangeStart, end: rangeEnd } = getDateRange();
+  const calendarDays = getDaysInRange();
+  const filteredWorkouts = scheduledWorkouts.filter((w) => {
+    const workoutDate = w.date?.toDate?.();
+    if (!workoutDate) return false;
+    return workoutDate >= rangeStart && workoutDate <= rangeEnd;
+  });
+
   if (loading || !user || loadingData) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -540,8 +633,9 @@ export default function GymDetailPage() {
 
           {activeTab === "programming" && isCoach && (
             <div className="p-6">
+              {/* Header with title and add button */}
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-gray-900">Scheduled Workouts</h2>
+                <h2 className="text-lg font-semibold text-gray-900">Programming Calendar</h2>
                 <button
                   onClick={() => setShowAddWorkoutModal(true)}
                   className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
@@ -549,43 +643,107 @@ export default function GymDetailPage() {
                   + Schedule Workout
                 </button>
               </div>
-              {scheduledWorkouts.length === 0 ? (
-                <p className="text-gray-500">No scheduled workouts. Create workouts to program for your groups.</p>
-              ) : (
-                <div className="space-y-3">
-                  {scheduledWorkouts.map((workout) => (
+
+              {/* Time Range Selector */}
+              <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
+                {[
+                  { id: "thisWeek", label: "This Week" },
+                  { id: "nextWeek", label: "Next Week" },
+                  { id: "2weeks", label: "2 Weeks" },
+                  { id: "month", label: "Month" },
+                ].map((range) => (
+                  <button
+                    key={range.id}
+                    onClick={() => setCalendarRange(range.id as typeof calendarRange)}
+                    className={`px-4 py-2 rounded-lg font-medium text-sm whitespace-nowrap transition-colors ${
+                      calendarRange === range.id
+                        ? "bg-blue-600 text-white"
+                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                    }`}
+                  >
+                    {range.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Date Range Display */}
+              <div className="text-sm text-gray-500 mb-4">
+                {rangeStart.toLocaleDateString("en-US", { month: "short", day: "numeric" })} - {rangeEnd.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                <span className="ml-2 text-gray-400">({filteredWorkouts.length} workout{filteredWorkouts.length !== 1 ? "s" : ""})</span>
+              </div>
+
+              {/* Calendar View */}
+              <div className="space-y-3">
+                {calendarDays.map((day) => {
+                  const dayWorkouts = getWorkoutsForDate(day);
+                  const { day: dayLabel, date: dateLabel } = formatDayHeader(day);
+                  const isToday = day.toDateString() === new Date().toDateString();
+
+                  return (
                     <div
-                      key={workout.id}
-                      className="p-4 bg-gray-50 rounded-lg border border-gray-200"
+                      key={day.toISOString()}
+                      className={`rounded-lg border ${isToday ? "border-blue-300 bg-blue-50" : "border-gray-200 bg-white"}`}
                     >
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full font-medium">
-                              {formatWorkoutDate(workout.date)}
-                            </span>
-                            {workout.groupIds?.map((gId) => (
-                              <span key={gId} className="px-2 py-0.5 bg-gray-200 text-gray-600 text-xs rounded-full">
-                                {getGroupName(gId)}
-                              </span>
+                      {/* Day Header */}
+                      <div className={`flex items-center justify-between px-4 py-2 border-b ${isToday ? "border-blue-200" : "border-gray-100"}`}>
+                        <div className="flex items-center gap-2">
+                          <span className={`font-semibold ${isToday ? "text-blue-700" : "text-gray-900"}`}>
+                            {dayLabel}
+                          </span>
+                          <span className={`text-sm ${isToday ? "text-blue-600" : "text-gray-500"}`}>
+                            {dateLabel}
+                          </span>
+                        </div>
+                        {dayWorkouts.length > 0 && (
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${isToday ? "bg-blue-200 text-blue-700" : "bg-gray-200 text-gray-600"}`}>
+                            {dayWorkouts.length} workout{dayWorkouts.length !== 1 ? "s" : ""}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Workouts for this day */}
+                      <div className="p-2">
+                        {dayWorkouts.length === 0 ? (
+                          <p className="text-gray-400 text-sm text-center py-2">No workouts scheduled</p>
+                        ) : (
+                          <div className="space-y-2">
+                            {dayWorkouts.map((workout) => (
+                              <div
+                                key={workout.id}
+                                className="p-3 bg-gray-50 rounded-lg border border-gray-100"
+                              >
+                                <div className="flex items-start justify-between">
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                      {workout.groupIds?.map((gId) => (
+                                        <span key={gId} className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full">
+                                          {getGroupName(gId)}
+                                        </span>
+                                      ))}
+                                    </div>
+                                    <h4 className="font-medium text-gray-900">{workout.wodTitle}</h4>
+                                    {workout.wodDescription && (
+                                      <p className="text-gray-600 text-sm mt-1 whitespace-pre-wrap line-clamp-2">{workout.wodDescription}</p>
+                                    )}
+                                  </div>
+                                  <button
+                                    onClick={() => handleDeleteWorkout(workout)}
+                                    className="ml-2 p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
+                                  >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
+                                  </button>
+                                </div>
+                              </div>
                             ))}
                           </div>
-                          <h3 className="font-semibold text-gray-900">{workout.wodTitle}</h3>
-                          {workout.wodDescription && (
-                            <p className="text-gray-600 text-sm mt-1 whitespace-pre-wrap">{workout.wodDescription}</p>
-                          )}
-                        </div>
-                        <button
-                          onClick={() => handleDeleteWorkout(workout)}
-                          className="ml-4 px-3 py-1 text-sm bg-red-100 text-red-600 rounded-lg hover:bg-red-200"
-                        >
-                          Delete
-                        </button>
+                        )}
                       </div>
                     </div>
-                  ))}
-                </div>
-              )}
+                  );
+                })}
+              </div>
             </div>
           )}
 
