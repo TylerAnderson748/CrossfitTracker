@@ -623,26 +623,31 @@ export default function GymDetailPage() {
     }
   };
 
-  const handleBackfillTimeSlots = async () => {
-    if (!confirm("Add/fix time slots for all workouts? This will use the time slots from each workout's assigned groups.")) {
+  const handleBackfillTimeSlots = async (forceAll: boolean = false) => {
+    const message = forceAll
+      ? "This will REPLACE all time slots on all workouts with fresh defaults from groups. Continue?"
+      : "Add/fix time slots for workouts missing them? This will use the time slots from each workout's assigned groups.";
+
+    if (!confirm(message)) {
       return;
     }
 
     try {
-      // Find workouts without time slots OR with corrupted time slots (missing hour/minute)
-      const workoutsToUpdate = scheduledWorkouts.filter((w) => {
-        // No time slots at all
-        if (!w.timeSlots || w.timeSlots.length === 0) return true;
-        // Has time slots but they're corrupted (all have undefined/0 hour values)
-        const hasCorruptedSlots = w.timeSlots.every(
-          (slot) => slot.hour === undefined || slot.hour === null ||
-                    (slot.hour === 0 && slot.minute === 0)
-        );
-        return hasCorruptedSlots;
-      });
+      // Find workouts to update
+      const workoutsToUpdate = forceAll
+        ? scheduledWorkouts
+        : scheduledWorkouts.filter((w) => {
+            // No time slots at all
+            if (!w.timeSlots || w.timeSlots.length === 0) return true;
+            // Has time slots but they're corrupted (check if any slot has valid hour > 0)
+            const hasValidSlot = w.timeSlots.some(
+              (slot) => typeof slot.hour === 'number' && slot.hour > 0
+            );
+            return !hasValidSlot;
+          });
 
       if (workoutsToUpdate.length === 0) {
-        alert("All workouts already have time slots!");
+        alert("All workouts already have valid time slots!");
         return;
       }
 
@@ -1122,22 +1127,16 @@ export default function GymDetailPage() {
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold text-gray-900">Programming Calendar</h2>
                 <div className="flex gap-2">
-                  {scheduledWorkouts.some((w) => {
-                    if (!w.timeSlots || w.timeSlots.length === 0) return true;
-                    // Check for corrupted slots
-                    return w.timeSlots.every(
-                      (slot) => slot.hour === undefined || slot.hour === null ||
-                                (slot.hour === 0 && slot.minute === 0)
-                    );
-                  }) && (
+                  {scheduledWorkouts.length > 0 && (
                     <button
-                      onClick={handleBackfillTimeSlots}
-                      className="px-3 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 text-sm flex items-center gap-1"
+                      onClick={() => handleBackfillTimeSlots(true)}
+                      className="px-3 py-2 bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 text-sm flex items-center gap-1"
+                      title="Force refresh all time slots from group defaults"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                       </svg>
-                      Add Time Slots
+                      Refresh Slots
                     </button>
                   )}
                   <button
