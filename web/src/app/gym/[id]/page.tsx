@@ -1277,21 +1277,72 @@ export default function GymDetailPage() {
                                         )}
                                       </>
                                     )}
-                                    {/* Time Slots Display */}
-                                    {workout.timeSlots && workout.timeSlots.length > 0 && (
-                                      <div className="mt-2 pt-2 border-t border-gray-200">
-                                        <div className="flex flex-wrap gap-1">
-                                          {workout.timeSlots
-                                            .filter((slot) => slot && slot.hour !== undefined)
-                                            .sort((a, b) => (a.hour ?? 0) * 60 + (a.minute ?? 0) - ((b.hour ?? 0) * 60 + (b.minute ?? 0)))
-                                            .map((slot, idx) => (
-                                              <span key={slot.id || idx} className="px-2 py-0.5 bg-purple-50 text-purple-600 text-xs rounded">
-                                                {formatTimeSlot(slot.hour, slot.minute)}
-                                              </span>
+                                    {/* Time Slots Display with Group Tags */}
+                                    {workout.timeSlots && workout.timeSlots.length > 0 && (() => {
+                                      // Build map of time -> groups for this workout
+                                      const timeSlotGroupMap: Record<string, { groupIds: string[]; maxCapacity: number }> = {};
+
+                                      workout.groupIds?.forEach((gId) => {
+                                        const group = groups.find(g => g.id === gId);
+                                        group?.defaultTimeSlots?.forEach((slot: any) => {
+                                          const timeKey = `${slot.hour}:${slot.minute}`;
+                                          if (!timeSlotGroupMap[timeKey]) {
+                                            timeSlotGroupMap[timeKey] = { groupIds: [], maxCapacity: 0 };
+                                          }
+                                          if (!timeSlotGroupMap[timeKey].groupIds.includes(gId)) {
+                                            timeSlotGroupMap[timeKey].groupIds.push(gId);
+                                          }
+                                          timeSlotGroupMap[timeKey].maxCapacity = Math.max(
+                                            timeSlotGroupMap[timeKey].maxCapacity,
+                                            slot.capacity || 20
+                                          );
+                                        });
+                                      });
+
+                                      // Process and deduplicate time slots
+                                      const seenTimes = new Set<string>();
+                                      const processedSlots = workout.timeSlots
+                                        .filter((slot: any) => slot && slot.hour !== undefined)
+                                        .map((slot: any) => {
+                                          const timeKey = `${slot.hour}:${slot.minute}`;
+                                          return {
+                                            ...slot,
+                                            groupIds: timeSlotGroupMap[timeKey]?.groupIds || [],
+                                            displayCapacity: timeSlotGroupMap[timeKey]?.maxCapacity || slot.capacity || 20
+                                          };
+                                        })
+                                        .filter((slot: any) => {
+                                          const timeKey = `${slot.hour}:${slot.minute}`;
+                                          if (seenTimes.has(timeKey)) return false;
+                                          seenTimes.add(timeKey);
+                                          return true;
+                                        })
+                                        .sort((a: any, b: any) => (a.hour ?? 0) * 60 + (a.minute ?? 0) - ((b.hour ?? 0) * 60 + (b.minute ?? 0)));
+
+                                      if (processedSlots.length === 0) return null;
+
+                                      return (
+                                        <div className="mt-2 pt-2 border-t border-gray-200">
+                                          <div className="space-y-1">
+                                            {processedSlots.map((slot: any, idx: number) => (
+                                              <div key={slot.id || idx} className="flex items-center gap-1 flex-wrap">
+                                                <span className="px-2 py-0.5 bg-purple-50 text-purple-600 text-xs rounded">
+                                                  {formatTimeSlot(slot.hour, slot.minute)}
+                                                </span>
+                                                {slot.groupIds.map((gId: string) => {
+                                                  const group = groups.find(g => g.id === gId);
+                                                  return (
+                                                    <span key={gId} className="px-1.5 py-0.5 bg-blue-50 text-blue-600 text-[10px] rounded">
+                                                      {group?.name || 'Unknown'}
+                                                    </span>
+                                                  );
+                                                })}
+                                              </div>
                                             ))}
+                                          </div>
                                         </div>
-                                      </div>
-                                    )}
+                                      );
+                                    })()}
                                   </div>
                                   <div className="flex items-center gap-1">
                                     <button
