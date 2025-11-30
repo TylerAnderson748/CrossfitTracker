@@ -93,7 +93,14 @@ struct WorkoutGroup: Codable, Identifiable {
         gymId = try container.decodeIfPresent(String.self, forKey: .gymId)
         name = try container.decode(String.self, forKey: .name)
         type = try container.decode(GroupType.self, forKey: .type)
-        membershipType = try container.decode(MembershipType.self, forKey: .membershipType)
+        // Handle membershipType with fallback for invalid values
+        if let rawValue = try? container.decode(String.self, forKey: .membershipType),
+           let decoded = MembershipType(rawValue: rawValue) {
+            membershipType = decoded
+        } else {
+            // Default to inviteOnly if value is missing or invalid
+            membershipType = .inviteOnly
+        }
         memberIds = try container.decode([String].self, forKey: .memberIds)
         coachIds = try container.decode([String].self, forKey: .coachIds)
         ownerId = try container.decode(String.self, forKey: .ownerId)
