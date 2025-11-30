@@ -71,13 +71,34 @@ export default function GymPage() {
     if (!user || !newGymName.trim()) return;
 
     try {
-      await addDoc(collection(db, "gyms"), {
+      // Create the gym
+      const gymRef = await addDoc(collection(db, "gyms"), {
         name: newGymName.trim(),
         ownerId: user.id,
         coachIds: [],
         memberIds: [],
         createdAt: Timestamp.now(),
       });
+
+      // Create the default "Members" group for this gym
+      await addDoc(collection(db, "groups"), {
+        name: "Members",
+        type: "default",
+        gymId: gymRef.id,
+        ownerId: user.id,
+        memberIds: [],
+        coachIds: [],
+        membershipType: "auto-assign-all",
+        isPublic: true,
+        isDeletable: false,
+        defaultTimeSlots: [],
+        hideDetailsByDefault: false,
+        defaultRevealDaysBefore: 0,
+        defaultRevealHour: 0,
+        defaultRevealMinute: 0,
+        createdAt: Timestamp.now(),
+      });
+
       setShowCreateModal(false);
       setNewGymName("");
       fetchGyms();
