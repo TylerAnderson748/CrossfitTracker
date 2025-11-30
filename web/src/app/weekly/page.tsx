@@ -71,12 +71,11 @@ export default function WeeklyPlanPage() {
         const data = doc.data();
         groupsMap[doc.id] = { id: doc.id, name: data.name };
 
-        // Only include group if user is directly a member, coach, or owner of the group
+        // Only include group if user is directly in memberIds or coachIds
         const isDirectMember = data.memberIds?.includes(user.id);
         const isDirectCoach = data.coachIds?.includes(user.id);
-        const isGroupOwner = data.ownerId === user.id;
 
-        if (isDirectMember || isDirectCoach || isGroupOwner) {
+        if (isDirectMember || isDirectCoach) {
           memberGroupIds.push(doc.id);
         }
       });
