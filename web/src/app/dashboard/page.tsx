@@ -342,17 +342,24 @@ export default function DashboardPage() {
                         >
                           {/* Workout Info */}
                           <div className="p-5">
-                            <h3 className="text-xl font-bold text-gray-900 mb-2">
-                              {workout.wodTitle}
-                            </h3>
                             {shouldShowDetails(workout) ? (
-                              <p className="text-gray-500 leading-relaxed">
-                                {workout.wodDescription}
-                              </p>
+                              <>
+                                <h3 className="text-xl font-bold text-gray-900 mb-2">
+                                  {workout.wodTitle}
+                                </h3>
+                                <p className="text-gray-500 leading-relaxed">
+                                  {workout.wodDescription}
+                                </p>
+                              </>
                             ) : (
-                              <p className="text-gray-400 italic">
-                                Workout details will be revealed soon...
-                              </p>
+                              <>
+                                <h3 className="text-xl font-bold text-gray-900 mb-2">
+                                  Upcoming Workout
+                                </h3>
+                                <p className="text-gray-400 italic">
+                                  Workout details will be revealed soon...
+                                </p>
+                              </>
                             )}
 
                             {/* Time Slots - filtered by user's group membership */}
