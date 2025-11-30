@@ -19,6 +19,7 @@ export default function WeeklyPlanPage() {
   const [calendarRange, setCalendarRange] = useState<"thisWeek" | "nextWeek" | "2weeks" | "month">("thisWeek");
   const [workouts, setWorkouts] = useState<ScheduledWorkout[]>([]);
   const [groups, setGroups] = useState<Record<string, WorkoutGroup>>({});
+  const [userGroupIds, setUserGroupIds] = useState<string[]>([]);
   const [loadingData, setLoadingData] = useState(true);
 
   useEffect(() => {
@@ -29,20 +30,41 @@ export default function WeeklyPlanPage() {
 
   useEffect(() => {
     if (user) {
-      fetchWorkouts();
-      fetchGroups();
+      fetchUserGroups();
     }
-  }, [user, calendarRange]);
+  }, [user]);
 
-  const fetchGroups = async () => {
+  useEffect(() => {
+    if (user && userGroupIds.length >= 0) {
+      fetchWorkouts();
+    }
+  }, [user, calendarRange, userGroupIds]);
+
+  const fetchUserGroups = async () => {
+    if (!user) return;
     try {
+      // Fetch all groups where user is a member or coach
       const groupsQuery = query(collection(db, "groups"));
       const snapshot = await getDocs(groupsQuery);
       const groupsMap: Record<string, WorkoutGroup> = {};
+      const memberGroupIds: string[] = [];
+
       snapshot.docs.forEach((doc) => {
-        groupsMap[doc.id] = { id: doc.id, name: doc.data().name };
+        const data = doc.data();
+        groupsMap[doc.id] = { id: doc.id, name: data.name };
+
+        // Check if user is a member, coach, or owner of this group
+        const isMember = data.memberIds?.includes(user.id);
+        const isCoach = data.coachIds?.includes(user.id);
+        const isOwner = data.ownerId === user.id;
+
+        if (isMember || isCoach || isOwner) {
+          memberGroupIds.push(doc.id);
+        }
       });
+
       setGroups(groupsMap);
+      setUserGroupIds(memberGroupIds);
     } catch (error) {
       console.error("Error fetching groups:", error);
     }
@@ -97,11 +119,21 @@ export default function WeeklyPlanPage() {
         orderBy("date", "asc")
       );
       const snapshot = await getDocs(workoutsQuery);
-      const data = snapshot.docs.map((doc) => ({
+      const allWorkouts = snapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       })) as ScheduledWorkout[];
-      setWorkouts(data);
+
+      // Filter to only show workouts for groups the user belongs to
+      const filteredWorkouts = allWorkouts.filter((workout) => {
+        // If workout has no groupIds, don't show it (it's not assigned to any group)
+        if (!workout.groupIds || workout.groupIds.length === 0) return false;
+
+        // Check if any of the workout's groupIds match the user's groups
+        return workout.groupIds.some((gId) => userGroupIds.includes(gId));
+      });
+
+      setWorkouts(filteredWorkouts);
     } catch (error) {
       console.error("Error fetching workouts:", error);
     } finally {
