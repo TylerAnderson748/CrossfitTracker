@@ -56,6 +56,8 @@ export default function GymDetailPage() {
   const [repeatDays, setRepeatDays] = useState<number[]>([1]); // 0=Sun, 1=Mon, etc.
   const [hasEndDate, setHasEndDate] = useState(false);
   const [endDate, setEndDate] = useState("");
+  // Edit mode state
+  const [editingWorkoutId, setEditingWorkoutId] = useState<string | null>(null);
 
   const isOwner = gym?.ownerId === user?.id;
   const isCoach = gym?.coachIds?.includes(user?.id || "") || isOwner;
@@ -383,6 +385,58 @@ export default function GymDetailPage() {
     setRepeatDays([1]);
     setHasEndDate(false);
     setEndDate("");
+    setEditingWorkoutId(null);
+  };
+
+  const handleEditWorkout = (workout: ScheduledWorkout) => {
+    setEditingWorkoutId(workout.id);
+    // Convert Timestamp to date string for the input
+    const workoutDate = workout.date.toDate();
+    const dateStr = workoutDate.toISOString().split("T")[0];
+    setNewWorkoutDate(dateStr);
+    setNewWorkoutGroupIds(workout.groupIds || []);
+
+    // Load components if available, otherwise create from legacy data
+    if (workout.components && workout.components.length > 0) {
+      setWorkoutComponents(workout.components);
+    } else {
+      // Legacy workout - create single component
+      const legacyComponent: WorkoutComponent = {
+        id: `legacy_${Date.now()}`,
+        type: workout.workoutType === "lift" ? "lift" : "wod",
+        title: workout.wodTitle,
+        description: workout.wodDescription,
+      };
+      setWorkoutComponents([legacyComponent]);
+    }
+
+    setRecurrenceType("none"); // Don't allow recurrence when editing single workout
+    setShowAddWorkoutModal(true);
+  };
+
+  const handleUpdateWorkout = async () => {
+    if (!user || !editingWorkoutId || workoutComponents.length === 0 || !newWorkoutDate || newWorkoutGroupIds.length === 0) return;
+    try {
+      const workoutDate = new Date(newWorkoutDate);
+
+      // Generate title from components
+      const mainComponent = workoutComponents.find(c => c.type === "wod") || workoutComponents[0];
+      const wodTitle = mainComponent?.title || workoutComponents.map(c => workoutComponentLabels[c.type]).join(" + ");
+
+      await updateDoc(doc(db, "scheduledWorkouts", editingWorkoutId), {
+        wodTitle,
+        wodDescription: workoutComponents.map(c => `${workoutComponentLabels[c.type]}: ${c.description}`).join("\n\n"),
+        date: Timestamp.fromDate(workoutDate),
+        workoutType: workoutComponents.some(c => c.type === "wod") ? "wod" : "lift",
+        groupIds: newWorkoutGroupIds,
+        components: workoutComponents,
+      });
+
+      resetWorkoutModal();
+      fetchGymData();
+    } catch (error) {
+      console.error("Error updating workout:", error);
+    }
   };
 
   const addComponent = (type: WorkoutComponentType) => {
@@ -999,14 +1053,26 @@ export default function GymDetailPage() {
                                       </>
                                     )}
                                   </div>
-                                  <button
-                                    onClick={() => handleDeleteWorkout(workout)}
-                                    className="ml-2 p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
-                                  >
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                    </svg>
-                                  </button>
+                                  <div className="flex items-center gap-1">
+                                    <button
+                                      onClick={() => handleEditWorkout(workout)}
+                                      className="p-1 text-blue-500 hover:text-blue-700 hover:bg-blue-50 rounded"
+                                      title="Edit workout"
+                                    >
+                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                      </svg>
+                                    </button>
+                                    <button
+                                      onClick={() => handleDeleteWorkout(workout)}
+                                      className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
+                                      title="Delete workout"
+                                    >
+                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                      </svg>
+                                    </button>
+                                  </div>
                                 </div>
                               </div>
                             ))}
@@ -1092,11 +1158,13 @@ export default function GymDetailPage() {
         </div>
       )}
 
-      {/* Add Workout Modal */}
+      {/* Add/Edit Workout Modal */}
       {showAddWorkoutModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">Schedule Workout</h2>
+            <h2 className="text-xl font-bold text-gray-900 mb-4">
+              {editingWorkoutId ? "Edit Workout" : "Schedule Workout"}
+            </h2>
             <div className="space-y-4">
               {/* Date */}
               <div>
@@ -1274,92 +1342,94 @@ export default function GymDetailPage() {
                 )}
               </div>
 
-              {/* Recurrence Section */}
-              <div className="border-t border-gray-200 pt-4">
-                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-3">Recurrence</p>
+              {/* Recurrence Section - only show when creating new workout */}
+              {!editingWorkoutId && (
+                <div className="border-t border-gray-200 pt-4">
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-3">Recurrence</p>
 
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Repeat
-                  </label>
-                  <select
-                    value={recurrenceType}
-                    onChange={(e) => setRecurrenceType(e.target.value as typeof recurrenceType)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    <option value="none">Does not repeat</option>
-                    <option value="daily">Daily</option>
-                    <option value="weekly">Weekly</option>
-                    <option value="monthly">Monthly</option>
-                  </select>
-                </div>
-
-                {recurrenceType === "weekly" && (
                   <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Repeat on
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Repeat
                     </label>
-                    <div className="flex gap-1">
-                      {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day, index) => (
-                        <button
-                          key={day}
-                          type="button"
-                          onClick={() => {
-                            if (repeatDays.includes(index)) {
-                              if (repeatDays.length > 1) {
-                                setRepeatDays(repeatDays.filter((d) => d !== index));
+                    <select
+                      value={recurrenceType}
+                      onChange={(e) => setRecurrenceType(e.target.value as typeof recurrenceType)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="none">Does not repeat</option>
+                      <option value="daily">Daily</option>
+                      <option value="weekly">Weekly</option>
+                      <option value="monthly">Monthly</option>
+                    </select>
+                  </div>
+
+                  {recurrenceType === "weekly" && (
+                    <div className="mb-4">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Repeat on
+                      </label>
+                      <div className="flex gap-1">
+                        {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day, index) => (
+                          <button
+                            key={day}
+                            type="button"
+                            onClick={() => {
+                              if (repeatDays.includes(index)) {
+                                if (repeatDays.length > 1) {
+                                  setRepeatDays(repeatDays.filter((d) => d !== index));
+                                }
+                              } else {
+                                setRepeatDays([...repeatDays, index].sort());
                               }
-                            } else {
-                              setRepeatDays([...repeatDays, index].sort());
-                            }
-                          }}
-                          className={`w-10 h-10 rounded-full text-sm font-medium transition-colors ${
-                            repeatDays.includes(index)
-                              ? "bg-blue-600 text-white"
-                              : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                            }}
+                            className={`w-10 h-10 rounded-full text-sm font-medium transition-colors ${
+                              repeatDays.includes(index)
+                                ? "bg-blue-600 text-white"
+                                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                            }`}
+                          >
+                            {day.charAt(0)}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {recurrenceType !== "none" && (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <label className="text-sm font-medium text-gray-700">Set end date</label>
+                        <button
+                          type="button"
+                          onClick={() => setHasEndDate(!hasEndDate)}
+                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                            hasEndDate ? "bg-blue-600" : "bg-gray-200"
                           }`}
                         >
-                          {day.charAt(0)}
+                          <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                            hasEndDate ? "translate-x-6" : "translate-x-1"
+                          }`} />
                         </button>
-                      ))}
+                      </div>
+                      {hasEndDate && (
+                        <input
+                          type="date"
+                          value={endDate}
+                          onChange={(e) => setEndDate(e.target.value)}
+                          min={newWorkoutDate}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 bg-white"
+                        />
+                      )}
+                      <p className="text-sm text-gray-500">
+                        {recurrenceType === "daily" && "Repeats every day"}
+                        {recurrenceType === "weekly" && `Repeats on ${repeatDays.map(d => ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d]).join(", ")}`}
+                        {recurrenceType === "monthly" && "Repeats monthly"}
+                        {hasEndDate && endDate && ` until ${new Date(endDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`}
+                      </p>
                     </div>
-                  </div>
-                )}
-
-                {recurrenceType !== "none" && (
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <label className="text-sm font-medium text-gray-700">Set end date</label>
-                      <button
-                        type="button"
-                        onClick={() => setHasEndDate(!hasEndDate)}
-                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                          hasEndDate ? "bg-blue-600" : "bg-gray-200"
-                        }`}
-                      >
-                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                          hasEndDate ? "translate-x-6" : "translate-x-1"
-                        }`} />
-                      </button>
-                    </div>
-                    {hasEndDate && (
-                      <input
-                        type="date"
-                        value={endDate}
-                        onChange={(e) => setEndDate(e.target.value)}
-                        min={newWorkoutDate}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 bg-white"
-                      />
-                    )}
-                    <p className="text-sm text-gray-500">
-                      {recurrenceType === "daily" && "Repeats every day"}
-                      {recurrenceType === "weekly" && `Repeats on ${repeatDays.map(d => ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d]).join(", ")}`}
-                      {recurrenceType === "monthly" && "Repeats monthly"}
-                      {hasEndDate && endDate && ` until ${new Date(endDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`}
-                    </p>
-                  </div>
-                )}
-              </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="flex gap-3 mt-6">
@@ -1370,11 +1440,11 @@ export default function GymDetailPage() {
                 Cancel
               </button>
               <button
-                onClick={handleCreateWorkout}
+                onClick={editingWorkoutId ? handleUpdateWorkout : handleCreateWorkout}
                 disabled={workoutComponents.length === 0 || !newWorkoutDate || newWorkoutGroupIds.length === 0}
                 className="flex-1 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-blue-300 transition-colors"
               >
-                Schedule
+                {editingWorkoutId ? "Save Changes" : "Schedule"}
               </button>
             </div>
           </div>
