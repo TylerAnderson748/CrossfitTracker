@@ -61,6 +61,9 @@ export default function GymDetailPage() {
   const [editingSeriesId, setEditingSeriesId] = useState<string | null>(null);
   const [showEditSeriesModal, setShowEditSeriesModal] = useState(false);
   const [pendingEditWorkout, setPendingEditWorkout] = useState<ScheduledWorkout | null>(null);
+  // Delete mode state
+  const [showDeleteSeriesModal, setShowDeleteSeriesModal] = useState(false);
+  const [pendingDeleteWorkout, setPendingDeleteWorkout] = useState<ScheduledWorkout | null>(null);
 
   const isOwner = gym?.ownerId === user?.id;
   const isCoach = gym?.coachIds?.includes(user?.id || "") || isOwner;
@@ -522,10 +525,48 @@ export default function GymDetailPage() {
     setEditingComponentDescription(component.description);
   };
 
-  const handleDeleteWorkout = async (workout: ScheduledWorkout) => {
-    if (!confirm(`Delete "${workout.wodTitle}"? This cannot be undone.`)) return;
+  const handleDeleteWorkout = (workout: ScheduledWorkout) => {
+    // If workout is part of a series, show dialog to choose delete type
+    if (workout.seriesId) {
+      setPendingDeleteWorkout(workout);
+      setShowDeleteSeriesModal(true);
+      return;
+    }
+    // Otherwise, confirm and delete single workout
+    confirmDeleteWorkout(workout, false);
+  };
+
+  const confirmDeleteWorkout = async (workout: ScheduledWorkout, deleteSeries: boolean) => {
+    const message = deleteSeries
+      ? `Delete all workouts in this series? This cannot be undone.`
+      : `Delete "${workout.wodTitle}"? This cannot be undone.`;
+
+    if (!confirm(message)) {
+      setShowDeleteSeriesModal(false);
+      setPendingDeleteWorkout(null);
+      return;
+    }
+
     try {
-      await deleteDoc(doc(db, "scheduledWorkouts", workout.id));
+      if (deleteSeries && workout.seriesId) {
+        // Delete all workouts in the series
+        const seriesQuery = query(
+          collection(db, "scheduledWorkouts"),
+          where("seriesId", "==", workout.seriesId)
+        );
+        const seriesSnapshot = await getDocs(seriesQuery);
+
+        const deletePromises = seriesSnapshot.docs.map((docSnap) =>
+          deleteDoc(doc(db, "scheduledWorkouts", docSnap.id))
+        );
+        await Promise.all(deletePromises);
+      } else {
+        // Delete single workout
+        await deleteDoc(doc(db, "scheduledWorkouts", workout.id));
+      }
+
+      setShowDeleteSeriesModal(false);
+      setPendingDeleteWorkout(null);
       fetchGymData();
     } catch (error) {
       console.error("Error deleting workout:", error);
@@ -1231,6 +1272,43 @@ export default function GymDetailPage() {
                 onClick={() => {
                   setShowEditSeriesModal(false);
                   setPendingEditWorkout(null);
+                }}
+                className="w-full py-2 text-gray-500 hover:text-gray-700 text-sm"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Series Choice Modal */}
+      {showDeleteSeriesModal && pendingDeleteWorkout && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl p-6 w-full max-w-sm">
+            <h2 className="text-lg font-bold text-gray-900 mb-2">Delete Recurring Workout</h2>
+            <p className="text-gray-600 text-sm mb-6">
+              This workout is part of a recurring series. Would you like to delete just this occurrence or all workouts in the series?
+            </p>
+            <div className="space-y-3">
+              <button
+                onClick={() => confirmDeleteWorkout(pendingDeleteWorkout, false)}
+                className="w-full py-3 px-4 bg-gray-100 hover:bg-gray-200 text-gray-900 rounded-lg font-medium transition-colors text-left"
+              >
+                <div className="font-semibold">This workout only</div>
+                <div className="text-sm text-gray-500">Delete only the selected date</div>
+              </button>
+              <button
+                onClick={() => confirmDeleteWorkout(pendingDeleteWorkout, true)}
+                className="w-full py-3 px-4 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors text-left"
+              >
+                <div className="font-semibold">All workouts in series</div>
+                <div className="text-sm text-red-100">Delete all occurrences</div>
+              </button>
+              <button
+                onClick={() => {
+                  setShowDeleteSeriesModal(false);
+                  setPendingDeleteWorkout(null);
                 }}
                 className="w-full py-2 text-gray-500 hover:text-gray-700 text-sm"
               >
