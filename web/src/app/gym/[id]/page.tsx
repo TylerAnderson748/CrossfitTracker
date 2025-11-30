@@ -625,7 +625,24 @@ export default function GymDetailPage() {
     try {
       let updatedCount = 0;
 
-      for (const workout of scheduledWorkouts) {
+      // Fetch ALL workouts for this gym's groups (not just the ones in state)
+      const groupIds = groups.map(g => g.id);
+      if (groupIds.length === 0) {
+        alert("No groups found.");
+        return;
+      }
+
+      const workoutsQuery = query(
+        collection(db, "scheduledWorkouts"),
+        where("groupIds", "array-contains-any", groupIds.slice(0, 10))
+      );
+      const workoutsSnapshot = await getDocs(workoutsQuery);
+      const allWorkouts = workoutsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as ScheduledWorkout[];
+
+      for (const workout of allWorkouts) {
         // Find groups for this workout
         const workoutGroups = groups.filter(g => workout.groupIds?.includes(g.id));
         const groupWithHiddenDetails = workoutGroups.find(g => g.hideDetailsByDefault);
@@ -646,16 +663,12 @@ export default function GymDetailPage() {
           revealDate = Timestamp.fromDate(revealDateTime);
         }
 
-        // Only update if values changed
-        if (workout.hideDetails !== shouldHideDetails ||
-            (shouldHideDetails && !workout.revealDate) ||
-            (shouldHideDetails && workout.revealDate?.toMillis() !== revealDate?.toMillis())) {
-          await updateDoc(doc(db, "scheduledWorkouts", workout.id), {
-            hideDetails: shouldHideDetails,
-            ...(revealDate ? { revealDate } : { revealDate: null }),
-          });
-          updatedCount++;
-        }
+        // Update the workout
+        await updateDoc(doc(db, "scheduledWorkouts", workout.id), {
+          hideDetails: shouldHideDetails,
+          ...(revealDate ? { revealDate } : {}),
+        });
+        updatedCount++;
       }
 
       alert(`Updated visibility settings for ${updatedCount} workout(s).`);
