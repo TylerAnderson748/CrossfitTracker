@@ -624,15 +624,22 @@ export default function GymDetailPage() {
   };
 
   const handleBackfillTimeSlots = async () => {
-    if (!confirm("Add default time slots to all workouts that don't have them? This will use the time slots from each workout's assigned groups.")) {
+    if (!confirm("Add/fix time slots for all workouts? This will use the time slots from each workout's assigned groups.")) {
       return;
     }
 
     try {
-      // Find workouts without time slots
-      const workoutsToUpdate = scheduledWorkouts.filter(
-        (w) => !w.timeSlots || w.timeSlots.length === 0
-      );
+      // Find workouts without time slots OR with corrupted time slots (missing hour/minute)
+      const workoutsToUpdate = scheduledWorkouts.filter((w) => {
+        // No time slots at all
+        if (!w.timeSlots || w.timeSlots.length === 0) return true;
+        // Has time slots but they're corrupted (all have undefined/0 hour values)
+        const hasCorruptedSlots = w.timeSlots.every(
+          (slot) => slot.hour === undefined || slot.hour === null ||
+                    (slot.hour === 0 && slot.minute === 0)
+        );
+        return hasCorruptedSlots;
+      });
 
       if (workoutsToUpdate.length === 0) {
         alert("All workouts already have time slots!");
@@ -1115,7 +1122,14 @@ export default function GymDetailPage() {
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold text-gray-900">Programming Calendar</h2>
                 <div className="flex gap-2">
-                  {scheduledWorkouts.some((w) => !w.timeSlots || w.timeSlots.length === 0) && (
+                  {scheduledWorkouts.some((w) => {
+                    if (!w.timeSlots || w.timeSlots.length === 0) return true;
+                    // Check for corrupted slots
+                    return w.timeSlots.every(
+                      (slot) => slot.hour === undefined || slot.hour === null ||
+                                (slot.hour === 0 && slot.minute === 0)
+                    );
+                  }) && (
                     <button
                       onClick={handleBackfillTimeSlots}
                       className="px-3 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 text-sm flex items-center gap-1"
