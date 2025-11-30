@@ -215,8 +215,10 @@ export function getRelativeDate(date: Date): string {
 }
 
 export function formatTimeSlot(hour: number, minute: number): string {
-  const period = hour >= 12 ? "PM" : "AM";
-  const displayHour = hour % 12 || 12;
-  const displayMinute = minute.toString().padStart(2, "0");
+  const safeHour = hour ?? 0;
+  const safeMinute = minute ?? 0;
+  const period = safeHour >= 12 ? "PM" : "AM";
+  const displayHour = safeHour % 12 || 12;
+  const displayMinute = safeMinute.toString().padStart(2, "0");
   return `${displayHour}:${displayMinute} ${period}`;
 }

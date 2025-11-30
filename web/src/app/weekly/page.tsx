@@ -427,6 +427,7 @@ export default function WeeklyPlanPage() {
                                     <p className="text-xs font-medium text-gray-500 mb-2">Class Times</p>
                                     <div className="flex flex-wrap gap-2">
                                       {workout.timeSlots
+                                        .filter((slot) => slot && typeof slot.hour === "number" && typeof slot.minute === "number")
                                         .sort((a, b) => a.hour * 60 + a.minute - (b.hour * 60 + b.minute))
                                         .map((slot) => {
                                           const signedUp = isUserSignedUp(slot);
