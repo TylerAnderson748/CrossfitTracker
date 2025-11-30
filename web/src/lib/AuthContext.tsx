@@ -10,23 +10,53 @@ import {
 } from "firebase/auth";
 import { doc, getDoc, setDoc, Timestamp } from "firebase/firestore";
 import { auth, db } from "./firebase";
-import { AppUser } from "./types";
+import { AppUser, StoredAccount } from "./types";
+
+const STORED_ACCOUNTS_KEY = "crossfit_tracker_accounts";
 
 interface AuthContextType {
   firebaseUser: FirebaseUser | null;
   user: AppUser | null;
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<void>;
+  signIn: (email: string, password: string, saveAccount?: boolean) => Promise<void>;
   signUp: (email: string, password: string, userData: Partial<AppUser>) => Promise<void>;
   signOut: () => Promise<void>;
+  // Multi-account management
+  storedAccounts: StoredAccount[];
+  switchAccount: (accountId: string) => Promise<void>;
+  addAccount: (email: string, password: string) => Promise<void>;
+  removeAccount: (accountId: string) => void;
+  isCurrentAccount: (accountId: string) => boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+// Helper functions for localStorage
+function getStoredAccountsFromStorage(): StoredAccount[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const stored = localStorage.getItem(STORED_ACCOUNTS_KEY);
+    return stored ? JSON.parse(stored) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveStoredAccountsToStorage(accounts: StoredAccount[]) {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(STORED_ACCOUNTS_KEY, JSON.stringify(accounts));
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [user, setUser] = useState<AppUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [storedAccounts, setStoredAccounts] = useState<StoredAccount[]>([]);
+
+  // Load stored accounts from localStorage on mount
+  useEffect(() => {
+    setStoredAccounts(getStoredAccountsFromStorage());
+  }, []);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -47,8 +77,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => unsubscribe();
   }, []);
 
-  const signIn = async (email: string, password: string) => {
-    await signInWithEmailAndPassword(auth, email, password);
+  // Update stored account display name when user data changes
+  useEffect(() => {
+    if (user) {
+      const accounts = getStoredAccountsFromStorage();
+      const accountIndex = accounts.findIndex((a) => a.id === user.id);
+      if (accountIndex !== -1 && accounts[accountIndex].displayName !== user.displayName) {
+        accounts[accountIndex].displayName = user.displayName;
+        saveStoredAccountsToStorage(accounts);
+        setStoredAccounts(accounts);
+      }
+    }
+  }, [user]);
+
+  const signIn = async (email: string, password: string, saveAccount: boolean = true) => {
+    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+
+    if (saveAccount) {
+      // Get user display name from Firestore
+      const userDoc = await getDoc(doc(db, "users", userCredential.user.uid));
+      const userData = userDoc.exists() ? userDoc.data() : null;
+
+      const accounts = getStoredAccountsFromStorage();
+      const existingIndex = accounts.findIndex((a) => a.email === email);
+
+      const newAccount: StoredAccount = {
+        id: userCredential.user.uid,
+        email,
+        displayName: userData?.displayName || userData?.firstName || email,
+        password,
+      };
+
+      if (existingIndex !== -1) {
+        accounts[existingIndex] = newAccount;
+      } else {
+        accounts.push(newAccount);
+      }
+
+      saveStoredAccountsToStorage(accounts);
+      setStoredAccounts(accounts);
+    }
   };
 
   const signUp = async (email: string, password: string, userData: Partial<AppUser>) => {
@@ -62,6 +130,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       hideFromLeaderboards: false,
       createdAt: Timestamp.now(),
     });
+
+    // Save the new account
+    const accounts = getStoredAccountsFromStorage();
+    const newAccount: StoredAccount = {
+      id: uid,
+      email,
+      displayName: userData.displayName || userData.firstName || email,
+      password,
+    };
+    accounts.push(newAccount);
+    saveStoredAccountsToStorage(accounts);
+    setStoredAccounts(accounts);
   };
 
   const signOut = async () => {
@@ -69,8 +149,69 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   };
 
+  const switchAccount = async (accountId: string) => {
+    const account = storedAccounts.find((a) => a.id === accountId);
+    if (!account) {
+      throw new Error("Account not found");
+    }
+
+    // Sign out current user and sign in with the new account
+    await firebaseSignOut(auth);
+    await signInWithEmailAndPassword(auth, account.email, account.password);
+  };
+
+  const addAccount = async (email: string, password: string) => {
+    // Sign in to validate credentials and get user info
+    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    const userDoc = await getDoc(doc(db, "users", userCredential.user.uid));
+    const userData = userDoc.exists() ? userDoc.data() : null;
+
+    const accounts = getStoredAccountsFromStorage();
+    const existingIndex = accounts.findIndex((a) => a.email === email);
+
+    const newAccount: StoredAccount = {
+      id: userCredential.user.uid,
+      email,
+      displayName: userData?.displayName || userData?.firstName || email,
+      password,
+    };
+
+    if (existingIndex !== -1) {
+      accounts[existingIndex] = newAccount;
+    } else {
+      accounts.push(newAccount);
+    }
+
+    saveStoredAccountsToStorage(accounts);
+    setStoredAccounts(accounts);
+  };
+
+  const removeAccount = (accountId: string) => {
+    const accounts = storedAccounts.filter((a) => a.id !== accountId);
+    saveStoredAccountsToStorage(accounts);
+    setStoredAccounts(accounts);
+  };
+
+  const isCurrentAccount = (accountId: string) => {
+    return user?.id === accountId;
+  };
+
   return (
-    <AuthContext.Provider value={{ firebaseUser, user, loading, signIn, signUp, signOut }}>
+    <AuthContext.Provider
+      value={{
+        firebaseUser,
+        user,
+        loading,
+        signIn,
+        signUp,
+        signOut,
+        storedAccounts,
+        switchAccount,
+        addAccount,
+        removeAccount,
+        isCurrentAccount,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

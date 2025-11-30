@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/AuthContext";
+import AccountSwitcher from "./AccountSwitcher";
 
 export default function Navigation() {
   const pathname = usePathname();
-  const { user, signOut } = useAuth();
+  const { user } = useAuth();
 
   const navItems = [
     { href: "/dashboard", label: "Dashboard", icon: "📊" },
@@ -42,20 +43,8 @@ export default function Navigation() {
               ))}
             </div>
           </div>
-          <div className="flex items-center space-x-4">
-            {user && (
-              <>
-                <span className="text-gray-500 text-sm hidden sm:block">
-                  {user.firstName || user.displayName}
-                </span>
-                <button
-                  onClick={() => signOut()}
-                  className="text-gray-500 hover:text-gray-700 text-sm"
-                >
-                  Sign Out
-                </button>
-              </>
-            )}
+          <div className="flex items-center">
+            {user && <AccountSwitcher />}
           </div>
         </div>
         {/* Mobile navigation */}

@@ -18,6 +18,14 @@ export interface AppUser {
   hideFromLeaderboards: boolean;
 }
 
+// Stored account for multi-account switching
+export interface StoredAccount {
+  id: string;
+  email: string;
+  displayName?: string;
+  password: string; // Stored for quick switching
+}
+
 // Workout types
 export type WorkoutType = "lift" | "wod";
 export type WorkoutResultType = "time" | "rounds" | "weight" | "reps" | "other";
