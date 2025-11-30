@@ -85,6 +85,37 @@ export default function GymDetailPage() {
     }
   }, [user, gymId]);
 
+  // Auto-load default time slots when groups are selected
+  useEffect(() => {
+    if (newWorkoutGroupIds.length > 0 && showAddWorkoutModal && !editingWorkoutId) {
+      const selectedGroups = groups.filter((g) => newWorkoutGroupIds.includes(g.id));
+      const allDefaultSlots: ScheduledTimeSlot[] = [];
+      const seenTimes = new Set<string>();
+
+      selectedGroups.forEach((group) => {
+        if (group.defaultTimeSlots?.length > 0) {
+          group.defaultTimeSlots.forEach((slot) => {
+            const timeKey = `${slot.hour}:${slot.minute}`;
+            if (!seenTimes.has(timeKey)) {
+              seenTimes.add(timeKey);
+              allDefaultSlots.push({
+                ...slot,
+                id: `slot_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                signups: [],
+              });
+            }
+          });
+        }
+      });
+
+      if (allDefaultSlots.length > 0) {
+        setWorkoutTimeSlots(
+          allDefaultSlots.sort((a, b) => a.hour * 60 + a.minute - (b.hour * 60 + b.minute))
+        );
+      }
+    }
+  }, [newWorkoutGroupIds, groups, showAddWorkoutModal, editingWorkoutId]);
+
   const fetchGymData = async () => {
     try {
       // Fetch gym
@@ -1528,48 +1559,21 @@ export default function GymDetailPage() {
 
               {/* Time Slots Section */}
               <div className="border-t border-gray-200 pt-4">
-                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-3">Class Times (Optional)</p>
-                <p className="text-xs text-gray-400 mb-3">Add time slots so athletes can sign up for specific class times</p>
-
-                {/* Use Default Time Slots Button */}
-                {newWorkoutGroupIds.length > 0 && (
-                  <div className="mb-3">
-                    <div className="flex flex-wrap gap-2">
-                      {groups
-                        .filter((g) => newWorkoutGroupIds.includes(g.id) && g.defaultTimeSlots?.length > 0)
-                        .map((group) => (
-                          <button
-                            key={group.id}
-                            type="button"
-                            onClick={() => {
-                              const defaultSlots: ScheduledTimeSlot[] = group.defaultTimeSlots.map((slot) => ({
-                                ...slot,
-                                id: `slot_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-                                signups: [],
-                              }));
-                              // Merge with existing slots, avoiding duplicates by time
-                              const existingTimes = new Set(workoutTimeSlots.map((s) => `${s.hour}:${s.minute}`));
-                              const newSlots = defaultSlots.filter((s) => !existingTimes.has(`${s.hour}:${s.minute}`));
-                              setWorkoutTimeSlots(
-                                [...workoutTimeSlots, ...newSlots].sort((a, b) =>
-                                  a.hour * 60 + a.minute - (b.hour * 60 + b.minute)
-                                )
-                              );
-                            }}
-                            className="px-3 py-1.5 bg-purple-100 text-purple-700 text-sm rounded-lg hover:bg-purple-200 flex items-center gap-1.5"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                            Use {group.name} defaults ({group.defaultTimeSlots.length})
-                          </button>
-                        ))}
-                    </div>
-                    {groups.filter((g) => newWorkoutGroupIds.includes(g.id) && g.defaultTimeSlots?.length > 0).length === 0 && (
-                      <p className="text-xs text-gray-400 italic">Selected groups have no default time slots configured</p>
-                    )}
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Class Times</p>
+                    <p className="text-xs text-gray-400">Time slots are loaded from group defaults</p>
                   </div>
-                )}
+                  {workoutTimeSlots.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setWorkoutTimeSlots([])}
+                      className="px-2 py-1 text-xs text-red-600 hover:bg-red-50 rounded"
+                    >
+                      Clear all
+                    </button>
+                  )}
+                </div>
 
                 {/* Add Time Slot Form */}
                 <div className="flex items-end gap-2 mb-3">
