@@ -13,6 +13,7 @@ export interface AppUser {
   lastName?: string;
   displayName?: string;
   gender?: Gender;
+  gymId?: string;
   createdAt: Timestamp;
   hideFromLeaderboards: boolean;
 }
@@ -101,15 +102,35 @@ export interface Gym {
   createdAt: Timestamp;
 }
 
+// Group types
+export type GroupType = "defaultGroup" | "custom" | "personal";
+export type MembershipType = "autoAssignAll" | "manual";
+export type GroupVisibility = "private" | "public";
+export type RevealTiming = "immediately" | "dayBefore" | "weekBefore" | "hoursBefore";
+
+export interface ClassTime {
+  id: string;
+  time: string; // e.g., "05:30", "18:30"
+  capacity: number;
+}
+
 export interface WorkoutGroup {
   id: string;
   name: string;
-  type: "defaultGroup" | "custom" | "personal";
+  type: GroupType;
   gymId?: string;
   memberIds: string[];
   coachIds: string[];
   ownerId: string;
+  // Settings
+  membership: MembershipType;
+  visibility: GroupVisibility;
+  // Class times
+  classTimes: ClassTime[];
+  // Workout visibility settings
   hideDetailsByDefault: boolean;
+  revealTiming: RevealTiming;
+  revealTime: string; // e.g., "16:00" for 4:00 PM
 }
 
 // Helper functions

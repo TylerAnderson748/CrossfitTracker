@@ -178,18 +178,24 @@ export default function GymDetailPage() {
   const handleCreateGroup = async () => {
     if (!user || !newGroupName.trim()) return;
     try {
-      await addDoc(collection(db, "groups"), {
+      const docRef = await addDoc(collection(db, "groups"), {
         gymId,
         name: newGroupName.trim(),
         type: "custom",
         ownerId: user.id,
         memberIds: [],
         coachIds: [],
+        membership: "manual",
+        visibility: "private",
+        classTimes: [],
         hideDetailsByDefault: false,
+        revealTiming: "dayBefore",
+        revealTime: "16:00",
       });
       setShowAddGroupModal(false);
       setNewGroupName("");
-      fetchGymData();
+      // Navigate to the new group's detail page
+      router.push(`/gym/${gymId}/groups/${docRef.id}`);
     } catch (error) {
       console.error("Error creating group:", error);
     }
@@ -381,26 +387,46 @@ export default function GymDetailPage() {
               ) : (
                 <div className="space-y-3">
                   {groups.map((group) => (
-                    <div key={group.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h3 className="font-medium text-gray-900">{group.name}</h3>
-                          {group.type === "defaultGroup" && (
-                            <span className="text-xs text-orange-600">★ Default</span>
-                          )}
+                    <div
+                      key={group.id}
+                      className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer transition-colors"
+                      onClick={() => router.push(`/gym/${gymId}/groups/${group.id}`)}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center">
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                          </svg>
                         </div>
-                        <p className="text-gray-500 text-sm">
-                          {group.memberIds?.length || 0} members
-                        </p>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-medium text-gray-900">{group.name}</h3>
+                            {group.type === "defaultGroup" && (
+                              <span className="text-xs text-orange-600">★ Default</span>
+                            )}
+                          </div>
+                          <p className="text-gray-500 text-sm">
+                            {group.memberIds?.length || 0} members
+                            {group.classTimes?.length > 0 && ` • ${group.classTimes.length} class times`}
+                          </p>
+                        </div>
                       </div>
-                      {isCoach && group.type !== "defaultGroup" && (
-                        <button
-                          onClick={() => handleDeleteGroup(group)}
-                          className="px-3 py-1 text-sm bg-red-100 text-red-600 rounded-lg hover:bg-red-200"
-                        >
-                          Delete
-                        </button>
-                      )}
+                      <div className="flex items-center gap-2">
+                        {isCoach && group.type !== "defaultGroup" && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteGroup(group);
+                            }}
+                            className="px-3 py-1 text-sm bg-red-100 text-red-600 rounded-lg hover:bg-red-200"
+                          >
+                            Delete
+                          </button>
+                        )}
+                        <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      </div>
                     </div>
                   ))}
                 </div>
