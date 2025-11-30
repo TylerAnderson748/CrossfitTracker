@@ -1321,24 +1321,55 @@ export default function GymDetailPage() {
 
                                       if (processedSlots.length === 0) return null;
 
+                                      // Helper to get user name from ID
+                                      const getUserName = (userId: string) => {
+                                        const member = members.find(m => m.id === userId);
+                                        const coach = coaches.find(c => c.id === userId);
+                                        return member?.name || coach?.name || 'Unknown User';
+                                      };
+
                                       return (
                                         <div className="mt-2 pt-2 border-t border-gray-200">
                                           <div className="space-y-1">
-                                            {processedSlots.map((slot: any, idx: number) => (
-                                              <div key={slot.id || idx} className="flex items-center gap-1 flex-wrap">
-                                                <span className="px-2 py-0.5 bg-purple-50 text-purple-600 text-xs rounded">
-                                                  {formatTimeSlot(slot.hour, slot.minute)}
-                                                </span>
-                                                {slot.groupIds.map((gId: string) => {
-                                                  const group = groups.find(g => g.id === gId);
-                                                  return (
-                                                    <span key={gId} className="px-1.5 py-0.5 bg-blue-50 text-blue-600 text-[10px] rounded">
-                                                      {group?.name || 'Unknown'}
+                                            {processedSlots.map((slot: any, idx: number) => {
+                                              const signups = slot.signups || slot.signedUpUserIds || [];
+                                              const signupCount = signups.length;
+                                              const signupNames = signups.map((id: string) => getUserName(id));
+
+                                              return (
+                                                <div key={slot.id || idx} className="flex items-center gap-1 flex-wrap">
+                                                  <span className="px-2 py-0.5 bg-purple-50 text-purple-600 text-xs rounded">
+                                                    {formatTimeSlot(slot.hour, slot.minute)}
+                                                  </span>
+                                                  {/* Signup count bubble with hover tooltip */}
+                                                  <div className="relative group/signup">
+                                                    <span className={`px-1.5 py-0.5 text-[10px] rounded-full cursor-default ${
+                                                      signupCount > 0
+                                                        ? 'bg-green-100 text-green-700'
+                                                        : 'bg-gray-100 text-gray-500'
+                                                    }`}>
+                                                      {signupCount} signed up
                                                     </span>
-                                                  );
-                                                })}
-                                              </div>
-                                            ))}
+                                                    {signupCount > 0 && (
+                                                      <div className="absolute bottom-full left-0 mb-1 hidden group-hover/signup:block z-50">
+                                                        <div className="bg-gray-900 text-white text-xs rounded px-2 py-1 whitespace-nowrap shadow-lg">
+                                                          {signupNames.join(', ')}
+                                                        </div>
+                                                        <div className="absolute top-full left-3 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
+                                                      </div>
+                                                    )}
+                                                  </div>
+                                                  {slot.groupIds.map((gId: string) => {
+                                                    const group = groups.find(g => g.id === gId);
+                                                    return (
+                                                      <span key={gId} className="px-1.5 py-0.5 bg-blue-50 text-blue-600 text-[10px] rounded">
+                                                        {group?.name || 'Unknown'}
+                                                      </span>
+                                                    );
+                                                  })}
+                                                </div>
+                                              );
+                                            })}
                                           </div>
                                         </div>
                                       );
