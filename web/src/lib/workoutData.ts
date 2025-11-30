@@ -18,18 +18,6 @@ export interface WorkoutCategory {
 
 export const WOD_CATEGORIES: WorkoutCategory[] = [
   {
-    name: "Frequent",
-    icon: "⚡",
-    workouts: [
-      { name: "Fran", description: "21-15-9: Thrusters (95/65) & Pull-ups", type: "wod" },
-      { name: "Murph", description: "1 mile run, 100 pull-ups, 200 push-ups, 300 squats, 1 mile run", type: "wod" },
-      { name: "Cindy", description: "AMRAP 20: 5 pull-ups, 10 push-ups, 15 squats", type: "wod" },
-      { name: "Grace", description: "30 Clean & Jerks (135/95)", type: "wod" },
-      { name: "Helen", description: "3 RFT: 400m run, 21 KB swings, 12 pull-ups", type: "wod" },
-      { name: "Diane", description: "21-15-9: Deadlifts (225/155) & HSPU", type: "wod" },
-    ],
-  },
-  {
     name: "Popular WODs",
     icon: "⭐",
     workouts: [
@@ -176,18 +164,6 @@ export const WOD_CATEGORIES: WorkoutCategory[] = [
 // =====================
 
 export const LIFT_CATEGORIES: WorkoutCategory[] = [
-  {
-    name: "Frequent",
-    icon: "⚡",
-    workouts: [
-      { name: "Back Squat", description: "Barbell back squat", type: "lift" },
-      { name: "Front Squat", description: "Barbell front squat", type: "lift" },
-      { name: "Deadlift", description: "Conventional deadlift", type: "lift" },
-      { name: "Bench Press", description: "Barbell bench press", type: "lift" },
-      { name: "Clean & Jerk", description: "Full clean and jerk", type: "lift" },
-      { name: "Snatch", description: "Full snatch", type: "lift" },
-    ],
-  },
   {
     name: "Popular Lifts",
     icon: "⭐",

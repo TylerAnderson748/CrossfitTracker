@@ -10,11 +10,20 @@ import { WorkoutLog, formatResult } from "@/lib/types";
 import Navigation from "@/components/Navigation";
 import { WOD_CATEGORIES, LIFT_CATEGORIES, WorkoutCategory, Workout, getAllWods, getAllLifts } from "@/lib/workoutData";
 
+interface FrequentWorkout {
+  name: string;
+  count: number;
+  type: "wod" | "lift";
+  description: string;
+}
+
 export default function WorkoutsPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
   const [workoutType, setWorkoutType] = useState<"wod" | "lift">("wod");
   const [recentLogs, setRecentLogs] = useState<WorkoutLog[]>([]);
+  const [frequentWods, setFrequentWods] = useState<FrequentWorkout[]>([]);
+  const [frequentLifts, setFrequentLifts] = useState<FrequentWorkout[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [loadingData, setLoadingData] = useState(true);
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
@@ -27,20 +36,21 @@ export default function WorkoutsPage() {
 
   useEffect(() => {
     if (user) {
-      fetchRecentLogs();
+      fetchUserData();
     }
   }, [user]);
 
-  const fetchRecentLogs = async () => {
+  const fetchUserData = async () => {
     if (!user) return;
 
     try {
+      // Fetch WOD logs
       const logsQuery = query(
         collection(db, "workoutLogs"),
         where("userId", "==", user.id)
       );
-      const snapshot = await getDocs(logsQuery);
-      const logs = snapshot.docs.map((doc) => ({
+      const logsSnapshot = await getDocs(logsQuery);
+      const logs = logsSnapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       })) as WorkoutLog[];
@@ -50,14 +60,91 @@ export default function WorkoutsPage() {
         return dateB.getTime() - dateA.getTime();
       });
       setRecentLogs(logs.slice(0, 10));
+
+      // Count WOD frequency
+      const wodCounts: Record<string, number> = {};
+      logs.forEach((log) => {
+        if (log.wodTitle) {
+          wodCounts[log.wodTitle] = (wodCounts[log.wodTitle] || 0) + 1;
+        }
+      });
+
+      // Get top frequent WODs
+      const allWods = getAllWods();
+      const frequentWodsList: FrequentWorkout[] = Object.entries(wodCounts)
+        .sort(([, a], [, b]) => b - a)
+        .slice(0, 6)
+        .map(([name, count]) => {
+          const wod = allWods.find((w) => w.name.toLowerCase() === name.toLowerCase());
+          return {
+            name,
+            count,
+            type: "wod" as const,
+            description: wod?.description || "",
+          };
+        });
+      setFrequentWods(frequentWodsList);
+
+      // Fetch lift results
+      const liftsQuery = query(
+        collection(db, "liftResults"),
+        where("oderId", "==", user.id)
+      );
+      const liftsSnapshot = await getDocs(liftsQuery);
+
+      // Count lift frequency
+      const liftCounts: Record<string, number> = {};
+      liftsSnapshot.docs.forEach((doc) => {
+        const data = doc.data();
+        const liftName = data.liftTitle || data.liftName;
+        if (liftName) {
+          liftCounts[liftName] = (liftCounts[liftName] || 0) + 1;
+        }
+      });
+
+      // Get top frequent lifts
+      const allLifts = getAllLifts();
+      const frequentLiftsList: FrequentWorkout[] = Object.entries(liftCounts)
+        .sort(([, a], [, b]) => b - a)
+        .slice(0, 6)
+        .map(([name, count]) => {
+          const lift = allLifts.find((l) => l.name.toLowerCase() === name.toLowerCase());
+          return {
+            name,
+            count,
+            type: "lift" as const,
+            description: lift?.description || "",
+          };
+        });
+      setFrequentLifts(frequentLiftsList);
     } catch (error) {
-      console.error("Error fetching logs:", error);
+      console.error("Error fetching data:", error);
     } finally {
       setLoadingData(false);
     }
   };
 
-  const categories = workoutType === "wod" ? WOD_CATEGORIES : LIFT_CATEGORIES;
+  // Build categories with dynamic Frequent section
+  const getCategories = (): WorkoutCategory[] => {
+    const baseCategories = workoutType === "wod" ? WOD_CATEGORIES : LIFT_CATEGORIES;
+    const frequentItems = workoutType === "wod" ? frequentWods : frequentLifts;
+
+    if (frequentItems.length > 0) {
+      const frequentCategory: WorkoutCategory = {
+        name: "Frequent",
+        icon: "⚡",
+        workouts: frequentItems.map((f) => ({
+          name: f.name,
+          description: f.description || `Logged ${f.count} times`,
+          type: f.type,
+        })),
+      };
+      return [frequentCategory, ...baseCategories];
+    }
+    return baseCategories;
+  };
+
+  const categories = getCategories();
 
   // Filter workouts across all categories when searching
   const getSearchResults = (): Workout[] => {
