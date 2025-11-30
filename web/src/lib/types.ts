@@ -104,7 +104,7 @@ export interface Gym {
 
 // Group types
 export type GroupType = "default" | "custom" | "personal";
-export type MembershipType = "auto-assign-all" | "manual";
+export type MembershipType = "auto-assign-all" | "inviteOnly";
 
 export interface TimeSlot {
   id: string;

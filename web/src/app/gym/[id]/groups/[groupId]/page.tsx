@@ -48,7 +48,7 @@ export default function GroupDetailPage({
   // Editable fields
   const [name, setName] = useState("");
   const [groupType, setGroupType] = useState<GroupType>("custom");
-  const [membershipType, setMembershipType] = useState<MembershipType>("manual");
+  const [membershipType, setMembershipType] = useState<MembershipType>("inviteOnly");
   const [isPublic, setIsPublic] = useState(false);
   const [defaultTimeSlots, setDefaultTimeSlots] = useState<TimeSlot[]>([]);
   const [hideDetailsByDefault, setHideDetailsByDefault] = useState(false);
@@ -106,7 +106,7 @@ export default function GroupDetailPage({
         // Initialize form fields
         setName(groupData.name);
         setGroupType(groupData.type || "custom");
-        setMembershipType(groupData.membershipType || "manual");
+        setMembershipType(groupData.membershipType || "inviteOnly");
         setIsPublic(groupData.isPublic || false);
         setDefaultTimeSlots(groupData.defaultTimeSlots || []);
         setHideDetailsByDefault(groupData.hideDetailsByDefault || false);
@@ -300,11 +300,11 @@ export default function GroupDetailPage({
                 className="text-right text-gray-900 bg-transparent border-none focus:ring-0 p-0 pr-6 appearance-none cursor-pointer"
               >
                 <option value="auto-assign-all">Auto-assign All</option>
-                <option value="manual">Manual</option>
+                <option value="inviteOnly">Invite Only</option>
               </select>
             ) : (
               <span className="text-gray-900">
-                {membershipType === "auto-assign-all" ? "Auto-assign All" : "Manual"}
+                {membershipType === "auto-assign-all" ? "Auto-assign All" : "Invite Only"}
               </span>
             )}
           </div>
