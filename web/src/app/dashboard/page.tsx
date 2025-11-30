@@ -29,6 +29,7 @@ interface WorkoutGroup {
   id: string;
   name: string;
   signupCutoffMinutes?: number;
+  defaultTimeSlots?: { hour: number; minute: number; capacity?: number }[];
 }
 
 function timeAgo(date: Date): string {
@@ -63,6 +64,7 @@ export default function DashboardPage() {
   const [upcomingWorkouts, setUpcomingWorkouts] = useState<ScheduledWorkout[]>([]);
   const [workoutLogs, setWorkoutLogs] = useState<{ [key: string]: WorkoutResult[] }>({});
   const [groups, setGroups] = useState<Record<string, WorkoutGroup>>({});
+  const [userGroupIds, setUserGroupIds] = useState<string[]>([]);
   const [loadingData, setLoadingData] = useState(true);
 
   useEffect(() => {
@@ -98,19 +100,28 @@ export default function DashboardPage() {
       })) as ScheduledWorkout[];
       setUpcomingWorkouts(workouts);
 
-      // Fetch all groups for signup cutoff info
+      // Fetch all groups for signup cutoff info and user membership
       const groupsQuery = query(collection(db, "groups"));
       const groupsSnapshot = await getDocs(groupsQuery);
       const groupsMap: Record<string, WorkoutGroup> = {};
+      const memberGroupIds: string[] = [];
       groupsSnapshot.docs.forEach((doc) => {
         const data = doc.data();
         groupsMap[doc.id] = {
           id: doc.id,
           name: data.name,
           signupCutoffMinutes: data.signupCutoffMinutes ?? 0,
+          defaultTimeSlots: data.defaultTimeSlots || [],
         };
+        // Check if user is a member or coach of this group
+        const isDirectMember = data.memberIds?.includes(user?.id);
+        const isDirectCoach = data.coachIds?.includes(user?.id);
+        if (isDirectMember || isDirectCoach) {
+          memberGroupIds.push(doc.id);
+        }
       });
       setGroups(groupsMap);
+      setUserGroupIds(memberGroupIds);
 
       // Fetch logs for each workout - handle both WODs and lifts
       const logsMap: { [key: string]: WorkoutResult[] } = {};
@@ -329,52 +340,87 @@ export default function DashboardPage() {
                               {workout.wodDescription}
                             </p>
 
-                            {/* Time Slots */}
-                            {workout.timeSlots && workout.timeSlots.length > 0 && (
-                              <div className="mt-4 pt-4 border-t border-gray-100">
-                                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Class Times</p>
-                                <div className="flex flex-wrap gap-2">
-                                  {workout.timeSlots.map((slot, index) => {
-                                    const signedUp = isUserSignedUp(slot);
-                                    const signedUpCount = slot.signups?.length || 0;
-                                    const capacity = slot.capacity || 20;
-                                    const availableSpots = capacity - signedUpCount;
-                                    const isFull = availableSpots <= 0;
-                                    const isPastCutoff = isSignupPastCutoff(workout, slot);
+                            {/* Time Slots - filtered by user's group membership */}
+                            {workout.timeSlots && workout.timeSlots.length > 0 && (() => {
+                              // Build a map of time -> { groups, maxCapacity } for user's groups
+                              const userGroupsForWorkout = workout.groupIds?.filter((gId) => userGroupIds.includes(gId)) || [];
+                              const timeSlotMap: Record<string, { groupIds: string[]; maxCapacity: number }> = {};
 
-                                    return (
-                                      <button
-                                        key={slot.id || `slot-${index}`}
-                                        onClick={() => signedUp ? handleCancelSignup(workout, slot) : handleSignup(workout, slot)}
-                                        disabled={(isFull || isPastCutoff) && !signedUp}
-                                        className={`px-3 py-2 rounded-xl text-sm font-medium transition-colors flex items-center gap-2 ${
-                                          signedUp
-                                            ? "bg-green-100 text-green-700 border border-green-300"
-                                            : isPastCutoff
-                                            ? "bg-orange-50 text-orange-400 cursor-not-allowed border border-orange-200"
-                                            : isFull
-                                            ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                                            : "bg-gray-100 text-gray-700 hover:bg-blue-100 hover:text-blue-700 border border-gray-200"
-                                        }`}
-                                      >
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                        </svg>
-                                        {formatTimeSlot(slot.hour, slot.minute)}
-                                        <span className={`text-xs ${
-                                          signedUp ? "text-green-600"
-                                          : isPastCutoff ? "text-orange-500"
-                                          : isFull ? "text-red-400"
-                                          : "text-gray-500"
-                                        }`}>
-                                          {signedUp ? "✓ Signed up" : isPastCutoff ? "Closed" : isFull ? "Full" : `${availableSpots} spots`}
-                                        </span>
-                                      </button>
-                                    );
-                                  })}
+                              userGroupsForWorkout.forEach((gId) => {
+                                const group = groups[gId];
+                                group?.defaultTimeSlots?.forEach((slot) => {
+                                  const timeKey = `${slot.hour}:${slot.minute}`;
+                                  if (!timeSlotMap[timeKey]) {
+                                    timeSlotMap[timeKey] = { groupIds: [], maxCapacity: 0 };
+                                  }
+                                  timeSlotMap[timeKey].groupIds.push(gId);
+                                  timeSlotMap[timeKey].maxCapacity = Math.max(timeSlotMap[timeKey].maxCapacity, slot.capacity || 20);
+                                });
+                              });
+
+                              // Filter and process workout time slots to only show ones matching user's groups
+                              const filteredSlots = workout.timeSlots
+                                .filter((slot) => {
+                                  const timeKey = `${slot.hour}:${slot.minute}`;
+                                  return timeSlotMap[timeKey] !== undefined;
+                                })
+                                .map((slot) => {
+                                  const timeKey = `${slot.hour}:${slot.minute}`;
+                                  const matchedGroups = timeSlotMap[timeKey];
+                                  return {
+                                    ...slot,
+                                    displayCapacity: matchedGroups?.maxCapacity || slot.capacity || 20
+                                  };
+                                });
+
+                              if (filteredSlots.length === 0) return null;
+
+                              return (
+                                <div className="mt-4 pt-4 border-t border-gray-100">
+                                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Class Times</p>
+                                  <div className="flex flex-wrap gap-2">
+                                    {filteredSlots.map((slot, index) => {
+                                      const signedUp = isUserSignedUp(slot);
+                                      const signedUpCount = slot.signups?.length || 0;
+                                      const capacity = slot.displayCapacity || slot.capacity || 20;
+                                      const availableSpots = capacity - signedUpCount;
+                                      const isFull = availableSpots <= 0;
+                                      const isPastCutoff = isSignupPastCutoff(workout, slot);
+
+                                      return (
+                                        <button
+                                          key={slot.id || `slot-${index}`}
+                                          onClick={() => signedUp ? handleCancelSignup(workout, slot) : handleSignup(workout, slot)}
+                                          disabled={(isFull || isPastCutoff) && !signedUp}
+                                          className={`px-3 py-2 rounded-xl text-sm font-medium transition-colors flex items-center gap-2 ${
+                                            signedUp
+                                              ? "bg-green-100 text-green-700 border border-green-300"
+                                              : isPastCutoff
+                                              ? "bg-orange-50 text-orange-400 cursor-not-allowed border border-orange-200"
+                                              : isFull
+                                              ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                                              : "bg-gray-100 text-gray-700 hover:bg-blue-100 hover:text-blue-700 border border-gray-200"
+                                          }`}
+                                        >
+                                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                          </svg>
+                                          {formatTimeSlot(slot.hour, slot.minute)}
+                                          <span className={`text-xs ${
+                                            signedUp ? "text-green-600"
+                                            : isPastCutoff ? "text-orange-500"
+                                            : isFull ? "text-red-400"
+                                            : "text-gray-500"
+                                          }`}>
+                                            {signedUp ? "✓ Signed up" : isPastCutoff ? "Closed" : isFull ? "Full" : `${availableSpots} spots`}
+                                          </span>
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
                                 </div>
-                              </div>
-                            )}
+                              );
+                            })()}
 
                             {/* Action Buttons */}
                             <div className="flex gap-3 mt-4">
