@@ -1253,6 +1253,21 @@ export default function GymDetailPage() {
                                         )}
                                       </>
                                     )}
+                                    {/* Time Slots Display */}
+                                    {workout.timeSlots && workout.timeSlots.length > 0 && (
+                                      <div className="mt-2 pt-2 border-t border-gray-200">
+                                        <div className="flex flex-wrap gap-1">
+                                          {workout.timeSlots
+                                            .filter((slot) => slot && slot.hour !== undefined)
+                                            .sort((a, b) => (a.hour ?? 0) * 60 + (a.minute ?? 0) - ((b.hour ?? 0) * 60 + (b.minute ?? 0)))
+                                            .map((slot, idx) => (
+                                              <span key={slot.id || idx} className="px-2 py-0.5 bg-purple-50 text-purple-600 text-xs rounded">
+                                                {formatTimeSlot(slot.hour, slot.minute)}
+                                              </span>
+                                            ))}
+                                        </div>
+                                      </div>
+                                    )}
                                   </div>
                                   <div className="flex items-center gap-1">
                                     <button
