@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { collection, query, where, getDocs, Timestamp, limit } from "firebase/firestore";
+import { collection, query, where, getDocs, Timestamp, limit, orderBy } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
 import { ScheduledWorkout, LeaderboardEntry, formatResult, normalizeWorkoutName } from "@/lib/types";
