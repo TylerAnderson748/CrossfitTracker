@@ -96,7 +96,11 @@ export default function GroupDetailPage({
       // Load group
       const groupDoc = await getDoc(doc(db, "groups", groupId));
       if (groupDoc.exists()) {
-        const groupData = { id: groupDoc.id, ...groupDoc.data() } as WorkoutGroup;
+        const rawData = groupDoc.data();
+        console.log("Raw group data from Firebase:", rawData);
+        console.log("membershipType in database:", rawData.membershipType);
+
+        const groupData = { id: groupDoc.id, ...rawData } as WorkoutGroup;
         setGroup(groupData);
 
         // Initialize form fields
