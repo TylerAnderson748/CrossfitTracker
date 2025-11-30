@@ -234,7 +234,7 @@ export default function GymDetailPage() {
             const usersSnapshot = await getDocs(usersQuery);
             usersSnapshot.docs.forEach((doc) => {
               const userData = doc.data();
-              userCacheMap[doc.id] = userData.name || userData.email || 'Unknown User';
+              userCacheMap[doc.id] = userData.displayName || userData.name || userData.email || 'Unknown User';
             });
           }
           setUserCache(userCacheMap);

@@ -24,6 +24,7 @@ export default function WeeklyPlanPage() {
   const [userGymIds, setUserGymIds] = useState<string[]>([]);
   const [groupsLoaded, setGroupsLoaded] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
+  const [userCache, setUserCache] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (!loading && !user) {
@@ -160,6 +161,30 @@ export default function WeeklyPlanPage() {
       });
 
       setWorkouts(filteredWorkouts);
+
+      // Fetch user names for all signed up users
+      const allSignupUserIds = new Set<string>();
+      filteredWorkouts.forEach((workout) => {
+        workout.timeSlots?.forEach((slot: any) => {
+          const signups = slot.signups || slot.signedUpUserIds || [];
+          signups.forEach((userId: string) => allSignupUserIds.add(userId));
+        });
+      });
+
+      if (allSignupUserIds.size > 0) {
+        const userIds = Array.from(allSignupUserIds);
+        const userCacheMap: Record<string, string> = {};
+        for (let i = 0; i < userIds.length; i += 10) {
+          const batch = userIds.slice(i, i + 10);
+          const usersQuery = query(collection(db, "users"), where("__name__", "in", batch));
+          const usersSnapshot = await getDocs(usersQuery);
+          usersSnapshot.docs.forEach((doc) => {
+            const userData = doc.data();
+            userCacheMap[doc.id] = userData.displayName || userData.name || userData.email || 'Unknown User';
+          });
+        }
+        setUserCache(userCacheMap);
+      }
     } catch (error) {
       console.error("Error fetching workouts:", error);
     } finally {
@@ -483,6 +508,7 @@ export default function WeeklyPlanPage() {
                                           const signedUpCount = slot.signups?.length || 0;
                                           const availableSpots = slot.displayCapacity - signedUpCount;
                                           const isFull = slot.displayCapacity > 0 && availableSpots <= 0;
+                                          const signupNames = slot.signups?.map((id: string) => userCache[id] || 'Unknown User') || [];
 
                                           return (
                                             <div key={slot.id || `slot-${index}-${slot.hour}-${slot.minute}`} className="flex items-center gap-2">
@@ -505,6 +531,20 @@ export default function WeeklyPlanPage() {
                                                   {signedUp ? "✓" : isFull ? "Full" : `${availableSpots} left`}
                                                 </span>
                                               </button>
+                                              {/* Signup count with hover tooltip */}
+                                              {signedUpCount > 0 && (
+                                                <div className="relative group/signup">
+                                                  <span className="px-1.5 py-0.5 bg-green-100 text-green-700 text-[10px] rounded-full cursor-default">
+                                                    {signedUpCount} signed up
+                                                  </span>
+                                                  <div className="absolute bottom-full left-0 mb-1 hidden group-hover/signup:block z-50">
+                                                    <div className="bg-gray-900 text-white text-xs rounded px-2 py-1 whitespace-nowrap shadow-lg">
+                                                      {signupNames.join(', ')}
+                                                    </div>
+                                                    <div className="absolute top-full left-3 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
+                                                  </div>
+                                                </div>
+                                              )}
                                               {/* Group tags for this time slot */}
                                               <div className="flex gap-1 flex-wrap">
                                                 {slot.groupIds.map((gId: string) => (
