@@ -40,6 +40,7 @@ export default function GymDetailPage() {
   const [loadingData, setLoadingData] = useState(true);
   const [activeTab, setActiveTab] = useState<"members" | "coaches" | "groups" | "programming" | "requests">("members");
   const [showAddGroupModal, setShowAddGroupModal] = useState(false);
+  const [showDeleteGymModal, setShowDeleteGymModal] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
 
   // Programming modal state
@@ -473,6 +474,53 @@ export default function GymDetailPage() {
       fetchGymData();
     } catch (error) {
       console.error("Error deleting group:", error);
+    }
+  };
+
+  const handleDeleteGym = async () => {
+    if (!gym || !isOwner) return;
+    try {
+      // Delete all groups associated with this gym
+      const groupsQuery = query(collection(db, "groups"), where("gymId", "==", gymId));
+      const groupsSnapshot = await getDocs(groupsQuery);
+      for (const groupDoc of groupsSnapshot.docs) {
+        await deleteDoc(doc(db, "groups", groupDoc.id));
+      }
+
+      // Delete all scheduled workouts for this gym's groups
+      const groupIds = groupsSnapshot.docs.map(d => d.id);
+      if (groupIds.length > 0) {
+        const workoutsQuery = query(
+          collection(db, "scheduledWorkouts"),
+          where("groupIds", "array-contains-any", groupIds.slice(0, 10))
+        );
+        const workoutsSnapshot = await getDocs(workoutsQuery);
+        for (const workoutDoc of workoutsSnapshot.docs) {
+          await deleteDoc(doc(db, "scheduledWorkouts", workoutDoc.id));
+        }
+      }
+
+      // Delete membership requests for this gym
+      const requestsQuery = query(collection(db, "gymMembershipRequests"), where("gymId", "==", gymId));
+      const requestsSnapshot = await getDocs(requestsQuery);
+      for (const requestDoc of requestsSnapshot.docs) {
+        await deleteDoc(doc(db, "gymMembershipRequests", requestDoc.id));
+      }
+
+      // Delete group membership requests for this gym
+      const groupRequestsQuery = query(collection(db, "groupMembershipRequests"), where("gymId", "==", gymId));
+      const groupRequestsSnapshot = await getDocs(groupRequestsQuery);
+      for (const requestDoc of groupRequestsSnapshot.docs) {
+        await deleteDoc(doc(db, "groupMembershipRequests", requestDoc.id));
+      }
+
+      // Delete the gym itself
+      await deleteDoc(doc(db, "gyms", gymId));
+
+      // Redirect to gym list
+      router.push("/gym");
+    } catch (error) {
+      console.error("Error deleting gym:", error);
     }
   };
 
@@ -1054,9 +1102,17 @@ export default function GymDetailPage() {
               </p>
             </div>
             {isOwner && (
-              <span className="ml-auto px-3 py-1 bg-purple-100 text-purple-600 rounded-full text-sm font-medium">
-                Owner
-              </span>
+              <div className="ml-auto flex items-center gap-2">
+                <span className="px-3 py-1 bg-purple-100 text-purple-600 rounded-full text-sm font-medium">
+                  Owner
+                </span>
+                <button
+                  onClick={() => setShowDeleteGymModal(true)}
+                  className="px-3 py-1 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 text-sm font-medium"
+                >
+                  Delete Gym
+                </button>
+              </div>
             )}
           </div>
         </div>
@@ -2139,6 +2195,62 @@ export default function GymDetailPage() {
                 className="flex-1 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-blue-300 transition-colors"
               >
                 {editingSeriesId ? "Update Series" : (editingWorkoutId ? "Save Changes" : "Schedule")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Gym Confirmation Modal */}
+      {showDeleteGymModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl p-6 w-full max-w-md">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">Delete Gym</h2>
+                <p className="text-sm text-gray-500">This action cannot be undone</p>
+              </div>
+            </div>
+            <p className="text-gray-600 mb-6">
+              Are you sure you want to delete <span className="font-semibold">{gym?.name}</span>? This will permanently remove:
+            </p>
+            <ul className="text-sm text-gray-600 mb-6 space-y-2">
+              <li className="flex items-center gap-2">
+                <svg className="w-4 h-4 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+                All groups and their settings
+              </li>
+              <li className="flex items-center gap-2">
+                <svg className="w-4 h-4 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+                All scheduled workouts
+              </li>
+              <li className="flex items-center gap-2">
+                <svg className="w-4 h-4 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+                All membership requests
+              </li>
+            </ul>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowDeleteGymModal(false)}
+                className="flex-1 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteGym}
+                className="flex-1 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+              >
+                Delete Gym
               </button>
             </div>
           </div>
