@@ -11,6 +11,7 @@ import Navigation from "@/components/Navigation";
 interface WorkoutGroup {
   id: string;
   name: string;
+  defaultTimeSlots?: { hour: number; minute: number }[];
 }
 
 export default function WeeklyPlanPage() {
@@ -69,7 +70,11 @@ export default function WeeklyPlanPage() {
 
       groupsSnapshot.docs.forEach((doc) => {
         const data = doc.data();
-        groupsMap[doc.id] = { id: doc.id, name: data.name };
+        groupsMap[doc.id] = {
+          id: doc.id,
+          name: data.name,
+          defaultTimeSlots: data.defaultTimeSlots || []
+        };
 
         // Only include group if user is directly in memberIds or coachIds
         const isDirectMember = data.memberIds?.includes(user.id);
@@ -365,14 +370,16 @@ export default function WeeklyPlanPage() {
                           >
                             <div className="flex items-start justify-between">
                               <div className="flex-1">
-                                {/* Group badges */}
+                                {/* Group badges - only show groups user is a member of */}
                                 {workout.groupIds && workout.groupIds.length > 0 && (
                                   <div className="flex items-center gap-2 mb-2 flex-wrap">
-                                    {workout.groupIds.map((gId) => (
-                                      <span key={gId} className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full">
-                                        {getGroupName(gId)}
-                                      </span>
-                                    ))}
+                                    {workout.groupIds
+                                      .filter((gId) => userGroupIds.includes(gId))
+                                      .map((gId) => (
+                                        <span key={gId} className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full">
+                                          {getGroupName(gId)}
+                                        </span>
+                                      ))}
                                   </div>
                                 )}
 
@@ -412,26 +419,41 @@ export default function WeeklyPlanPage() {
                                   </>
                                 )}
 
-                                {/* Time Slots */}
-                                {workout.timeSlots && workout.timeSlots.length > 0 && (
+                                {/* Time Slots - only show slots that match user's groups' default times */}
+                                {workout.timeSlots && workout.timeSlots.length > 0 && (() => {
+                                  // Get all valid time slots for user's groups
+                                  const userGroupsForWorkout = workout.groupIds?.filter((gId) => userGroupIds.includes(gId)) || [];
+                                  const validTimes = new Set<string>();
+                                  userGroupsForWorkout.forEach((gId) => {
+                                    const group = groups[gId];
+                                    group?.defaultTimeSlots?.forEach((slot: any) => {
+                                      validTimes.add(`${slot.hour}:${slot.minute}`);
+                                    });
+                                  });
+
+                                  const filteredSlots = workout.timeSlots
+                                    .filter((slot) => slot != null)
+                                    .map((slot: any) => {
+                                      // Handle legacy format with startTime Timestamp
+                                      let hour = slot.hour;
+                                      let minute = slot.minute;
+                                      if (slot.startTime && typeof slot.startTime.toDate === 'function') {
+                                        const date = slot.startTime.toDate();
+                                        hour = date.getHours();
+                                        minute = date.getMinutes();
+                                      }
+                                      return { ...slot, hour, minute, signups: slot.signups || slot.signedUpUserIds || [] };
+                                    })
+                                    .filter((slot) => validTimes.size === 0 || validTimes.has(`${slot.hour}:${slot.minute}`))
+                                    .sort((a, b) => (a.hour ?? 0) * 60 + (a.minute ?? 0) - ((b.hour ?? 0) * 60 + (b.minute ?? 0)));
+
+                                  if (filteredSlots.length === 0) return null;
+
+                                  return (
                                   <div className="mt-3 pt-3 border-t border-gray-200">
                                     <p className="text-xs font-medium text-gray-500 mb-2">Class Times</p>
                                     <div className="flex flex-wrap gap-2">
-                                      {workout.timeSlots
-                                        .filter((slot) => slot != null)
-                                        .map((slot: any) => {
-                                          // Handle legacy format with startTime Timestamp
-                                          let hour = slot.hour;
-                                          let minute = slot.minute;
-                                          if (slot.startTime && typeof slot.startTime.toDate === 'function') {
-                                            const date = slot.startTime.toDate();
-                                            hour = date.getHours();
-                                            minute = date.getMinutes();
-                                          }
-                                          return { ...slot, hour, minute, signups: slot.signups || slot.signedUpUserIds || [] };
-                                        })
-                                        .sort((a, b) => (a.hour ?? 0) * 60 + (a.minute ?? 0) - ((b.hour ?? 0) * 60 + (b.minute ?? 0)))
-                                        .map((slot, index) => {
+                                      {filteredSlots.map((slot, index) => {
                                           const signedUp = isUserSignedUp(slot);
                                           const availableSpots = getAvailableSpots(slot);
                                           const isFull = (slot.capacity || 20) > 0 && availableSpots <= 0;
@@ -461,7 +483,8 @@ export default function WeeklyPlanPage() {
                                         })}
                                     </div>
                                   </div>
-                                )}
+                                  );
+                                })()}
                               </div>
 
                               {/* Log button */}
