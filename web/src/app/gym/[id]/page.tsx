@@ -619,6 +619,53 @@ export default function GymDetailPage() {
     }
   };
 
+  const handleSyncVisibilitySettings = async () => {
+    if (!isOwner && !isCoach) return;
+
+    try {
+      let updatedCount = 0;
+
+      for (const workout of scheduledWorkouts) {
+        // Find groups for this workout
+        const workoutGroups = groups.filter(g => workout.groupIds?.includes(g.id));
+        const groupWithHiddenDetails = workoutGroups.find(g => g.hideDetailsByDefault);
+        const shouldHideDetails = !!groupWithHiddenDetails;
+
+        // Calculate reveal date if details should be hidden
+        let revealDate: Timestamp | undefined;
+        if (shouldHideDetails && groupWithHiddenDetails) {
+          const workoutDate = workout.date.toDate();
+          const revealDateTime = new Date(workoutDate);
+          revealDateTime.setDate(revealDateTime.getDate() - (groupWithHiddenDetails.defaultRevealDaysBefore || 0));
+          revealDateTime.setHours(
+            groupWithHiddenDetails.defaultRevealHour || 0,
+            groupWithHiddenDetails.defaultRevealMinute || 0,
+            0,
+            0
+          );
+          revealDate = Timestamp.fromDate(revealDateTime);
+        }
+
+        // Only update if values changed
+        if (workout.hideDetails !== shouldHideDetails ||
+            (shouldHideDetails && !workout.revealDate) ||
+            (shouldHideDetails && workout.revealDate?.toMillis() !== revealDate?.toMillis())) {
+          await updateDoc(doc(db, "scheduledWorkouts", workout.id), {
+            hideDetails: shouldHideDetails,
+            ...(revealDate ? { revealDate } : { revealDate: null }),
+          });
+          updatedCount++;
+        }
+      }
+
+      alert(`Updated visibility settings for ${updatedCount} workout(s).`);
+      fetchGymData();
+    } catch (error) {
+      console.error("Error syncing visibility settings:", error);
+      alert("Error syncing visibility settings. Please try again.");
+    }
+  };
+
   const resetWorkoutModal = () => {
     setShowAddWorkoutModal(false);
     setNewWorkoutDate("");
@@ -1402,6 +1449,13 @@ export default function GymDetailPage() {
                       Refresh Slots
                     </button>
                   )}
+                  <button
+                    onClick={handleSyncVisibilitySettings}
+                    className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm"
+                    title="Update all workouts to match group visibility settings"
+                  >
+                    Sync Visibility
+                  </button>
                   <button
                     onClick={() => setShowAddWorkoutModal(true)}
                     className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
