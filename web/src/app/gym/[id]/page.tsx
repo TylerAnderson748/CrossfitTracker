@@ -69,6 +69,8 @@ export default function GymDetailPage() {
   const [newSlotHour, setNewSlotHour] = useState(6);
   const [newSlotMinute, setNewSlotMinute] = useState(0);
   const [newSlotCapacity, setNewSlotCapacity] = useState(20);
+  // User cache for displaying signup names
+  const [userCache, setUserCache] = useState<Record<string, string>>({});
 
   const isOwner = gym?.ownerId === user?.id;
   const isCoach = gym?.coachIds?.includes(user?.id || "") || isOwner;
@@ -212,6 +214,31 @@ export default function GymDetailPage() {
             return dateA.getTime() - dateB.getTime();
           }) as ScheduledWorkout[];
         setScheduledWorkouts(workoutsData);
+
+        // Fetch user names for all signed up users
+        const allSignupUserIds = new Set<string>();
+        workoutsData.forEach((workout) => {
+          workout.timeSlots?.forEach((slot: any) => {
+            const signups = slot.signups || slot.signedUpUserIds || [];
+            signups.forEach((userId: string) => allSignupUserIds.add(userId));
+          });
+        });
+
+        if (allSignupUserIds.size > 0) {
+          const userIds = Array.from(allSignupUserIds);
+          const userCacheMap: Record<string, string> = {};
+          // Fetch users in batches of 10 (Firestore limit for 'in' queries)
+          for (let i = 0; i < userIds.length; i += 10) {
+            const batch = userIds.slice(i, i + 10);
+            const usersQuery = query(collection(db, "users"), where("__name__", "in", batch));
+            const usersSnapshot = await getDocs(usersQuery);
+            usersSnapshot.docs.forEach((doc) => {
+              const userData = doc.data();
+              userCacheMap[doc.id] = userData.name || userData.email || 'Unknown User';
+            });
+          }
+          setUserCache(userCacheMap);
+        }
       }
 
       // Fetch ALL workout logs for suggestions (not limited to gym members)
@@ -1323,6 +1350,9 @@ export default function GymDetailPage() {
 
                                       // Helper to get user name from ID
                                       const getUserName = (userId: string) => {
+                                        // First check the user cache
+                                        if (userCache[userId]) return userCache[userId];
+                                        // Fallback to members/coaches
                                         const member = members.find(m => m.id === userId);
                                         const coach = coaches.find(c => c.id === userId);
                                         return member?.name || coach?.name || 'Unknown User';
