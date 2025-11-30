@@ -377,7 +377,7 @@ export default function WeeklyPlanPage() {
                     value={newWorkout.wodTitle}
                     onChange={(e) => setNewWorkout({ ...newWorkout, wodTitle: e.target.value })}
                     placeholder="e.g., Fran, Back Squat"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-gray-500"
                   />
                 </div>
                 <div>
@@ -389,7 +389,7 @@ export default function WeeklyPlanPage() {
                     onChange={(e) => setNewWorkout({ ...newWorkout, wodDescription: e.target.value })}
                     placeholder="e.g., 21-15-9 Thrusters & Pull-ups"
                     rows={3}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-gray-500"
                   />
                 </div>
                 <div>
