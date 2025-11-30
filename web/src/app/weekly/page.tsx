@@ -109,17 +109,18 @@ export default function WeeklyPlanPage() {
 
     switch (calendarRange) {
       case "thisWeek":
-        rangeEnd.setDate(rangeStart.getDate() + 6);
+        rangeEnd.setDate(startOfWeek.getDate() + 6);
         break;
       case "nextWeek":
-        rangeStart.setDate(rangeStart.getDate() + 7);
-        rangeEnd.setDate(rangeStart.getDate() + 6);
+        rangeStart.setDate(startOfWeek.getDate() + 7);
+        rangeEnd = new Date(rangeStart);
+        rangeEnd.setDate(rangeEnd.getDate() + 6);
         break;
       case "2weeks":
-        rangeEnd.setDate(rangeStart.getDate() + 13);
+        rangeEnd.setDate(startOfWeek.getDate() + 13);
         break;
       case "month":
-        rangeEnd.setDate(rangeStart.getDate() + 29);
+        rangeEnd.setDate(startOfWeek.getDate() + 29);
         break;
     }
 
