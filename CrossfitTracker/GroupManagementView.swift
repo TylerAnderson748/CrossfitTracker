@@ -14,9 +14,37 @@ struct GroupManagementView: View {
     @State private var groups: [WorkoutGroup] = []
     @State private var showingAddGroup = false
     @State private var selectedGroup: WorkoutGroup?
+    @State private var isRepairing = false
+    @State private var repairMessage: String?
 
     var body: some View {
         List {
+            // Repair section if groups are missing
+            if groups.count < 3 {
+                Section {
+                    Button(action: repairGroups) {
+                        HStack {
+                            if isRepairing {
+                                ProgressView()
+                                    .padding(.trailing, 8)
+                            } else {
+                                Image(systemName: "wrench.and.screwdriver")
+                                    .foregroundColor(.orange)
+                            }
+                            Text(isRepairing ? "Repairing..." : "Repair Missing Groups")
+                                .foregroundColor(isRepairing ? .secondary : .primary)
+                        }
+                    }
+                    .disabled(isRepairing)
+
+                    if let message = repairMessage {
+                        Text(message)
+                            .font(.caption)
+                            .foregroundColor(.green)
+                    }
+                }
+            }
+
             ForEach(groups) { group in
                 NavigationLink(destination: GroupDetailView(group: group, gym: gym).environmentObject(store)) {
                     GroupRow(group: group)
@@ -64,6 +92,26 @@ struct GroupManagementView: View {
 
             if let savedGroup = savedGroup {
                 self.groups.append(savedGroup)
+            }
+        }
+    }
+
+    private func repairGroups() {
+        guard let gymId = gym.id else { return }
+
+        isRepairing = true
+        repairMessage = nil
+
+        store.repairDefaultGroupsForGym(gymId: gymId, ownerId: gym.ownerId) { createdCount, error in
+            isRepairing = false
+
+            if let error = error {
+                repairMessage = "Error: \(error)"
+            } else if createdCount > 0 {
+                repairMessage = "Created \(createdCount) missing group(s)"
+                loadGroups() // Reload to show new groups
+            } else {
+                repairMessage = "All groups already exist"
             }
         }
     }
