@@ -139,6 +139,30 @@ export interface LiftResult {
   isPersonalRecord: boolean;
 }
 
+// Pricing types
+export type BillingCycle = "monthly" | "quarterly" | "yearly" | "one-time";
+export type PaymentStatus = "active" | "past_due" | "cancelled" | "trial";
+
+export interface PricingTier {
+  id: string;
+  name: string;
+  price: number;
+  billingCycle: BillingCycle;
+  description?: string;
+  features?: string[];
+  isActive: boolean;
+}
+
+export interface MemberSubscription {
+  id: string;
+  memberId: string;
+  tierId: string;
+  status: PaymentStatus;
+  startDate: Timestamp;
+  nextBillingDate?: Timestamp;
+  cancelledAt?: Timestamp;
+}
+
 export interface Gym {
   id: string;
   name: string;
@@ -146,6 +170,9 @@ export interface Gym {
   coachIds: string[];
   memberIds: string[];
   createdAt: Timestamp;
+  // Pricing settings (mockup)
+  pricingEnabled?: boolean;
+  defaultPricingTierId?: string;
 }
 
 // Group types
@@ -181,6 +208,10 @@ export interface WorkoutGroup {
   defaultRevealMinute: number;
   // Signup cutoff (minutes before time slot)
   signupCutoffMinutes: number;
+  // Pricing settings (mockup)
+  pricingTierId?: string;
+  requiresPayment?: boolean;
+  additionalFee?: number;
 }
 
 // Group membership request

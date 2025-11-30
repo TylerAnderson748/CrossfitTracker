@@ -6,7 +6,7 @@ import Link from "next/link";
 import { doc, getDoc, collection, query, where, getDocs, updateDoc, arrayUnion, arrayRemove, deleteDoc, addDoc, Timestamp } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
-import { Gym, WorkoutGroup, AppUser, ScheduledWorkout, ScheduledTimeSlot, WorkoutLog, WorkoutComponent, WorkoutComponentType, workoutComponentLabels, workoutComponentColors, LiftResult, LeaderboardEntry, formatTimeSlot, GroupMembershipRequest } from "@/lib/types";
+import { Gym, WorkoutGroup, AppUser, ScheduledWorkout, ScheduledTimeSlot, WorkoutLog, WorkoutComponent, WorkoutComponentType, workoutComponentLabels, workoutComponentColors, LiftResult, LeaderboardEntry, formatTimeSlot, GroupMembershipRequest, PricingTier, BillingCycle } from "@/lib/types";
 import { getAllWods, getAllLifts } from "@/lib/workoutData";
 import Navigation from "@/components/Navigation";
 
@@ -38,7 +38,7 @@ export default function GymDetailPage() {
   const [leaderboardEntries, setLeaderboardEntries] = useState<LeaderboardEntry[]>([]);
   const [allScheduledWorkouts, setAllScheduledWorkouts] = useState<ScheduledWorkout[]>([]);
   const [loadingData, setLoadingData] = useState(true);
-  const [activeTab, setActiveTab] = useState<"members" | "coaches" | "groups" | "programming" | "requests">("members");
+  const [activeTab, setActiveTab] = useState<"members" | "coaches" | "groups" | "programming" | "requests" | "pricing">("members");
   const [showAddGroupModal, setShowAddGroupModal] = useState(false);
   const [showDeleteGymModal, setShowDeleteGymModal] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
@@ -74,6 +74,20 @@ export default function GymDetailPage() {
   const [newSlotCapacity, setNewSlotCapacity] = useState(20);
   // User cache for displaying signup names
   const [userCache, setUserCache] = useState<Record<string, string>>({});
+
+  // Pricing state (mockup)
+  const [pricingTiers, setPricingTiers] = useState<PricingTier[]>([
+    { id: "tier_1", name: "Monthly Membership", price: 150, billingCycle: "monthly", description: "Unlimited access to all classes", features: ["Unlimited classes", "Open gym access", "Member app access"], isActive: true },
+    { id: "tier_2", name: "Drop-In", price: 25, billingCycle: "one-time", description: "Single class visit", features: ["1 class access"], isActive: true },
+    { id: "tier_3", name: "10-Class Pack", price: 200, billingCycle: "one-time", description: "10 class punch card", features: ["10 class credits", "Never expires"], isActive: true },
+  ]);
+  const [showAddPricingModal, setShowAddPricingModal] = useState(false);
+  const [editingTier, setEditingTier] = useState<PricingTier | null>(null);
+  const [newTierName, setNewTierName] = useState("");
+  const [newTierPrice, setNewTierPrice] = useState("");
+  const [newTierBillingCycle, setNewTierBillingCycle] = useState<BillingCycle>("monthly");
+  const [newTierDescription, setNewTierDescription] = useState("");
+  const [newTierFeatures, setNewTierFeatures] = useState("");
 
   const isOwner = gym?.ownerId === user?.id;
   const isCoach = gym?.coachIds?.includes(user?.id || "") || isOwner;
@@ -1226,6 +1240,7 @@ export default function GymDetailPage() {
             { id: "groups", label: "Groups", count: groups.length, badge: isCoach && groupRequests.length > 0 ? groupRequests.length : undefined },
             ...(isCoach ? [{ id: "programming", label: "Programming", count: scheduledWorkouts.length }] : []),
             ...(isOwner ? [{ id: "requests", label: "Requests", count: requests.length }] : []),
+            ...(isOwner ? [{ id: "pricing", label: "Pricing", count: pricingTiers.filter(t => t.isActive).length }] : []),
           ].map((tab) => (
             <button
               key={tab.id}
@@ -1671,7 +1686,7 @@ export default function GymDetailPage() {
                                         // Fallback to members/coaches
                                         const member = members.find(m => m.id === userId);
                                         const coach = coaches.find(c => c.id === userId);
-                                        return member?.name || coach?.name || 'Unknown User';
+                                        return member?.firstName || coach?.firstName || 'Unknown User';
                                       };
 
                                       return (
@@ -1785,6 +1800,161 @@ export default function GymDetailPage() {
                   ))}
                 </div>
               )}
+            </div>
+          )}
+
+          {activeTab === "pricing" && isOwner && (
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-6">
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">Pricing Plans</h2>
+                  <p className="text-sm text-gray-500 mt-1">Set up membership pricing for your gym (mockup)</p>
+                </div>
+                <button
+                  onClick={() => {
+                    setEditingTier(null);
+                    setNewTierName("");
+                    setNewTierPrice("");
+                    setNewTierBillingCycle("monthly");
+                    setNewTierDescription("");
+                    setNewTierFeatures("");
+                    setShowAddPricingModal(true);
+                  }}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
+                >
+                  + Add Plan
+                </button>
+              </div>
+
+              {/* Mockup Banner */}
+              <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <div className="flex items-start gap-3">
+                  <span className="text-yellow-600 text-xl">⚠️</span>
+                  <div>
+                    <p className="font-medium text-yellow-800">Mockup Mode</p>
+                    <p className="text-sm text-yellow-700">This is a preview of pricing features. Payment processing is not yet connected. Changes are for demonstration only.</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Pricing Tiers */}
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {pricingTiers.map((tier) => (
+                  <div
+                    key={tier.id}
+                    className={`p-5 rounded-xl border-2 ${
+                      tier.isActive ? "border-blue-200 bg-white" : "border-gray-200 bg-gray-50 opacity-60"
+                    }`}
+                  >
+                    <div className="flex justify-between items-start mb-3">
+                      <div>
+                        <h3 className="font-semibold text-gray-900">{tier.name}</h3>
+                        {!tier.isActive && (
+                          <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded">Inactive</span>
+                        )}
+                      </div>
+                      <div className="flex gap-1">
+                        <button
+                          onClick={() => {
+                            setEditingTier(tier);
+                            setNewTierName(tier.name);
+                            setNewTierPrice(tier.price.toString());
+                            setNewTierBillingCycle(tier.billingCycle);
+                            setNewTierDescription(tier.description || "");
+                            setNewTierFeatures(tier.features?.join("\n") || "");
+                            setShowAddPricingModal(true);
+                          }}
+                          className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded"
+                          title="Edit"
+                        >
+                          ✏️
+                        </button>
+                        <button
+                          onClick={() => {
+                            setPricingTiers(prev => prev.map(t =>
+                              t.id === tier.id ? { ...t, isActive: !t.isActive } : t
+                            ));
+                          }}
+                          className="p-1.5 text-gray-400 hover:text-orange-600 hover:bg-orange-50 rounded"
+                          title={tier.isActive ? "Deactivate" : "Activate"}
+                        >
+                          {tier.isActive ? "🚫" : "✅"}
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (confirm(`Delete "${tier.name}" pricing plan?`)) {
+                              setPricingTiers(prev => prev.filter(t => t.id !== tier.id));
+                            }
+                          }}
+                          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
+                          title="Delete"
+                        >
+                          🗑️
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="mb-3">
+                      <span className="text-3xl font-bold text-gray-900">${tier.price}</span>
+                      <span className="text-gray-500 text-sm ml-1">
+                        {tier.billingCycle === "monthly" && "/month"}
+                        {tier.billingCycle === "quarterly" && "/quarter"}
+                        {tier.billingCycle === "yearly" && "/year"}
+                        {tier.billingCycle === "one-time" && " one-time"}
+                      </span>
+                    </div>
+
+                    {tier.description && (
+                      <p className="text-sm text-gray-600 mb-3">{tier.description}</p>
+                    )}
+
+                    {tier.features && tier.features.length > 0 && (
+                      <ul className="space-y-1.5">
+                        {tier.features.map((feature, idx) => (
+                          <li key={idx} className="flex items-center gap-2 text-sm text-gray-600">
+                            <span className="text-green-500">✓</span>
+                            {feature}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+
+                    {/* Mockup stats */}
+                    <div className="mt-4 pt-3 border-t border-gray-100">
+                      <p className="text-xs text-gray-400">
+                        {Math.floor(Math.random() * 20 + 5)} active subscribers (mockup)
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {pricingTiers.length === 0 && (
+                <div className="text-center py-12 text-gray-500">
+                  <p className="text-4xl mb-3">💳</p>
+                  <p className="font-medium">No pricing plans yet</p>
+                  <p className="text-sm">Create your first plan to start accepting payments</p>
+                </div>
+              )}
+
+              {/* Revenue Summary Mockup */}
+              <div className="mt-8 p-5 bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl border border-green-200">
+                <h3 className="font-semibold text-gray-900 mb-4">Revenue Summary (Mockup)</h3>
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <p className="text-sm text-gray-500">Monthly Revenue</p>
+                    <p className="text-2xl font-bold text-green-600">$4,500</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500">Active Members</p>
+                    <p className="text-2xl font-bold text-blue-600">32</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500">Avg. per Member</p>
+                    <p className="text-2xl font-bold text-purple-600">$140</p>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -2359,6 +2529,130 @@ export default function GymDetailPage() {
                 className="flex-1 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
               >
                 Delete Gym
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add/Edit Pricing Plan Modal */}
+      {showAddPricingModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <h2 className="text-xl font-bold text-gray-900 mb-4">
+              {editingTier ? "Edit Pricing Plan" : "Add Pricing Plan"}
+            </h2>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Plan Name *
+                </label>
+                <input
+                  type="text"
+                  value={newTierName}
+                  onChange={(e) => setNewTierName(e.target.value)}
+                  placeholder="e.g., Monthly Unlimited"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Price ($) *
+                  </label>
+                  <input
+                    type="number"
+                    value={newTierPrice}
+                    onChange={(e) => setNewTierPrice(e.target.value)}
+                    placeholder="0"
+                    min="0"
+                    step="0.01"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Billing Cycle
+                  </label>
+                  <select
+                    value={newTierBillingCycle}
+                    onChange={(e) => setNewTierBillingCycle(e.target.value as BillingCycle)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="monthly">Monthly</option>
+                    <option value="quarterly">Quarterly</option>
+                    <option value="yearly">Yearly</option>
+                    <option value="one-time">One-time</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Description
+                </label>
+                <input
+                  type="text"
+                  value={newTierDescription}
+                  onChange={(e) => setNewTierDescription(e.target.value)}
+                  placeholder="Brief description of this plan"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Features (one per line)
+                </label>
+                <textarea
+                  value={newTierFeatures}
+                  onChange={(e) => setNewTierFeatures(e.target.value)}
+                  placeholder="Unlimited classes&#10;Open gym access&#10;Free parking"
+                  rows={4}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => {
+                  setShowAddPricingModal(false);
+                  setEditingTier(null);
+                }}
+                className="flex-1 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  if (!newTierName.trim() || !newTierPrice) return;
+
+                  const tierData: PricingTier = {
+                    id: editingTier?.id || `tier_${Date.now()}`,
+                    name: newTierName.trim(),
+                    price: parseFloat(newTierPrice),
+                    billingCycle: newTierBillingCycle,
+                    description: newTierDescription.trim() || undefined,
+                    features: newTierFeatures.split("\n").map(f => f.trim()).filter(Boolean),
+                    isActive: editingTier?.isActive ?? true,
+                  };
+
+                  if (editingTier) {
+                    setPricingTiers(prev => prev.map(t => t.id === editingTier.id ? tierData : t));
+                  } else {
+                    setPricingTiers(prev => [...prev, tierData]);
+                  }
+
+                  setShowAddPricingModal(false);
+                  setEditingTier(null);
+                }}
+                disabled={!newTierName.trim() || !newTierPrice}
+                className="flex-1 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-blue-300 transition-colors"
+              >
+                {editingTier ? "Save Changes" : "Add Plan"}
               </button>
             </div>
           </div>
