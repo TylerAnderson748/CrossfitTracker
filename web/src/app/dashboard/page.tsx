@@ -3,10 +3,10 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { collection, query, where, getDocs, Timestamp, limit, orderBy } from "firebase/firestore";
+import { collection, query, where, getDocs, Timestamp, limit, orderBy, doc, updateDoc } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
-import { ScheduledWorkout, LeaderboardEntry, formatResult, normalizeWorkoutName } from "@/lib/types";
+import { ScheduledWorkout, ScheduledTimeSlot, LeaderboardEntry, formatResult, normalizeWorkoutName, formatTimeSlot } from "@/lib/types";
 import Navigation from "@/components/Navigation";
 
 // Combined result type for both WODs and lifts
@@ -23,6 +23,12 @@ interface WorkoutResult {
   reps?: number;
   date?: Timestamp;
   isLift?: boolean;
+}
+
+interface WorkoutGroup {
+  id: string;
+  name: string;
+  signupCutoffMinutes?: number;
 }
 
 function timeAgo(date: Date): string {
@@ -56,6 +62,7 @@ export default function DashboardPage() {
   const router = useRouter();
   const [upcomingWorkouts, setUpcomingWorkouts] = useState<ScheduledWorkout[]>([]);
   const [workoutLogs, setWorkoutLogs] = useState<{ [key: string]: WorkoutResult[] }>({});
+  const [groups, setGroups] = useState<Record<string, WorkoutGroup>>({});
   const [loadingData, setLoadingData] = useState(true);
 
   useEffect(() => {
@@ -90,6 +97,20 @@ export default function DashboardPage() {
         ...doc.data(),
       })) as ScheduledWorkout[];
       setUpcomingWorkouts(workouts);
+
+      // Fetch all groups for signup cutoff info
+      const groupsQuery = query(collection(db, "groups"));
+      const groupsSnapshot = await getDocs(groupsQuery);
+      const groupsMap: Record<string, WorkoutGroup> = {};
+      groupsSnapshot.docs.forEach((doc) => {
+        const data = doc.data();
+        groupsMap[doc.id] = {
+          id: doc.id,
+          name: data.name,
+          signupCutoffMinutes: data.signupCutoffMinutes ?? 0,
+        };
+      });
+      setGroups(groupsMap);
 
       // Fetch logs for each workout - handle both WODs and lifts
       const logsMap: { [key: string]: WorkoutResult[] } = {};
@@ -144,6 +165,87 @@ export default function DashboardPage() {
       console.error("Error fetching dashboard data:", error);
     } finally {
       setLoadingData(false);
+    }
+  };
+
+  // Check if user is signed up for a time slot
+  const isUserSignedUp = (slot: ScheduledTimeSlot): boolean => {
+    return slot.signups?.includes(user?.id || "") || false;
+  };
+
+  // Check if signup is past cutoff for a workout/timeslot
+  const isSignupPastCutoff = (workout: ScheduledWorkout, timeSlot: ScheduledTimeSlot): boolean => {
+    const groupIds = workout.groupIds || [];
+    let maxCutoff = 0;
+    for (const groupId of groupIds) {
+      const group = groups[groupId];
+      if (group?.signupCutoffMinutes && group.signupCutoffMinutes > maxCutoff) {
+        maxCutoff = group.signupCutoffMinutes;
+      }
+    }
+
+    if (maxCutoff === 0) return false;
+
+    const workoutDate = workout.date.toDate();
+    const slotTime = new Date(workoutDate);
+    slotTime.setHours(timeSlot.hour, timeSlot.minute, 0, 0);
+
+    const cutoffTime = new Date(slotTime.getTime() - maxCutoff * 60 * 1000);
+    const now = new Date();
+
+    return now >= cutoffTime;
+  };
+
+  const handleSignup = async (workout: ScheduledWorkout, timeSlot: ScheduledTimeSlot) => {
+    if (!user) return;
+
+    if (isSignupPastCutoff(workout, timeSlot)) {
+      alert("Signup for this time slot has closed.");
+      return;
+    }
+
+    try {
+      const workoutRef = doc(db, "scheduledWorkouts", workout.id);
+      const updatedTimeSlots = workout.timeSlots?.map((slot) => {
+        if (slot.id === timeSlot.id) {
+          return { ...slot, signups: [...(slot.signups || []), user.id] };
+        }
+        return slot;
+      });
+
+      await updateDoc(workoutRef, { timeSlots: updatedTimeSlots });
+
+      setUpcomingWorkouts((prev) =>
+        prev.map((w) =>
+          w.id === workout.id ? { ...w, timeSlots: updatedTimeSlots } : w
+        )
+      );
+    } catch (error) {
+      console.error("Error signing up for time slot:", error);
+    }
+  };
+
+  const handleCancelSignup = async (workout: ScheduledWorkout, timeSlot: ScheduledTimeSlot) => {
+    if (!user) return;
+
+    try {
+      const workoutRef = doc(db, "scheduledWorkouts", workout.id);
+      const updatedTimeSlots = workout.timeSlots?.map((slot) => {
+        if (slot.id === timeSlot.id) {
+          return { ...slot, signups: (slot.signups || []).filter((id) => id !== user.id) };
+        }
+        return slot;
+      });
+
+      await updateDoc(workoutRef, { timeSlots: updatedTimeSlots });
+
+      setUpcomingWorkouts((prev) =>
+        prev.map((w) =>
+          w.id === workout.id ? { ...w, timeSlots: updatedTimeSlots } : w
+        )
+      );
+    } catch (error) {
+      console.error("Error canceling signup:", error);
     }
   };
 
@@ -226,6 +328,53 @@ export default function DashboardPage() {
                             <p className="text-gray-500 leading-relaxed">
                               {workout.wodDescription}
                             </p>
+
+                            {/* Time Slots */}
+                            {workout.timeSlots && workout.timeSlots.length > 0 && (
+                              <div className="mt-4 pt-4 border-t border-gray-100">
+                                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Class Times</p>
+                                <div className="flex flex-wrap gap-2">
+                                  {workout.timeSlots.map((slot, index) => {
+                                    const signedUp = isUserSignedUp(slot);
+                                    const signedUpCount = slot.signups?.length || 0;
+                                    const capacity = slot.capacity || 20;
+                                    const availableSpots = capacity - signedUpCount;
+                                    const isFull = availableSpots <= 0;
+                                    const isPastCutoff = isSignupPastCutoff(workout, slot);
+
+                                    return (
+                                      <button
+                                        key={slot.id || `slot-${index}`}
+                                        onClick={() => signedUp ? handleCancelSignup(workout, slot) : handleSignup(workout, slot)}
+                                        disabled={(isFull || isPastCutoff) && !signedUp}
+                                        className={`px-3 py-2 rounded-xl text-sm font-medium transition-colors flex items-center gap-2 ${
+                                          signedUp
+                                            ? "bg-green-100 text-green-700 border border-green-300"
+                                            : isPastCutoff
+                                            ? "bg-orange-50 text-orange-400 cursor-not-allowed border border-orange-200"
+                                            : isFull
+                                            ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                                            : "bg-gray-100 text-gray-700 hover:bg-blue-100 hover:text-blue-700 border border-gray-200"
+                                        }`}
+                                      >
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                        {formatTimeSlot(slot.hour, slot.minute)}
+                                        <span className={`text-xs ${
+                                          signedUp ? "text-green-600"
+                                          : isPastCutoff ? "text-orange-500"
+                                          : isFull ? "text-red-400"
+                                          : "text-gray-500"
+                                        }`}>
+                                          {signedUp ? "✓ Signed up" : isPastCutoff ? "Closed" : isFull ? "Full" : `${availableSpots} spots`}
+                                        </span>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
 
                             {/* Action Buttons */}
                             <div className="flex gap-3 mt-4">
