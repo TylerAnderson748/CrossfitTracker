@@ -421,20 +421,26 @@ export default function WeeklyPlanPage() {
 
                                 {/* Time Slots - only show slots that match user's groups' default times */}
                                 {workout.timeSlots && workout.timeSlots.length > 0 && (() => {
-                                  // Get all valid time slots for user's groups
+                                  // Build a map of time -> { groups, maxCapacity }
                                   const userGroupsForWorkout = workout.groupIds?.filter((gId) => userGroupIds.includes(gId)) || [];
-                                  const validTimes = new Set<string>();
+                                  const timeSlotMap: Record<string, { groupIds: string[]; maxCapacity: number }> = {};
+
                                   userGroupsForWorkout.forEach((gId) => {
                                     const group = groups[gId];
                                     group?.defaultTimeSlots?.forEach((slot: any) => {
-                                      validTimes.add(`${slot.hour}:${slot.minute}`);
+                                      const timeKey = `${slot.hour}:${slot.minute}`;
+                                      if (!timeSlotMap[timeKey]) {
+                                        timeSlotMap[timeKey] = { groupIds: [], maxCapacity: 0 };
+                                      }
+                                      timeSlotMap[timeKey].groupIds.push(gId);
+                                      timeSlotMap[timeKey].maxCapacity = Math.max(timeSlotMap[timeKey].maxCapacity, slot.capacity || 20);
                                     });
                                   });
 
-                                  const filteredSlots = workout.timeSlots
+                                  // Process workout time slots and match to groups
+                                  const processedSlots = workout.timeSlots
                                     .filter((slot) => slot != null)
                                     .map((slot: any) => {
-                                      // Handle legacy format with startTime Timestamp
                                       let hour = slot.hour;
                                       let minute = slot.minute;
                                       if (slot.startTime && typeof slot.startTime.toDate === 'function') {
@@ -442,9 +448,28 @@ export default function WeeklyPlanPage() {
                                         hour = date.getHours();
                                         minute = date.getMinutes();
                                       }
-                                      return { ...slot, hour, minute, signups: slot.signups || slot.signedUpUserIds || [] };
+                                      const timeKey = `${hour}:${minute}`;
+                                      const matchedGroups = timeSlotMap[timeKey];
+                                      return {
+                                        ...slot,
+                                        hour,
+                                        minute,
+                                        signups: slot.signups || slot.signedUpUserIds || [],
+                                        groupIds: matchedGroups?.groupIds || [],
+                                        displayCapacity: matchedGroups?.maxCapacity || slot.capacity || 20
+                                      };
                                     })
-                                    .filter((slot) => validTimes.size === 0 || validTimes.has(`${slot.hour}:${slot.minute}`))
+                                    .filter((slot) => slot.groupIds.length > 0);
+
+                                  // Deduplicate by time (keep first occurrence, already has combined group info)
+                                  const seenTimes = new Set<string>();
+                                  const filteredSlots = processedSlots
+                                    .filter((slot) => {
+                                      const timeKey = `${slot.hour}:${slot.minute}`;
+                                      if (seenTimes.has(timeKey)) return false;
+                                      seenTimes.add(timeKey);
+                                      return true;
+                                    })
                                     .sort((a, b) => (a.hour ?? 0) * 60 + (a.minute ?? 0) - ((b.hour ?? 0) * 60 + (b.minute ?? 0)));
 
                                   if (filteredSlots.length === 0) return null;
@@ -452,33 +477,43 @@ export default function WeeklyPlanPage() {
                                   return (
                                   <div className="mt-3 pt-3 border-t border-gray-200">
                                     <p className="text-xs font-medium text-gray-500 mb-2">Class Times</p>
-                                    <div className="flex flex-wrap gap-2">
+                                    <div className="space-y-2">
                                       {filteredSlots.map((slot, index) => {
                                           const signedUp = isUserSignedUp(slot);
-                                          const availableSpots = getAvailableSpots(slot);
-                                          const isFull = (slot.capacity || 20) > 0 && availableSpots <= 0;
+                                          const signedUpCount = slot.signups?.length || 0;
+                                          const availableSpots = slot.displayCapacity - signedUpCount;
+                                          const isFull = slot.displayCapacity > 0 && availableSpots <= 0;
 
                                           return (
-                                            <button
-                                              key={slot.id || `slot-${index}-${slot.hour}-${slot.minute}`}
-                                              onClick={() => signedUp ? handleCancelSignup(workout, slot) : handleSignup(workout, slot)}
-                                              disabled={isFull && !signedUp}
-                                              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 ${
-                                                signedUp
-                                                  ? "bg-green-100 text-green-700 border border-green-300"
-                                                  : isFull
-                                                  ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                                                  : "bg-gray-100 text-gray-700 hover:bg-blue-100 hover:text-blue-700 border border-gray-200"
-                                              }`}
-                                            >
-                                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                              </svg>
-                                              {formatTimeSlot(slot.hour, slot.minute)}
-                                              <span className={`text-xs ${signedUp ? "text-green-600" : isFull ? "text-red-400" : "text-gray-500"}`}>
-                                                {signedUp ? "✓" : isFull ? "Full" : `${availableSpots} left`}
-                                              </span>
-                                            </button>
+                                            <div key={slot.id || `slot-${index}-${slot.hour}-${slot.minute}`} className="flex items-center gap-2">
+                                              <button
+                                                onClick={() => signedUp ? handleCancelSignup(workout, slot) : handleSignup(workout, slot)}
+                                                disabled={isFull && !signedUp}
+                                                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 ${
+                                                  signedUp
+                                                    ? "bg-green-100 text-green-700 border border-green-300"
+                                                    : isFull
+                                                    ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                                                    : "bg-gray-100 text-gray-700 hover:bg-blue-100 hover:text-blue-700 border border-gray-200"
+                                                }`}
+                                              >
+                                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                </svg>
+                                                {formatTimeSlot(slot.hour, slot.minute)}
+                                                <span className={`text-xs ${signedUp ? "text-green-600" : isFull ? "text-red-400" : "text-gray-500"}`}>
+                                                  {signedUp ? "✓" : isFull ? "Full" : `${availableSpots} left`}
+                                                </span>
+                                              </button>
+                                              {/* Group tags for this time slot */}
+                                              <div className="flex gap-1 flex-wrap">
+                                                {slot.groupIds.map((gId: string) => (
+                                                  <span key={gId} className="px-1.5 py-0.5 bg-blue-50 text-blue-600 text-[10px] rounded">
+                                                    {getGroupName(gId)}
+                                                  </span>
+                                                ))}
+                                              </div>
+                                            </div>
                                           );
                                         })}
                                     </div>
