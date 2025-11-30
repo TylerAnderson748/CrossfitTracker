@@ -20,6 +20,7 @@ export default function WeeklyPlanPage() {
   const [workouts, setWorkouts] = useState<ScheduledWorkout[]>([]);
   const [groups, setGroups] = useState<Record<string, WorkoutGroup>>({});
   const [userGroupIds, setUserGroupIds] = useState<string[]>([]);
+  const [groupsLoaded, setGroupsLoaded] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
 
   useEffect(() => {
@@ -35,38 +36,52 @@ export default function WeeklyPlanPage() {
   }, [user]);
 
   useEffect(() => {
-    if (user && userGroupIds.length >= 0) {
+    if (user && groupsLoaded) {
       fetchWorkouts();
     }
-  }, [user, calendarRange, userGroupIds]);
+  }, [user, calendarRange, groupsLoaded, userGroupIds]);
 
   const fetchUserGroups = async () => {
     if (!user) return;
     try {
-      // Fetch all groups where user is a member or coach
-      const groupsQuery = query(collection(db, "groups"));
-      const snapshot = await getDocs(groupsQuery);
-      const groupsMap: Record<string, WorkoutGroup> = {};
-      const memberGroupIds: string[] = [];
+      // First, find all gyms where user is a member, coach, or owner
+      const gymsQuery = query(collection(db, "gyms"));
+      const gymsSnapshot = await getDocs(gymsQuery);
+      const userGymIds: string[] = [];
 
-      snapshot.docs.forEach((doc) => {
+      gymsSnapshot.docs.forEach((doc) => {
         const data = doc.data();
-        groupsMap[doc.id] = { id: doc.id, name: data.name };
-
-        // Check if user is a member, coach, or owner of this group
         const isMember = data.memberIds?.includes(user.id);
         const isCoach = data.coachIds?.includes(user.id);
         const isOwner = data.ownerId === user.id;
 
         if (isMember || isCoach || isOwner) {
+          userGymIds.push(doc.id);
+        }
+      });
+
+      // Then get all groups from those gyms
+      const groupsQuery = query(collection(db, "groups"));
+      const groupsSnapshot = await getDocs(groupsQuery);
+      const groupsMap: Record<string, WorkoutGroup> = {};
+      const memberGroupIds: string[] = [];
+
+      groupsSnapshot.docs.forEach((doc) => {
+        const data = doc.data();
+        groupsMap[doc.id] = { id: doc.id, name: data.name };
+
+        // Include group if it belongs to a gym the user is a member of
+        if (userGymIds.includes(data.gymId)) {
           memberGroupIds.push(doc.id);
         }
       });
 
       setGroups(groupsMap);
       setUserGroupIds(memberGroupIds);
+      setGroupsLoaded(true);
     } catch (error) {
       console.error("Error fetching groups:", error);
+      setGroupsLoaded(true);
     }
   };
 
