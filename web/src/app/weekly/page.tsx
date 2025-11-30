@@ -234,6 +234,15 @@ export default function WeeklyPlanPage() {
     return now >= cutoffTime;
   };
 
+  // Check if workout details should be revealed based on hideDetails and revealDate
+  const shouldShowDetails = (workout: ScheduledWorkout): boolean => {
+    if (!workout.hideDetails) return true;
+    if (!workout.revealDate) return false;
+    const now = new Date();
+    const revealTime = workout.revealDate.toDate();
+    return now >= revealTime;
+  };
+
   const handleSignup = async (workout: ScheduledWorkout, timeSlot: ScheduledTimeSlot) => {
     if (!user) return;
 
@@ -478,8 +487,12 @@ export default function WeeklyPlanPage() {
                                       </span>
                                     </div>
                                     <h4 className="font-medium text-gray-900">{workout.wodTitle}</h4>
-                                    {workout.wodDescription && (
-                                      <p className="text-gray-600 text-sm mt-1 whitespace-pre-wrap line-clamp-2">{workout.wodDescription}</p>
+                                    {shouldShowDetails(workout) ? (
+                                      workout.wodDescription && (
+                                        <p className="text-gray-600 text-sm mt-1 whitespace-pre-wrap line-clamp-2">{workout.wodDescription}</p>
+                                      )
+                                    ) : (
+                                      <p className="text-gray-400 text-sm mt-1 italic">Details revealed soon...</p>
                                     )}
                                   </>
                                 )}

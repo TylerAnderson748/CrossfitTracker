@@ -207,6 +207,15 @@ export default function DashboardPage() {
     return now >= cutoffTime;
   };
 
+  // Check if workout details should be revealed based on hideDetails and revealDate
+  const shouldShowDetails = (workout: ScheduledWorkout): boolean => {
+    if (!workout.hideDetails) return true;
+    if (!workout.revealDate) return false;
+    const now = new Date();
+    const revealTime = workout.revealDate.toDate();
+    return now >= revealTime;
+  };
+
   const handleSignup = async (workout: ScheduledWorkout, timeSlot: ScheduledTimeSlot) => {
     if (!user) return;
 
@@ -336,9 +345,15 @@ export default function DashboardPage() {
                             <h3 className="text-xl font-bold text-gray-900 mb-2">
                               {workout.wodTitle}
                             </h3>
-                            <p className="text-gray-500 leading-relaxed">
-                              {workout.wodDescription}
-                            </p>
+                            {shouldShowDetails(workout) ? (
+                              <p className="text-gray-500 leading-relaxed">
+                                {workout.wodDescription}
+                              </p>
+                            ) : (
+                              <p className="text-gray-400 italic">
+                                Workout details will be revealed soon...
+                              </p>
+                            )}
 
                             {/* Time Slots - filtered by user's group membership */}
                             {workout.timeSlots && workout.timeSlots.length > 0 && (() => {
