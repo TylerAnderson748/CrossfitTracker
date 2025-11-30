@@ -23,6 +23,32 @@ export type WorkoutType = "lift" | "wod";
 export type WorkoutResultType = "time" | "rounds" | "weight" | "reps" | "other";
 export type RecurrenceType = "none" | "daily" | "weekly" | "monthly";
 
+// Workout component types for programming
+export type WorkoutComponentType = "warmup" | "wod" | "lift" | "skill" | "cooldown";
+
+export interface WorkoutComponent {
+  id: string;
+  type: WorkoutComponentType;
+  title: string;
+  description: string;
+}
+
+export const workoutComponentLabels: Record<WorkoutComponentType, string> = {
+  warmup: "Warm Up",
+  wod: "WOD",
+  lift: "Lift",
+  skill: "Skill Work",
+  cooldown: "Cool Down",
+};
+
+export const workoutComponentColors: Record<WorkoutComponentType, { bg: string; text: string }> = {
+  warmup: { bg: "bg-yellow-100", text: "text-yellow-700" },
+  wod: { bg: "bg-orange-100", text: "text-orange-700" },
+  lift: { bg: "bg-purple-100", text: "text-purple-700" },
+  skill: { bg: "bg-green-100", text: "text-green-700" },
+  cooldown: { bg: "bg-blue-100", text: "text-blue-700" },
+};
+
 // WOD Categories
 export type WODCategory = "RX" | "Scaled" | "Just For Fun";
 
@@ -46,6 +72,8 @@ export interface ScheduledWorkout {
   recurrenceType: RecurrenceType;
   hideDetails?: boolean;
   revealDate?: Timestamp;
+  // Multi-component support
+  components?: WorkoutComponent[];
 }
 
 export interface WorkoutLog {

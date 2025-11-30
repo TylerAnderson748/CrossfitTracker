@@ -6,7 +6,7 @@ import Link from "next/link";
 import { doc, getDoc, collection, query, where, getDocs, updateDoc, arrayUnion, arrayRemove, deleteDoc, addDoc, Timestamp } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
-import { Gym, WorkoutGroup, AppUser, ScheduledWorkout, WorkoutLog, WorkoutType } from "@/lib/types";
+import { Gym, WorkoutGroup, AppUser, ScheduledWorkout, WorkoutLog, WorkoutComponent, WorkoutComponentType, workoutComponentLabels, workoutComponentColors } from "@/lib/types";
 import Navigation from "@/components/Navigation";
 
 interface MembershipRequest {
@@ -38,12 +38,14 @@ export default function GymDetailPage() {
 
   // Programming modal state
   const [showAddWorkoutModal, setShowAddWorkoutModal] = useState(false);
-  const [newWorkoutTitle, setNewWorkoutTitle] = useState("");
-  const [newWorkoutDescription, setNewWorkoutDescription] = useState("");
   const [newWorkoutDate, setNewWorkoutDate] = useState("");
   const [newWorkoutGroupIds, setNewWorkoutGroupIds] = useState<string[]>([]);
-  const [newWorkoutType, setNewWorkoutType] = useState<WorkoutType>("wod");
   const [calendarRange, setCalendarRange] = useState<"thisWeek" | "nextWeek" | "2weeks" | "month">("thisWeek");
+  // Workout components state
+  const [workoutComponents, setWorkoutComponents] = useState<WorkoutComponent[]>([]);
+  const [editingComponentId, setEditingComponentId] = useState<string | null>(null);
+  const [editingComponentTitle, setEditingComponentTitle] = useState("");
+  const [editingComponentDescription, setEditingComponentDescription] = useState("");
   const [showTitleSuggestions, setShowTitleSuggestions] = useState(false);
   // Recurrence state
   const [recurrenceType, setRecurrenceType] = useState<"none" | "daily" | "weekly" | "monthly">("none");
@@ -289,7 +291,7 @@ export default function GymDetailPage() {
   };
 
   const handleCreateWorkout = async () => {
-    if (!user || !newWorkoutTitle.trim() || !newWorkoutDate || newWorkoutGroupIds.length === 0) return;
+    if (!user || workoutComponents.length === 0 || !newWorkoutDate || newWorkoutGroupIds.length === 0) return;
     try {
       const startDate = new Date(newWorkoutDate);
       const workoutDates: Date[] = [];
@@ -322,36 +324,82 @@ export default function GymDetailPage() {
         }
       }
 
+      // Generate title from components
+      const mainComponent = workoutComponents.find(c => c.type === "wod") || workoutComponents[0];
+      const wodTitle = mainComponent?.title || workoutComponents.map(c => workoutComponentLabels[c.type]).join(" + ");
+
       // Create all workout documents
       for (const date of workoutDates) {
         await addDoc(collection(db, "scheduledWorkouts"), {
-          wodTitle: newWorkoutTitle.trim(),
-          wodDescription: newWorkoutDescription.trim(),
+          wodTitle,
+          wodDescription: workoutComponents.map(c => `${workoutComponentLabels[c.type]}: ${c.description}`).join("\n\n"),
           date: Timestamp.fromDate(date),
-          workoutType: newWorkoutType,
+          workoutType: workoutComponents.some(c => c.type === "wod") ? "wod" : "lift",
           groupIds: newWorkoutGroupIds,
           createdBy: user.id,
           recurrenceType: recurrenceType,
           hideDetails: false,
           gymId: gymId,
+          components: workoutComponents,
         });
       }
 
       // Reset form
-      setShowAddWorkoutModal(false);
-      setNewWorkoutTitle("");
-      setNewWorkoutDescription("");
-      setNewWorkoutDate("");
-      setNewWorkoutGroupIds([]);
-      setNewWorkoutType("wod");
-      setRecurrenceType("none");
-      setRepeatDays([1]);
-      setHasEndDate(false);
-      setEndDate("");
+      resetWorkoutModal();
       fetchGymData();
     } catch (error) {
       console.error("Error creating workout:", error);
     }
+  };
+
+  const resetWorkoutModal = () => {
+    setShowAddWorkoutModal(false);
+    setNewWorkoutDate("");
+    setNewWorkoutGroupIds([]);
+    setWorkoutComponents([]);
+    setEditingComponentId(null);
+    setEditingComponentTitle("");
+    setEditingComponentDescription("");
+    setRecurrenceType("none");
+    setRepeatDays([1]);
+    setHasEndDate(false);
+    setEndDate("");
+  };
+
+  const addComponent = (type: WorkoutComponentType) => {
+    const newComponent: WorkoutComponent = {
+      id: `comp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      type,
+      title: workoutComponentLabels[type],
+      description: "",
+    };
+    setWorkoutComponents([...workoutComponents, newComponent]);
+    setEditingComponentId(newComponent.id);
+    setEditingComponentTitle(newComponent.title);
+    setEditingComponentDescription("");
+  };
+
+  const removeComponent = (id: string) => {
+    setWorkoutComponents(workoutComponents.filter(c => c.id !== id));
+    if (editingComponentId === id) {
+      setEditingComponentId(null);
+    }
+  };
+
+  const saveComponentEdit = () => {
+    if (!editingComponentId) return;
+    setWorkoutComponents(workoutComponents.map(c =>
+      c.id === editingComponentId
+        ? { ...c, title: editingComponentTitle, description: editingComponentDescription }
+        : c
+    ));
+    setEditingComponentId(null);
+  };
+
+  const startEditComponent = (component: WorkoutComponent) => {
+    setEditingComponentId(component.id);
+    setEditingComponentTitle(component.title);
+    setEditingComponentDescription(component.description);
   };
 
   const handleDeleteWorkout = async (workout: ScheduledWorkout) => {
@@ -413,15 +461,15 @@ export default function GymDetailPage() {
 
   const uniqueWorkouts = getUniqueWorkouts();
 
-  const filteredSuggestions = newWorkoutTitle.trim().length > 0
+  const filteredSuggestions = editingComponentTitle.trim().length > 0
     ? uniqueWorkouts.filter((w) =>
-        w.title.toLowerCase().includes(newWorkoutTitle.toLowerCase())
+        w.title.toLowerCase().includes(editingComponentTitle.toLowerCase())
       )
     : [];
 
   const handleSelectSuggestion = (workout: { title: string; description: string }) => {
-    setNewWorkoutTitle(workout.title);
-    setNewWorkoutDescription(workout.description);
+    setEditingComponentTitle(workout.title);
+    setEditingComponentDescription(workout.description);
     setShowTitleSuggestions(false);
   };
 
@@ -840,23 +888,48 @@ export default function GymDetailPage() {
                               >
                                 <div className="flex items-start justify-between">
                                   <div className="flex-1">
-                                    <div className="flex items-center gap-2 mb-1 flex-wrap">
-                                      <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${
-                                        workout.workoutType === "lift"
-                                          ? "bg-purple-100 text-purple-700"
-                                          : "bg-orange-100 text-orange-700"
-                                      }`}>
-                                        {workout.workoutType === "lift" ? "Lift" : "WOD"}
-                                      </span>
+                                    {/* Group badges */}
+                                    <div className="flex items-center gap-2 mb-2 flex-wrap">
                                       {workout.groupIds?.map((gId) => (
                                         <span key={gId} className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full">
                                           {getGroupName(gId)}
                                         </span>
                                       ))}
                                     </div>
-                                    <h4 className="font-medium text-gray-900">{workout.wodTitle}</h4>
-                                    {workout.wodDescription && (
-                                      <p className="text-gray-600 text-sm mt-1 whitespace-pre-wrap line-clamp-2">{workout.wodDescription}</p>
+                                    {/* Show components if available */}
+                                    {workout.components && workout.components.length > 0 ? (
+                                      <div className="space-y-2">
+                                        {workout.components.map((comp) => (
+                                          <div key={comp.id} className="border-l-2 border-gray-200 pl-2">
+                                            <div className="flex items-center gap-2">
+                                              <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${workoutComponentColors[comp.type]?.bg || "bg-gray-100"} ${workoutComponentColors[comp.type]?.text || "text-gray-700"}`}>
+                                                {workoutComponentLabels[comp.type] || comp.type}
+                                              </span>
+                                              <span className="font-medium text-gray-900 text-sm">{comp.title}</span>
+                                            </div>
+                                            {comp.description && (
+                                              <p className="text-gray-600 text-xs mt-1 whitespace-pre-wrap line-clamp-2 ml-1">{comp.description}</p>
+                                            )}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    ) : (
+                                      <>
+                                        {/* Legacy single workout display */}
+                                        <div className="flex items-center gap-2 mb-1">
+                                          <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${
+                                            workout.workoutType === "lift"
+                                              ? "bg-purple-100 text-purple-700"
+                                              : "bg-orange-100 text-orange-700"
+                                          }`}>
+                                            {workout.workoutType === "lift" ? "Lift" : "WOD"}
+                                          </span>
+                                        </div>
+                                        <h4 className="font-medium text-gray-900">{workout.wodTitle}</h4>
+                                        {workout.wodDescription && (
+                                          <p className="text-gray-600 text-sm mt-1 whitespace-pre-wrap line-clamp-2">{workout.wodDescription}</p>
+                                        )}
+                                      </>
                                     )}
                                   </div>
                                   <button
@@ -958,86 +1031,7 @@ export default function GymDetailPage() {
           <div className="bg-white rounded-xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <h2 className="text-xl font-bold text-gray-900 mb-4">Schedule Workout</h2>
             <div className="space-y-4">
-              <div className="relative">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Workout Title *
-                </label>
-                <input
-                  type="text"
-                  value={newWorkoutTitle}
-                  onChange={(e) => {
-                    setNewWorkoutTitle(e.target.value);
-                    setShowTitleSuggestions(true);
-                  }}
-                  onFocus={() => setShowTitleSuggestions(true)}
-                  onBlur={() => {
-                    // Delay to allow click on suggestion
-                    setTimeout(() => setShowTitleSuggestions(false), 200);
-                  }}
-                  placeholder="e.g., Monday WOD, Fran"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  autoComplete="off"
-                />
-                {/* Suggestions Dropdown */}
-                {showTitleSuggestions && filteredSuggestions.length > 0 && (
-                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                    {filteredSuggestions.map((workout, index) => (
-                      <button
-                        key={index}
-                        type="button"
-                        onClick={() => handleSelectSuggestion(workout)}
-                        className="w-full px-4 py-2 text-left hover:bg-blue-50 border-b border-gray-100 last:border-b-0"
-                      >
-                        <span className="font-medium text-gray-900">{workout.title}</span>
-                        {workout.description && (
-                          <p className="text-gray-500 text-sm truncate">{workout.description}</p>
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Workout Type *
-                </label>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setNewWorkoutType("wod")}
-                    className={`flex-1 py-2 px-4 rounded-lg font-medium transition-colors ${
-                      newWorkoutType === "wod"
-                        ? "bg-blue-600 text-white"
-                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                    }`}
-                  >
-                    WOD
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setNewWorkoutType("lift")}
-                    className={`flex-1 py-2 px-4 rounded-lg font-medium transition-colors ${
-                      newWorkoutType === "lift"
-                        ? "bg-blue-600 text-white"
-                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                    }`}
-                  >
-                    Lift
-                  </button>
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Description
-                </label>
-                <textarea
-                  value={newWorkoutDescription}
-                  onChange={(e) => setNewWorkoutDescription(e.target.value)}
-                  placeholder="e.g., 21-15-9&#10;Thrusters (95/65)&#10;Pull-ups"
-                  rows={4}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
+              {/* Date */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Date *
@@ -1049,11 +1043,13 @@ export default function GymDetailPage() {
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
+
+              {/* Groups */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Groups *
                 </label>
-                <div className="space-y-2 max-h-40 overflow-y-auto border border-gray-200 rounded-lg p-2">
+                <div className="space-y-2 max-h-32 overflow-y-auto border border-gray-200 rounded-lg p-2">
                   {groups.map((group) => (
                     <label key={group.id} className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded cursor-pointer">
                       <input
@@ -1072,8 +1068,129 @@ export default function GymDetailPage() {
                     </label>
                   ))}
                 </div>
-                {groups.length === 0 && (
-                  <p className="text-gray-500 text-sm mt-2">No groups available. Create groups first.</p>
+              </div>
+
+              {/* Workout Components Section */}
+              <div className="border-t border-gray-200 pt-4">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Workout Components</p>
+                  <span className="text-xs text-gray-400">{workoutComponents.length} added</span>
+                </div>
+
+                {/* Add Component Buttons */}
+                <div className="flex flex-wrap gap-2 mb-4">
+                  {(["warmup", "wod", "lift", "skill", "cooldown"] as WorkoutComponentType[]).map((type) => {
+                    const hasType = workoutComponents.some(c => c.type === type);
+                    return (
+                      <button
+                        key={type}
+                        type="button"
+                        onClick={() => addComponent(type)}
+                        className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-1 ${
+                          hasType
+                            ? `${workoutComponentColors[type].bg} ${workoutComponentColors[type].text}`
+                            : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                        }`}
+                      >
+                        <span>+</span>
+                        {workoutComponentLabels[type]}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Added Components List */}
+                {workoutComponents.length === 0 ? (
+                  <p className="text-gray-400 text-sm text-center py-4 border border-dashed border-gray-200 rounded-lg">
+                    Add workout components above
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {workoutComponents.map((comp) => (
+                      <div key={comp.id} className={`border-l-4 ${workoutComponentColors[comp.type].bg.replace("100", "300")} bg-gray-50 rounded-r-lg p-3`}>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${workoutComponentColors[comp.type].bg} ${workoutComponentColors[comp.type].text}`}>
+                            {workoutComponentLabels[comp.type]}
+                          </span>
+                          <div className="flex gap-1">
+                            <button
+                              type="button"
+                              onClick={() => startEditComponent(comp)}
+                              className="p-1 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                              </svg>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => removeComponent(comp.id)}
+                              className="p-1 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          </div>
+                        </div>
+
+                        {editingComponentId === comp.id ? (
+                          <div className="space-y-2">
+                            <div className="relative">
+                              <input
+                                type="text"
+                                value={editingComponentTitle}
+                                onChange={(e) => {
+                                  setEditingComponentTitle(e.target.value);
+                                  setShowTitleSuggestions(true);
+                                }}
+                                onFocus={() => setShowTitleSuggestions(true)}
+                                onBlur={() => setTimeout(() => setShowTitleSuggestions(false), 200)}
+                                placeholder="Title"
+                                className="w-full px-3 py-1.5 border border-gray-300 rounded text-sm text-gray-900 bg-white"
+                                autoComplete="off"
+                              />
+                              {showTitleSuggestions && filteredSuggestions.length > 0 && (
+                                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-32 overflow-y-auto">
+                                  {filteredSuggestions.slice(0, 5).map((workout, index) => (
+                                    <button
+                                      key={index}
+                                      type="button"
+                                      onClick={() => handleSelectSuggestion(workout)}
+                                      className="w-full px-3 py-2 text-left hover:bg-blue-50 border-b border-gray-100 last:border-b-0 text-sm"
+                                    >
+                                      <span className="font-medium text-gray-900">{workout.title}</span>
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                            <textarea
+                              value={editingComponentDescription}
+                              onChange={(e) => setEditingComponentDescription(e.target.value)}
+                              placeholder="Description (optional)"
+                              rows={2}
+                              className="w-full px-3 py-1.5 border border-gray-300 rounded text-sm text-gray-900 bg-white"
+                            />
+                            <button
+                              type="button"
+                              onClick={saveComponentEdit}
+                              className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+                            >
+                              Save
+                            </button>
+                          </div>
+                        ) : (
+                          <>
+                            <p className="font-medium text-gray-900 text-sm">{comp.title}</p>
+                            {comp.description && (
+                              <p className="text-gray-600 text-xs mt-1 whitespace-pre-wrap">{comp.description}</p>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
 
@@ -1081,7 +1198,6 @@ export default function GymDetailPage() {
               <div className="border-t border-gray-200 pt-4">
                 <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-3">Recurrence</p>
 
-                {/* Repeat Type */}
                 <div className="mb-4">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Repeat
@@ -1098,7 +1214,6 @@ export default function GymDetailPage() {
                   </select>
                 </div>
 
-                {/* Day Selection (for weekly) */}
                 {recurrenceType === "weekly" && (
                   <div className="mb-4">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -1111,7 +1226,6 @@ export default function GymDetailPage() {
                           type="button"
                           onClick={() => {
                             if (repeatDays.includes(index)) {
-                              // Don't allow removing the last day
                               if (repeatDays.length > 1) {
                                 setRepeatDays(repeatDays.filter((d) => d !== index));
                               }
@@ -1132,13 +1246,10 @@ export default function GymDetailPage() {
                   </div>
                 )}
 
-                {/* End Date */}
                 {recurrenceType !== "none" && (
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <label className="text-sm font-medium text-gray-700">
-                        Set end date
-                      </label>
+                      <label className="text-sm font-medium text-gray-700">Set end date</label>
                       <button
                         type="button"
                         onClick={() => setHasEndDate(!hasEndDate)}
@@ -1146,61 +1257,41 @@ export default function GymDetailPage() {
                           hasEndDate ? "bg-blue-600" : "bg-gray-200"
                         }`}
                       >
-                        <span
-                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                            hasEndDate ? "translate-x-6" : "translate-x-1"
-                          }`}
-                        />
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                          hasEndDate ? "translate-x-6" : "translate-x-1"
+                        }`} />
                       </button>
                     </div>
-
                     {hasEndDate && (
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Ends on
-                        </label>
-                        <input
-                          type="date"
-                          value={endDate}
-                          onChange={(e) => setEndDate(e.target.value)}
-                          min={newWorkoutDate}
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                      </div>
+                      <input
+                        type="date"
+                        value={endDate}
+                        onChange={(e) => setEndDate(e.target.value)}
+                        min={newWorkoutDate}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 bg-white"
+                      />
                     )}
-
-                    {/* Summary text */}
                     <p className="text-sm text-gray-500">
                       {recurrenceType === "daily" && "Repeats every day"}
                       {recurrenceType === "weekly" && `Repeats on ${repeatDays.map(d => ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d]).join(", ")}`}
-                      {recurrenceType === "monthly" && "Repeats monthly on the same date"}
+                      {recurrenceType === "monthly" && "Repeats monthly"}
                       {hasEndDate && endDate && ` until ${new Date(endDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`}
                     </p>
                   </div>
                 )}
               </div>
             </div>
+
             <div className="flex gap-3 mt-6">
               <button
-                onClick={() => {
-                  setShowAddWorkoutModal(false);
-                  setNewWorkoutTitle("");
-                  setNewWorkoutDescription("");
-                  setNewWorkoutDate("");
-                  setNewWorkoutGroupIds([]);
-                  setNewWorkoutType("wod");
-                  setRecurrenceType("none");
-                  setRepeatDays([1]);
-                  setHasEndDate(false);
-                  setEndDate("");
-                }}
+                onClick={resetWorkoutModal}
                 className="flex-1 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleCreateWorkout}
-                disabled={!newWorkoutTitle.trim() || !newWorkoutDate || newWorkoutGroupIds.length === 0}
+                disabled={workoutComponents.length === 0 || !newWorkoutDate || newWorkoutGroupIds.length === 0}
                 className="flex-1 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-blue-300 transition-colors"
               >
                 Schedule
