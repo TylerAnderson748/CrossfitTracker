@@ -305,16 +305,20 @@ function LiftPageContent() {
   const weights = chartData.map((h) => h.weight);
   const dataMax = weights.length > 0 ? Math.max(...weights) : 100;
   const dataMin = weights.length > 0 ? Math.min(...weights) : 0;
-  const tickInterval = 10;
-  const minWeightTick = Math.floor(dataMin / tickInterval) * tickInterval - tickInterval;
-  const maxWeightTick = Math.ceil(dataMax / tickInterval) * tickInterval + tickInterval;
-  const fullRange = maxWeightTick - minWeightTick || 50;
-  const numTicks = Math.ceil(fullRange / tickInterval) + 1;
-  const yTicks = Array.from({ length: Math.min(numTicks, 7) }, (_, i) => maxWeightTick - i * tickInterval);
-  // Use actual tick range for data positioning (yTicks may be capped at 7)
-  const chartMax = yTicks[0];
-  const chartMin = yTicks[yTicks.length - 1];
-  const range = chartMax - chartMin || 50;
+
+  // Calculate tick interval to fit data in ~5-6 ticks with padding
+  const dataRange = dataMax - dataMin || 50;
+  const rawInterval = dataRange / 5;
+  // Round to nice intervals: 5, 10, 20, 25, 50, 100, etc.
+  const niceIntervals = [5, 10, 20, 25, 50, 100, 200];
+  const tickInterval = niceIntervals.find(i => i >= rawInterval) || Math.ceil(rawInterval / 10) * 10;
+
+  // Calculate min/max ticks with padding
+  const chartMin = Math.floor(dataMin / tickInterval) * tickInterval;
+  const chartMax = Math.ceil(dataMax / tickInterval) * tickInterval;
+  const range = chartMax - chartMin || tickInterval;
+  const numTicks = Math.round(range / tickInterval) + 1;
+  const yTicks = Array.from({ length: numTicks }, (_, i) => chartMax - i * tickInterval);
 
   // Generate x-axis labels for the full time range
   const getXAxisLabels = () => {

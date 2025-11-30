@@ -470,19 +470,20 @@ function NewWorkoutContent() {
   const times = chartData.map((h) => h.timeInSeconds);
   const dataMax = Math.max(...times, 60);
   const dataMin = Math.min(...times, 0);
-  // Choose tick interval based on data range for readable labels
-  const dataRange = dataMax - dataMin;
-  const tickInterval = dataRange > 600 ? 120 : dataRange > 300 ? 60 : dataRange > 120 ? 30 : 15;
-  const minTime = Math.floor(dataMin / tickInterval) * tickInterval;
-  const maxTime = Math.ceil(dataMax / tickInterval) * tickInterval;
-  const fullRange = maxTime - minTime || 60;
-  // Generate Y-axis ticks
-  const numTicks = Math.ceil(fullRange / tickInterval) + 1;
-  const yTicks = Array.from({ length: Math.min(numTicks, 6) }, (_, i) => maxTime - i * tickInterval);
-  // Use actual tick range for data positioning (yTicks may be capped at 6)
-  const chartMax = yTicks[0];
-  const chartMin = yTicks[yTicks.length - 1];
-  const range = chartMax - chartMin || 60;
+
+  // Calculate tick interval to fit data in ~5-6 ticks
+  const dataRange = dataMax - dataMin || 60;
+  const rawInterval = dataRange / 5;
+  // Nice time intervals: 15s, 30s, 1m, 2m, 5m, 10m
+  const niceIntervals = [15, 30, 60, 120, 300, 600];
+  const tickInterval = niceIntervals.find(i => i >= rawInterval) || Math.ceil(rawInterval / 60) * 60;
+
+  // Calculate min/max ticks to cover all data
+  const chartMin = Math.floor(dataMin / tickInterval) * tickInterval;
+  const chartMax = Math.ceil(dataMax / tickInterval) * tickInterval;
+  const range = chartMax - chartMin || tickInterval;
+  const numTicks = Math.round(range / tickInterval) + 1;
+  const yTicks = Array.from({ length: numTicks }, (_, i) => chartMax - i * tickInterval);
 
   // Generate x-axis labels for the full time range
   const getXAxisLabels = () => {
