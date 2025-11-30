@@ -457,44 +457,48 @@ export default function WeeklyPlanPage() {
                                   </div>
                                 )}
 
-                                {/* Show components if available */}
-                                {workout.components && workout.components.length > 0 ? (
-                                  <div className="space-y-2">
-                                    {workout.components.map((comp) => (
-                                      <div key={comp.id} className="border-l-2 border-gray-200 pl-2">
-                                        <div className="flex items-center gap-2">
-                                          <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${workoutComponentColors[comp.type]?.bg || "bg-gray-100"} ${workoutComponentColors[comp.type]?.text || "text-gray-700"}`}>
-                                            {workoutComponentLabels[comp.type] || comp.type}
-                                          </span>
-                                          <span className="font-medium text-gray-900 text-sm">{comp.title}</span>
+                                {/* Show workout content - check visibility first */}
+                                {shouldShowDetails(workout) ? (
+                                  // Show full workout details
+                                  workout.components && workout.components.length > 0 ? (
+                                    <div className="space-y-2">
+                                      {workout.components.map((comp) => (
+                                        <div key={comp.id} className="border-l-2 border-gray-200 pl-2">
+                                          <div className="flex items-center gap-2">
+                                            <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${workoutComponentColors[comp.type]?.bg || "bg-gray-100"} ${workoutComponentColors[comp.type]?.text || "text-gray-700"}`}>
+                                              {workoutComponentLabels[comp.type] || comp.type}
+                                            </span>
+                                            <span className="font-medium text-gray-900 text-sm">{comp.title}</span>
+                                          </div>
+                                          {comp.description && (
+                                            <p className="text-gray-600 text-xs mt-1 whitespace-pre-wrap line-clamp-2 ml-1">{comp.description}</p>
+                                          )}
                                         </div>
-                                        {comp.description && (
-                                          <p className="text-gray-600 text-xs mt-1 whitespace-pre-wrap line-clamp-2 ml-1">{comp.description}</p>
-                                        )}
-                                      </div>
-                                    ))}
-                                  </div>
-                                ) : (
-                                  <>
-                                    {/* Legacy single workout display */}
-                                    <div className="flex items-center gap-2 mb-1">
-                                      <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${
-                                        workout.workoutType === "lift"
-                                          ? "bg-purple-100 text-purple-700"
-                                          : "bg-orange-100 text-orange-700"
-                                      }`}>
-                                        {workout.workoutType === "lift" ? "Lift" : "WOD"}
-                                      </span>
+                                      ))}
                                     </div>
-                                    <h4 className="font-medium text-gray-900">{workout.wodTitle}</h4>
-                                    {shouldShowDetails(workout) ? (
-                                      workout.wodDescription && (
+                                  ) : (
+                                    <>
+                                      {/* Legacy single workout display */}
+                                      <div className="flex items-center gap-2 mb-1">
+                                        <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${
+                                          workout.workoutType === "lift"
+                                            ? "bg-purple-100 text-purple-700"
+                                            : "bg-orange-100 text-orange-700"
+                                        }`}>
+                                          {workout.workoutType === "lift" ? "Lift" : "WOD"}
+                                        </span>
+                                      </div>
+                                      <h4 className="font-medium text-gray-900">{workout.wodTitle}</h4>
+                                      {workout.wodDescription && (
                                         <p className="text-gray-600 text-sm mt-1 whitespace-pre-wrap line-clamp-2">{workout.wodDescription}</p>
-                                      )
-                                    ) : (
-                                      <p className="text-gray-400 text-sm mt-1 italic">Details revealed soon...</p>
-                                    )}
-                                  </>
+                                      )}
+                                    </>
+                                  )
+                                ) : (
+                                  // Details are hidden
+                                  <div className="py-2">
+                                    <p className="text-gray-400 italic text-sm">Workout details will be revealed soon...</p>
+                                  </div>
                                 )}
 
                                 {/* Time Slots - only show slots that match user's groups' default times */}
