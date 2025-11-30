@@ -8,25 +8,7 @@ import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
 import { WorkoutLog, formatResult } from "@/lib/types";
 import Navigation from "@/components/Navigation";
-
-// Popular WODs
-const POPULAR_WODS = [
-  { name: "Fran", description: "21-15-9: Thrusters (95/65) & Pull-ups", type: "wod" },
-  { name: "Murph", description: "1 mile run, 100 pull-ups, 200 push-ups, 300 squats, 1 mile run", type: "wod" },
-  { name: "Cindy", description: "AMRAP 20: 5 pull-ups, 10 push-ups, 15 squats", type: "wod" },
-  { name: "Grace", description: "30 Clean & Jerks (135/95)", type: "wod" },
-  { name: "Helen", description: "3 RFT: 400m run, 21 KB swings, 12 pull-ups", type: "wod" },
-  { name: "Diane", description: "21-15-9: Deadlifts (225/155) & HSPU", type: "wod" },
-];
-
-const POPULAR_LIFTS = [
-  { name: "Back Squat", description: "Barbell back squat", type: "lift" },
-  { name: "Front Squat", description: "Barbell front squat", type: "lift" },
-  { name: "Deadlift", description: "Conventional deadlift", type: "lift" },
-  { name: "Clean", description: "Power or squat clean", type: "lift" },
-  { name: "Snatch", description: "Power or squat snatch", type: "lift" },
-  { name: "Overhead Press", description: "Strict press", type: "lift" },
-];
+import { WOD_CATEGORIES, LIFT_CATEGORIES, WorkoutCategory, Workout, getAllWods, getAllLifts } from "@/lib/workoutData";
 
 export default function WorkoutsPage() {
   const { user, loading } = useAuth();
@@ -35,6 +17,7 @@ export default function WorkoutsPage() {
   const [recentLogs, setRecentLogs] = useState<WorkoutLog[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [loadingData, setLoadingData] = useState(true);
+  const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -52,7 +35,6 @@ export default function WorkoutsPage() {
     if (!user) return;
 
     try {
-      // Simplified query to avoid index requirements - sort client-side
       const logsQuery = query(
         collection(db, "workoutLogs"),
         where("userId", "==", user.id)
@@ -62,7 +44,6 @@ export default function WorkoutsPage() {
         id: doc.id,
         ...doc.data(),
       })) as WorkoutLog[];
-      // Sort by completedDate descending client-side
       logs.sort((a, b) => {
         const dateA = a.completedDate?.toDate?.() || new Date(0);
         const dateB = b.completedDate?.toDate?.() || new Date(0);
@@ -76,15 +57,25 @@ export default function WorkoutsPage() {
     }
   };
 
-  const filteredWorkouts = workoutType === "wod"
-    ? POPULAR_WODS.filter((w) =>
+  const categories = workoutType === "wod" ? WOD_CATEGORIES : LIFT_CATEGORIES;
+
+  // Filter workouts across all categories when searching
+  const getSearchResults = (): Workout[] => {
+    if (!searchQuery.trim()) return [];
+    const allWorkouts = workoutType === "wod" ? getAllWods() : getAllLifts();
+    return allWorkouts.filter(
+      (w) =>
         w.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         w.description.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-    : POPULAR_LIFTS.filter((w) =>
-        w.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        w.description.toLowerCase().includes(searchQuery.toLowerCase())
-      );
+    );
+  };
+
+  const searchResults = getSearchResults();
+  const isSearching = searchQuery.trim().length > 0;
+
+  const toggleCategory = (categoryName: string) => {
+    setExpandedCategory(expandedCategory === categoryName ? null : categoryName);
+  };
 
   if (loading || !user) {
     return (
@@ -112,7 +103,11 @@ export default function WorkoutsPage() {
         {/* Type Selector */}
         <div className="flex gap-2 mb-6">
           <button
-            onClick={() => setWorkoutType("wod")}
+            onClick={() => {
+              setWorkoutType("wod");
+              setExpandedCategory(null);
+              setSearchQuery("");
+            }}
             className={`px-4 py-2 rounded-lg font-medium transition-colors ${
               workoutType === "wod"
                 ? "bg-blue-600 text-white"
@@ -122,10 +117,14 @@ export default function WorkoutsPage() {
             WODs
           </button>
           <button
-            onClick={() => setWorkoutType("lift")}
+            onClick={() => {
+              setWorkoutType("lift");
+              setExpandedCategory(null);
+              setSearchQuery("");
+            }}
             className={`px-4 py-2 rounded-lg font-medium transition-colors ${
               workoutType === "lift"
-                ? "bg-purple-600 text-white"
+                ? "bg-blue-600 text-white"
                 : "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
             }`}
           >
@@ -145,38 +144,100 @@ export default function WorkoutsPage() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Workout List */}
+          {/* Workout Categories or Search Results */}
           <div className="lg:col-span-2">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-              ⭐ Popular {workoutType === "wod" ? "WODs" : "Lifts"}
-            </h2>
-            <div className="space-y-3">
-              {filteredWorkouts.map((workout) => (
-                <Link
-                  key={workout.name}
-                  href={`/workouts/new?name=${encodeURIComponent(workout.name)}&description=${encodeURIComponent(workout.description)}&type=${workout.type}`}
-                  className="block bg-white rounded-xl shadow-sm border border-gray-200 p-4 hover:shadow-md transition-shadow"
-                >
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h3 className="font-semibold text-gray-900">{workout.name}</h3>
-                      <p className="text-gray-500 text-sm mt-1">{workout.description}</p>
-                    </div>
-                    <span className={`px-2 py-1 text-xs font-medium rounded ${
-                      workout.type === "lift"
-                        ? "bg-purple-100 text-purple-600"
-                        : "bg-blue-100 text-blue-600"
-                    }`}>
-                      {workout.type === "lift" ? "Lift" : "WOD"}
-                    </span>
+            {isSearching ? (
+              // Search Results
+              <>
+                <h2 className="text-lg font-semibold text-gray-900 mb-4">
+                  Search Results ({searchResults.length})
+                </h2>
+                {searchResults.length > 0 ? (
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                    {searchResults.map((workout, idx) => (
+                      <Link
+                        key={`${workout.name}-${idx}`}
+                        href={
+                          workout.type === "lift"
+                            ? `/workouts/lift?name=${encodeURIComponent(workout.name)}`
+                            : `/workouts/new?name=${encodeURIComponent(workout.name)}&description=${encodeURIComponent(workout.description)}&type=${workout.type}`
+                        }
+                        className={`flex items-center justify-between p-4 hover:bg-gray-50 transition-colors ${
+                          idx > 0 ? "border-t border-gray-100" : ""
+                        }`}
+                      >
+                        <div>
+                          <h3 className="font-medium text-gray-900">{workout.name}</h3>
+                          <p className="text-gray-500 text-sm">{workout.description}</p>
+                        </div>
+                        <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      </Link>
+                    ))}
                   </div>
-                </Link>
-              ))}
-            </div>
+                ) : (
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
+                    <p className="text-gray-500">No workouts found matching "{searchQuery}"</p>
+                  </div>
+                )}
+              </>
+            ) : (
+              // Category List
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                {categories.map((category, catIdx) => (
+                  <div key={category.name}>
+                    {/* Category Header */}
+                    <button
+                      onClick={() => toggleCategory(category.name)}
+                      className={`w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors text-left ${
+                        catIdx > 0 ? "border-t border-gray-100" : ""
+                      }`}
+                    >
+                      <span className="font-medium text-gray-900 flex items-center gap-2">
+                        {category.icon && <span>{category.icon}</span>}
+                        {category.name}
+                      </span>
+                      <svg
+                        className={`w-5 h-5 text-gray-400 transition-transform ${
+                          expandedCategory === category.name ? "rotate-90" : ""
+                        }`}
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </button>
 
-            {filteredWorkouts.length === 0 && (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
-                <p className="text-gray-500">No workouts found matching your search</p>
+                    {/* Expanded Workout List */}
+                    {expandedCategory === category.name && (
+                      <div className="bg-gray-50 border-t border-gray-100">
+                        {category.workouts.map((workout, idx) => (
+                          <Link
+                            key={`${workout.name}-${idx}`}
+                            href={
+                              workout.type === "lift"
+                                ? `/workouts/lift?name=${encodeURIComponent(workout.name)}`
+                                : `/workouts/new?name=${encodeURIComponent(workout.name)}&description=${encodeURIComponent(workout.description)}&type=${workout.type}`
+                            }
+                            className={`flex items-center justify-between p-4 pl-8 hover:bg-gray-100 transition-colors ${
+                              idx > 0 ? "border-t border-gray-200" : ""
+                            }`}
+                          >
+                            <div>
+                              <h4 className="font-medium text-gray-800">{workout.name}</h4>
+                              <p className="text-gray-500 text-sm">{workout.description}</p>
+                            </div>
+                            <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
+                          </Link>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
             )}
           </div>
