@@ -368,13 +368,14 @@ export default function GymDetailPage() {
     const newComponent: WorkoutComponent = {
       id: `comp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       type,
-      title: workoutComponentLabels[type],
+      title: "",
       description: "",
     };
     setWorkoutComponents([...workoutComponents, newComponent]);
     setEditingComponentId(newComponent.id);
-    setEditingComponentTitle(newComponent.title);
+    setEditingComponentTitle("");
     setEditingComponentDescription("");
+    setShowTitleSuggestions(true);
   };
 
   const removeComponent = (id: string) => {
@@ -469,11 +470,12 @@ export default function GymDetailPage() {
 
   const uniqueWorkouts = getUniqueWorkouts();
 
+  // Show all suggestions when empty, or filter when typing
   const filteredSuggestions = editingComponentTitle.trim().length > 0
     ? uniqueWorkouts.filter((w) =>
         w.title.toLowerCase().includes(editingComponentTitle.toLowerCase())
-      )
-    : [];
+      ).slice(0, 10)
+    : uniqueWorkouts.slice(0, 10); // Show first 10 when empty
 
   const handleSelectSuggestion = (workout: { title: string; description: string }) => {
     setEditingComponentTitle(workout.title);
@@ -1082,7 +1084,9 @@ export default function GymDetailPage() {
               <div className="border-t border-gray-200 pt-4">
                 <div className="flex items-center justify-between mb-3">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Workout Components</p>
-                  <span className="text-xs text-gray-400">{workoutComponents.length} added</span>
+                  <span className="text-xs text-gray-400">
+                    {workoutComponents.length} added • {uniqueWorkouts.length} suggestions available
+                  </span>
                 </div>
 
                 {/* Add Component Buttons */}
@@ -1158,18 +1162,29 @@ export default function GymDetailPage() {
                                 className="w-full px-3 py-1.5 border border-gray-300 rounded text-sm text-gray-900 bg-white"
                                 autoComplete="off"
                               />
-                              {showTitleSuggestions && filteredSuggestions.length > 0 && (
-                                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-32 overflow-y-auto">
-                                  {filteredSuggestions.slice(0, 5).map((workout, index) => (
-                                    <button
-                                      key={index}
-                                      type="button"
-                                      onClick={() => handleSelectSuggestion(workout)}
-                                      className="w-full px-3 py-2 text-left hover:bg-blue-50 border-b border-gray-100 last:border-b-0 text-sm"
-                                    >
-                                      <span className="font-medium text-gray-900">{workout.title}</span>
-                                    </button>
-                                  ))}
+                              {showTitleSuggestions && (
+                                <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                                  {filteredSuggestions.length > 0 ? (
+                                    filteredSuggestions.map((workout, index) => (
+                                      <button
+                                        key={index}
+                                        type="button"
+                                        onClick={() => handleSelectSuggestion(workout)}
+                                        className="w-full px-3 py-2 text-left hover:bg-blue-50 border-b border-gray-100 last:border-b-0 text-sm"
+                                      >
+                                        <span className="font-medium text-gray-900">{workout.title}</span>
+                                        {workout.description && (
+                                          <p className="text-gray-500 text-xs truncate">{workout.description}</p>
+                                        )}
+                                      </button>
+                                    ))
+                                  ) : (
+                                    <p className="px-3 py-2 text-gray-500 text-sm">
+                                      {uniqueWorkouts.length === 0
+                                        ? "No workouts in database yet"
+                                        : "No matches found"}
+                                    </p>
+                                  )}
                                 </div>
                               )}
                             </div>
