@@ -18,7 +18,7 @@ interface FrequentWorkout {
 }
 
 export default function WorkoutsPage() {
-  const { user, loading } = useAuth();
+  const { user, loading, switching } = useAuth();
   const router = useRouter();
   const [workoutType, setWorkoutType] = useState<"wod" | "lift">("wod");
   const [recentLogs, setRecentLogs] = useState<WorkoutLog[]>([]);
@@ -29,10 +29,10 @@ export default function WorkoutsPage() {
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!loading && !user) {
+    if (!loading && !switching && !user) {
       router.push("/login");
     }
-  }, [user, loading, router]);
+  }, [user, loading, switching, router]);
 
   useEffect(() => {
     if (user) {

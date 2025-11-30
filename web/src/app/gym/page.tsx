@@ -10,7 +10,7 @@ import { Gym } from "@/lib/types";
 import Navigation from "@/components/Navigation";
 
 export default function GymPage() {
-  const { user, loading } = useAuth();
+  const { user, loading, switching } = useAuth();
   const router = useRouter();
   const [myGyms, setMyGyms] = useState<(Gym & { role: string })[]>([]);
   const [allGyms, setAllGyms] = useState<Gym[]>([]);
@@ -20,10 +20,10 @@ export default function GymPage() {
   const [newGymName, setNewGymName] = useState("");
 
   useEffect(() => {
-    if (!loading && !user) {
+    if (!loading && !switching && !user) {
       router.push("/login");
     }
-  }, [user, loading, router]);
+  }, [user, loading, switching, router]);
 
   useEffect(() => {
     if (user) {

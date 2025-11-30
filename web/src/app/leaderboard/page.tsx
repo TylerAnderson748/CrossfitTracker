@@ -9,7 +9,7 @@ import { LeaderboardEntry, formatResult, Gender } from "@/lib/types";
 import Navigation from "@/components/Navigation";
 
 function LeaderboardContent() {
-  const { user, loading } = useAuth();
+  const { user, loading, switching } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialWorkout = searchParams.get("workout") || "";
@@ -21,10 +21,10 @@ function LeaderboardContent() {
   const [workoutNames, setWorkoutNames] = useState<string[]>([]);
 
   useEffect(() => {
-    if (!loading && !user) {
+    if (!loading && !switching && !user) {
       router.push("/login");
     }
-  }, [user, loading, router]);
+  }, [user, loading, switching, router]);
 
   useEffect(() => {
     if (user) {

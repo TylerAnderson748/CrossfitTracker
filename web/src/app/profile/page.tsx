@@ -9,7 +9,7 @@ import { Gym, Gender } from "@/lib/types";
 import Navigation from "@/components/Navigation";
 
 export default function ProfilePage() {
-  const { user, loading, signOut } = useAuth();
+  const { user, loading, switching, signOut } = useAuth();
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -23,10 +23,10 @@ export default function ProfilePage() {
   });
 
   useEffect(() => {
-    if (!loading && !user) {
+    if (!loading && !switching && !user) {
       router.push("/login");
     }
-  }, [user, loading, router]);
+  }, [user, loading, switching, router]);
 
   useEffect(() => {
     if (user) {

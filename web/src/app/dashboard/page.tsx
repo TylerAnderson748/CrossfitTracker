@@ -52,17 +52,17 @@ function formatDate(date: Date): string {
 }
 
 export default function DashboardPage() {
-  const { user, loading } = useAuth();
+  const { user, loading, switching } = useAuth();
   const router = useRouter();
   const [upcomingWorkouts, setUpcomingWorkouts] = useState<ScheduledWorkout[]>([]);
   const [workoutLogs, setWorkoutLogs] = useState<{ [key: string]: WorkoutResult[] }>({});
   const [loadingData, setLoadingData] = useState(true);
 
   useEffect(() => {
-    if (!loading && !user) {
+    if (!loading && !switching && !user) {
       router.push("/login");
     }
-  }, [user, loading, router]);
+  }, [user, loading, switching, router]);
 
   useEffect(() => {
     if (user) {

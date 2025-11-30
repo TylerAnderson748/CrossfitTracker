@@ -50,7 +50,7 @@ function formatDateTime(date: Date): string {
 }
 
 function NewWorkoutContent() {
-  const { user, loading } = useAuth();
+  const { user, loading, switching } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -85,10 +85,10 @@ function NewWorkoutContent() {
   const [editDate, setEditDate] = useState("");
 
   useEffect(() => {
-    if (!loading && !user) {
+    if (!loading && !switching && !user) {
       router.push("/login");
     }
-  }, [user, loading, router]);
+  }, [user, loading, switching, router]);
 
   // Redirect to lift page if type=lift is passed
   useEffect(() => {

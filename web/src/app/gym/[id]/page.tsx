@@ -20,7 +20,7 @@ interface MembershipRequest {
 }
 
 export default function GymDetailPage() {
-  const { user, loading } = useAuth();
+  const { user, loading, switching } = useAuth();
   const router = useRouter();
   const params = useParams();
   const gymId = params.id as string;
@@ -76,10 +76,10 @@ export default function GymDetailPage() {
   const isCoach = gym?.coachIds?.includes(user?.id || "") || isOwner;
 
   useEffect(() => {
-    if (!loading && !user) {
+    if (!loading && !switching && !user) {
       router.push("/login");
     }
-  }, [user, loading, router]);
+  }, [user, loading, switching, router]);
 
   useEffect(() => {
     if (user && gymId) {

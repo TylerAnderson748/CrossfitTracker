@@ -15,7 +15,7 @@ interface WorkoutGroup {
 }
 
 export default function WeeklyPlanPage() {
-  const { user, loading } = useAuth();
+  const { user, loading, switching } = useAuth();
   const router = useRouter();
   const [calendarRange, setCalendarRange] = useState<"thisWeek" | "nextWeek" | "2weeks" | "month">("thisWeek");
   const [workouts, setWorkouts] = useState<ScheduledWorkout[]>([]);
@@ -27,10 +27,10 @@ export default function WeeklyPlanPage() {
   const [userCache, setUserCache] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    if (!loading && !user) {
+    if (!loading && !switching && !user) {
       router.push("/login");
     }
-  }, [user, loading, router]);
+  }, [user, loading, switching, router]);
 
   useEffect(() => {
     if (user) {

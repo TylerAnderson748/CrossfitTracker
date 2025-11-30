@@ -18,6 +18,7 @@ interface AuthContextType {
   firebaseUser: FirebaseUser | null;
   user: AppUser | null;
   loading: boolean;
+  switching: boolean; // True during account switch to prevent redirects
   signIn: (email: string, password: string, saveAccount?: boolean) => Promise<void>;
   signUp: (email: string, password: string, userData: Partial<AppUser>) => Promise<void>;
   signOut: () => Promise<void>;
@@ -51,6 +52,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [user, setUser] = useState<AppUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [switching, setSwitching] = useState(false);
   const [storedAccounts, setStoredAccounts] = useState<StoredAccount[]>([]);
 
   // Load stored accounts from localStorage on mount
@@ -155,9 +157,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error("Account not found");
     }
 
-    // Sign out current user and sign in with the new account
-    await firebaseSignOut(auth);
-    await signInWithEmailAndPassword(auth, account.email, account.password);
+    // Set switching flag to prevent redirects during the switch
+    setSwitching(true);
+    try {
+      // Sign out current user and sign in with the new account
+      await firebaseSignOut(auth);
+      await signInWithEmailAndPassword(auth, account.email, account.password);
+    } finally {
+      setSwitching(false);
+    }
   };
 
   const addAccount = async (email: string, password: string) => {
@@ -202,6 +210,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         firebaseUser,
         user,
         loading,
+        switching,
         signIn,
         signUp,
         signOut,
