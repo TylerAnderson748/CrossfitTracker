@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { collection, query, where, orderBy, getDocs, Timestamp } from "firebase/firestore";
+import { collection, query, where, orderBy, getDocs, Timestamp, doc, updateDoc, arrayUnion, arrayRemove } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
-import { ScheduledWorkout, workoutComponentLabels, workoutComponentColors } from "@/lib/types";
+import { ScheduledWorkout, ScheduledTimeSlot, workoutComponentLabels, workoutComponentColors, formatTimeSlot } from "@/lib/types";
 import Navigation from "@/components/Navigation";
 
 interface WorkoutGroup {
@@ -179,6 +179,65 @@ export default function WeeklyPlanPage() {
     } else {
       router.push(`/workouts/new?name=${encodeURIComponent(workout.wodTitle)}&description=${encodeURIComponent(workout.wodDescription || "")}`);
     }
+  };
+
+  const handleSignup = async (workout: ScheduledWorkout, timeSlot: ScheduledTimeSlot) => {
+    if (!user) return;
+
+    try {
+      const workoutRef = doc(db, "scheduledWorkouts", workout.id);
+      const updatedTimeSlots = workout.timeSlots?.map((slot) => {
+        if (slot.id === timeSlot.id) {
+          return { ...slot, signups: [...(slot.signups || []), user.id] };
+        }
+        return slot;
+      });
+
+      await updateDoc(workoutRef, { timeSlots: updatedTimeSlots });
+
+      // Update local state
+      setWorkouts((prev) =>
+        prev.map((w) =>
+          w.id === workout.id ? { ...w, timeSlots: updatedTimeSlots } : w
+        )
+      );
+    } catch (error) {
+      console.error("Error signing up for time slot:", error);
+    }
+  };
+
+  const handleCancelSignup = async (workout: ScheduledWorkout, timeSlot: ScheduledTimeSlot) => {
+    if (!user) return;
+
+    try {
+      const workoutRef = doc(db, "scheduledWorkouts", workout.id);
+      const updatedTimeSlots = workout.timeSlots?.map((slot) => {
+        if (slot.id === timeSlot.id) {
+          return { ...slot, signups: (slot.signups || []).filter((id) => id !== user.id) };
+        }
+        return slot;
+      });
+
+      await updateDoc(workoutRef, { timeSlots: updatedTimeSlots });
+
+      // Update local state
+      setWorkouts((prev) =>
+        prev.map((w) =>
+          w.id === workout.id ? { ...w, timeSlots: updatedTimeSlots } : w
+        )
+      );
+    } catch (error) {
+      console.error("Error canceling signup:", error);
+    }
+  };
+
+  const isUserSignedUp = (timeSlot: ScheduledTimeSlot) => {
+    return user && timeSlot.signups?.includes(user.id);
+  };
+
+  const getAvailableSpots = (timeSlot: ScheduledTimeSlot) => {
+    const signedUp = timeSlot.signups?.length || 0;
+    return timeSlot.capacity - signedUp;
   };
 
   // Generate array of days for the selected range
@@ -360,6 +419,45 @@ export default function WeeklyPlanPage() {
                                       <p className="text-gray-600 text-sm mt-1 whitespace-pre-wrap line-clamp-2">{workout.wodDescription}</p>
                                     )}
                                   </>
+                                )}
+
+                                {/* Time Slots */}
+                                {workout.timeSlots && workout.timeSlots.length > 0 && (
+                                  <div className="mt-3 pt-3 border-t border-gray-200">
+                                    <p className="text-xs font-medium text-gray-500 mb-2">Class Times</p>
+                                    <div className="flex flex-wrap gap-2">
+                                      {workout.timeSlots
+                                        .sort((a, b) => a.hour * 60 + a.minute - (b.hour * 60 + b.minute))
+                                        .map((slot) => {
+                                          const signedUp = isUserSignedUp(slot);
+                                          const availableSpots = getAvailableSpots(slot);
+                                          const isFull = availableSpots <= 0;
+
+                                          return (
+                                            <button
+                                              key={slot.id}
+                                              onClick={() => signedUp ? handleCancelSignup(workout, slot) : handleSignup(workout, slot)}
+                                              disabled={isFull && !signedUp}
+                                              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 ${
+                                                signedUp
+                                                  ? "bg-green-100 text-green-700 border border-green-300"
+                                                  : isFull
+                                                  ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                                                  : "bg-gray-100 text-gray-700 hover:bg-blue-100 hover:text-blue-700 border border-gray-200"
+                                              }`}
+                                            >
+                                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                              </svg>
+                                              {formatTimeSlot(slot.hour, slot.minute)}
+                                              <span className={`text-xs ${signedUp ? "text-green-600" : isFull ? "text-red-400" : "text-gray-500"}`}>
+                                                {signedUp ? "✓" : isFull ? "Full" : `${availableSpots} left`}
+                                              </span>
+                                            </button>
+                                          );
+                                        })}
+                                    </div>
+                                  </div>
                                 )}
                               </div>
 

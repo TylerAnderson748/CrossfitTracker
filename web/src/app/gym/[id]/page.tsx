@@ -6,7 +6,7 @@ import Link from "next/link";
 import { doc, getDoc, collection, query, where, getDocs, updateDoc, arrayUnion, arrayRemove, deleteDoc, addDoc, Timestamp } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
-import { Gym, WorkoutGroup, AppUser, ScheduledWorkout, WorkoutLog, WorkoutComponent, WorkoutComponentType, workoutComponentLabels, workoutComponentColors, LiftResult, LeaderboardEntry } from "@/lib/types";
+import { Gym, WorkoutGroup, AppUser, ScheduledWorkout, ScheduledTimeSlot, WorkoutLog, WorkoutComponent, WorkoutComponentType, workoutComponentLabels, workoutComponentColors, LiftResult, LeaderboardEntry, formatTimeSlot } from "@/lib/types";
 import { getAllWods, getAllLifts } from "@/lib/workoutData";
 import Navigation from "@/components/Navigation";
 
@@ -64,6 +64,11 @@ export default function GymDetailPage() {
   // Delete mode state
   const [showDeleteSeriesModal, setShowDeleteSeriesModal] = useState(false);
   const [pendingDeleteWorkout, setPendingDeleteWorkout] = useState<ScheduledWorkout | null>(null);
+  // Time slots state
+  const [workoutTimeSlots, setWorkoutTimeSlots] = useState<ScheduledTimeSlot[]>([]);
+  const [newSlotHour, setNewSlotHour] = useState(6);
+  const [newSlotMinute, setNewSlotMinute] = useState(0);
+  const [newSlotCapacity, setNewSlotCapacity] = useState(20);
 
   const isOwner = gym?.ownerId === user?.id;
   const isCoach = gym?.coachIds?.includes(user?.id || "") || isOwner;
@@ -372,6 +377,7 @@ export default function GymDetailPage() {
           gymId: gymId,
           components: workoutComponents,
           ...(seriesId && { seriesId }),
+          ...(workoutTimeSlots.length > 0 && { timeSlots: workoutTimeSlots }),
         });
       }
 
@@ -398,6 +404,10 @@ export default function GymDetailPage() {
     setEditingWorkoutId(null);
     setEditingSeriesId(null);
     setPendingEditWorkout(null);
+    setWorkoutTimeSlots([]);
+    setNewSlotHour(6);
+    setNewSlotMinute(0);
+    setNewSlotCapacity(20);
   };
 
   const handleEditWorkout = (workout: ScheduledWorkout) => {
@@ -439,6 +449,9 @@ export default function GymDetailPage() {
       setWorkoutComponents([legacyComponent]);
     }
 
+    // Load time slots if available
+    setWorkoutTimeSlots(workout.timeSlots || []);
+
     setRecurrenceType("none"); // Don't allow recurrence when editing
     setShowEditSeriesModal(false);
     setPendingEditWorkout(null);
@@ -458,6 +471,7 @@ export default function GymDetailPage() {
         workoutType: workoutComponents.some(c => c.type === "wod") ? "wod" : "lift",
         groupIds: newWorkoutGroupIds,
         components: workoutComponents,
+        timeSlots: workoutTimeSlots,
       };
 
       if (editingSeriesId) {
@@ -1506,6 +1520,100 @@ export default function GymDetailPage() {
                             )}
                           </>
                         )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Time Slots Section */}
+              <div className="border-t border-gray-200 pt-4">
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-3">Class Times (Optional)</p>
+                <p className="text-xs text-gray-400 mb-3">Add time slots so athletes can sign up for specific class times</p>
+
+                {/* Add Time Slot Form */}
+                <div className="flex items-end gap-2 mb-3">
+                  <div className="flex-1">
+                    <label className="block text-xs text-gray-500 mb-1">Time</label>
+                    <div className="flex gap-1">
+                      <select
+                        value={newSlotHour}
+                        onChange={(e) => setNewSlotHour(parseInt(e.target.value))}
+                        className="flex-1 px-2 py-1.5 border border-gray-300 rounded text-sm text-gray-900 bg-white"
+                      >
+                        {Array.from({ length: 24 }, (_, i) => (
+                          <option key={i} value={i}>
+                            {i === 0 ? "12 AM" : i < 12 ? `${i} AM` : i === 12 ? "12 PM" : `${i - 12} PM`}
+                          </option>
+                        ))}
+                      </select>
+                      <select
+                        value={newSlotMinute}
+                        onChange={(e) => setNewSlotMinute(parseInt(e.target.value))}
+                        className="w-20 px-2 py-1.5 border border-gray-300 rounded text-sm text-gray-900 bg-white"
+                      >
+                        <option value={0}>:00</option>
+                        <option value={15}>:15</option>
+                        <option value={30}>:30</option>
+                        <option value={45}>:45</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="w-24">
+                    <label className="block text-xs text-gray-500 mb-1">Capacity</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={100}
+                      value={newSlotCapacity}
+                      onChange={(e) => setNewSlotCapacity(parseInt(e.target.value) || 20)}
+                      className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm text-gray-900 bg-white"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const newSlot: ScheduledTimeSlot = {
+                        id: `slot_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                        hour: newSlotHour,
+                        minute: newSlotMinute,
+                        capacity: newSlotCapacity,
+                        signups: [],
+                      };
+                      setWorkoutTimeSlots([...workoutTimeSlots, newSlot].sort((a, b) =>
+                        a.hour * 60 + a.minute - (b.hour * 60 + b.minute)
+                      ));
+                    }}
+                    className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+                  >
+                    Add
+                  </button>
+                </div>
+
+                {/* Time Slots List */}
+                {workoutTimeSlots.length > 0 && (
+                  <div className="space-y-2">
+                    {workoutTimeSlots.map((slot) => (
+                      <div
+                        key={slot.id}
+                        className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-lg border border-gray-200"
+                      >
+                        <div className="flex items-center gap-3">
+                          <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          <span className="font-medium text-gray-900">{formatTimeSlot(slot.hour, slot.minute)}</span>
+                          <span className="text-sm text-gray-500">({slot.capacity} spots)</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setWorkoutTimeSlots(workoutTimeSlots.filter((s) => s.id !== slot.id))}
+                          className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
                       </div>
                     ))}
                   </div>

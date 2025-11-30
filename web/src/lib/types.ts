@@ -61,6 +61,11 @@ export const categoryColors: Record<WODCategory, { bg: string; text: string; bad
   "Just For Fun": { bg: "bg-green-500", text: "text-white", badge: "bg-green-100 text-green-700" },
 };
 
+// Time slot with signups for a scheduled workout
+export interface ScheduledTimeSlot extends TimeSlot {
+  signups: string[]; // Array of user IDs signed up for this slot
+}
+
 export interface ScheduledWorkout {
   id: string;
   wodTitle: string;
@@ -77,6 +82,8 @@ export interface ScheduledWorkout {
   // Series tracking for recurring workouts
   seriesId?: string;
   gymId?: string;
+  // Time slots for this workout (with signup tracking)
+  timeSlots?: ScheduledTimeSlot[];
 }
 
 export interface WorkoutLog {
@@ -205,4 +212,11 @@ export function getRelativeDate(date: Date): string {
     return "Tomorrow";
   }
   return date.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
+}
+
+export function formatTimeSlot(hour: number, minute: number): string {
+  const period = hour >= 12 ? "PM" : "AM";
+  const displayHour = hour % 12 || 12;
+  const displayMinute = minute.toString().padStart(2, "0");
+  return `${displayHour}:${displayMinute} ${period}`;
 }
