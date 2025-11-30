@@ -573,8 +573,27 @@ export default function GymDetailPage() {
       // Generate seriesId for recurring workouts
       const seriesId = recurrenceType !== "none" ? `series_${Date.now()}_${Math.random().toString(36).substr(2, 9)}` : undefined;
 
+      // Check if any selected group has hideDetailsByDefault enabled
+      const selectedGroups = groups.filter(g => newWorkoutGroupIds.includes(g.id));
+      const groupWithHiddenDetails = selectedGroups.find(g => g.hideDetailsByDefault);
+      const shouldHideDetails = !!groupWithHiddenDetails;
+
       // Create all workout documents
       for (const date of workoutDates) {
+        // Calculate reveal date if details should be hidden
+        let revealDate: Timestamp | undefined;
+        if (shouldHideDetails && groupWithHiddenDetails) {
+          const revealDateTime = new Date(date);
+          revealDateTime.setDate(revealDateTime.getDate() - (groupWithHiddenDetails.defaultRevealDaysBefore || 0));
+          revealDateTime.setHours(
+            groupWithHiddenDetails.defaultRevealHour || 0,
+            groupWithHiddenDetails.defaultRevealMinute || 0,
+            0,
+            0
+          );
+          revealDate = Timestamp.fromDate(revealDateTime);
+        }
+
         await addDoc(collection(db, "scheduledWorkouts"), {
           wodTitle,
           wodDescription: workoutComponents.map(c => `${workoutComponentLabels[c.type]}: ${c.description}`).join("\n\n"),
@@ -583,7 +602,8 @@ export default function GymDetailPage() {
           groupIds: newWorkoutGroupIds,
           createdBy: user.id,
           recurrenceType: recurrenceType,
-          hideDetails: false,
+          hideDetails: shouldHideDetails,
+          ...(revealDate && { revealDate }),
           gymId: gymId,
           components: workoutComponents,
           ...(seriesId && { seriesId }),
