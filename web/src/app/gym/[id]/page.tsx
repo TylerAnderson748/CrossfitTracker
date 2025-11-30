@@ -328,6 +328,13 @@ export default function GymDetailPage() {
       await updateDoc(doc(db, "gymMembershipRequests", request.id), {
         status: "approved",
       });
+      // Add user to all auto-assign groups (like Members)
+      const autoAssignGroups = groups.filter((g) => g.membershipType === "auto-assign-all");
+      for (const group of autoAssignGroups) {
+        await updateDoc(doc(db, "groups", group.id), {
+          memberIds: arrayUnion(request.userId),
+        });
+      }
       fetchGymData();
     } catch (error) {
       console.error("Error approving request:", error);
