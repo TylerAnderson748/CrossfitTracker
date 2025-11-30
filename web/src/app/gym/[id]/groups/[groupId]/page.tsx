@@ -2,7 +2,7 @@
 
 import { useState, useEffect, use } from "react";
 import { useRouter } from "next/navigation";
-import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { doc, getDoc, updateDoc, collection, query, where, getDocs } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
 import {
@@ -11,6 +11,7 @@ import {
   GroupType,
   MembershipType,
   Gym,
+  AppUser,
 } from "@/lib/types";
 import Navigation from "@/components/Navigation";
 
@@ -68,6 +69,13 @@ export default function GroupDetailPage({
   const [editSlotMinute, setEditSlotMinute] = useState(0);
   const [editSlotCapacity, setEditSlotCapacity] = useState(20);
 
+  // Members state
+  const [memberIds, setMemberIds] = useState<string[]>([]);
+  const [members, setMembers] = useState<AppUser[]>([]);
+  const [gymMembers, setGymMembers] = useState<AppUser[]>([]);
+  const [showAddMemberModal, setShowAddMemberModal] = useState(false);
+  const [memberSearchQuery, setMemberSearchQuery] = useState("");
+
   useEffect(() => {
     if (!authLoading && !user) {
       router.push("/login");
@@ -85,12 +93,27 @@ export default function GroupDetailPage({
     try {
       // Load gym
       const gymDoc = await getDoc(doc(db, "gyms", gymId));
+      let gymData: Gym | null = null;
       if (gymDoc.exists()) {
-        const gymData = { id: gymDoc.id, ...gymDoc.data() } as Gym;
+        gymData = { id: gymDoc.id, ...gymDoc.data() } as Gym;
         setGym(gymData);
         setIsCoachOrOwner(
           gymData.ownerId === user?.id || gymData.coachIds?.includes(user?.id || "")
         );
+
+        // Load all gym members for the add member modal
+        if (gymData.memberIds && gymData.memberIds.length > 0) {
+          const membersQuery = query(
+            collection(db, "users"),
+            where("__name__", "in", gymData.memberIds.slice(0, 10)) // Firestore limit
+          );
+          const membersSnapshot = await getDocs(membersQuery);
+          const allGymMembers = membersSnapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          })) as AppUser[];
+          setGymMembers(allGymMembers);
+        }
       }
 
       // Load group
@@ -113,6 +136,28 @@ export default function GroupDetailPage({
         setDefaultRevealDaysBefore(groupData.defaultRevealDaysBefore ?? 1);
         setDefaultRevealHour(groupData.defaultRevealHour ?? 16);
         setDefaultRevealMinute(groupData.defaultRevealMinute ?? 0);
+        setMemberIds(groupData.memberIds || []);
+
+        // Load member details
+        if (groupData.memberIds && groupData.memberIds.length > 0) {
+          const memberChunks = [];
+          for (let i = 0; i < groupData.memberIds.length; i += 10) {
+            memberChunks.push(groupData.memberIds.slice(i, i + 10));
+          }
+
+          const allMembers: AppUser[] = [];
+          for (const chunk of memberChunks) {
+            const membersQuery = query(
+              collection(db, "users"),
+              where("__name__", "in", chunk)
+            );
+            const membersSnapshot = await getDocs(membersQuery);
+            membersSnapshot.docs.forEach((doc) => {
+              allMembers.push({ id: doc.id, ...doc.data() } as AppUser);
+            });
+          }
+          setMembers(allMembers);
+        }
       }
     } catch (err) {
       console.error("Error loading group:", err);
@@ -136,6 +181,7 @@ export default function GroupDetailPage({
         defaultRevealDaysBefore,
         defaultRevealHour,
         defaultRevealMinute,
+        memberIds,
       });
       router.push(`/gym/${gymId}`);
     } catch (err) {
@@ -144,6 +190,36 @@ export default function GroupDetailPage({
       setSaving(false);
     }
   };
+
+  const handleAddMember = (memberId: string) => {
+    if (!memberIds.includes(memberId)) {
+      const newMemberIds = [...memberIds, memberId];
+      setMemberIds(newMemberIds);
+
+      // Add to members display list
+      const memberToAdd = gymMembers.find((m) => m.id === memberId);
+      if (memberToAdd) {
+        setMembers([...members, memberToAdd]);
+      }
+    }
+    setShowAddMemberModal(false);
+    setMemberSearchQuery("");
+  };
+
+  const handleRemoveMember = (memberId: string) => {
+    setMemberIds(memberIds.filter((id) => id !== memberId));
+    setMembers(members.filter((m) => m.id !== memberId));
+  };
+
+  // Filter gym members who aren't already in the group
+  const availableMembers = gymMembers.filter(
+    (m) => !memberIds.includes(m.id)
+  ).filter((m) => {
+    if (!memberSearchQuery) return true;
+    const searchLower = memberSearchQuery.toLowerCase();
+    const displayName = m.displayName || `${m.firstName || ""} ${m.lastName || ""}`.trim() || m.email;
+    return displayName.toLowerCase().includes(searchLower) || m.email.toLowerCase().includes(searchLower);
+  });
 
   const handleAddTimeSlot = () => {
     const newSlot: TimeSlot = {
@@ -414,6 +490,58 @@ export default function GroupDetailPage({
           )}
         </div>
 
+        {/* Members Section */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-4">
+          <div className="flex items-center justify-between px-4 py-2 border-b border-gray-100">
+            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+              Members ({members.length})
+            </p>
+            {isCoachOrOwner && (
+              <button
+                onClick={() => setShowAddMemberModal(true)}
+                className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center text-white text-sm font-bold"
+              >
+                +
+              </button>
+            )}
+          </div>
+
+          {members.length === 0 ? (
+            <div className="px-4 py-6 text-center text-gray-400 text-sm">
+              No members in this group
+            </div>
+          ) : (
+            members.map((member) => (
+              <div
+                key={member.id}
+                className="flex items-center justify-between px-4 py-3 border-b border-gray-100 last:border-b-0"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-medium text-sm">
+                    {(member.displayName || member.firstName || member.email || "?")[0].toUpperCase()}
+                  </div>
+                  <div>
+                    <p className="text-gray-900 font-medium">
+                      {member.displayName || `${member.firstName || ""} ${member.lastName || ""}`.trim() || member.email}
+                    </p>
+                    <p className="text-gray-500 text-xs">{member.email}</p>
+                  </div>
+                </div>
+                {isCoachOrOwner && (
+                  <button
+                    onClick={() => handleRemoveMember(member.id)}
+                    className="text-red-500 hover:text-red-700"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+
         {/* Workout Visibility Section */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-6">
           <div className="px-4 py-2 border-b border-gray-100">
@@ -554,6 +682,62 @@ export default function GroupDetailPage({
                   className="flex-1 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700"
                 >
                   Add
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Add Member Modal */}
+        {showAddMemberModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-sm max-h-[80vh] flex flex-col">
+              <div className="p-4 border-b border-gray-200">
+                <h3 className="text-lg font-semibold text-gray-900">Add Member</h3>
+              </div>
+              <div className="p-4 border-b border-gray-200">
+                <input
+                  type="text"
+                  placeholder="Search members..."
+                  value={memberSearchQuery}
+                  onChange={(e) => setMemberSearchQuery(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+              <div className="flex-1 overflow-y-auto">
+                {availableMembers.length === 0 ? (
+                  <div className="px-4 py-6 text-center text-gray-400 text-sm">
+                    {memberSearchQuery ? "No matching members found" : "No available members to add"}
+                  </div>
+                ) : (
+                  availableMembers.map((member) => (
+                    <button
+                      key={member.id}
+                      onClick={() => handleAddMember(member.id)}
+                      className="w-full flex items-center gap-3 px-4 py-3 border-b border-gray-100 last:border-b-0 hover:bg-gray-50 text-left"
+                    >
+                      <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-medium text-sm">
+                        {(member.displayName || member.firstName || member.email || "?")[0].toUpperCase()}
+                      </div>
+                      <div>
+                        <p className="text-gray-900 font-medium">
+                          {member.displayName || `${member.firstName || ""} ${member.lastName || ""}`.trim() || member.email}
+                        </p>
+                        <p className="text-gray-500 text-xs">{member.email}</p>
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+              <div className="p-4 border-t border-gray-200">
+                <button
+                  onClick={() => {
+                    setShowAddMemberModal(false);
+                    setMemberSearchQuery("");
+                  }}
+                  className="w-full py-2 bg-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-300"
+                >
+                  Cancel
                 </button>
               </div>
             </div>
