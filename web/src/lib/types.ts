@@ -103,14 +103,13 @@ export interface Gym {
 }
 
 // Group types
-export type GroupType = "defaultGroup" | "custom" | "personal";
-export type MembershipType = "autoAssignAll" | "manual";
-export type GroupVisibility = "private" | "public";
-export type RevealTiming = "immediately" | "dayBefore" | "weekBefore" | "hoursBefore";
+export type GroupType = "default" | "custom" | "personal";
+export type MembershipType = "auto-assign-all" | "manual";
 
-export interface ClassTime {
+export interface TimeSlot {
   id: string;
-  time: string; // e.g., "05:30", "18:30"
+  hour: number;
+  minute: number;
   capacity: number;
 }
 
@@ -122,15 +121,18 @@ export interface WorkoutGroup {
   memberIds: string[];
   coachIds: string[];
   ownerId: string;
+  createdAt?: Timestamp;
   // Settings
-  membership: MembershipType;
-  visibility: GroupVisibility;
-  // Class times
-  classTimes: ClassTime[];
+  membershipType: MembershipType;
+  isPublic: boolean;
+  isDeletable: boolean;
+  // Default time slots
+  defaultTimeSlots: TimeSlot[];
   // Workout visibility settings
   hideDetailsByDefault: boolean;
-  revealTiming: RevealTiming;
-  revealTime: string; // e.g., "16:00" for 4:00 PM
+  defaultRevealDaysBefore: number;
+  defaultRevealHour: number;
+  defaultRevealMinute: number;
 }
 
 // Helper functions

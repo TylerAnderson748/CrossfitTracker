@@ -185,12 +185,15 @@ export default function GymDetailPage() {
         ownerId: user.id,
         memberIds: [],
         coachIds: [],
-        membership: "manual",
-        visibility: "private",
-        classTimes: [],
+        membershipType: "manual",
+        isPublic: false,
+        isDeletable: true,
+        defaultTimeSlots: [],
         hideDetailsByDefault: false,
-        revealTiming: "dayBefore",
-        revealTime: "16:00",
+        defaultRevealDaysBefore: 1,
+        defaultRevealHour: 16,
+        defaultRevealMinute: 0,
+        createdAt: Timestamp.now(),
       });
       setShowAddGroupModal(false);
       setNewGroupName("");
@@ -401,18 +404,18 @@ export default function GymDetailPage() {
                         <div>
                           <div className="flex items-center gap-2">
                             <h3 className="font-medium text-gray-900">{group.name}</h3>
-                            {group.type === "defaultGroup" && (
+                            {group.type === "default" && (
                               <span className="text-xs text-orange-600">★ Default</span>
                             )}
                           </div>
                           <p className="text-gray-500 text-sm">
                             {group.memberIds?.length || 0} members
-                            {group.classTimes?.length > 0 && ` • ${group.classTimes.length} class times`}
+                            {group.defaultTimeSlots?.length > 0 && ` • ${group.defaultTimeSlots.length} class times`}
                           </p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        {isCoach && group.type !== "defaultGroup" && (
+                        {isCoach && group.isDeletable !== false && (
                           <button
                             onClick={(e) => {
                               e.stopPropagation();

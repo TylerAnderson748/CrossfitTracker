@@ -2,29 +2,32 @@
 
 import { useState, useEffect, use } from "react";
 import { useRouter } from "next/navigation";
-import { doc, getDoc, updateDoc, collection, query, where, getDocs } from "firebase/firestore";
+import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
 import {
   WorkoutGroup,
-  ClassTime,
+  TimeSlot,
   GroupType,
   MembershipType,
-  GroupVisibility,
-  RevealTiming,
   Gym,
 } from "@/lib/types";
 import Navigation from "@/components/Navigation";
 
-function formatTimeDisplay(time24: string): string {
-  const [hours, minutes] = time24.split(":").map(Number);
-  const period = hours >= 12 ? "PM" : "AM";
-  const hours12 = hours % 12 || 12;
-  return `${hours12}:${minutes.toString().padStart(2, "0")} ${period}`;
+function formatTimeSlotDisplay(hour: number, minute: number): string {
+  const period = hour >= 12 ? "PM" : "AM";
+  const hours12 = hour % 12 || 12;
+  return `${hours12}:${minute.toString().padStart(2, "0")} ${period}`;
+}
+
+function formatHourMinuteDisplay(hour: number, minute: number): string {
+  const period = hour >= 12 ? "PM" : "AM";
+  const hours12 = hour % 12 || 12;
+  return `${hours12}:${minute.toString().padStart(2, "0")} ${period}`;
 }
 
 function generateId(): string {
-  return Math.random().toString(36).substring(2, 15);
+  return `${Date.now()}-${Math.random().toString(36).substring(2, 15)}`.toUpperCase();
 }
 
 export default function GroupDetailPage({
@@ -45,17 +48,19 @@ export default function GroupDetailPage({
   // Editable fields
   const [name, setName] = useState("");
   const [groupType, setGroupType] = useState<GroupType>("custom");
-  const [membership, setMembership] = useState<MembershipType>("manual");
-  const [visibility, setVisibility] = useState<GroupVisibility>("private");
-  const [classTimes, setClassTimes] = useState<ClassTime[]>([]);
+  const [membershipType, setMembershipType] = useState<MembershipType>("manual");
+  const [isPublic, setIsPublic] = useState(false);
+  const [defaultTimeSlots, setDefaultTimeSlots] = useState<TimeSlot[]>([]);
   const [hideDetailsByDefault, setHideDetailsByDefault] = useState(false);
-  const [revealTiming, setRevealTiming] = useState<RevealTiming>("dayBefore");
-  const [revealTime, setRevealTime] = useState("16:00");
+  const [defaultRevealDaysBefore, setDefaultRevealDaysBefore] = useState(1);
+  const [defaultRevealHour, setDefaultRevealHour] = useState(16);
+  const [defaultRevealMinute, setDefaultRevealMinute] = useState(0);
 
-  // Add class time modal
-  const [showAddClassTime, setShowAddClassTime] = useState(false);
-  const [newClassTime, setNewClassTime] = useState("06:00");
-  const [newClassCapacity, setNewClassCapacity] = useState(20);
+  // Add time slot modal
+  const [showAddTimeSlot, setShowAddTimeSlot] = useState(false);
+  const [newSlotHour, setNewSlotHour] = useState(6);
+  const [newSlotMinute, setNewSlotMinute] = useState(0);
+  const [newSlotCapacity, setNewSlotCapacity] = useState(20);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -90,13 +95,14 @@ export default function GroupDetailPage({
 
         // Initialize form fields
         setName(groupData.name);
-        setGroupType(groupData.type);
-        setMembership(groupData.membership || "manual");
-        setVisibility(groupData.visibility || "private");
-        setClassTimes(groupData.classTimes || []);
+        setGroupType(groupData.type || "custom");
+        setMembershipType(groupData.membershipType || "manual");
+        setIsPublic(groupData.isPublic || false);
+        setDefaultTimeSlots(groupData.defaultTimeSlots || []);
         setHideDetailsByDefault(groupData.hideDetailsByDefault || false);
-        setRevealTiming(groupData.revealTiming || "dayBefore");
-        setRevealTime(groupData.revealTime || "16:00");
+        setDefaultRevealDaysBefore(groupData.defaultRevealDaysBefore ?? 1);
+        setDefaultRevealHour(groupData.defaultRevealHour ?? 16);
+        setDefaultRevealMinute(groupData.defaultRevealMinute ?? 0);
       }
     } catch (err) {
       console.error("Error loading group:", err);
@@ -113,12 +119,13 @@ export default function GroupDetailPage({
       await updateDoc(doc(db, "groups", groupId), {
         name,
         type: groupType,
-        membership,
-        visibility,
-        classTimes,
+        membershipType,
+        isPublic,
+        defaultTimeSlots,
         hideDetailsByDefault,
-        revealTiming,
-        revealTime,
+        defaultRevealDaysBefore,
+        defaultRevealHour,
+        defaultRevealMinute,
       });
       router.push(`/gym/${gymId}`);
     } catch (err) {
@@ -128,20 +135,36 @@ export default function GroupDetailPage({
     }
   };
 
-  const handleAddClassTime = () => {
-    const newTime: ClassTime = {
+  const handleAddTimeSlot = () => {
+    const newSlot: TimeSlot = {
       id: generateId(),
-      time: newClassTime,
-      capacity: newClassCapacity,
+      hour: newSlotHour,
+      minute: newSlotMinute,
+      capacity: newSlotCapacity,
     };
-    setClassTimes([...classTimes, newTime].sort((a, b) => a.time.localeCompare(b.time)));
-    setShowAddClassTime(false);
-    setNewClassTime("06:00");
-    setNewClassCapacity(20);
+    // Sort by hour then minute
+    const updated = [...defaultTimeSlots, newSlot].sort((a, b) => {
+      if (a.hour !== b.hour) return a.hour - b.hour;
+      return a.minute - b.minute;
+    });
+    setDefaultTimeSlots(updated);
+    setShowAddTimeSlot(false);
+    setNewSlotHour(6);
+    setNewSlotMinute(0);
+    setNewSlotCapacity(20);
   };
 
-  const handleDeleteClassTime = (id: string) => {
-    setClassTimes(classTimes.filter((ct) => ct.id !== id));
+  const handleDeleteTimeSlot = (id: string) => {
+    setDefaultTimeSlots(defaultTimeSlots.filter((slot) => slot.id !== id));
+  };
+
+  // Convert hour/minute to time input value
+  const revealTimeValue = `${defaultRevealHour.toString().padStart(2, "0")}:${defaultRevealMinute.toString().padStart(2, "0")}`;
+
+  const handleRevealTimeChange = (value: string) => {
+    const [hours, minutes] = value.split(":").map(Number);
+    setDefaultRevealHour(hours);
+    setDefaultRevealMinute(minutes);
   };
 
   if (authLoading || loading) {
@@ -213,13 +236,13 @@ export default function GroupDetailPage({
                 onChange={(e) => setGroupType(e.target.value as GroupType)}
                 className="text-right text-gray-900 bg-transparent border-none focus:ring-0 p-0 pr-6 appearance-none cursor-pointer"
               >
-                <option value="defaultGroup">Default</option>
+                <option value="default">Default</option>
                 <option value="custom">Custom</option>
                 <option value="personal">Personal</option>
               </select>
             ) : (
               <span className="text-gray-900">
-                {groupType === "defaultGroup" ? "Default" : groupType === "custom" ? "Custom" : "Personal"}
+                {groupType === "default" ? "Default" : groupType === "custom" ? "Custom" : "Personal"}
               </span>
             )}
           </div>
@@ -229,16 +252,16 @@ export default function GroupDetailPage({
             <span className="text-gray-700">Membership</span>
             {isCoachOrOwner ? (
               <select
-                value={membership}
-                onChange={(e) => setMembership(e.target.value as MembershipType)}
+                value={membershipType}
+                onChange={(e) => setMembershipType(e.target.value as MembershipType)}
                 className="text-right text-gray-900 bg-transparent border-none focus:ring-0 p-0 pr-6 appearance-none cursor-pointer"
               >
-                <option value="autoAssignAll">Auto-assign All</option>
+                <option value="auto-assign-all">Auto-assign All</option>
                 <option value="manual">Manual</option>
               </select>
             ) : (
               <span className="text-gray-900">
-                {membership === "autoAssignAll" ? "Auto-assign All" : "Manual"}
+                {membershipType === "auto-assign-all" ? "Auto-assign All" : "Manual"}
               </span>
             )}
           </div>
@@ -248,8 +271,8 @@ export default function GroupDetailPage({
             <span className="text-gray-700">Visibility</span>
             {isCoachOrOwner ? (
               <select
-                value={visibility}
-                onChange={(e) => setVisibility(e.target.value as GroupVisibility)}
+                value={isPublic ? "public" : "private"}
+                onChange={(e) => setIsPublic(e.target.value === "public")}
                 className="text-right text-gray-900 bg-transparent border-none focus:ring-0 p-0 pr-6 appearance-none cursor-pointer"
               >
                 <option value="private">Private</option>
@@ -257,7 +280,7 @@ export default function GroupDetailPage({
               </select>
             ) : (
               <span className="text-gray-900">
-                {visibility === "private" ? "Private" : "Public"}
+                {isPublic ? "Public" : "Private"}
               </span>
             )}
           </div>
@@ -271,7 +294,7 @@ export default function GroupDetailPage({
             </p>
             {isCoachOrOwner && (
               <button
-                onClick={() => setShowAddClassTime(true)}
+                onClick={() => setShowAddTimeSlot(true)}
                 className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center text-white text-sm font-bold"
               >
                 +
@@ -279,14 +302,14 @@ export default function GroupDetailPage({
             )}
           </div>
 
-          {classTimes.length === 0 ? (
+          {defaultTimeSlots.length === 0 ? (
             <div className="px-4 py-6 text-center text-gray-400 text-sm">
               No class times configured
             </div>
           ) : (
-            classTimes.map((ct) => (
+            defaultTimeSlots.map((slot) => (
               <div
-                key={ct.id}
+                key={slot.id}
                 className="flex items-center justify-between px-4 py-3 border-b border-gray-100 last:border-b-0"
               >
                 <div className="flex items-center gap-3">
@@ -295,13 +318,15 @@ export default function GroupDetailPage({
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                   </div>
-                  <span className="text-gray-900 font-medium">{formatTimeDisplay(ct.time)}</span>
+                  <span className="text-gray-900 font-medium">
+                    {formatTimeSlotDisplay(slot.hour, slot.minute)}
+                  </span>
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className="text-gray-500 text-sm">Cap: {ct.capacity}</span>
+                  <span className="text-gray-500 text-sm">Cap: {slot.capacity}</span>
                   {isCoachOrOwner && (
                     <button
-                      onClick={() => handleDeleteClassTime(ct.id)}
+                      onClick={() => handleDeleteTimeSlot(slot.id)}
                       className="text-red-500 hover:text-red-700"
                     >
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -348,20 +373,21 @@ export default function GroupDetailPage({
                 <span className="text-gray-700">Reveal</span>
                 {isCoachOrOwner ? (
                   <select
-                    value={revealTiming}
-                    onChange={(e) => setRevealTiming(e.target.value as RevealTiming)}
+                    value={defaultRevealDaysBefore}
+                    onChange={(e) => setDefaultRevealDaysBefore(parseInt(e.target.value))}
                     className="text-right text-gray-900 bg-transparent border-none focus:ring-0 p-0 pr-6 appearance-none cursor-pointer"
                   >
-                    <option value="immediately">Immediately</option>
-                    <option value="hoursBefore">Hours before</option>
-                    <option value="dayBefore">Day before</option>
-                    <option value="weekBefore">Week before</option>
+                    <option value={0}>Same day</option>
+                    <option value={1}>Day before</option>
+                    <option value={2}>2 days before</option>
+                    <option value={7}>Week before</option>
                   </select>
                 ) : (
                   <span className="text-gray-900">
-                    {revealTiming === "immediately" ? "Immediately" :
-                     revealTiming === "hoursBefore" ? "Hours before" :
-                     revealTiming === "dayBefore" ? "Day before" : "Week before"}
+                    {defaultRevealDaysBefore === 0 ? "Same day" :
+                     defaultRevealDaysBefore === 1 ? "Day before" :
+                     defaultRevealDaysBefore === 7 ? "Week before" :
+                     `${defaultRevealDaysBefore} days before`}
                   </span>
                 )}
               </div>
@@ -372,12 +398,14 @@ export default function GroupDetailPage({
                 {isCoachOrOwner ? (
                   <input
                     type="time"
-                    value={revealTime}
-                    onChange={(e) => setRevealTime(e.target.value)}
+                    value={revealTimeValue}
+                    onChange={(e) => handleRevealTimeChange(e.target.value)}
                     className="text-right text-gray-900 bg-transparent border-none focus:ring-0 p-0"
                   />
                 ) : (
-                  <span className="text-gray-900">{formatTimeDisplay(revealTime)}</span>
+                  <span className="text-gray-900">
+                    {formatHourMinuteDisplay(defaultRevealHour, defaultRevealMinute)}
+                  </span>
                 )}
               </div>
             </>
@@ -395,8 +423,8 @@ export default function GroupDetailPage({
           </button>
         )}
 
-        {/* Add Class Time Modal */}
-        {showAddClassTime && (
+        {/* Add Time Slot Modal */}
+        {showAddTimeSlot && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-xl shadow-xl w-full max-w-sm">
               <div className="p-4 border-b border-gray-200">
@@ -405,19 +433,36 @@ export default function GroupDetailPage({
               <div className="p-4 space-y-4">
                 <div>
                   <label className="block text-sm text-gray-600 mb-1">Time</label>
-                  <input
-                    type="time"
-                    value={newClassTime}
-                    onChange={(e) => setNewClassTime(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
+                  <div className="flex gap-2">
+                    <select
+                      value={newSlotHour}
+                      onChange={(e) => setNewSlotHour(parseInt(e.target.value))}
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      {Array.from({ length: 24 }, (_, i) => (
+                        <option key={i} value={i}>
+                          {i === 0 ? "12 AM" : i < 12 ? `${i} AM` : i === 12 ? "12 PM" : `${i - 12} PM`}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      value={newSlotMinute}
+                      onChange={(e) => setNewSlotMinute(parseInt(e.target.value))}
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value={0}>:00</option>
+                      <option value={15}>:15</option>
+                      <option value={30}>:30</option>
+                      <option value={45}>:45</option>
+                    </select>
+                  </div>
                 </div>
                 <div>
                   <label className="block text-sm text-gray-600 mb-1">Capacity</label>
                   <input
                     type="number"
-                    value={newClassCapacity}
-                    onChange={(e) => setNewClassCapacity(parseInt(e.target.value) || 20)}
+                    value={newSlotCapacity}
+                    onChange={(e) => setNewSlotCapacity(parseInt(e.target.value) || 20)}
                     min={1}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
@@ -425,13 +470,13 @@ export default function GroupDetailPage({
               </div>
               <div className="flex gap-3 p-4 border-t border-gray-200">
                 <button
-                  onClick={() => setShowAddClassTime(false)}
+                  onClick={() => setShowAddTimeSlot(false)}
                   className="flex-1 py-2 bg-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-300"
                 >
                   Cancel
                 </button>
                 <button
-                  onClick={handleAddClassTime}
+                  onClick={handleAddTimeSlot}
                   className="flex-1 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700"
                 >
                   Add
