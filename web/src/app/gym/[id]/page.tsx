@@ -6,7 +6,8 @@ import Link from "next/link";
 import { doc, getDoc, collection, query, where, getDocs, updateDoc, arrayUnion, arrayRemove, deleteDoc, addDoc, Timestamp } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
-import { Gym, WorkoutGroup, AppUser, ScheduledWorkout, WorkoutLog, WorkoutComponent, WorkoutComponentType, workoutComponentLabels, workoutComponentColors, LiftResult, LeaderboardEntry, ALL_BENCHMARK_WORKOUTS } from "@/lib/types";
+import { Gym, WorkoutGroup, AppUser, ScheduledWorkout, WorkoutLog, WorkoutComponent, WorkoutComponentType, workoutComponentLabels, workoutComponentColors, LiftResult, LeaderboardEntry } from "@/lib/types";
+import { getAllWods, getAllLifts } from "@/lib/workoutData";
 import Navigation from "@/components/Navigation";
 
 interface MembershipRequest {
@@ -455,16 +456,23 @@ export default function GymDetailPage() {
   const getUniqueWorkouts = () => {
     const workoutMap = new Map<string, { title: string; description: string }>();
 
-    // First, add all standard benchmark workouts (Girls, Heroes, Lifts, etc.)
-    // These are always available regardless of database content
-    ALL_BENCHMARK_WORKOUTS.forEach((w) => {
-      workoutMap.set(w.title.toLowerCase(), {
-        title: w.title,
+    // First, add all WODs from workoutData (Girls, Heroes, etc.)
+    getAllWods().forEach((w) => {
+      workoutMap.set(w.name.toLowerCase(), {
+        title: w.name,
         description: w.description,
       });
     });
 
-    // Add from ALL scheduled workouts (entire database) - may override with custom descriptions
+    // Add all lifts from workoutData
+    getAllLifts().forEach((w) => {
+      workoutMap.set(w.name.toLowerCase(), {
+        title: w.name,
+        description: w.description,
+      });
+    });
+
+    // Add from ALL scheduled workouts (entire database) - custom workouts
     allScheduledWorkouts.forEach((w) => {
       if (w.wodTitle && !workoutMap.has(w.wodTitle.toLowerCase())) {
         workoutMap.set(w.wodTitle.toLowerCase(), {
