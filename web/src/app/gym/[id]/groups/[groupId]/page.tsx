@@ -355,12 +355,12 @@ export default function GroupDetailPage({
                   // Edit mode
                   <div className="px-4 py-3 space-y-3 bg-blue-50">
                     <div>
-                      <label className="block text-xs text-gray-500 mb-1">Time</label>
+                      <label className="block text-xs text-gray-600 mb-1 font-medium">Time</label>
                       <div className="flex gap-2">
                         <select
                           value={editSlotHour}
                           onChange={(e) => setEditSlotHour(parseInt(e.target.value))}
-                          className="flex-1 px-2 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          className="flex-1 px-2 py-1.5 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         >
                           {Array.from({ length: 24 }, (_, i) => (
                             <option key={i} value={i}>
@@ -371,7 +371,7 @@ export default function GroupDetailPage({
                         <select
                           value={editSlotMinute}
                           onChange={(e) => setEditSlotMinute(parseInt(e.target.value))}
-                          className="flex-1 px-2 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          className="flex-1 px-2 py-1.5 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         >
                           <option value={0}>:00</option>
                           <option value={15}>:15</option>
@@ -381,13 +381,13 @@ export default function GroupDetailPage({
                       </div>
                     </div>
                     <div>
-                      <label className="block text-xs text-gray-500 mb-1">Capacity</label>
+                      <label className="block text-xs text-gray-600 mb-1 font-medium">Capacity</label>
                       <input
                         type="number"
                         value={editSlotCapacity}
                         onChange={(e) => setEditSlotCapacity(parseInt(e.target.value) || 1)}
                         min={1}
-                        className="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       />
                     </div>
                     <div className="flex gap-2">
@@ -536,12 +536,12 @@ export default function GroupDetailPage({
               </div>
               <div className="p-4 space-y-4">
                 <div>
-                  <label className="block text-sm text-gray-600 mb-1">Time</label>
+                  <label className="block text-sm text-gray-700 mb-1 font-medium">Time</label>
                   <div className="flex gap-2">
                     <select
                       value={newSlotHour}
                       onChange={(e) => setNewSlotHour(parseInt(e.target.value))}
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     >
                       {Array.from({ length: 24 }, (_, i) => (
                         <option key={i} value={i}>
@@ -552,7 +552,7 @@ export default function GroupDetailPage({
                     <select
                       value={newSlotMinute}
                       onChange={(e) => setNewSlotMinute(parseInt(e.target.value))}
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     >
                       <option value={0}>:00</option>
                       <option value={15}>:15</option>
@@ -562,13 +562,13 @@ export default function GroupDetailPage({
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm text-gray-600 mb-1">Capacity</label>
+                  <label className="block text-sm text-gray-700 mb-1 font-medium">Capacity</label>
                   <input
                     type="number"
                     value={newSlotCapacity}
                     onChange={(e) => setNewSlotCapacity(parseInt(e.target.value) || 20)}
                     min={1}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
               </div>
