@@ -6,7 +6,7 @@ import Link from "next/link";
 import { doc, getDoc, collection, query, where, getDocs, updateDoc, arrayUnion, arrayRemove, deleteDoc, addDoc, Timestamp } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
-import { Gym, WorkoutGroup, AppUser, ScheduledWorkout, WorkoutLog, WorkoutComponent, WorkoutComponentType, workoutComponentLabels, workoutComponentColors, LiftResult } from "@/lib/types";
+import { Gym, WorkoutGroup, AppUser, ScheduledWorkout, WorkoutLog, WorkoutComponent, WorkoutComponentType, workoutComponentLabels, workoutComponentColors, LiftResult, LeaderboardEntry } from "@/lib/types";
 import Navigation from "@/components/Navigation";
 
 interface MembershipRequest {
@@ -32,6 +32,8 @@ export default function GymDetailPage() {
   const [scheduledWorkouts, setScheduledWorkouts] = useState<ScheduledWorkout[]>([]);
   const [workoutLogs, setWorkoutLogs] = useState<WorkoutLog[]>([]);
   const [liftResults, setLiftResults] = useState<LiftResult[]>([]);
+  const [leaderboardEntries, setLeaderboardEntries] = useState<LeaderboardEntry[]>([]);
+  const [allScheduledWorkouts, setAllScheduledWorkouts] = useState<ScheduledWorkout[]>([]);
   const [loadingData, setLoadingData] = useState(true);
   const [activeTab, setActiveTab] = useState<"members" | "coaches" | "groups" | "programming" | "requests">("members");
   const [showAddGroupModal, setShowAddGroupModal] = useState(false);
@@ -179,6 +181,24 @@ export default function GymDetailPage() {
         ...doc.data(),
       })) as LiftResult[];
       setLiftResults(liftsData);
+
+      // Fetch ALL leaderboard entries for suggestions (contains benchmark WOD names like Fran)
+      const leaderboardQuery = query(collection(db, "leaderboardEntries"));
+      const leaderboardSnapshot = await getDocs(leaderboardQuery);
+      const leaderboardData = leaderboardSnapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as LeaderboardEntry[];
+      setLeaderboardEntries(leaderboardData);
+
+      // Fetch ALL scheduled workouts for suggestions (not just current gym)
+      const allWorkoutsQuery = query(collection(db, "scheduledWorkouts"));
+      const allWorkoutsSnapshot = await getDocs(allWorkoutsQuery);
+      const allWorkoutsData = allWorkoutsSnapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as ScheduledWorkout[];
+      setAllScheduledWorkouts(allWorkoutsData);
     } catch (error) {
       console.error("Error fetching gym data:", error);
     } finally {
@@ -435,7 +455,17 @@ export default function GymDetailPage() {
   const getUniqueWorkouts = () => {
     const workoutMap = new Map<string, { title: string; description: string }>();
 
-    // Add from scheduled workouts
+    // Add from ALL scheduled workouts (entire database)
+    allScheduledWorkouts.forEach((w) => {
+      if (w.wodTitle && !workoutMap.has(w.wodTitle.toLowerCase())) {
+        workoutMap.set(w.wodTitle.toLowerCase(), {
+          title: w.wodTitle,
+          description: w.wodDescription || "",
+        });
+      }
+    });
+
+    // Add from current gym's scheduled workouts
     scheduledWorkouts.forEach((w) => {
       if (w.wodTitle && !workoutMap.has(w.wodTitle.toLowerCase())) {
         workoutMap.set(w.wodTitle.toLowerCase(), {
@@ -460,6 +490,16 @@ export default function GymDetailPage() {
       if (lift.liftName && !workoutMap.has(lift.liftName.toLowerCase())) {
         workoutMap.set(lift.liftName.toLowerCase(), {
           title: lift.liftName,
+          description: "",
+        });
+      }
+    });
+
+    // Add from leaderboard entries (contains benchmark WOD names like Fran, Murph, etc.)
+    leaderboardEntries.forEach((entry) => {
+      if (entry.originalWorkoutName && !workoutMap.has(entry.originalWorkoutName.toLowerCase())) {
+        workoutMap.set(entry.originalWorkoutName.toLowerCase(), {
+          title: entry.originalWorkoutName,
           description: "",
         });
       }
