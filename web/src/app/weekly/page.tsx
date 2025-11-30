@@ -442,9 +442,19 @@ export default function WeeklyPlanPage() {
                                 {workout.timeSlots && workout.timeSlots.length > 0 && (
                                   <div className="mt-3 pt-3 border-t border-gray-200">
                                     <p className="text-xs font-medium text-gray-500 mb-2">Class Times</p>
+                                    {/* Debug: Log raw slot data */}
+                                    {console.log("Weekly view slots for", workout.id, ":", JSON.stringify(workout.timeSlots))}
                                     <div className="flex flex-wrap gap-2">
                                       {workout.timeSlots
-                                        .filter((slot) => slot && slot.hour !== undefined && slot.minute !== undefined)
+                                        .filter((slot) => {
+                                          // More lenient filter - just check slot exists
+                                          if (!slot) return false;
+                                          // Log slots that would be filtered out
+                                          if (slot.hour === undefined && slot.minute === undefined) {
+                                            console.log("Slot missing hour/minute:", slot);
+                                          }
+                                          return true; // Accept all slots for now to see what we have
+                                        })
                                         .sort((a, b) => (a.hour ?? 0) * 60 + (a.minute ?? 0) - ((b.hour ?? 0) * 60 + (b.minute ?? 0)))
                                         .map((slot, index) => {
                                           const signedUp = isUserSignedUp(slot);
