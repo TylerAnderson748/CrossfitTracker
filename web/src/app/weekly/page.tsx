@@ -429,6 +429,17 @@ export default function WeeklyPlanPage() {
                                     <div className="flex flex-wrap gap-2">
                                       {workout.timeSlots
                                         .filter((slot) => slot != null)
+                                        .map((slot: any) => {
+                                          // Handle legacy format with startTime Timestamp
+                                          let hour = slot.hour;
+                                          let minute = slot.minute;
+                                          if (slot.startTime && typeof slot.startTime.toDate === 'function') {
+                                            const date = slot.startTime.toDate();
+                                            hour = date.getHours();
+                                            minute = date.getMinutes();
+                                          }
+                                          return { ...slot, hour, minute, signups: slot.signups || slot.signedUpUserIds || [] };
+                                        })
                                         .sort((a, b) => (a.hour ?? 0) * 60 + (a.minute ?? 0) - ((b.hour ?? 0) * 60 + (b.minute ?? 0)))
                                         .map((slot, index) => {
                                           const signedUp = isUserSignedUp(slot);
