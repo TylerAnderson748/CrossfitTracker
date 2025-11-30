@@ -618,6 +618,62 @@ export default function GymDetailPage() {
     }
   };
 
+  const handleBackfillTimeSlots = async () => {
+    if (!confirm("Add default time slots to all workouts that don't have them? This will use the time slots from each workout's assigned groups.")) {
+      return;
+    }
+
+    try {
+      // Find workouts without time slots
+      const workoutsToUpdate = scheduledWorkouts.filter(
+        (w) => !w.timeSlots || w.timeSlots.length === 0
+      );
+
+      if (workoutsToUpdate.length === 0) {
+        alert("All workouts already have time slots!");
+        return;
+      }
+
+      let updatedCount = 0;
+
+      for (const workout of workoutsToUpdate) {
+        // Get default time slots from the workout's groups
+        const workoutGroups = groups.filter((g) => workout.groupIds?.includes(g.id));
+        const allDefaultSlots: ScheduledTimeSlot[] = [];
+        const seenTimes = new Set<string>();
+
+        workoutGroups.forEach((group) => {
+          if (group.defaultTimeSlots?.length > 0) {
+            group.defaultTimeSlots.forEach((slot) => {
+              const timeKey = `${slot.hour}:${slot.minute}`;
+              if (!seenTimes.has(timeKey)) {
+                seenTimes.add(timeKey);
+                allDefaultSlots.push({
+                  ...slot,
+                  id: `slot_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                  signups: [],
+                });
+              }
+            });
+          }
+        });
+
+        if (allDefaultSlots.length > 0) {
+          await updateDoc(doc(db, "scheduledWorkouts", workout.id), {
+            timeSlots: allDefaultSlots.sort((a, b) => a.hour * 60 + a.minute - (b.hour * 60 + b.minute)),
+          });
+          updatedCount++;
+        }
+      }
+
+      alert(`Added time slots to ${updatedCount} workout${updatedCount !== 1 ? "s" : ""}!`);
+      fetchGymData();
+    } catch (error) {
+      console.error("Error backfilling time slots:", error);
+      alert("Error adding time slots. Please try again.");
+    }
+  };
+
   const formatWorkoutDate = (timestamp: Timestamp) => {
     const date = timestamp.toDate();
     const today = new Date();
@@ -1047,12 +1103,25 @@ export default function GymDetailPage() {
               {/* Header with title and add button */}
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold text-gray-900">Programming Calendar</h2>
-                <button
-                  onClick={() => setShowAddWorkoutModal(true)}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
-                >
-                  + Schedule Workout
-                </button>
+                <div className="flex gap-2">
+                  {scheduledWorkouts.some((w) => !w.timeSlots || w.timeSlots.length === 0) && (
+                    <button
+                      onClick={handleBackfillTimeSlots}
+                      className="px-3 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 text-sm flex items-center gap-1"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      Add Time Slots
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setShowAddWorkoutModal(true)}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
+                  >
+                    + Schedule Workout
+                  </button>
+                </div>
               </div>
 
               {/* Time Range Selector */}
