@@ -187,12 +187,9 @@ function NewWorkoutContent() {
       // Filter for this workout if we have a title
       if (wodTitle) {
         const normalized = normalizeWorkoutName(wodTitle.trim());
-        const workoutEntries = entries.filter(
+        entries = entries.filter(
           (e) => e.normalizedWorkoutName === normalized
         );
-        if (workoutEntries.length > 0) {
-          entries = workoutEntries;
-        }
       }
 
       // Filter for entries with time data
