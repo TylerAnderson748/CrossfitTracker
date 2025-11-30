@@ -155,7 +155,7 @@ function LeaderboardContent() {
               <select
                 value={selectedWorkout}
                 onChange={(e) => setSelectedWorkout(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
                 <option value="all">All Workouts</option>
                 {workoutNames.map((name) => (
@@ -173,7 +173,7 @@ function LeaderboardContent() {
               <select
                 value={genderFilter}
                 onChange={(e) => setGenderFilter(e.target.value as Gender | "all")}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
                 <option value="all">All</option>
                 <option value="Male">Male</option>

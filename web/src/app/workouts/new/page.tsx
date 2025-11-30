@@ -788,7 +788,7 @@ function NewWorkoutContent() {
                 onChange={(e) => setWodDescription(e.target.value)}
                 placeholder="21-15-9 Thrusters & Pull-ups"
                 rows={2}
-                className="w-full text-gray-500 text-sm border-none focus:ring-0 p-0 resize-none placeholder-gray-300"
+                className="w-full text-gray-900 text-sm border-none focus:ring-0 p-0 resize-none placeholder-gray-400"
               />
             </div>
 
