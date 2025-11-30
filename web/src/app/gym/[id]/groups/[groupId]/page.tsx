@@ -48,7 +48,7 @@ export default function GroupDetailPage({
   // Editable fields
   const [name, setName] = useState("");
   const [groupType, setGroupType] = useState<GroupType>("custom");
-  const [membershipType, setMembershipType] = useState<MembershipType>("inviteOnly");
+  const [membershipType, setMembershipType] = useState<MembershipType>("invite-only");
   const [isPublic, setIsPublic] = useState(false);
   const [defaultTimeSlots, setDefaultTimeSlots] = useState<TimeSlot[]>([]);
   const [hideDetailsByDefault, setHideDetailsByDefault] = useState(false);
@@ -106,7 +106,7 @@ export default function GroupDetailPage({
         // Initialize form fields
         setName(groupData.name);
         setGroupType(groupData.type || "custom");
-        setMembershipType(groupData.membershipType || "inviteOnly");
+        setMembershipType(groupData.membershipType || "invite-only");
         setIsPublic(groupData.isPublic || false);
         setDefaultTimeSlots(groupData.defaultTimeSlots || []);
         setHideDetailsByDefault(groupData.hideDetailsByDefault || false);
@@ -293,20 +293,9 @@ export default function GroupDetailPage({
           {/* Membership */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
             <span className="text-gray-700">Membership</span>
-            {isCoachOrOwner ? (
-              <select
-                value={membershipType}
-                onChange={(e) => setMembershipType(e.target.value as MembershipType)}
-                className="text-right text-gray-900 bg-transparent border-none focus:ring-0 p-0 pr-6 appearance-none cursor-pointer"
-              >
-                <option value="auto-assign-all">Auto-assign All</option>
-                <option value="inviteOnly">Invite Only</option>
-              </select>
-            ) : (
-              <span className="text-gray-900">
-                {membershipType === "auto-assign-all" ? "Auto-assign All" : "Invite Only"}
-              </span>
-            )}
+            <span className="text-gray-900">
+              {membershipType === "auto-assign-all" ? "Auto-assign All" : "Invite Only"}
+            </span>
           </div>
 
           {/* Visibility */}

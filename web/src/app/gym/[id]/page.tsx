@@ -191,7 +191,7 @@ export default function GymDetailPage() {
         ownerId: user.id,
         memberIds: [],
         coachIds: [],
-        membershipType: "inviteOnly",
+        membershipType: "invite-only",
         isPublic: false,
         isDeletable: true,
         defaultTimeSlots: [],
