@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, useRef, ReactNode } from "react";
 import {
   User as FirebaseUser,
   onAuthStateChanged,
@@ -55,6 +55,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [switching, setSwitching] = useState(false);
   const [storedAccounts, setStoredAccounts] = useState<StoredAccount[]>([]);
 
+  // Ref to track switching synchronously (state updates are async)
+  const switchingRef = useRef(false);
+
   // Load stored accounts from localStorage on mount
   useEffect(() => {
     setStoredAccounts(getStoredAccountsFromStorage());
@@ -70,7 +73,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setUser({ id: userDoc.id, ...userDoc.data() } as AppUser);
         }
       } else {
-        setUser(null);
+        // Only clear user if we're not in the middle of switching accounts
+        if (!switchingRef.current) {
+          setUser(null);
+        }
       }
 
       setLoading(false);
@@ -158,12 +164,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     // Set switching flag to prevent redirects during the switch
+    // Use ref for synchronous check in auth listener, state for UI
+    switchingRef.current = true;
     setSwitching(true);
     try {
       // Sign out current user and sign in with the new account
       await firebaseSignOut(auth);
       await signInWithEmailAndPassword(auth, account.email, account.password);
     } finally {
+      switchingRef.current = false;
       setSwitching(false);
     }
   };
