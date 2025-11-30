@@ -58,6 +58,10 @@ export default function GroupDetailPage({
   const [defaultRevealMinute, setDefaultRevealMinute] = useState(0);
   const [signupCutoffMinutes, setSignupCutoffMinutes] = useState(0);
 
+  // Pricing state (mockup)
+  const [requiresPayment, setRequiresPayment] = useState(false);
+  const [additionalFee, setAdditionalFee] = useState(0);
+
   // Add time slot modal
   const [showAddTimeSlot, setShowAddTimeSlot] = useState(false);
   const [newSlotHour, setNewSlotHour] = useState(6);
@@ -138,6 +142,8 @@ export default function GroupDetailPage({
         setDefaultRevealHour(groupData.defaultRevealHour ?? 16);
         setDefaultRevealMinute(groupData.defaultRevealMinute ?? 0);
         setSignupCutoffMinutes(groupData.signupCutoffMinutes ?? 0);
+        setRequiresPayment(groupData.requiresPayment ?? false);
+        setAdditionalFee(groupData.additionalFee ?? 0);
         setMemberIds(groupData.memberIds || []);
 
         // Load member details
@@ -184,6 +190,8 @@ export default function GroupDetailPage({
         defaultRevealHour,
         defaultRevealMinute,
         signupCutoffMinutes,
+        requiresPayment,
+        additionalFee,
         memberIds,
       });
       router.push(`/gym/${gymId}`);
@@ -655,6 +663,80 @@ export default function GroupDetailPage({
                  signupCutoffMinutes < 1440 ? `${signupCutoffMinutes / 60} hours before` :
                  "24 hours before"}
               </span>
+            )}
+          </div>
+        </div>
+
+        {/* Pricing Section (Mockup) */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+          <div className="px-4 py-3 bg-gradient-to-r from-green-50 to-emerald-50 border-b border-green-200">
+            <div className="flex items-center gap-2">
+              <span className="text-green-600 font-semibold">Pricing</span>
+              <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded">Mockup</span>
+            </div>
+            <p className="text-xs text-green-600 mt-0.5">Set additional fees for this group membership</p>
+          </div>
+
+          <div className="divide-y divide-gray-100">
+            {/* Requires Payment Toggle */}
+            <div className="px-4 py-3 flex items-center justify-between">
+              <div>
+                <span className="text-gray-700">Requires additional payment</span>
+                <p className="text-xs text-gray-500">Charge an extra fee for this group</p>
+              </div>
+              {isCoachOrOwner ? (
+                <button
+                  onClick={() => setRequiresPayment(!requiresPayment)}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                    requiresPayment ? "bg-green-600" : "bg-gray-200"
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      requiresPayment ? "translate-x-6" : "translate-x-1"
+                    }`}
+                  />
+                </button>
+              ) : (
+                <span className={`px-2 py-1 rounded text-sm ${requiresPayment ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}`}>
+                  {requiresPayment ? "Yes" : "No"}
+                </span>
+              )}
+            </div>
+
+            {/* Additional Fee */}
+            {requiresPayment && (
+              <div className="px-4 py-3 flex items-center justify-between">
+                <div>
+                  <span className="text-gray-700">Additional monthly fee</span>
+                  <p className="text-xs text-gray-500">Added to base membership cost</p>
+                </div>
+                {isCoachOrOwner ? (
+                  <div className="flex items-center gap-1">
+                    <span className="text-gray-500">$</span>
+                    <input
+                      type="number"
+                      value={additionalFee}
+                      onChange={(e) => setAdditionalFee(Math.max(0, parseFloat(e.target.value) || 0))}
+                      min="0"
+                      step="5"
+                      className="w-20 text-right text-gray-900 bg-transparent border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 px-2 py-1.5"
+                    />
+                    <span className="text-gray-500 text-sm">/mo</span>
+                  </div>
+                ) : (
+                  <span className="text-gray-900 font-medium">${additionalFee}/mo</span>
+                )}
+              </div>
+            )}
+
+            {/* Pricing Summary */}
+            {requiresPayment && additionalFee > 0 && (
+              <div className="px-4 py-3 bg-gray-50">
+                <p className="text-sm text-gray-600">
+                  Members joining this group will be charged an additional <span className="font-semibold text-green-600">${additionalFee}/month</span> on top of their base membership.
+                </p>
+              </div>
             )}
           </div>
         </div>
