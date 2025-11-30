@@ -20,6 +20,7 @@ export default function WeeklyPlanPage() {
   const [workouts, setWorkouts] = useState<ScheduledWorkout[]>([]);
   const [groups, setGroups] = useState<Record<string, WorkoutGroup>>({});
   const [userGroupIds, setUserGroupIds] = useState<string[]>([]);
+  const [userGymIds, setUserGymIds] = useState<string[]>([]);
   const [groupsLoaded, setGroupsLoaded] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
 
@@ -39,7 +40,7 @@ export default function WeeklyPlanPage() {
     if (user && groupsLoaded) {
       fetchWorkouts();
     }
-  }, [user, calendarRange, groupsLoaded, userGroupIds]);
+  }, [user, calendarRange, groupsLoaded, userGroupIds, userGymIds]);
 
   const fetchUserGroups = async () => {
     if (!user) return;
@@ -70,14 +71,22 @@ export default function WeeklyPlanPage() {
         const data = doc.data();
         groupsMap[doc.id] = { id: doc.id, name: data.name };
 
-        // Include group if it belongs to a gym the user is a member of
-        if (userGymIds.includes(data.gymId)) {
+        // Include group if:
+        // 1. User is directly in the group's memberIds, coachIds, or is owner
+        // 2. OR the group belongs to a gym the user is a member of
+        const isDirectMember = data.memberIds?.includes(user.id);
+        const isDirectCoach = data.coachIds?.includes(user.id);
+        const isGroupOwner = data.ownerId === user.id;
+        const isFromUserGym = userGymIds.includes(data.gymId);
+
+        if (isDirectMember || isDirectCoach || isGroupOwner || isFromUserGym) {
           memberGroupIds.push(doc.id);
         }
       });
 
       setGroups(groupsMap);
       setUserGroupIds(memberGroupIds);
+      setUserGymIds(userGymIds);
       setGroupsLoaded(true);
     } catch (error) {
       console.error("Error fetching groups:", error);
@@ -141,11 +150,17 @@ export default function WeeklyPlanPage() {
 
       // Filter to only show workouts for groups the user belongs to
       const filteredWorkouts = allWorkouts.filter((workout) => {
-        // If workout has no groupIds, don't show it (it's not assigned to any group)
-        if (!workout.groupIds || workout.groupIds.length === 0) return false;
+        // Check if workout belongs to a gym the user is a member of
+        if (workout.gymId && userGymIds.includes(workout.gymId)) {
+          return true;
+        }
 
-        // Check if any of the workout's groupIds match the user's groups
-        return workout.groupIds.some((gId) => userGroupIds.includes(gId));
+        // If workout has groupIds, check if any match the user's groups
+        if (workout.groupIds && workout.groupIds.length > 0) {
+          return workout.groupIds.some((gId) => userGroupIds.includes(gId));
+        }
+
+        return false;
       });
 
       setWorkouts(filteredWorkouts);
