@@ -396,6 +396,8 @@ export default function GymDetailPage() {
   };
 
   const isGroupMember = (group: WorkoutGroup) => {
+    // Gym owners and coaches have access to all groups
+    if (isOwner || isCoach) return true;
     return group.memberIds?.includes(user?.id || "") || group.coachIds?.includes(user?.id || "") || group.ownerId === user?.id;
   };
 
