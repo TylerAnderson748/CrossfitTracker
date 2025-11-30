@@ -6,7 +6,7 @@ import Link from "next/link";
 import { doc, getDoc, collection, query, where, getDocs, updateDoc, arrayUnion, arrayRemove, deleteDoc, addDoc, Timestamp } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
-import { Gym, WorkoutGroup, AppUser, ScheduledWorkout, WorkoutLog, WorkoutComponent, WorkoutComponentType, workoutComponentLabels, workoutComponentColors, LiftResult, LeaderboardEntry } from "@/lib/types";
+import { Gym, WorkoutGroup, AppUser, ScheduledWorkout, WorkoutLog, WorkoutComponent, WorkoutComponentType, workoutComponentLabels, workoutComponentColors, LiftResult, LeaderboardEntry, ALL_BENCHMARK_WORKOUTS } from "@/lib/types";
 import Navigation from "@/components/Navigation";
 
 interface MembershipRequest {
@@ -455,7 +455,16 @@ export default function GymDetailPage() {
   const getUniqueWorkouts = () => {
     const workoutMap = new Map<string, { title: string; description: string }>();
 
-    // Add from ALL scheduled workouts (entire database)
+    // First, add all standard benchmark workouts (Girls, Heroes, Lifts, etc.)
+    // These are always available regardless of database content
+    ALL_BENCHMARK_WORKOUTS.forEach((w) => {
+      workoutMap.set(w.title.toLowerCase(), {
+        title: w.title,
+        description: w.description,
+      });
+    });
+
+    // Add from ALL scheduled workouts (entire database) - may override with custom descriptions
     allScheduledWorkouts.forEach((w) => {
       if (w.wodTitle && !workoutMap.has(w.wodTitle.toLowerCase())) {
         workoutMap.set(w.wodTitle.toLowerCase(), {
@@ -495,7 +504,7 @@ export default function GymDetailPage() {
       }
     });
 
-    // Add from leaderboard entries (contains benchmark WOD names like Fran, Murph, etc.)
+    // Add from leaderboard entries
     leaderboardEntries.forEach((entry) => {
       if (entry.originalWorkoutName && !workoutMap.has(entry.originalWorkoutName.toLowerCase())) {
         workoutMap.set(entry.originalWorkoutName.toLowerCase(), {
