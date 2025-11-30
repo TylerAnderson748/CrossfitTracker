@@ -625,6 +625,14 @@ export default function GymDetailPage() {
     try {
       let updatedCount = 0;
 
+      // Debug: Log groups and their visibility settings
+      console.log("Groups:", groups.map(g => ({
+        id: g.id,
+        name: g.name,
+        hideDetailsByDefault: g.hideDetailsByDefault,
+        defaultRevealDaysBefore: g.defaultRevealDaysBefore
+      })));
+
       // Fetch ALL workouts for this gym's groups (not just the ones in state)
       const groupIds = groups.map(g => g.id);
       if (groupIds.length === 0) {
@@ -637,16 +645,20 @@ export default function GymDetailPage() {
         where("groupIds", "array-contains-any", groupIds.slice(0, 10))
       );
       const workoutsSnapshot = await getDocs(workoutsQuery);
-      const allWorkouts = workoutsSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
+      const allWorkouts = workoutsSnapshot.docs.map(d => ({
+        id: d.id,
+        ...d.data(),
       })) as ScheduledWorkout[];
+
+      console.log(`Found ${allWorkouts.length} workouts to sync`);
 
       for (const workout of allWorkouts) {
         // Find groups for this workout
         const workoutGroups = groups.filter(g => workout.groupIds?.includes(g.id));
-        const groupWithHiddenDetails = workoutGroups.find(g => g.hideDetailsByDefault);
+        const groupWithHiddenDetails = workoutGroups.find(g => g.hideDetailsByDefault === true);
         const shouldHideDetails = !!groupWithHiddenDetails;
+
+        console.log(`Workout "${workout.wodTitle}": groups=${workoutGroups.map(g => g.name).join(", ")}, shouldHide=${shouldHideDetails}`);
 
         // Calculate reveal date if details should be hidden
         let revealDate: Timestamp | undefined;
@@ -661,6 +673,7 @@ export default function GymDetailPage() {
             0
           );
           revealDate = Timestamp.fromDate(revealDateTime);
+          console.log(`  -> revealDate: ${revealDateTime.toISOString()}`);
         }
 
         // Update the workout
