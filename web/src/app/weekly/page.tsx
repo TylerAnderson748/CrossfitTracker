@@ -17,7 +17,7 @@ interface WorkoutGroup {
 export default function WeeklyPlanPage() {
   const { user, loading, switching } = useAuth();
   const router = useRouter();
-  const [calendarRange, setCalendarRange] = useState<"thisWeek" | "nextWeek" | "2weeks" | "month">("thisWeek");
+  const [calendarRange, setCalendarRange] = useState<"next7days" | "thisWeek" | "nextWeek" | "2weeks" | "month">("next7days");
   const [workouts, setWorkouts] = useState<ScheduledWorkout[]>([]);
   const [groups, setGroups] = useState<Record<string, WorkoutGroup>>({});
   const [userGroupIds, setUserGroupIds] = useState<string[]>([]);
@@ -110,6 +110,11 @@ export default function WeeklyPlanPage() {
     let rangeEnd = new Date(startOfWeek);
 
     switch (calendarRange) {
+      case "next7days":
+        rangeStart = new Date(today);
+        rangeEnd = new Date(today);
+        rangeEnd.setDate(today.getDate() + 6);
+        break;
       case "thisWeek":
         rangeEnd.setDate(startOfWeek.getDate() + 6);
         break;
@@ -323,6 +328,7 @@ export default function WeeklyPlanPage() {
         {/* Time Range Selector */}
         <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
           {[
+            { id: "next7days", label: "Next 7 Days" },
             { id: "thisWeek", label: "This Week" },
             { id: "nextWeek", label: "Next Week" },
             { id: "2weeks", label: "2 Weeks" },

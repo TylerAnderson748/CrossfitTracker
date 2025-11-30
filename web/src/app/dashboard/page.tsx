@@ -72,12 +72,16 @@ export default function DashboardPage() {
 
   const fetchDashboardData = async () => {
     try {
-      // Fetch upcoming scheduled workouts
+      // Fetch upcoming scheduled workouts for the next 7 days
       const today = new Date();
       today.setHours(0, 0, 0, 0);
+      const endDate = new Date(today);
+      endDate.setDate(endDate.getDate() + 7);
+      endDate.setHours(23, 59, 59, 999);
       const workoutsQuery = query(
         collection(db, "scheduledWorkouts"),
         where("date", ">=", Timestamp.fromDate(today)),
+        where("date", "<=", Timestamp.fromDate(endDate)),
         orderBy("date", "asc")
       );
       const workoutsSnapshot = await getDocs(workoutsQuery);
@@ -85,11 +89,11 @@ export default function DashboardPage() {
         id: doc.id,
         ...doc.data(),
       })) as ScheduledWorkout[];
-      setUpcomingWorkouts(workouts.slice(0, 14));
+      setUpcomingWorkouts(workouts);
 
       // Fetch logs for each workout - handle both WODs and lifts
       const logsMap: { [key: string]: WorkoutResult[] } = {};
-      for (const workout of workouts.slice(0, 14)) {
+      for (const workout of workouts) {
         const isLift = workout.workoutType?.toLowerCase().includes("lift");
 
         if (isLift) {
