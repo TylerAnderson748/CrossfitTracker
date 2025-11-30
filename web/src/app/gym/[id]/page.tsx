@@ -410,7 +410,7 @@ export default function GymDetailPage() {
                         <div>
                           <div className="flex items-center gap-2">
                             <h3 className="font-medium text-gray-900">{group.name}</h3>
-                            {group.type === "default" && (
+                            {group.name === "Members" && (
                               <span className="text-xs text-orange-600">★ Default</span>
                             )}
                           </div>
