@@ -42,6 +42,7 @@ export default function GymDetailPage() {
   const [newWorkoutDate, setNewWorkoutDate] = useState("");
   const [newWorkoutGroupIds, setNewWorkoutGroupIds] = useState<string[]>([]);
   const [calendarRange, setCalendarRange] = useState<"thisWeek" | "nextWeek" | "2weeks" | "month">("thisWeek");
+  const [showTitleSuggestions, setShowTitleSuggestions] = useState(false);
 
   const isOwner = gym?.ownerId === user?.id;
   const isCoach = gym?.coachIds?.includes(user?.id || "") || isOwner;
@@ -313,6 +314,34 @@ export default function GymDetailPage() {
   const getGroupName = (groupId: string) => {
     const group = groups.find((g) => g.id === groupId);
     return group?.name || "Unknown";
+  };
+
+  // Get unique workout titles and their descriptions for autocomplete
+  const getUniqueWorkouts = () => {
+    const workoutMap = new Map<string, string>();
+    scheduledWorkouts.forEach((w) => {
+      if (w.wodTitle && !workoutMap.has(w.wodTitle.toLowerCase())) {
+        workoutMap.set(w.wodTitle.toLowerCase(), w.wodDescription || "");
+      }
+    });
+    return Array.from(workoutMap.entries()).map(([title, description]) => ({
+      title: scheduledWorkouts.find((w) => w.wodTitle.toLowerCase() === title)?.wodTitle || title,
+      description,
+    }));
+  };
+
+  const uniqueWorkouts = getUniqueWorkouts();
+
+  const filteredSuggestions = newWorkoutTitle.trim().length > 0
+    ? uniqueWorkouts.filter((w) =>
+        w.title.toLowerCase().includes(newWorkoutTitle.toLowerCase())
+      )
+    : [];
+
+  const handleSelectSuggestion = (workout: { title: string; description: string }) => {
+    setNewWorkoutTitle(workout.title);
+    setNewWorkoutDescription(workout.description);
+    setShowTitleSuggestions(false);
   };
 
   // Calendar helper functions
@@ -841,17 +870,44 @@ export default function GymDetailPage() {
           <div className="bg-white rounded-xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <h2 className="text-xl font-bold text-gray-900 mb-4">Schedule Workout</h2>
             <div className="space-y-4">
-              <div>
+              <div className="relative">
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Workout Title *
                 </label>
                 <input
                   type="text"
                   value={newWorkoutTitle}
-                  onChange={(e) => setNewWorkoutTitle(e.target.value)}
+                  onChange={(e) => {
+                    setNewWorkoutTitle(e.target.value);
+                    setShowTitleSuggestions(true);
+                  }}
+                  onFocus={() => setShowTitleSuggestions(true)}
+                  onBlur={() => {
+                    // Delay to allow click on suggestion
+                    setTimeout(() => setShowTitleSuggestions(false), 200);
+                  }}
                   placeholder="e.g., Monday WOD, Fran"
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  autoComplete="off"
                 />
+                {/* Suggestions Dropdown */}
+                {showTitleSuggestions && filteredSuggestions.length > 0 && (
+                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                    {filteredSuggestions.map((workout, index) => (
+                      <button
+                        key={index}
+                        type="button"
+                        onClick={() => handleSelectSuggestion(workout)}
+                        className="w-full px-4 py-2 text-left hover:bg-blue-50 border-b border-gray-100 last:border-b-0"
+                      >
+                        <span className="font-medium text-gray-900">{workout.title}</span>
+                        {workout.description && (
+                          <p className="text-gray-500 text-sm truncate">{workout.description}</p>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
