@@ -62,6 +62,12 @@ export default function GroupDetailPage({
   const [newSlotMinute, setNewSlotMinute] = useState(0);
   const [newSlotCapacity, setNewSlotCapacity] = useState(20);
 
+  // Edit time slot state
+  const [editingSlotId, setEditingSlotId] = useState<string | null>(null);
+  const [editSlotHour, setEditSlotHour] = useState(0);
+  const [editSlotMinute, setEditSlotMinute] = useState(0);
+  const [editSlotCapacity, setEditSlotCapacity] = useState(20);
+
   useEffect(() => {
     if (!authLoading && !user) {
       router.push("/login");
@@ -156,6 +162,39 @@ export default function GroupDetailPage({
 
   const handleDeleteTimeSlot = (id: string) => {
     setDefaultTimeSlots(defaultTimeSlots.filter((slot) => slot.id !== id));
+  };
+
+  const startEditTimeSlot = (slot: TimeSlot) => {
+    setEditingSlotId(slot.id);
+    setEditSlotHour(slot.hour);
+    setEditSlotMinute(slot.minute);
+    setEditSlotCapacity(slot.capacity);
+  };
+
+  const cancelEditTimeSlot = () => {
+    setEditingSlotId(null);
+  };
+
+  const saveEditTimeSlot = () => {
+    if (!editingSlotId) return;
+
+    const updated = defaultTimeSlots.map((slot) => {
+      if (slot.id === editingSlotId) {
+        return {
+          ...slot,
+          hour: editSlotHour,
+          minute: editSlotMinute,
+          capacity: editSlotCapacity,
+        };
+      }
+      return slot;
+    }).sort((a, b) => {
+      if (a.hour !== b.hour) return a.hour - b.hour;
+      return a.minute - b.minute;
+    });
+
+    setDefaultTimeSlots(updated);
+    setEditingSlotId(null);
   };
 
   // Convert hour/minute to time input value
@@ -310,31 +349,96 @@ export default function GroupDetailPage({
             defaultTimeSlots.map((slot) => (
               <div
                 key={slot.id}
-                className="flex items-center justify-between px-4 py-3 border-b border-gray-100 last:border-b-0"
+                className="border-b border-gray-100 last:border-b-0"
               >
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
-                    <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
+                {editingSlotId === slot.id ? (
+                  // Edit mode
+                  <div className="px-4 py-3 space-y-3 bg-blue-50">
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">Time</label>
+                      <div className="flex gap-2">
+                        <select
+                          value={editSlotHour}
+                          onChange={(e) => setEditSlotHour(parseInt(e.target.value))}
+                          className="flex-1 px-2 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        >
+                          {Array.from({ length: 24 }, (_, i) => (
+                            <option key={i} value={i}>
+                              {i === 0 ? "12 AM" : i < 12 ? `${i} AM` : i === 12 ? "12 PM" : `${i - 12} PM`}
+                            </option>
+                          ))}
+                        </select>
+                        <select
+                          value={editSlotMinute}
+                          onChange={(e) => setEditSlotMinute(parseInt(e.target.value))}
+                          className="flex-1 px-2 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        >
+                          <option value={0}>:00</option>
+                          <option value={15}>:15</option>
+                          <option value={30}>:30</option>
+                          <option value={45}>:45</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">Capacity</label>
+                      <input
+                        type="number"
+                        value={editSlotCapacity}
+                        onChange={(e) => setEditSlotCapacity(parseInt(e.target.value) || 1)}
+                        min={1}
+                        className="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={saveEditTimeSlot}
+                        className="flex-1 py-1.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700"
+                      >
+                        Save
+                      </button>
+                      <button
+                        onClick={cancelEditTimeSlot}
+                        className="flex-1 py-1.5 bg-gray-200 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-300"
+                      >
+                        Cancel
+                      </button>
+                    </div>
                   </div>
-                  <span className="text-gray-900 font-medium">
-                    {formatTimeSlotDisplay(slot.hour, slot.minute)}
-                  </span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-gray-500 text-sm">Cap: {slot.capacity}</span>
-                  {isCoachOrOwner && (
-                    <button
-                      onClick={() => handleDeleteTimeSlot(slot.id)}
-                      className="text-red-500 hover:text-red-700"
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                    </button>
-                  )}
-                </div>
+                ) : (
+                  // View mode
+                  <div
+                    className={`flex items-center justify-between px-4 py-3 ${isCoachOrOwner ? "cursor-pointer hover:bg-gray-50" : ""}`}
+                    onClick={() => isCoachOrOwner && startEditTimeSlot(slot)}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
+                        <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      </div>
+                      <span className="text-gray-900 font-medium">
+                        {formatTimeSlotDisplay(slot.hour, slot.minute)}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-gray-500 text-sm">Cap: {slot.capacity}</span>
+                      {isCoachOrOwner && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteTimeSlot(slot.id);
+                          }}
+                          className="text-red-500 hover:text-red-700"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             ))
           )}
