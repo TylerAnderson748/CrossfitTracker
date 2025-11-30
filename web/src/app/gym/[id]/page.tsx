@@ -694,11 +694,27 @@ export default function GymDetailPage() {
                             {dateLabel}
                           </span>
                         </div>
-                        {dayWorkouts.length > 0 && (
-                          <span className={`text-xs px-2 py-0.5 rounded-full ${isToday ? "bg-blue-200 text-blue-700" : "bg-gray-200 text-gray-600"}`}>
-                            {dayWorkouts.length} workout{dayWorkouts.length !== 1 ? "s" : ""}
-                          </span>
-                        )}
+                        <div className="flex items-center gap-2">
+                          {dayWorkouts.length > 0 && (
+                            <span className={`text-xs px-2 py-0.5 rounded-full ${isToday ? "bg-blue-200 text-blue-700" : "bg-gray-200 text-gray-600"}`}>
+                              {dayWorkouts.length} workout{dayWorkouts.length !== 1 ? "s" : ""}
+                            </span>
+                          )}
+                          <button
+                            onClick={() => {
+                              const dateStr = day.toISOString().split("T")[0];
+                              setNewWorkoutDate(dateStr);
+                              setShowAddWorkoutModal(true);
+                            }}
+                            className={`w-6 h-6 rounded-full flex items-center justify-center text-sm font-bold transition-colors ${
+                              isToday
+                                ? "bg-blue-600 text-white hover:bg-blue-700"
+                                : "bg-gray-200 text-gray-600 hover:bg-gray-300"
+                            }`}
+                          >
+                            +
+                          </button>
+                        </div>
                       </div>
 
                       {/* Workouts for this day */}
