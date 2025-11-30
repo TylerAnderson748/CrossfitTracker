@@ -273,21 +273,9 @@ export default function GroupDetailPage({
           {/* Type */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
             <span className="text-gray-700">Type</span>
-            {isCoachOrOwner ? (
-              <select
-                value={groupType}
-                onChange={(e) => setGroupType(e.target.value as GroupType)}
-                className="text-right text-gray-900 bg-transparent border-none focus:ring-0 p-0 pr-6 appearance-none cursor-pointer"
-              >
-                <option value="default">Default</option>
-                <option value="custom">Custom</option>
-                <option value="personal">Personal</option>
-              </select>
-            ) : (
-              <span className="text-gray-900">
-                {groupType === "default" ? "Default" : groupType === "custom" ? "Custom" : "Personal"}
-              </span>
-            )}
+            <span className="text-gray-900">
+              {groupType === "default" ? "Default" : groupType === "custom" ? "Custom" : "Personal"}
+            </span>
           </div>
 
           {/* Membership */}
@@ -301,20 +289,9 @@ export default function GroupDetailPage({
           {/* Visibility */}
           <div className="flex items-center justify-between px-4 py-3">
             <span className="text-gray-700">Visibility</span>
-            {isCoachOrOwner ? (
-              <select
-                value={isPublic ? "public" : "private"}
-                onChange={(e) => setIsPublic(e.target.value === "public")}
-                className="text-right text-gray-900 bg-transparent border-none focus:ring-0 p-0 pr-6 appearance-none cursor-pointer"
-              >
-                <option value="private">Private</option>
-                <option value="public">Public</option>
-              </select>
-            ) : (
-              <span className="text-gray-900">
-                {isPublic ? "Public" : "Private"}
-              </span>
-            )}
+            <span className="text-gray-900">
+              {isPublic ? "Public" : "Private"}
+            </span>
           </div>
         </div>
 
