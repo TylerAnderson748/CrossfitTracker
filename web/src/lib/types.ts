@@ -74,6 +74,9 @@ export interface ScheduledWorkout {
   revealDate?: Timestamp;
   // Multi-component support
   components?: WorkoutComponent[];
+  // Series tracking for recurring workouts
+  seriesId?: string;
+  gymId?: string;
 }
 
 export interface WorkoutLog {

@@ -58,6 +58,9 @@ export default function GymDetailPage() {
   const [endDate, setEndDate] = useState("");
   // Edit mode state
   const [editingWorkoutId, setEditingWorkoutId] = useState<string | null>(null);
+  const [editingSeriesId, setEditingSeriesId] = useState<string | null>(null);
+  const [showEditSeriesModal, setShowEditSeriesModal] = useState(false);
+  const [pendingEditWorkout, setPendingEditWorkout] = useState<ScheduledWorkout | null>(null);
 
   const isOwner = gym?.ownerId === user?.id;
   const isCoach = gym?.coachIds?.includes(user?.id || "") || isOwner;
@@ -349,6 +352,9 @@ export default function GymDetailPage() {
       const mainComponent = workoutComponents.find(c => c.type === "wod") || workoutComponents[0];
       const wodTitle = mainComponent?.title || workoutComponents.map(c => workoutComponentLabels[c.type]).join(" + ");
 
+      // Generate seriesId for recurring workouts
+      const seriesId = recurrenceType !== "none" ? `series_${Date.now()}_${Math.random().toString(36).substr(2, 9)}` : undefined;
+
       // Create all workout documents
       for (const date of workoutDates) {
         await addDoc(collection(db, "scheduledWorkouts"), {
@@ -362,6 +368,7 @@ export default function GymDetailPage() {
           hideDetails: false,
           gymId: gymId,
           components: workoutComponents,
+          ...(seriesId && { seriesId }),
         });
       }
 
@@ -386,10 +393,29 @@ export default function GymDetailPage() {
     setHasEndDate(false);
     setEndDate("");
     setEditingWorkoutId(null);
+    setEditingSeriesId(null);
+    setPendingEditWorkout(null);
   };
 
   const handleEditWorkout = (workout: ScheduledWorkout) => {
+    // If workout is part of a series, show dialog to choose edit type
+    if (workout.seriesId) {
+      setPendingEditWorkout(workout);
+      setShowEditSeriesModal(true);
+      return;
+    }
+    // Otherwise, proceed with single workout edit
+    startEditingWorkout(workout, false);
+  };
+
+  const startEditingWorkout = (workout: ScheduledWorkout, editSeries: boolean) => {
     setEditingWorkoutId(workout.id);
+    if (editSeries && workout.seriesId) {
+      setEditingSeriesId(workout.seriesId);
+    } else {
+      setEditingSeriesId(null);
+    }
+
     // Convert Timestamp to date string for the input
     const workoutDate = workout.date.toDate();
     const dateStr = workoutDate.toISOString().split("T")[0];
@@ -410,27 +436,47 @@ export default function GymDetailPage() {
       setWorkoutComponents([legacyComponent]);
     }
 
-    setRecurrenceType("none"); // Don't allow recurrence when editing single workout
+    setRecurrenceType("none"); // Don't allow recurrence when editing
+    setShowEditSeriesModal(false);
+    setPendingEditWorkout(null);
     setShowAddWorkoutModal(true);
   };
 
   const handleUpdateWorkout = async () => {
     if (!user || !editingWorkoutId || workoutComponents.length === 0 || !newWorkoutDate || newWorkoutGroupIds.length === 0) return;
     try {
-      const workoutDate = new Date(newWorkoutDate);
-
       // Generate title from components
       const mainComponent = workoutComponents.find(c => c.type === "wod") || workoutComponents[0];
       const wodTitle = mainComponent?.title || workoutComponents.map(c => workoutComponentLabels[c.type]).join(" + ");
 
-      await updateDoc(doc(db, "scheduledWorkouts", editingWorkoutId), {
+      const updateData = {
         wodTitle,
         wodDescription: workoutComponents.map(c => `${workoutComponentLabels[c.type]}: ${c.description}`).join("\n\n"),
-        date: Timestamp.fromDate(workoutDate),
         workoutType: workoutComponents.some(c => c.type === "wod") ? "wod" : "lift",
         groupIds: newWorkoutGroupIds,
         components: workoutComponents,
-      });
+      };
+
+      if (editingSeriesId) {
+        // Update all workouts in the series
+        const seriesQuery = query(
+          collection(db, "scheduledWorkouts"),
+          where("seriesId", "==", editingSeriesId)
+        );
+        const seriesSnapshot = await getDocs(seriesQuery);
+
+        const updatePromises = seriesSnapshot.docs.map((docSnap) =>
+          updateDoc(doc(db, "scheduledWorkouts", docSnap.id), updateData)
+        );
+        await Promise.all(updatePromises);
+      } else {
+        // Update single workout (also update date for single edits)
+        const workoutDate = new Date(newWorkoutDate);
+        await updateDoc(doc(db, "scheduledWorkouts", editingWorkoutId), {
+          ...updateData,
+          date: Timestamp.fromDate(workoutDate),
+        });
+      }
 
       resetWorkoutModal();
       fetchGymData();
@@ -1158,26 +1204,72 @@ export default function GymDetailPage() {
         </div>
       )}
 
+      {/* Edit Series Choice Modal */}
+      {showEditSeriesModal && pendingEditWorkout && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl p-6 w-full max-w-sm">
+            <h2 className="text-lg font-bold text-gray-900 mb-2">Edit Recurring Workout</h2>
+            <p className="text-gray-600 text-sm mb-6">
+              This workout is part of a recurring series. Would you like to edit just this occurrence or all workouts in the series?
+            </p>
+            <div className="space-y-3">
+              <button
+                onClick={() => startEditingWorkout(pendingEditWorkout, false)}
+                className="w-full py-3 px-4 bg-gray-100 hover:bg-gray-200 text-gray-900 rounded-lg font-medium transition-colors text-left"
+              >
+                <div className="font-semibold">This workout only</div>
+                <div className="text-sm text-gray-500">Edit only the selected date</div>
+              </button>
+              <button
+                onClick={() => startEditingWorkout(pendingEditWorkout, true)}
+                className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors text-left"
+              >
+                <div className="font-semibold">All workouts in series</div>
+                <div className="text-sm text-blue-100">Edit all occurrences at once</div>
+              </button>
+              <button
+                onClick={() => {
+                  setShowEditSeriesModal(false);
+                  setPendingEditWorkout(null);
+                }}
+                className="w-full py-2 text-gray-500 hover:text-gray-700 text-sm"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Add/Edit Workout Modal */}
       {showAddWorkoutModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <h2 className="text-xl font-bold text-gray-900 mb-4">
-              {editingWorkoutId ? "Edit Workout" : "Schedule Workout"}
+              {editingWorkoutId
+                ? (editingSeriesId ? "Edit Workout Series" : "Edit Workout")
+                : "Schedule Workout"}
             </h2>
+            {editingSeriesId && (
+              <p className="text-sm text-blue-600 bg-blue-50 px-3 py-2 rounded-lg mb-4">
+                Changes will apply to all workouts in this series
+              </p>
+            )}
             <div className="space-y-4">
-              {/* Date */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Date *
-                </label>
-                <input
-                  type="date"
-                  value={newWorkoutDate}
-                  onChange={(e) => setNewWorkoutDate(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
+              {/* Date - hide when editing series since dates remain unchanged */}
+              {!editingSeriesId && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Date *
+                  </label>
+                  <input
+                    type="date"
+                    value={newWorkoutDate}
+                    onChange={(e) => setNewWorkoutDate(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+              )}
 
               {/* Groups */}
               <div>
@@ -1441,10 +1533,10 @@ export default function GymDetailPage() {
               </button>
               <button
                 onClick={editingWorkoutId ? handleUpdateWorkout : handleCreateWorkout}
-                disabled={workoutComponents.length === 0 || !newWorkoutDate || newWorkoutGroupIds.length === 0}
+                disabled={workoutComponents.length === 0 || (!editingSeriesId && !newWorkoutDate) || newWorkoutGroupIds.length === 0}
                 className="flex-1 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-blue-300 transition-colors"
               >
-                {editingWorkoutId ? "Save Changes" : "Schedule"}
+                {editingSeriesId ? "Update Series" : (editingWorkoutId ? "Save Changes" : "Schedule")}
               </button>
             </div>
           </div>
