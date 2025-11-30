@@ -463,6 +463,7 @@ export default function GymDetailPage() {
         defaultRevealDaysBefore: 1,
         defaultRevealHour: 16,
         defaultRevealMinute: 0,
+        signupCutoffMinutes: 0,
         createdAt: Timestamp.now(),
       });
       setShowAddGroupModal(false);

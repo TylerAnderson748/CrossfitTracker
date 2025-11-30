@@ -179,6 +179,8 @@ export interface WorkoutGroup {
   defaultRevealDaysBefore: number;
   defaultRevealHour: number;
   defaultRevealMinute: number;
+  // Signup cutoff (minutes before time slot)
+  signupCutoffMinutes: number;
 }
 
 // Group membership request

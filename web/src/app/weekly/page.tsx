@@ -12,6 +12,7 @@ interface WorkoutGroup {
   id: string;
   name: string;
   defaultTimeSlots?: { hour: number; minute: number }[];
+  signupCutoffMinutes?: number;
 }
 
 export default function WeeklyPlanPage() {
@@ -74,7 +75,8 @@ export default function WeeklyPlanPage() {
         groupsMap[doc.id] = {
           id: doc.id,
           name: data.name,
-          defaultTimeSlots: data.defaultTimeSlots || []
+          defaultTimeSlots: data.defaultTimeSlots || [],
+          signupCutoffMinutes: data.signupCutoffMinutes ?? 0,
         };
 
         // Only include group if user is directly in memberIds or coachIds
@@ -206,8 +208,40 @@ export default function WeeklyPlanPage() {
     }
   };
 
+  // Check if signup is past cutoff for a workout/timeslot
+  const isSignupPastCutoff = (workout: ScheduledWorkout, timeSlot: ScheduledTimeSlot): boolean => {
+    // Get the max cutoff from all groups this workout belongs to
+    const groupIds = workout.groupIds || [];
+    let maxCutoff = 0;
+    for (const groupId of groupIds) {
+      const group = groups[groupId];
+      if (group?.signupCutoffMinutes && group.signupCutoffMinutes > maxCutoff) {
+        maxCutoff = group.signupCutoffMinutes;
+      }
+    }
+
+    if (maxCutoff === 0) return false; // No cutoff set
+
+    // Calculate the time slot datetime
+    const workoutDate = workout.date.toDate();
+    const slotTime = new Date(workoutDate);
+    slotTime.setHours(timeSlot.hour, timeSlot.minute, 0, 0);
+
+    // Calculate cutoff time
+    const cutoffTime = new Date(slotTime.getTime() - maxCutoff * 60 * 1000);
+    const now = new Date();
+
+    return now >= cutoffTime;
+  };
+
   const handleSignup = async (workout: ScheduledWorkout, timeSlot: ScheduledTimeSlot) => {
     if (!user) return;
+
+    // Check cutoff
+    if (isSignupPastCutoff(workout, timeSlot)) {
+      alert("Signup for this time slot has closed.");
+      return;
+    }
 
     try {
       const workoutRef = doc(db, "scheduledWorkouts", workout.id);
@@ -514,16 +548,19 @@ export default function WeeklyPlanPage() {
                                           const signedUpCount = slot.signups?.length || 0;
                                           const availableSpots = slot.displayCapacity - signedUpCount;
                                           const isFull = slot.displayCapacity > 0 && availableSpots <= 0;
+                                          const isPastCutoff = isSignupPastCutoff(workout, slot);
                                           const signupNames = slot.signups?.map((id: string) => userCache[id] || 'Unknown User') || [];
 
                                           return (
                                             <div key={slot.id || `slot-${index}-${slot.hour}-${slot.minute}`} className="flex items-center gap-2">
                                               <button
                                                 onClick={() => signedUp ? handleCancelSignup(workout, slot) : handleSignup(workout, slot)}
-                                                disabled={isFull && !signedUp}
+                                                disabled={(isFull || isPastCutoff) && !signedUp}
                                                 className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 ${
                                                   signedUp
                                                     ? "bg-green-100 text-green-700 border border-green-300"
+                                                    : isPastCutoff
+                                                    ? "bg-orange-50 text-orange-400 cursor-not-allowed border border-orange-200"
                                                     : isFull
                                                     ? "bg-gray-100 text-gray-400 cursor-not-allowed"
                                                     : "bg-gray-100 text-gray-700 hover:bg-blue-100 hover:text-blue-700 border border-gray-200"
@@ -533,8 +570,8 @@ export default function WeeklyPlanPage() {
                                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                                                 </svg>
                                                 {formatTimeSlot(slot.hour, slot.minute)}
-                                                <span className={`text-xs ${signedUp ? "text-green-600" : isFull ? "text-red-400" : "text-gray-500"}`}>
-                                                  {signedUp ? "✓" : isFull ? "Full" : `${availableSpots} left`}
+                                                <span className={`text-xs ${signedUp ? "text-green-600" : isPastCutoff ? "text-orange-500" : isFull ? "text-red-400" : "text-gray-500"}`}>
+                                                  {signedUp ? "✓" : isPastCutoff ? "Closed" : isFull ? "Full" : `${availableSpots} left`}
                                                 </span>
                                               </button>
                                               {/* Signup count with hover tooltip */}

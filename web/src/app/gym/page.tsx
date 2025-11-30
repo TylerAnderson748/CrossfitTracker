@@ -96,6 +96,7 @@ export default function GymPage() {
         defaultRevealDaysBefore: 0,
         defaultRevealHour: 0,
         defaultRevealMinute: 0,
+        signupCutoffMinutes: 0,
         createdAt: Timestamp.now(),
       });
 

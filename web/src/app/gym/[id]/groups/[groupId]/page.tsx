@@ -56,6 +56,7 @@ export default function GroupDetailPage({
   const [defaultRevealDaysBefore, setDefaultRevealDaysBefore] = useState(1);
   const [defaultRevealHour, setDefaultRevealHour] = useState(16);
   const [defaultRevealMinute, setDefaultRevealMinute] = useState(0);
+  const [signupCutoffMinutes, setSignupCutoffMinutes] = useState(0);
 
   // Add time slot modal
   const [showAddTimeSlot, setShowAddTimeSlot] = useState(false);
@@ -136,6 +137,7 @@ export default function GroupDetailPage({
         setDefaultRevealDaysBefore(groupData.defaultRevealDaysBefore ?? 1);
         setDefaultRevealHour(groupData.defaultRevealHour ?? 16);
         setDefaultRevealMinute(groupData.defaultRevealMinute ?? 0);
+        setSignupCutoffMinutes(groupData.signupCutoffMinutes ?? 0);
         setMemberIds(groupData.memberIds || []);
 
         // Load member details
@@ -181,6 +183,7 @@ export default function GroupDetailPage({
         defaultRevealDaysBefore,
         defaultRevealHour,
         defaultRevealMinute,
+        signupCutoffMinutes,
         memberIds,
       });
       router.push(`/gym/${gymId}`);
@@ -612,6 +615,48 @@ export default function GroupDetailPage({
               </div>
             </>
           )}
+        </div>
+
+        {/* Signup Settings Section */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-6">
+          <div className="px-4 py-2 border-b border-gray-100">
+            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+              Signup Settings
+            </p>
+          </div>
+
+          {/* Signup cutoff time */}
+          <div className="flex items-center justify-between px-4 py-3">
+            <div>
+              <span className="text-gray-700">Signup cutoff</span>
+              <p className="text-xs text-gray-500">How long before class can members sign up</p>
+            </div>
+            {isCoachOrOwner ? (
+              <select
+                value={signupCutoffMinutes}
+                onChange={(e) => setSignupCutoffMinutes(parseInt(e.target.value))}
+                className="text-right text-gray-900 bg-transparent border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 px-3 py-1.5 cursor-pointer"
+              >
+                <option value={0}>No cutoff</option>
+                <option value={15}>15 minutes before</option>
+                <option value={30}>30 minutes before</option>
+                <option value={60}>1 hour before</option>
+                <option value={120}>2 hours before</option>
+                <option value={180}>3 hours before</option>
+                <option value={360}>6 hours before</option>
+                <option value={720}>12 hours before</option>
+                <option value={1440}>24 hours before</option>
+              </select>
+            ) : (
+              <span className="text-gray-900">
+                {signupCutoffMinutes === 0 ? "No cutoff" :
+                 signupCutoffMinutes < 60 ? `${signupCutoffMinutes} minutes before` :
+                 signupCutoffMinutes === 60 ? "1 hour before" :
+                 signupCutoffMinutes < 1440 ? `${signupCutoffMinutes / 60} hours before` :
+                 "24 hours before"}
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Save Button */}
