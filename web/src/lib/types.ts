@@ -181,6 +181,19 @@ export interface WorkoutGroup {
   defaultRevealMinute: number;
 }
 
+// Group membership request
+export interface GroupMembershipRequest {
+  id: string;
+  groupId: string;
+  groupName: string;
+  gymId: string;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  status: "pending" | "approved" | "denied";
+  createdAt: Timestamp;
+}
+
 // Helper functions
 export function formatTime(seconds: number): string {
   const mins = Math.floor(seconds / 60);

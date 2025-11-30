@@ -6,7 +6,7 @@ import Link from "next/link";
 import { doc, getDoc, collection, query, where, getDocs, updateDoc, arrayUnion, arrayRemove, deleteDoc, addDoc, Timestamp } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
-import { Gym, WorkoutGroup, AppUser, ScheduledWorkout, ScheduledTimeSlot, WorkoutLog, WorkoutComponent, WorkoutComponentType, workoutComponentLabels, workoutComponentColors, LiftResult, LeaderboardEntry, formatTimeSlot } from "@/lib/types";
+import { Gym, WorkoutGroup, AppUser, ScheduledWorkout, ScheduledTimeSlot, WorkoutLog, WorkoutComponent, WorkoutComponentType, workoutComponentLabels, workoutComponentColors, LiftResult, LeaderboardEntry, formatTimeSlot, GroupMembershipRequest } from "@/lib/types";
 import { getAllWods, getAllLifts } from "@/lib/workoutData";
 import Navigation from "@/components/Navigation";
 
@@ -30,6 +30,8 @@ export default function GymDetailPage() {
   const [coaches, setCoaches] = useState<AppUser[]>([]);
   const [groups, setGroups] = useState<WorkoutGroup[]>([]);
   const [requests, setRequests] = useState<MembershipRequest[]>([]);
+  const [groupRequests, setGroupRequests] = useState<GroupMembershipRequest[]>([]);
+  const [userGroupRequests, setUserGroupRequests] = useState<GroupMembershipRequest[]>([]); // User's own pending requests
   const [scheduledWorkouts, setScheduledWorkouts] = useState<ScheduledWorkout[]>([]);
   const [workoutLogs, setWorkoutLogs] = useState<WorkoutLog[]>([]);
   const [liftResults, setLiftResults] = useState<LiftResult[]>([]);
@@ -186,6 +188,38 @@ export default function GymDetailPage() {
         setRequests(requestsData);
       }
 
+      // Fetch group membership requests (for coaches/owners)
+      const isCoachOrOwner = gymData.ownerId === user?.id || gymData.coachIds?.includes(user?.id || "");
+      if (isCoachOrOwner) {
+        const groupRequestsQuery = query(
+          collection(db, "groupMembershipRequests"),
+          where("gymId", "==", gymId),
+          where("status", "==", "pending")
+        );
+        const groupRequestsSnapshot = await getDocs(groupRequestsQuery);
+        const groupRequestsData = groupRequestsSnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        })) as GroupMembershipRequest[];
+        setGroupRequests(groupRequestsData);
+      }
+
+      // Fetch user's own pending group requests
+      if (user?.id) {
+        const userGroupRequestsQuery = query(
+          collection(db, "groupMembershipRequests"),
+          where("gymId", "==", gymId),
+          where("userId", "==", user.id),
+          where("status", "==", "pending")
+        );
+        const userGroupRequestsSnapshot = await getDocs(userGroupRequestsQuery);
+        const userGroupRequestsData = userGroupRequestsSnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        })) as GroupMembershipRequest[];
+        setUserGroupRequests(userGroupRequestsData);
+      }
+
       // Fetch scheduled workouts for this gym's groups
       const groupIds = groupsData.map((g) => g.id);
       if (groupIds.length > 0) {
@@ -308,6 +342,61 @@ export default function GymDetailPage() {
     } catch (error) {
       console.error("Error denying request:", error);
     }
+  };
+
+  // Group membership request handlers
+  const handleRequestGroupAccess = async (group: WorkoutGroup) => {
+    if (!user || !gym) return;
+    try {
+      await addDoc(collection(db, "groupMembershipRequests"), {
+        groupId: group.id,
+        groupName: group.name,
+        gymId: gymId,
+        userId: user.id,
+        userName: user.displayName || `${user.firstName} ${user.lastName}`,
+        userEmail: user.email,
+        status: "pending",
+        createdAt: Timestamp.now(),
+      });
+      fetchGymData();
+    } catch (error) {
+      console.error("Error requesting group access:", error);
+    }
+  };
+
+  const handleApproveGroupRequest = async (request: GroupMembershipRequest) => {
+    try {
+      // Add user to group members
+      await updateDoc(doc(db, "groups", request.groupId), {
+        memberIds: arrayUnion(request.userId),
+      });
+      // Update request status
+      await updateDoc(doc(db, "groupMembershipRequests", request.id), {
+        status: "approved",
+      });
+      fetchGymData();
+    } catch (error) {
+      console.error("Error approving group request:", error);
+    }
+  };
+
+  const handleDenyGroupRequest = async (request: GroupMembershipRequest) => {
+    try {
+      await updateDoc(doc(db, "groupMembershipRequests", request.id), {
+        status: "denied",
+      });
+      setGroupRequests(groupRequests.filter((r) => r.id !== request.id));
+    } catch (error) {
+      console.error("Error denying group request:", error);
+    }
+  };
+
+  const hasRequestedGroup = (groupId: string) => {
+    return userGroupRequests.some((r) => r.groupId === groupId);
+  };
+
+  const isGroupMember = (group: WorkoutGroup) => {
+    return group.memberIds?.includes(user?.id || "") || group.coachIds?.includes(user?.id || "") || group.ownerId === user?.id;
   };
 
   const handlePromoteToCoach = async (member: AppUser) => {
@@ -975,7 +1064,7 @@ export default function GymDetailPage() {
           {[
             { id: "members", label: "Members", count: members.length },
             { id: "coaches", label: "Coaches", count: coaches.length },
-            { id: "groups", label: "Groups", count: groups.length },
+            { id: "groups", label: "Groups", count: groups.length, badge: isCoach && groupRequests.length > 0 ? groupRequests.length : undefined },
             ...(isCoach ? [{ id: "programming", label: "Programming", count: scheduledWorkouts.length }] : []),
             ...(isOwner ? [{ id: "requests", label: "Requests", count: requests.length }] : []),
           ].map((tab) => (
@@ -994,6 +1083,11 @@ export default function GymDetailPage() {
                   activeTab === tab.id ? "bg-blue-500" : "bg-gray-200"
                 }`}>
                   {tab.count}
+                </span>
+              )}
+              {"badge" in tab && tab.badge && (
+                <span className="ml-1 px-2 py-0.5 rounded-full text-xs bg-yellow-400 text-yellow-900">
+                  {tab.badge}
                 </span>
               )}
             </button>
@@ -1085,6 +1179,39 @@ export default function GymDetailPage() {
 
           {activeTab === "groups" && (
             <div className="p-6">
+              {/* Pending Group Requests Section (for coaches/owners) */}
+              {isCoach && groupRequests.length > 0 && (
+                <div className="mb-6">
+                  <h3 className="text-md font-semibold text-gray-900 mb-3">Pending Group Access Requests</h3>
+                  <div className="space-y-2">
+                    {groupRequests.map((request) => (
+                      <div key={request.id} className="flex items-center justify-between p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+                        <div>
+                          <p className="font-medium text-gray-900">{request.userName}</p>
+                          <p className="text-gray-500 text-sm">
+                            Requesting access to <span className="font-medium">{request.groupName}</span>
+                          </p>
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleApproveGroupRequest(request)}
+                            className="px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm"
+                          >
+                            Approve
+                          </button>
+                          <button
+                            onClick={() => handleDenyGroupRequest(request)}
+                            className="px-3 py-1.5 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 text-sm"
+                          >
+                            Deny
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold text-gray-900">Workout Groups</h2>
                 {isCoach && (
@@ -1103,11 +1230,11 @@ export default function GymDetailPage() {
                   {groups.map((group) => (
                     <div
                       key={group.id}
-                      className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer transition-colors"
-                      onClick={() => router.push(`/gym/${gymId}/groups/${group.id}`)}
+                      className={`flex items-center justify-between p-4 bg-gray-50 rounded-lg transition-colors ${isCoach ? "hover:bg-gray-100 cursor-pointer" : ""}`}
+                      onClick={() => isCoach && router.push(`/gym/${gymId}/groups/${group.id}`)}
                     >
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center">
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isGroupMember(group) ? "bg-green-100 text-green-600" : "bg-blue-100 text-blue-600"}`}>
                           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                           </svg>
@@ -1118,6 +1245,9 @@ export default function GymDetailPage() {
                             {group.name === "Members" && (
                               <span className="text-xs text-orange-600">★ Default</span>
                             )}
+                            {isGroupMember(group) && (
+                              <span className="text-xs bg-green-100 text-green-600 px-2 py-0.5 rounded-full">Member</span>
+                            )}
                           </div>
                           <p className="text-gray-500 text-sm">
                             {group.memberIds?.length || 0} members
@@ -1126,6 +1256,24 @@ export default function GymDetailPage() {
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
+                        {/* Request Access button for non-members */}
+                        {!isCoach && !isGroupMember(group) && group.name !== "Members" && (
+                          hasRequestedGroup(group.id) ? (
+                            <span className="px-3 py-1 text-sm bg-yellow-100 text-yellow-700 rounded-lg">
+                              Pending
+                            </span>
+                          ) : (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleRequestGroupAccess(group);
+                              }}
+                              className="px-3 py-1 text-sm bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200"
+                            >
+                              Request Access
+                            </button>
+                          )
+                        )}
                         {isCoach && group.name !== "Members" && group.isDeletable !== false && (
                           <button
                             onClick={(e) => {
@@ -1137,9 +1285,11 @@ export default function GymDetailPage() {
                             Delete
                           </button>
                         )}
-                        <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                        </svg>
+                        {isCoach && (
+                          <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
+                        )}
                       </div>
                     </div>
                   ))}
