@@ -237,7 +237,8 @@ export default function WeeklyPlanPage() {
 
   const getAvailableSpots = (timeSlot: ScheduledTimeSlot) => {
     const signedUp = timeSlot.signups?.length || 0;
-    return timeSlot.capacity - signedUp;
+    const capacity = timeSlot.capacity || 20; // Default to 20 if not set
+    return capacity - signedUp;
   };
 
   // Generate array of days for the selected range
@@ -427,16 +428,16 @@ export default function WeeklyPlanPage() {
                                     <p className="text-xs font-medium text-gray-500 mb-2">Class Times</p>
                                     <div className="flex flex-wrap gap-2">
                                       {workout.timeSlots
-                                        .filter((slot) => slot && typeof slot.hour === "number" && typeof slot.minute === "number")
-                                        .sort((a, b) => a.hour * 60 + a.minute - (b.hour * 60 + b.minute))
-                                        .map((slot) => {
+                                        .filter((slot) => slot && slot.hour !== undefined && slot.minute !== undefined)
+                                        .sort((a, b) => (a.hour ?? 0) * 60 + (a.minute ?? 0) - ((b.hour ?? 0) * 60 + (b.minute ?? 0)))
+                                        .map((slot, index) => {
                                           const signedUp = isUserSignedUp(slot);
                                           const availableSpots = getAvailableSpots(slot);
-                                          const isFull = availableSpots <= 0;
+                                          const isFull = (slot.capacity || 20) > 0 && availableSpots <= 0;
 
                                           return (
                                             <button
-                                              key={slot.id}
+                                              key={slot.id || `slot-${index}-${slot.hour}-${slot.minute}`}
                                               onClick={() => signedUp ? handleCancelSignup(workout, slot) : handleSignup(workout, slot)}
                                               disabled={isFull && !signedUp}
                                               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 ${
