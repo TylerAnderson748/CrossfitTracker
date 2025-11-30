@@ -6,7 +6,7 @@ import Link from "next/link";
 import { doc, getDoc, collection, query, where, getDocs, updateDoc, arrayUnion, arrayRemove, deleteDoc, addDoc, Timestamp } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
-import { Gym, WorkoutGroup, AppUser } from "@/lib/types";
+import { Gym, WorkoutGroup, AppUser, ScheduledWorkout } from "@/lib/types";
 import Navigation from "@/components/Navigation";
 
 interface MembershipRequest {
@@ -29,10 +29,18 @@ export default function GymDetailPage() {
   const [coaches, setCoaches] = useState<AppUser[]>([]);
   const [groups, setGroups] = useState<WorkoutGroup[]>([]);
   const [requests, setRequests] = useState<MembershipRequest[]>([]);
+  const [scheduledWorkouts, setScheduledWorkouts] = useState<ScheduledWorkout[]>([]);
   const [loadingData, setLoadingData] = useState(true);
-  const [activeTab, setActiveTab] = useState<"members" | "coaches" | "groups" | "requests">("members");
+  const [activeTab, setActiveTab] = useState<"members" | "coaches" | "groups" | "programming" | "requests">("members");
   const [showAddGroupModal, setShowAddGroupModal] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
+
+  // Programming modal state
+  const [showAddWorkoutModal, setShowAddWorkoutModal] = useState(false);
+  const [newWorkoutTitle, setNewWorkoutTitle] = useState("");
+  const [newWorkoutDescription, setNewWorkoutDescription] = useState("");
+  const [newWorkoutDate, setNewWorkoutDate] = useState("");
+  const [newWorkoutGroupIds, setNewWorkoutGroupIds] = useState<string[]>([]);
 
   const isOwner = gym?.ownerId === user?.id;
   const isCoach = gym?.coachIds?.includes(user?.id || "") || isOwner;
@@ -110,6 +118,36 @@ export default function GymDetailPage() {
           ...doc.data(),
         })) as MembershipRequest[];
         setRequests(requestsData);
+      }
+
+      // Fetch scheduled workouts for this gym's groups
+      const groupIds = groupsData.map((g) => g.id);
+      if (groupIds.length > 0) {
+        // Get workouts for the next 30 days
+        const now = new Date();
+        const thirtyDaysFromNow = new Date();
+        thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
+
+        const workoutsQuery = query(
+          collection(db, "scheduledWorkouts"),
+          where("groupIds", "array-contains-any", groupIds.slice(0, 10))
+        );
+        const workoutsSnapshot = await getDocs(workoutsQuery);
+        const workoutsData = workoutsSnapshot.docs
+          .map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          }))
+          .filter((w) => {
+            const workoutDate = (w as ScheduledWorkout).date?.toDate?.();
+            return workoutDate && workoutDate >= now;
+          })
+          .sort((a, b) => {
+            const dateA = (a as ScheduledWorkout).date?.toDate?.() || new Date();
+            const dateB = (b as ScheduledWorkout).date?.toDate?.() || new Date();
+            return dateA.getTime() - dateB.getTime();
+          }) as ScheduledWorkout[];
+        setScheduledWorkouts(workoutsData);
       }
     } catch (error) {
       console.error("Error fetching gym data:", error);
@@ -220,6 +258,62 @@ export default function GymDetailPage() {
     }
   };
 
+  const handleCreateWorkout = async () => {
+    if (!user || !newWorkoutTitle.trim() || !newWorkoutDate || newWorkoutGroupIds.length === 0) return;
+    try {
+      const workoutDate = new Date(newWorkoutDate);
+      await addDoc(collection(db, "scheduledWorkouts"), {
+        wodTitle: newWorkoutTitle.trim(),
+        wodDescription: newWorkoutDescription.trim(),
+        date: Timestamp.fromDate(workoutDate),
+        workoutType: "wod",
+        groupIds: newWorkoutGroupIds,
+        createdBy: user.id,
+        recurrenceType: "none",
+        hideDetails: false,
+        gymId: gymId,
+      });
+      setShowAddWorkoutModal(false);
+      setNewWorkoutTitle("");
+      setNewWorkoutDescription("");
+      setNewWorkoutDate("");
+      setNewWorkoutGroupIds([]);
+      fetchGymData();
+    } catch (error) {
+      console.error("Error creating workout:", error);
+    }
+  };
+
+  const handleDeleteWorkout = async (workout: ScheduledWorkout) => {
+    if (!confirm(`Delete "${workout.wodTitle}"? This cannot be undone.`)) return;
+    try {
+      await deleteDoc(doc(db, "scheduledWorkouts", workout.id));
+      fetchGymData();
+    } catch (error) {
+      console.error("Error deleting workout:", error);
+    }
+  };
+
+  const formatWorkoutDate = (timestamp: Timestamp) => {
+    const date = timestamp.toDate();
+    const today = new Date();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    if (date.toDateString() === today.toDateString()) {
+      return "Today";
+    }
+    if (date.toDateString() === tomorrow.toDateString()) {
+      return "Tomorrow";
+    }
+    return date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+  };
+
+  const getGroupName = (groupId: string) => {
+    const group = groups.find((g) => g.id === groupId);
+    return group?.name || "Unknown";
+  };
+
   if (loading || !user || loadingData) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -272,6 +366,7 @@ export default function GymDetailPage() {
             { id: "members", label: "Members", count: members.length },
             { id: "coaches", label: "Coaches", count: coaches.length },
             { id: "groups", label: "Groups", count: groups.length },
+            ...(isCoach ? [{ id: "programming", label: "Programming", count: scheduledWorkouts.length }] : []),
             ...(isOwner ? [{ id: "requests", label: "Requests", count: requests.length }] : []),
           ].map((tab) => (
             <button
@@ -443,6 +538,57 @@ export default function GymDetailPage() {
             </div>
           )}
 
+          {activeTab === "programming" && isCoach && (
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-gray-900">Scheduled Workouts</h2>
+                <button
+                  onClick={() => setShowAddWorkoutModal(true)}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
+                >
+                  + Schedule Workout
+                </button>
+              </div>
+              {scheduledWorkouts.length === 0 ? (
+                <p className="text-gray-500">No scheduled workouts. Create workouts to program for your groups.</p>
+              ) : (
+                <div className="space-y-3">
+                  {scheduledWorkouts.map((workout) => (
+                    <div
+                      key={workout.id}
+                      className="p-4 bg-gray-50 rounded-lg border border-gray-200"
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full font-medium">
+                              {formatWorkoutDate(workout.date)}
+                            </span>
+                            {workout.groupIds?.map((gId) => (
+                              <span key={gId} className="px-2 py-0.5 bg-gray-200 text-gray-600 text-xs rounded-full">
+                                {getGroupName(gId)}
+                              </span>
+                            ))}
+                          </div>
+                          <h3 className="font-semibold text-gray-900">{workout.wodTitle}</h3>
+                          {workout.wodDescription && (
+                            <p className="text-gray-600 text-sm mt-1 whitespace-pre-wrap">{workout.wodDescription}</p>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => handleDeleteWorkout(workout)}
+                          className="ml-4 px-3 py-1 text-sm bg-red-100 text-red-600 rounded-lg hover:bg-red-200"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {activeTab === "requests" && isOwner && (
             <div className="p-6">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">Membership Requests</h2>
@@ -509,6 +655,100 @@ export default function GymDetailPage() {
                 className="flex-1 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-blue-300 transition-colors"
               >
                 Create Group
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Workout Modal */}
+      {showAddWorkoutModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <h2 className="text-xl font-bold text-gray-900 mb-4">Schedule Workout</h2>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Workout Title *
+                </label>
+                <input
+                  type="text"
+                  value={newWorkoutTitle}
+                  onChange={(e) => setNewWorkoutTitle(e.target.value)}
+                  placeholder="e.g., Monday WOD, Fran"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Description
+                </label>
+                <textarea
+                  value={newWorkoutDescription}
+                  onChange={(e) => setNewWorkoutDescription(e.target.value)}
+                  placeholder="e.g., 21-15-9&#10;Thrusters (95/65)&#10;Pull-ups"
+                  rows={4}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Date *
+                </label>
+                <input
+                  type="date"
+                  value={newWorkoutDate}
+                  onChange={(e) => setNewWorkoutDate(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Groups *
+                </label>
+                <div className="space-y-2 max-h-40 overflow-y-auto border border-gray-200 rounded-lg p-2">
+                  {groups.map((group) => (
+                    <label key={group.id} className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={newWorkoutGroupIds.includes(group.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setNewWorkoutGroupIds([...newWorkoutGroupIds, group.id]);
+                          } else {
+                            setNewWorkoutGroupIds(newWorkoutGroupIds.filter((id) => id !== group.id));
+                          }
+                        }}
+                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <span className="text-gray-900">{group.name}</span>
+                    </label>
+                  ))}
+                </div>
+                {groups.length === 0 && (
+                  <p className="text-gray-500 text-sm mt-2">No groups available. Create groups first.</p>
+                )}
+              </div>
+            </div>
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => {
+                  setShowAddWorkoutModal(false);
+                  setNewWorkoutTitle("");
+                  setNewWorkoutDescription("");
+                  setNewWorkoutDate("");
+                  setNewWorkoutGroupIds([]);
+                }}
+                className="flex-1 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreateWorkout}
+                disabled={!newWorkoutTitle.trim() || !newWorkoutDate || newWorkoutGroupIds.length === 0}
+                className="flex-1 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-blue-300 transition-colors"
+              >
+                Schedule
               </button>
             </div>
           </div>
