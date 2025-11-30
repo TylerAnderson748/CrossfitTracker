@@ -193,10 +193,14 @@ export default function GymDetailPage() {
         );
         const workoutsSnapshot = await getDocs(workoutsQuery);
         const workoutsData = workoutsSnapshot.docs
-          .map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-          }))
+          .map((doc) => {
+            const data = doc.data();
+            console.log("Gym page - Workout from Firestore:", doc.id, "timeSlots:", data.timeSlots);
+            return {
+              id: doc.id,
+              ...data,
+            };
+          })
           .filter((w) => {
             const workoutDate = (w as ScheduledWorkout).date?.toDate?.();
             return workoutDate && workoutDate >= now;
