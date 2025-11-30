@@ -71,15 +71,12 @@ export default function WeeklyPlanPage() {
         const data = doc.data();
         groupsMap[doc.id] = { id: doc.id, name: data.name };
 
-        // Include group if:
-        // 1. User is directly in the group's memberIds, coachIds, or is owner
-        // 2. OR the group belongs to a gym the user is a member of
+        // Only include group if user is directly a member, coach, or owner of the group
         const isDirectMember = data.memberIds?.includes(user.id);
         const isDirectCoach = data.coachIds?.includes(user.id);
         const isGroupOwner = data.ownerId === user.id;
-        const isFromUserGym = userGymIds.includes(data.gymId);
 
-        if (isDirectMember || isDirectCoach || isGroupOwner || isFromUserGym) {
+        if (isDirectMember || isDirectCoach || isGroupOwner) {
           memberGroupIds.push(doc.id);
         }
       });
@@ -149,18 +146,12 @@ export default function WeeklyPlanPage() {
         ...doc.data(),
       })) as ScheduledWorkout[];
 
-      // Filter to only show workouts for groups the user belongs to
+      // Filter to only show workouts for groups the user is a member of
       const filteredWorkouts = allWorkouts.filter((workout) => {
-        // Check if workout belongs to a gym the user is a member of
-        if (workout.gymId && userGymIds.includes(workout.gymId)) {
-          return true;
-        }
-
-        // If workout has groupIds, check if any match the user's groups
+        // Only show workouts if user is in at least one of the workout's groups
         if (workout.groupIds && workout.groupIds.length > 0) {
           return workout.groupIds.some((gId) => userGroupIds.includes(gId));
         }
-
         return false;
       });
 
