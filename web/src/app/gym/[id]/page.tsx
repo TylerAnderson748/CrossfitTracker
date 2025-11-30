@@ -95,12 +95,17 @@ export default function GymDetailPage() {
       selectedGroups.forEach((group) => {
         if (group.defaultTimeSlots?.length > 0) {
           group.defaultTimeSlots.forEach((slot) => {
-            const timeKey = `${slot.hour}:${slot.minute}`;
+            // Explicitly extract hour and minute to ensure they're copied
+            const hour = typeof slot.hour === 'number' ? slot.hour : parseInt(slot.hour as unknown as string) || 0;
+            const minute = typeof slot.minute === 'number' ? slot.minute : parseInt(slot.minute as unknown as string) || 0;
+            const timeKey = `${hour}:${minute}`;
             if (!seenTimes.has(timeKey)) {
               seenTimes.add(timeKey);
               allDefaultSlots.push({
-                ...slot,
                 id: `slot_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                hour: hour,
+                minute: minute,
+                capacity: slot.capacity || 20,
                 signups: [],
               });
             }
@@ -193,14 +198,10 @@ export default function GymDetailPage() {
         );
         const workoutsSnapshot = await getDocs(workoutsQuery);
         const workoutsData = workoutsSnapshot.docs
-          .map((doc) => {
-            const data = doc.data();
-            console.log("Gym page - Workout from Firestore:", doc.id, "timeSlots:", data.timeSlots);
-            return {
-              id: doc.id,
-              ...data,
-            };
-          })
+          .map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          }))
           .filter((w) => {
             const workoutDate = (w as ScheduledWorkout).date?.toDate?.();
             return workoutDate && workoutDate >= now;
@@ -649,12 +650,17 @@ export default function GymDetailPage() {
         workoutGroups.forEach((group) => {
           if (group.defaultTimeSlots?.length > 0) {
             group.defaultTimeSlots.forEach((slot) => {
-              const timeKey = `${slot.hour}:${slot.minute}`;
+              // Explicitly extract hour and minute to ensure they're copied
+              const hour = typeof slot.hour === 'number' ? slot.hour : parseInt(slot.hour) || 0;
+              const minute = typeof slot.minute === 'number' ? slot.minute : parseInt(slot.minute) || 0;
+              const timeKey = `${hour}:${minute}`;
               if (!seenTimes.has(timeKey)) {
                 seenTimes.add(timeKey);
                 allDefaultSlots.push({
-                  ...slot,
                   id: `slot_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                  hour: hour,
+                  minute: minute,
+                  capacity: slot.capacity || 20,
                   signups: [],
                 });
               }
@@ -664,11 +670,9 @@ export default function GymDetailPage() {
 
         if (allDefaultSlots.length > 0) {
           const sortedSlots = allDefaultSlots.sort((a, b) => a.hour * 60 + a.minute - (b.hour * 60 + b.minute));
-          console.log("Saving timeSlots for workout:", workout.id, sortedSlots);
           await updateDoc(doc(db, "scheduledWorkouts", workout.id), {
             timeSlots: sortedSlots,
           });
-          console.log("Saved successfully for workout:", workout.id);
           updatedCount++;
         }
       }
@@ -1260,8 +1264,6 @@ export default function GymDetailPage() {
                                         )}
                                       </>
                                     )}
-                                    {/* Debug: Show workout ID */}
-                                    <p className="text-xs text-gray-400 mt-1">ID: {workout.id}</p>
                                     {/* Time Slots Display */}
                                     {workout.timeSlots && workout.timeSlots.length > 0 && (
                                       <div className="mt-2 pt-2 border-t border-gray-200">
@@ -1276,9 +1278,6 @@ export default function GymDetailPage() {
                                             ))}
                                         </div>
                                       </div>
-                                    )}
-                                    {!workout.timeSlots && (
-                                      <p className="text-xs text-red-400 mt-1">No timeSlots</p>
                                     )}
                                   </div>
                                   <div className="flex items-center gap-1">

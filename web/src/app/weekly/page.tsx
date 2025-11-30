@@ -144,14 +144,10 @@ export default function WeeklyPlanPage() {
         orderBy("date", "asc")
       );
       const snapshot = await getDocs(workoutsQuery);
-      const allWorkouts = snapshot.docs.map((doc) => {
-        const data = doc.data();
-        console.log("Workout from Firestore:", doc.id, "timeSlots:", data.timeSlots);
-        return {
-          id: doc.id,
-          ...data,
-        };
-      }) as ScheduledWorkout[];
+      const allWorkouts = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as ScheduledWorkout[];
 
       // Filter to only show workouts for groups the user belongs to
       const filteredWorkouts = allWorkouts.filter((workout) => {
@@ -426,35 +422,13 @@ export default function WeeklyPlanPage() {
                                   </>
                                 )}
 
-                                {/* Debug: Show workout info */}
-                                <p className="text-xs text-gray-400 mt-2">ID: {workout.id}</p>
-                                {!workout.timeSlots && (
-                                  <p className="text-xs text-red-400">No timeSlots field</p>
-                                )}
-                                {workout.timeSlots && workout.timeSlots.length === 0 && (
-                                  <p className="text-xs text-orange-400">timeSlots is empty array</p>
-                                )}
-                                {workout.timeSlots && workout.timeSlots.length > 0 && (
-                                  <p className="text-xs text-green-400">Has {workout.timeSlots.length} time slots</p>
-                                )}
-
                                 {/* Time Slots */}
                                 {workout.timeSlots && workout.timeSlots.length > 0 && (
                                   <div className="mt-3 pt-3 border-t border-gray-200">
                                     <p className="text-xs font-medium text-gray-500 mb-2">Class Times</p>
-                                    {/* Debug: Log raw slot data */}
-                                    {console.log("Weekly view slots for", workout.id, ":", JSON.stringify(workout.timeSlots))}
                                     <div className="flex flex-wrap gap-2">
                                       {workout.timeSlots
-                                        .filter((slot) => {
-                                          // More lenient filter - just check slot exists
-                                          if (!slot) return false;
-                                          // Log slots that would be filtered out
-                                          if (slot.hour === undefined && slot.minute === undefined) {
-                                            console.log("Slot missing hour/minute:", slot);
-                                          }
-                                          return true; // Accept all slots for now to see what we have
-                                        })
+                                        .filter((slot) => slot != null)
                                         .sort((a, b) => (a.hour ?? 0) * 60 + (a.minute ?? 0) - ((b.hour ?? 0) * 60 + (b.minute ?? 0)))
                                         .map((slot, index) => {
                                           const signedUp = isUserSignedUp(slot);
