@@ -418,81 +418,137 @@ export default function JoinGymPage({
             </div>
 
             <div className="space-y-3">
-              {visibleTiers
-                .filter((tier) => hasBillingOption(tier, selectedBillingCycle))
-                .map((tier) => {
-                  const price = getSelectedPrice(tier, selectedBillingCycle);
-                  const discountedPrice = getDiscountedPrice(price, appliedDiscount);
-                  const hasDiscount = appliedDiscount && discountedPrice < price;
+              {visibleTiers.map((tier) => {
+                const isSelected = selectedTierId === tier.id;
 
-                  return (
-                    <div
-                      key={tier.id}
-                      onClick={() => setSelectedTierId(tier.id)}
-                      className={`w-full p-4 rounded-xl border-2 text-left transition-all cursor-pointer ${
-                        selectedTierId === tier.id
-                          ? tier.isHidden ? "border-purple-500 bg-purple-50" : "border-blue-500 bg-blue-50"
-                          : tier.isHidden ? "border-purple-200 bg-purple-50/50 hover:border-purple-300" : "border-gray-200 bg-white hover:border-gray-300"
-                      }`}
-                    >
-                      {tier.isHidden && (
-                        <div className="mb-2">
-                          <span className="text-xs bg-purple-600 text-white px-2 py-0.5 rounded-full">✨ Exclusive Plan</span>
-                        </div>
-                      )}
-                      <div className="flex justify-between items-start">
-                        <div className="flex-1">
-                          <h3 className="font-semibold text-gray-900">{tier.name}</h3>
-                          <p className="text-sm text-gray-500 mt-1">{tier.description}</p>
-                          {tier.features && tier.features.length > 0 && (
-                            <ul className="mt-2 space-y-1">
-                              {tier.features.map((feature, idx) => (
-                                <li key={idx} className="text-sm text-gray-600 flex items-center gap-1">
-                                  <span className="text-green-500">✓</span> {feature}
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-                        </div>
-                        <div className="text-right ml-4">
-                          {hasDiscount && (
-                            <div className="text-gray-400 line-through text-sm">
-                              ${price}
-                            </div>
-                          )}
-                          <div className={`${selectedTierId === tier.id ? "text-blue-600" : "text-gray-900"}`}>
-                            <span className="text-2xl font-bold">${hasDiscount ? discountedPrice.toFixed(0) : price}</span>
-                            <span className="text-gray-500 text-sm">
-                              {selectedBillingCycle === "monthly" && "/mo"}
-                              {selectedBillingCycle === "yearly" && "/yr"}
-                            </span>
-                          </div>
-                          {hasDiscount && (
-                            <div className="text-green-600 text-xs font-medium">
-                              {appliedDiscount.discountType === "percentage"
-                                ? `${appliedDiscount.discountValue}% off!`
-                                : `$${appliedDiscount.discountValue} off!`}
-                            </div>
-                          )}
-                        </div>
+                // Calculate discounted prices for each billing option
+                const monthlyPrice = tier.monthlyPrice || 0;
+                const yearlyPrice = tier.yearlyPrice || 0;
+                const oneTimePrice = tier.oneTimePrice || 0;
+
+                const monthlyDiscounted = getDiscountedPrice(monthlyPrice, appliedDiscount);
+                const yearlyDiscounted = getDiscountedPrice(yearlyPrice, appliedDiscount);
+                const oneTimeDiscounted = getDiscountedPrice(oneTimePrice, appliedDiscount);
+
+                return (
+                  <div
+                    key={tier.id}
+                    onClick={() => setSelectedTierId(tier.id)}
+                    className={`w-full p-4 rounded-xl border-2 text-left transition-all cursor-pointer ${
+                      isSelected
+                        ? tier.isHidden ? "border-purple-500 bg-purple-50" : "border-blue-500 bg-blue-50"
+                        : tier.isHidden ? "border-purple-200 bg-purple-50/50 hover:border-purple-300" : "border-gray-200 bg-white hover:border-gray-300"
+                    }`}
+                  >
+                    {tier.isHidden && (
+                      <div className="mb-2">
+                        <span className="text-xs bg-purple-600 text-white px-2 py-0.5 rounded-full">✨ Exclusive Plan</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <h3 className="font-semibold text-gray-900">{tier.name}</h3>
+                        <p className="text-sm text-gray-500 mt-1">{tier.description}</p>
+                        {tier.features && tier.features.length > 0 && (
+                          <ul className="mt-2 space-y-1">
+                            {tier.features.map((feature, idx) => (
+                              <li key={idx} className="text-sm text-gray-600 flex items-center gap-1">
+                                <span className="text-green-500">✓</span> {feature}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
                       </div>
 
-                      {selectedTierId === tier.id && (
-                        <div className={`mt-3 pt-3 border-t ${tier.isHidden ? "border-purple-200" : "border-blue-200"}`}>
-                          <span className={`${tier.isHidden ? "text-purple-600" : "text-blue-600"} text-sm font-medium`}>✓ Selected</span>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+                      {/* Pricing Options */}
+                      <div className="text-right ml-4 space-y-1">
+                        {tier.monthlyPrice && (
+                          <div
+                            onClick={(e) => { e.stopPropagation(); setSelectedTierId(tier.id); setSelectedBillingCycle("monthly"); }}
+                            className={`p-2 rounded-lg cursor-pointer transition-all ${
+                              isSelected && selectedBillingCycle === "monthly"
+                                ? "bg-blue-100 ring-2 ring-blue-500"
+                                : "hover:bg-gray-100"
+                            }`}
+                          >
+                            {appliedDiscount && monthlyDiscounted < monthlyPrice && (
+                              <div className="text-gray-400 line-through text-xs">${monthlyPrice}/mo</div>
+                            )}
+                            <div className={isSelected && selectedBillingCycle === "monthly" ? "text-blue-600" : "text-gray-900"}>
+                              <span className="text-xl font-bold">
+                                ${appliedDiscount ? monthlyDiscounted.toFixed(0) : monthlyPrice}
+                              </span>
+                              <span className="text-gray-500 text-sm">/mo</span>
+                            </div>
+                          </div>
+                        )}
+                        {tier.yearlyPrice && (
+                          <div
+                            onClick={(e) => { e.stopPropagation(); setSelectedTierId(tier.id); setSelectedBillingCycle("yearly"); }}
+                            className={`p-2 rounded-lg cursor-pointer transition-all ${
+                              isSelected && selectedBillingCycle === "yearly"
+                                ? "bg-blue-100 ring-2 ring-blue-500"
+                                : "hover:bg-gray-100"
+                            }`}
+                          >
+                            {appliedDiscount && yearlyDiscounted < yearlyPrice && (
+                              <div className="text-gray-400 line-through text-xs">${yearlyPrice}/yr</div>
+                            )}
+                            <div className={isSelected && selectedBillingCycle === "yearly" ? "text-blue-600" : "text-gray-700"}>
+                              <span className="text-lg font-semibold">
+                                ${appliedDiscount ? yearlyDiscounted.toFixed(0) : yearlyPrice}
+                              </span>
+                              <span className="text-gray-500 text-sm">/yr</span>
+                            </div>
+                            {tier.monthlyPrice && (
+                              <div className="text-green-600 text-xs">
+                                Save ${(tier.monthlyPrice * 12) - tier.yearlyPrice}/yr
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        {tier.oneTimePrice && (
+                          <div
+                            onClick={(e) => { e.stopPropagation(); setSelectedTierId(tier.id); setSelectedBillingCycle("one-time"); }}
+                            className={`p-2 rounded-lg cursor-pointer transition-all ${
+                              isSelected && selectedBillingCycle === "one-time"
+                                ? "bg-blue-100 ring-2 ring-blue-500"
+                                : "hover:bg-gray-100"
+                            }`}
+                          >
+                            {appliedDiscount && oneTimeDiscounted < oneTimePrice && (
+                              <div className="text-gray-400 line-through text-xs">${oneTimePrice}</div>
+                            )}
+                            <div className={isSelected && selectedBillingCycle === "one-time" ? "text-blue-600" : "text-gray-700"}>
+                              <span className={`${!tier.monthlyPrice && !tier.yearlyPrice ? "text-xl font-bold" : "text-lg font-semibold"}`}>
+                                ${appliedDiscount ? oneTimeDiscounted.toFixed(0) : oneTimePrice}
+                              </span>
+                            </div>
+                            <div className="text-gray-500 text-xs">one-time</div>
+                          </div>
+                        )}
 
-              {/* Show message if no plans available for selected billing cycle */}
-              {visibleTiers.filter((tier) => hasBillingOption(tier, selectedBillingCycle)).length === 0 && (
-                <div className="text-center py-8 text-gray-500">
-                  <p>No plans available for {selectedBillingCycle} billing.</p>
-                  <p className="text-sm mt-1">Try selecting a different payment option above.</p>
-                </div>
-              )}
+                        {/* Discount badge */}
+                        {appliedDiscount && (
+                          <div className="text-green-600 text-xs font-medium mt-1">
+                            🏷️ {appliedDiscount.discountType === "percentage"
+                              ? `${appliedDiscount.discountValue}% off`
+                              : `$${appliedDiscount.discountValue} off`}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {isSelected && (
+                      <div className={`mt-3 pt-3 border-t ${tier.isHidden ? "border-purple-200" : "border-blue-200"}`}>
+                        <span className={`${tier.isHidden ? "text-purple-600" : "text-blue-600"} text-sm font-medium`}>
+                          ✓ Selected ({selectedBillingCycle === "monthly" ? "Monthly" : selectedBillingCycle === "yearly" ? "Yearly" : "One-time"})
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
 
             {/* Optional Group Add-ons */}
