@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { doc, updateDoc, collection, query, where, getDocs } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
-import { Gym, Gender } from "@/lib/types";
+import { Gym, Gender, WorkoutGroup } from "@/lib/types";
 import Navigation from "@/components/Navigation";
 
 // Subscription type for member's gym memberships
@@ -23,6 +23,15 @@ interface Subscription {
   classesTotal?: number;
 }
 
+// Group add-on for subscription display
+interface GroupAddOn {
+  id: string;
+  gymId: string;
+  gymName: string;
+  groupName: string;
+  additionalFee: number;
+}
+
 export default function ProfilePage() {
   const { user, loading, switching, signOut } = useAuth();
   const router = useRouter();
@@ -30,6 +39,7 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [myGyms, setMyGyms] = useState<(Gym & { role: string })[]>([]);
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
+  const [groupAddOns, setGroupAddOns] = useState<GroupAddOn[]>([]);
   const [showCancelModal, setShowCancelModal] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     firstName: "",
@@ -101,6 +111,29 @@ export default function ProfilePage() {
         classesTotal: idx === 0 ? undefined : 10,
       }));
       setSubscriptions(mockSubscriptions);
+
+      // Fetch groups user is a member of (with additional fees)
+      const groupsSnapshot = await getDocs(collection(db, "groups"));
+      const allGroups = groupsSnapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as WorkoutGroup[];
+
+      // Filter groups where user is a member and has additional fee
+      const userGroupAddOns: GroupAddOn[] = [];
+      allGroups.forEach((group) => {
+        if (group.memberIds?.includes(user.id) && group.additionalFee && group.additionalFee > 0) {
+          const gym = gyms.find((g) => g.id === group.gymId);
+          userGroupAddOns.push({
+            id: group.id,
+            gymId: group.gymId || "",
+            gymName: gym?.name || "Unknown Gym",
+            groupName: group.name,
+            additionalFee: group.additionalFee,
+          });
+        }
+      });
+      setGroupAddOns(userGroupAddOns);
     } catch (error) {
       console.error("Error fetching gyms:", error);
     }
@@ -451,6 +484,35 @@ export default function ProfilePage() {
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* Group Add-Ons */}
+          {groupAddOns.length > 0 && (
+            <div className="mt-6 pt-6 border-t border-gray-200">
+              <h4 className="text-sm font-semibold text-gray-700 mb-3">Group Add-Ons</h4>
+              <div className="space-y-2">
+                {groupAddOns.map((addOn) => (
+                  <div
+                    key={addOn.id}
+                    className="flex items-center justify-between p-3 bg-amber-50 border border-amber-200 rounded-lg"
+                  >
+                    <div>
+                      <p className="font-medium text-gray-900">{addOn.groupName}</p>
+                      <p className="text-xs text-gray-500">{addOn.gymName}</p>
+                    </div>
+                    <span className="font-semibold text-amber-700">+${addOn.additionalFee}/mo</span>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3 p-3 bg-gray-100 rounded-lg">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">Total Add-On Fees</span>
+                  <span className="font-bold text-gray-900">
+                    +${groupAddOns.reduce((sum, g) => sum + g.additionalFee, 0)}/mo
+                  </span>
+                </div>
+              </div>
             </div>
           )}
 
