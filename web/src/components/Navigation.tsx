@@ -41,6 +41,7 @@ export default function Navigation() {
   const navItems = [
     { href: "/weekly", label: "Home", icon: "🏠" },
     ...(isGymOwner ? [{ href: "/gym", label: "Gym", icon: "🏢" }] : []),
+    { href: "/programming", label: "Programming", icon: "📅" },
     { href: "/workouts", label: "Workouts", icon: "📋" },
     { href: "/profile", label: "Profile", icon: "👤" },
   ];
