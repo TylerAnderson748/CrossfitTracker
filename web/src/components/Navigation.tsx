@@ -12,6 +12,7 @@ export default function Navigation() {
   const navItems = [
     { href: "/dashboard", label: "Dashboard", icon: "📊" },
     { href: "/weekly", label: "Weekly Plan", icon: "📅" },
+    { href: "/my-workouts", label: "My Workouts", icon: "🏋️" },
     { href: "/gym", label: "Gym", icon: "🏢" },
     { href: "/workouts", label: "Workouts", icon: "📋" },
     { href: "/profile", label: "Profile", icon: "👤" },
