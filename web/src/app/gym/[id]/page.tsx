@@ -77,9 +77,10 @@ export default function GymDetailPage() {
 
   // Pricing state (mockup)
   const [pricingTiers, setPricingTiers] = useState<PricingTier[]>([
-    { id: "tier_1", name: "Monthly Membership", price: 150, billingCycle: "monthly", description: "Unlimited access to all classes", features: ["Unlimited classes", "Open gym access", "Member app access"], isActive: true },
+    { id: "tier_1", name: "Monthly Unlimited", price: 150, billingCycle: "monthly", description: "Unlimited access to all classes", features: ["Unlimited classes", "Open gym access", "Member app access"], isActive: true },
     { id: "tier_2", name: "Drop-In", price: 25, billingCycle: "one-time", description: "Single class visit", features: ["1 class access"], isActive: true },
     { id: "tier_3", name: "10-Class Pack", price: 200, billingCycle: "one-time", description: "10 class punch card", features: ["10 class credits", "Never expires"], isActive: true },
+    { id: "tier_4", name: "8x Monthly", price: 120, billingCycle: "monthly", description: "8 classes per month", features: ["8 classes/month", "Open gym access"], isActive: true },
   ]);
   const [showAddPricingModal, setShowAddPricingModal] = useState(false);
   const [editingTier, setEditingTier] = useState<PricingTier | null>(null);
@@ -88,6 +89,15 @@ export default function GymDetailPage() {
   const [newTierBillingCycle, setNewTierBillingCycle] = useState<BillingCycle>("monthly");
   const [newTierDescription, setNewTierDescription] = useState("");
   const [newTierFeatures, setNewTierFeatures] = useState("");
+
+  // Member subscription tracking (mockup)
+  interface MemberPlan {
+    oderId: string;
+    planName: string;
+    monthlyLimit: number | null; // null = unlimited
+    checkInsThisMonth: number;
+  }
+  const [memberPlans, setMemberPlans] = useState<Record<string, MemberPlan>>({});
 
   const isOwner = gym?.ownerId === user?.id;
   const isCoach = gym?.coachIds?.includes(user?.id || "") || isOwner;
@@ -288,6 +298,44 @@ export default function GymDetailPage() {
           }
           setUserCache(userCacheMap);
         }
+
+        // Count check-ins per member for current month (mockup)
+        const currentDate = new Date();
+        const currentMonth = currentDate.getMonth();
+        const currentYear = currentDate.getFullYear();
+        const memberCheckIns: Record<string, number> = {};
+
+        workoutsData.forEach((workout) => {
+          const workoutDate = workout.date?.toDate?.();
+          if (workoutDate && workoutDate.getMonth() === currentMonth && workoutDate.getFullYear() === currentYear) {
+            workout.timeSlots?.forEach((slot: any) => {
+              const signups = slot.signups || slot.signedUpUserIds || [];
+              signups.forEach((userId: string) => {
+                memberCheckIns[userId] = (memberCheckIns[userId] || 0) + 1;
+              });
+            });
+          }
+        });
+
+        // Assign mockup membership plans to members
+        const plans: Record<string, MemberPlan> = {};
+        const planTypes = [
+          { planName: "Monthly Unlimited", monthlyLimit: null },
+          { planName: "8x Monthly", monthlyLimit: 8 },
+          { planName: "10-Class Pack", monthlyLimit: 10 },
+          { planName: "Drop-In", monthlyLimit: 1 },
+        ];
+        (gymData.memberIds || []).forEach((memberId, index) => {
+          // Distribute plans - first few get unlimited, rest get limited plans
+          const planType = planTypes[index % planTypes.length];
+          plans[memberId] = {
+            oderId: `order_${memberId}`,
+            planName: planType.planName,
+            monthlyLimit: planType.monthlyLimit,
+            checkInsThisMonth: memberCheckIns[memberId] || 0,
+          };
+        });
+        setMemberPlans(plans);
       }
 
       // Fetch ALL workout logs for suggestions (not limited to gym members)
@@ -1272,42 +1320,99 @@ export default function GymDetailPage() {
         <div className="bg-white rounded-xl shadow-sm border border-gray-200">
           {activeTab === "members" && (
             <div className="p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Members</h2>
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-lg font-semibold text-gray-900">Members</h2>
+                {isOwner && members.length > 0 && (
+                  <span className="text-sm text-gray-500">
+                    {new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })} Check-ins
+                  </span>
+                )}
+              </div>
               {members.length === 0 ? (
                 <p className="text-gray-500">No members yet</p>
               ) : (
                 <div className="space-y-3">
-                  {members.map((member) => (
-                    <div key={member.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-medium">
-                          {member.firstName?.charAt(0) || member.email?.charAt(0) || "?"}
+                  {members.map((member) => {
+                    const plan = memberPlans[member.id];
+                    const checkIns = plan?.checkInsThisMonth || 0;
+                    const limit = plan?.monthlyLimit;
+                    const isUnlimited = limit === null;
+                    const remaining = isUnlimited ? null : Math.max(0, (limit || 0) - checkIns);
+                    const isOverLimit = !isUnlimited && remaining === 0 && checkIns > 0;
+
+                    return (
+                      <div key={member.id} className="p-4 bg-gray-50 rounded-lg">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-medium">
+                              {member.firstName?.charAt(0) || member.email?.charAt(0) || "?"}
+                            </div>
+                            <div>
+                              <p className="font-medium text-gray-900">
+                                {member.firstName} {member.lastName}
+                              </p>
+                              <p className="text-gray-500 text-sm">{member.email}</p>
+                            </div>
+                          </div>
+                          {isOwner && (
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => handlePromoteToCoach(member)}
+                                className="px-3 py-1 text-sm bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200"
+                              >
+                                Make Coach
+                              </button>
+                              <button
+                                onClick={() => handleRemoveMember(member)}
+                                className="px-3 py-1 text-sm bg-red-100 text-red-600 rounded-lg hover:bg-red-200"
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          )}
                         </div>
-                        <div>
-                          <p className="font-medium text-gray-900">
-                            {member.firstName} {member.lastName}
-                          </p>
-                          <p className="text-gray-500 text-sm">{member.email}</p>
-                        </div>
+
+                        {/* Membership Info - Only visible to owner */}
+                        {isOwner && plan && (
+                          <div className="mt-3 pt-3 border-t border-gray-200 flex items-center justify-between">
+                            <div className="flex items-center gap-4">
+                              <div>
+                                <span className="text-xs text-gray-500 uppercase tracking-wide">Plan</span>
+                                <p className="font-medium text-gray-900">{plan.planName}</p>
+                              </div>
+                              <div>
+                                <span className="text-xs text-gray-500 uppercase tracking-wide">Check-ins</span>
+                                <p className={`font-medium ${isOverLimit ? 'text-red-600' : 'text-gray-900'}`}>
+                                  {isUnlimited ? (
+                                    <span>{checkIns} / <span className="text-green-600">Unlimited</span></span>
+                                  ) : (
+                                    <span>
+                                      {checkIns} / {limit}
+                                      {remaining !== null && remaining > 0 && (
+                                        <span className="text-gray-500 text-sm ml-1">({remaining} left)</span>
+                                      )}
+                                      {isOverLimit && (
+                                        <span className="text-red-500 text-sm ml-1">(limit reached)</span>
+                                      )}
+                                    </span>
+                                  )}
+                                </p>
+                              </div>
+                            </div>
+                            <div className={`px-3 py-1 rounded-full text-xs font-medium ${
+                              isUnlimited
+                                ? 'bg-green-100 text-green-700'
+                                : isOverLimit
+                                  ? 'bg-red-100 text-red-700'
+                                  : 'bg-blue-100 text-blue-700'
+                            }`}>
+                              {isUnlimited ? 'Unlimited' : isOverLimit ? 'At Limit' : `${remaining} remaining`}
+                            </div>
+                          </div>
+                        )}
                       </div>
-                      {isOwner && (
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => handlePromoteToCoach(member)}
-                            className="px-3 py-1 text-sm bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200"
-                          >
-                            Make Coach
-                          </button>
-                          <button
-                            onClick={() => handleRemoveMember(member)}
-                            className="px-3 py-1 text-sm bg-red-100 text-red-600 rounded-lg hover:bg-red-200"
-                          >
-                            Remove
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
