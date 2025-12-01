@@ -226,19 +226,29 @@ export default function WeeklyPlanPage() {
 
     try {
       const { rangeStart, rangeEnd } = getDateRange();
+      // Simple query by userId only to avoid composite index requirement
       const personalQuery = query(
         collection(db, "personalWorkouts"),
-        where("userId", "==", user.id),
-        where("date", ">=", Timestamp.fromDate(rangeStart)),
-        where("date", "<=", Timestamp.fromDate(rangeEnd)),
-        orderBy("date", "asc")
+        where("userId", "==", user.id)
       );
       const snapshot = await getDocs(personalQuery);
-      const workouts = snapshot.docs.map((doc) => ({
+      const allWorkouts = snapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       })) as PersonalWorkout[];
-      setPersonalWorkouts(workouts);
+
+      // Filter by date range client-side
+      const filteredWorkouts = allWorkouts.filter((w) => {
+        const workoutDate = w.date?.toDate?.();
+        if (!workoutDate) return false;
+        return workoutDate >= rangeStart && workoutDate <= rangeEnd;
+      }).sort((a, b) => {
+        const dateA = a.date?.toDate?.() || new Date(0);
+        const dateB = b.date?.toDate?.() || new Date(0);
+        return dateA.getTime() - dateB.getTime();
+      });
+
+      setPersonalWorkouts(filteredWorkouts);
     } catch (error) {
       console.error("Error fetching personal workouts:", error);
     }
