@@ -47,6 +47,13 @@ export default function GymPage() {
           ...gym,
           role: "Owner",
         }));
+
+      // Redirect non-owners to programming page
+      if (ownedGyms.length === 0) {
+        router.replace("/programming");
+        return;
+      }
+
       setMyGyms(ownedGyms);
     } catch (error) {
       console.error("Error fetching gyms:", error);
