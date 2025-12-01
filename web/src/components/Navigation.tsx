@@ -1,17 +1,46 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { collection, getDocs } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
+import { db } from "@/lib/firebase";
+import { Gym } from "@/lib/types";
 import AccountSwitcher from "./AccountSwitcher";
 
 export default function Navigation() {
   const pathname = usePathname();
   const { user } = useAuth();
+  const [isGymOwner, setIsGymOwner] = useState(false);
+
+  useEffect(() => {
+    const checkGymOwnership = async () => {
+      if (!user) {
+        setIsGymOwner(false);
+        return;
+      }
+      try {
+        const gymsSnapshot = await getDocs(collection(db, "gyms"));
+        const gyms = gymsSnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        })) as Gym[];
+
+        const ownsGym = gyms.some((gym) => gym.ownerId === user.id);
+        setIsGymOwner(ownsGym);
+      } catch (error) {
+        console.error("Error checking gym ownership:", error);
+        setIsGymOwner(false);
+      }
+    };
+
+    checkGymOwnership();
+  }, [user]);
 
   const navItems = [
     { href: "/weekly", label: "Home", icon: "🏠" },
-    { href: "/gym", label: "Gym", icon: "🏢" },
+    ...(isGymOwner ? [{ href: "/gym", label: "Gym", icon: "🏢" }] : []),
     { href: "/workouts", label: "Workouts", icon: "📋" },
     { href: "/profile", label: "Profile", icon: "👤" },
   ];
