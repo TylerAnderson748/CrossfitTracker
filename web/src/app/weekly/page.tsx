@@ -2,11 +2,26 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { collection, query, where, orderBy, getDocs, addDoc, updateDoc, deleteDoc, doc, Timestamp } from "firebase/firestore";
+import Link from "next/link";
+import { collection, query, where, orderBy, getDocs, addDoc, updateDoc, deleteDoc, doc, Timestamp, limit } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
-import { ScheduledWorkout, ScheduledTimeSlot, WorkoutComponent, WorkoutComponentType, workoutComponentLabels, workoutComponentColors, formatTimeSlot } from "@/lib/types";
+import { ScheduledWorkout, ScheduledTimeSlot, WorkoutComponent, WorkoutComponentType, workoutComponentLabels, workoutComponentColors, formatTimeSlot, LeaderboardEntry, formatResult, normalizeWorkoutName } from "@/lib/types";
 import Navigation from "@/components/Navigation";
+
+// Combined result type for both WODs and lifts
+interface WorkoutResult {
+  id: string;
+  userName: string;
+  createdAt?: Timestamp;
+  category?: string;
+  timeInSeconds?: number;
+  resultType?: string;
+  weight?: number;
+  reps?: number;
+  date?: Timestamp;
+  isLift?: boolean;
+}
 
 interface WorkoutGroup {
   id: string;
@@ -39,6 +54,7 @@ export default function WeeklyPlanPage() {
   const [groupsLoaded, setGroupsLoaded] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
   const [userCache, setUserCache] = useState<Record<string, string>>({});
+  const [workoutLogs, setWorkoutLogs] = useState<{ [key: string]: WorkoutResult[] }>({});
 
   // Personal workout modal state
   const [showAddModal, setShowAddModal] = useState(false);
@@ -58,6 +74,19 @@ export default function WeeklyPlanPage() {
     okay: "😐",
     tired: "😓",
     exhausted: "😵",
+  };
+
+  // Helper to format time ago
+  const timeAgo = (date: Date): string => {
+    const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+
+    if (days > 0) return `${days}d ago`;
+    if (hours > 0) return `${hours}h ago`;
+    if (minutes > 0) return `${minutes}m ago`;
+    return "Just now";
   };
 
   // Component management functions
@@ -378,6 +407,52 @@ export default function WeeklyPlanPage() {
         }
         setUserCache(userCacheMap);
       }
+
+      // Fetch recent results for each workout
+      const logsMap: { [key: string]: WorkoutResult[] } = {};
+      for (const workout of filteredWorkouts) {
+        const isLift = workout.workoutType?.toLowerCase().includes("lift");
+
+        if (isLift) {
+          const liftQuery = query(
+            collection(db, "liftResults"),
+            where("liftTitle", "==", workout.wodTitle),
+            limit(5)
+          );
+          const liftSnapshot = await getDocs(liftQuery);
+          const liftResults = liftSnapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+            isLift: true,
+          })) as WorkoutResult[];
+          liftResults.sort((a, b) => {
+            const dateA = a.date?.toDate?.() || new Date(0);
+            const dateB = b.date?.toDate?.() || new Date(0);
+            return dateB.getTime() - dateA.getTime();
+          });
+          logsMap[workout.id] = liftResults.slice(0, 3);
+        } else {
+          const normalized = normalizeWorkoutName(workout.wodTitle);
+          const logsQuery = query(
+            collection(db, "leaderboardEntries"),
+            where("normalizedWorkoutName", "==", normalized),
+            limit(10)
+          );
+          const logsSnapshot = await getDocs(logsQuery);
+          const logs = logsSnapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+            isLift: false,
+          })) as WorkoutResult[];
+          logs.sort((a, b) => {
+            const dateA = a.createdAt?.toDate?.() || new Date(0);
+            const dateB = b.createdAt?.toDate?.() || new Date(0);
+            return dateB.getTime() - dateA.getTime();
+          });
+          logsMap[workout.id] = logs.slice(0, 3);
+        }
+      }
+      setWorkoutLogs(logsMap);
     } catch (error) {
       console.error("Error fetching workouts:", error);
     } finally {
@@ -551,7 +626,7 @@ export default function WeeklyPlanPage() {
       <main className="max-w-lg mx-auto px-4 py-6">
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
-          <h1 className="text-xl font-bold text-gray-900">My Weekly Workouts</h1>
+          <h1 className="text-xl font-bold text-gray-900">My Workouts</h1>
         </div>
 
         {/* Time Range Selector */}
@@ -821,17 +896,77 @@ export default function WeeklyPlanPage() {
                                 })()}
                               </div>
 
-                              {/* Log button */}
-                              <button
-                                onClick={() => handleLogWorkout(workout)}
-                                className="ml-2 px-3 py-1.5 bg-green-500 text-white text-xs font-semibold rounded-lg hover:bg-green-600 transition-colors flex items-center gap-1"
-                              >
-                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                </svg>
-                                Log
-                              </button>
+                              {/* Action buttons */}
+                              <div className="flex items-center gap-1 ml-2">
+                                <Link
+                                  href={workout.workoutType?.toLowerCase().includes("lift")
+                                    ? `/workouts/lift?name=${encodeURIComponent(workout.wodTitle)}&description=${encodeURIComponent(workout.wodDescription || "")}`
+                                    : `/workouts/new?name=${encodeURIComponent(workout.wodTitle)}&description=${encodeURIComponent(workout.wodDescription || "")}`}
+                                  className={`px-2 py-1.5 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1 ${
+                                    workout.workoutType?.toLowerCase().includes("lift")
+                                      ? "bg-purple-600 hover:bg-purple-700"
+                                      : "bg-blue-600 hover:bg-blue-700"
+                                  }`}
+                                >
+                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                  </svg>
+                                  Log
+                                </Link>
+                                <Link
+                                  href={`/leaderboard?workout=${encodeURIComponent(workout.wodTitle)}`}
+                                  className="px-2 py-1.5 border border-gray-300 text-gray-600 text-xs font-semibold rounded-lg hover:bg-gray-50 transition-colors"
+                                  title="Leaderboard"
+                                >
+                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                                  </svg>
+                                </Link>
+                              </div>
                             </div>
+
+                            {/* Recent Results */}
+                            {workoutLogs[workout.id] && workoutLogs[workout.id].length > 0 && (
+                              <div className="mt-3 pt-3 border-t border-gray-200">
+                                <p className="text-xs font-medium text-gray-500 mb-2">Recent Results</p>
+                                <div className="space-y-1.5">
+                                  {workoutLogs[workout.id].map((log) => (
+                                    <div key={log.id} className="flex items-center justify-between text-xs">
+                                      <div className="flex items-center gap-2">
+                                        <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-semibold ${
+                                          log.isLift ? "bg-purple-100 text-purple-600" : "bg-blue-100 text-blue-600"
+                                        }`}>
+                                          {log.userName?.charAt(0) || "?"}
+                                        </div>
+                                        <span className="text-gray-700">{log.userName}</span>
+                                      </div>
+                                      <div className="flex items-center gap-1.5">
+                                        {log.isLift ? (
+                                          <>
+                                            <span className="font-mono font-semibold text-gray-900">{log.weight} lbs</span>
+                                            <span className="px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 text-[10px]">
+                                              {log.reps}r
+                                            </span>
+                                          </>
+                                        ) : (
+                                          <>
+                                            <span className="font-mono font-semibold text-gray-900">{formatResult(log as LeaderboardEntry)}</span>
+                                            <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${
+                                              log.category === "RX" ? "bg-blue-100 text-blue-700" : "bg-gray-200 text-gray-600"
+                                            }`}>
+                                              {log.category}
+                                            </span>
+                                          </>
+                                        )}
+                                        <span className="text-gray-400">
+                                          {timeAgo((log.isLift ? log.date : log.createdAt)?.toDate?.() || new Date())}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         ))}
 

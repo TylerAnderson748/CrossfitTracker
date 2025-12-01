@@ -10,8 +10,7 @@ export default function Navigation() {
   const { user } = useAuth();
 
   const navItems = [
-    { href: "/dashboard", label: "Dashboard", icon: "📊" },
-    { href: "/weekly", label: "Weekly Plan", icon: "📅" },
+    { href: "/weekly", label: "Home", icon: "🏠" },
     { href: "/gym", label: "Gym", icon: "🏢" },
     { href: "/workouts", label: "Workouts", icon: "📋" },
     { href: "/profile", label: "Profile", icon: "👤" },
@@ -22,7 +21,7 @@ export default function Navigation() {
       <div className="max-w-7xl mx-auto px-4">
         <div className="flex items-center justify-between h-16">
           <div className="flex items-center space-x-8">
-            <Link href="/dashboard" className="flex items-center space-x-2">
+            <Link href="/weekly" className="flex items-center space-x-2">
               <span className="text-2xl">🔥</span>
               <span className="text-xl font-bold text-blue-600">CrossFit Tracker</span>
             </Link>
