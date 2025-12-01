@@ -237,9 +237,18 @@ export default function WeeklyPlanPage() {
 
   // Get personal workouts for a specific date
   const getPersonalWorkoutsForDate = (date: Date) => {
+    const targetYear = date.getFullYear();
+    const targetMonth = date.getMonth();
+    const targetDay = date.getDate();
+
     return personalWorkouts.filter((w) => {
       const workoutDate = w.date?.toDate?.();
-      return workoutDate?.toDateString() === date.toDateString();
+      if (!workoutDate) return false;
+      return (
+        workoutDate.getFullYear() === targetYear &&
+        workoutDate.getMonth() === targetMonth &&
+        workoutDate.getDate() === targetDay
+      );
     });
   };
 
@@ -560,8 +569,9 @@ export default function WeeklyPlanPage() {
   // Generate array of days for the selected range
   const getCalendarDays = () => {
     const days: Date[] = [];
-    const current = new Date(rangeStart);
-    while (current <= rangeEnd) {
+    const current = new Date(rangeStart.getFullYear(), rangeStart.getMonth(), rangeStart.getDate(), 12, 0, 0, 0);
+    const endDate = new Date(rangeEnd.getFullYear(), rangeEnd.getMonth(), rangeEnd.getDate(), 12, 0, 0, 0);
+    while (current <= endDate) {
       days.push(new Date(current));
       current.setDate(current.getDate() + 1);
     }
