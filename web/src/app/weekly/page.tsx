@@ -627,6 +627,15 @@ export default function WeeklyPlanPage() {
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-xl font-bold text-gray-900">My Workouts</h1>
+          <button
+            onClick={() => openAddModal(new Date())}
+            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium flex items-center gap-1"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Add Personal Workout
+          </button>
         </div>
 
         {/* Time Range Selector */}
@@ -695,12 +704,14 @@ export default function WeeklyPlanPage() {
                       )}
                       <button
                         onClick={() => openAddModal(day)}
-                        className="p-1 rounded-full bg-green-100 text-green-700 hover:bg-green-200 transition-colors"
+                        className={`w-6 h-6 rounded-full flex items-center justify-center text-sm font-bold transition-colors ${
+                          isToday
+                            ? "bg-green-600 text-white hover:bg-green-700"
+                            : "bg-green-100 text-green-700 hover:bg-green-200"
+                        }`}
                         title="Add personal workout"
                       >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                        </svg>
+                        +
                       </button>
                     </div>
                   </div>
