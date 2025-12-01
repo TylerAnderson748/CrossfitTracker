@@ -140,14 +140,21 @@ export interface LiftResult {
 }
 
 // Pricing types
-export type BillingCycle = "monthly" | "quarterly" | "yearly" | "one-time";
+export type BillingCycle = "monthly" | "yearly" | "one-time";
+export type ClassLimitType = "unlimited" | "per-month" | "fixed";
 export type PaymentStatus = "active" | "past_due" | "cancelled" | "trial";
 
 export interface PricingTier {
   id: string;
   name: string;
-  price: number;
-  billingCycle: BillingCycle;
+  // Pricing per billing cycle
+  monthlyPrice?: number;
+  yearlyPrice?: number;
+  oneTimePrice?: number;
+  // Class limits
+  classLimitType: ClassLimitType;
+  classesPerMonth?: number;  // For "per-month" type
+  totalClasses?: number;     // For "fixed" (one-time pack) type
   description?: string;
   features?: string[];
   isActive: boolean;

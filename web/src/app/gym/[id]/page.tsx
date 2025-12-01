@@ -6,7 +6,7 @@ import Link from "next/link";
 import { doc, getDoc, collection, query, where, getDocs, updateDoc, arrayUnion, arrayRemove, deleteDoc, addDoc, Timestamp } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
-import { Gym, WorkoutGroup, AppUser, ScheduledWorkout, ScheduledTimeSlot, WorkoutLog, WorkoutComponent, WorkoutComponentType, workoutComponentLabels, workoutComponentColors, LiftResult, LeaderboardEntry, formatTimeSlot, GroupMembershipRequest, PricingTier, BillingCycle } from "@/lib/types";
+import { Gym, WorkoutGroup, AppUser, ScheduledWorkout, ScheduledTimeSlot, WorkoutLog, WorkoutComponent, WorkoutComponentType, workoutComponentLabels, workoutComponentColors, LiftResult, LeaderboardEntry, formatTimeSlot, GroupMembershipRequest, PricingTier, BillingCycle, ClassLimitType } from "@/lib/types";
 import { getAllWods, getAllLifts } from "@/lib/workoutData";
 import Navigation from "@/components/Navigation";
 
@@ -77,16 +77,20 @@ export default function GymDetailPage() {
 
   // Pricing state (mockup)
   const [pricingTiers, setPricingTiers] = useState<PricingTier[]>([
-    { id: "tier_1", name: "Monthly Unlimited", price: 150, billingCycle: "monthly", description: "Unlimited access to all classes", features: ["Unlimited classes", "Open gym access", "Member app access"], isActive: true },
-    { id: "tier_2", name: "Drop-In", price: 25, billingCycle: "one-time", description: "Single class visit", features: ["1 class access"], isActive: true },
-    { id: "tier_3", name: "10-Class Pack", price: 200, billingCycle: "one-time", description: "10 class punch card", features: ["10 class credits", "Never expires"], isActive: true },
-    { id: "tier_4", name: "8x Monthly", price: 120, billingCycle: "monthly", description: "8 classes per month", features: ["8 classes/month", "Open gym access"], isActive: true },
+    { id: "tier_1", name: "Monthly Unlimited", monthlyPrice: 150, yearlyPrice: 1500, classLimitType: "unlimited", description: "Unlimited access to all classes", features: ["Unlimited classes", "Open gym access", "Member app access"], isActive: true },
+    { id: "tier_2", name: "Drop-In", oneTimePrice: 25, classLimitType: "fixed", totalClasses: 1, description: "Single class visit", features: ["1 class access"], isActive: true },
+    { id: "tier_3", name: "10-Class Pack", oneTimePrice: 200, classLimitType: "fixed", totalClasses: 10, description: "10 class punch card", features: ["10 class credits", "Never expires"], isActive: true },
+    { id: "tier_4", name: "8x Monthly", monthlyPrice: 120, yearlyPrice: 1200, classLimitType: "per-month", classesPerMonth: 8, description: "8 classes per month", features: ["8 classes/month", "Open gym access"], isActive: true },
   ]);
   const [showAddPricingModal, setShowAddPricingModal] = useState(false);
   const [editingTier, setEditingTier] = useState<PricingTier | null>(null);
   const [newTierName, setNewTierName] = useState("");
-  const [newTierPrice, setNewTierPrice] = useState("");
-  const [newTierBillingCycle, setNewTierBillingCycle] = useState<BillingCycle>("monthly");
+  const [newTierMonthlyPrice, setNewTierMonthlyPrice] = useState("");
+  const [newTierYearlyPrice, setNewTierYearlyPrice] = useState("");
+  const [newTierOneTimePrice, setNewTierOneTimePrice] = useState("");
+  const [newTierClassLimitType, setNewTierClassLimitType] = useState<ClassLimitType>("unlimited");
+  const [newTierClassesPerMonth, setNewTierClassesPerMonth] = useState("");
+  const [newTierTotalClasses, setNewTierTotalClasses] = useState("");
   const [newTierDescription, setNewTierDescription] = useState("");
   const [newTierFeatures, setNewTierFeatures] = useState("");
 
@@ -1919,8 +1923,12 @@ export default function GymDetailPage() {
                   onClick={() => {
                     setEditingTier(null);
                     setNewTierName("");
-                    setNewTierPrice("");
-                    setNewTierBillingCycle("monthly");
+                    setNewTierMonthlyPrice("");
+                    setNewTierYearlyPrice("");
+                    setNewTierOneTimePrice("");
+                    setNewTierClassLimitType("unlimited");
+                    setNewTierClassesPerMonth("");
+                    setNewTierTotalClasses("");
                     setNewTierDescription("");
                     setNewTierFeatures("");
                     setShowAddPricingModal(true);
@@ -1963,8 +1971,12 @@ export default function GymDetailPage() {
                           onClick={() => {
                             setEditingTier(tier);
                             setNewTierName(tier.name);
-                            setNewTierPrice(tier.price.toString());
-                            setNewTierBillingCycle(tier.billingCycle);
+                            setNewTierMonthlyPrice(tier.monthlyPrice?.toString() || "");
+                            setNewTierYearlyPrice(tier.yearlyPrice?.toString() || "");
+                            setNewTierOneTimePrice(tier.oneTimePrice?.toString() || "");
+                            setNewTierClassLimitType(tier.classLimitType);
+                            setNewTierClassesPerMonth(tier.classesPerMonth?.toString() || "");
+                            setNewTierTotalClasses(tier.totalClasses?.toString() || "");
                             setNewTierDescription(tier.description || "");
                             setNewTierFeatures(tier.features?.join("\n") || "");
                             setShowAddPricingModal(true);
@@ -1999,13 +2011,45 @@ export default function GymDetailPage() {
                       </div>
                     </div>
 
+                    {/* Pricing Display */}
+                    <div className="mb-3 space-y-1">
+                      {tier.monthlyPrice && (
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-2xl font-bold text-gray-900">${tier.monthlyPrice}</span>
+                          <span className="text-gray-500 text-sm">/month</span>
+                        </div>
+                      )}
+                      {tier.yearlyPrice && (
+                        <div className="flex items-baseline gap-1">
+                          <span className={`${tier.monthlyPrice ? 'text-lg' : 'text-2xl'} font-bold text-gray-900`}>${tier.yearlyPrice}</span>
+                          <span className="text-gray-500 text-sm">/year</span>
+                          {tier.monthlyPrice && (
+                            <span className="text-green-600 text-xs ml-1">
+                              (save ${(tier.monthlyPrice * 12) - tier.yearlyPrice})
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      {tier.oneTimePrice && (
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-2xl font-bold text-gray-900">${tier.oneTimePrice}</span>
+                          <span className="text-gray-500 text-sm">one-time</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Class Limit Badge */}
                     <div className="mb-3">
-                      <span className="text-3xl font-bold text-gray-900">${tier.price}</span>
-                      <span className="text-gray-500 text-sm ml-1">
-                        {tier.billingCycle === "monthly" && "/month"}
-                        {tier.billingCycle === "quarterly" && "/quarter"}
-                        {tier.billingCycle === "yearly" && "/year"}
-                        {tier.billingCycle === "one-time" && " one-time"}
+                      <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${
+                        tier.classLimitType === "unlimited"
+                          ? "bg-green-100 text-green-700"
+                          : tier.classLimitType === "per-month"
+                            ? "bg-blue-100 text-blue-700"
+                            : "bg-purple-100 text-purple-700"
+                      }`}>
+                        {tier.classLimitType === "unlimited" && "Unlimited Classes"}
+                        {tier.classLimitType === "per-month" && `${tier.classesPerMonth} classes/month`}
+                        {tier.classLimitType === "fixed" && `${tier.totalClasses} class${(tier.totalClasses || 0) > 1 ? 'es' : ''} total`}
                       </span>
                     </div>
 
@@ -2743,12 +2787,13 @@ export default function GymDetailPage() {
       {/* Add/Edit Pricing Plan Modal */}
       {showAddPricingModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <h2 className="text-xl font-bold text-gray-900 mb-4">
               {editingTier ? "Edit Pricing Plan" : "Add Pricing Plan"}
             </h2>
 
-            <div className="space-y-4">
+            <div className="space-y-5">
+              {/* Plan Name */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Plan Name *
@@ -2762,38 +2807,136 @@ export default function GymDetailPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Price ($) *
-                  </label>
-                  <input
-                    type="number"
-                    value={newTierPrice}
-                    onChange={(e) => setNewTierPrice(e.target.value)}
-                    placeholder="0"
-                    min="0"
-                    step="0.01"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
+              {/* Billing Options */}
+              <div className="p-4 bg-gray-50 rounded-lg">
+                <label className="block text-sm font-medium text-gray-700 mb-3">
+                  Billing Options (set prices for available billing cycles)
+                </label>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-24 text-sm text-gray-600">Monthly:</div>
+                    <div className="flex items-center gap-1 flex-1">
+                      <span className="text-gray-500">$</span>
+                      <input
+                        type="number"
+                        value={newTierMonthlyPrice}
+                        onChange={(e) => setNewTierMonthlyPrice(e.target.value)}
+                        placeholder="0"
+                        min="0"
+                        step="1"
+                        className="flex-1 px-3 py-1.5 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                      <span className="text-gray-500 text-sm">/mo</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-24 text-sm text-gray-600">Yearly:</div>
+                    <div className="flex items-center gap-1 flex-1">
+                      <span className="text-gray-500">$</span>
+                      <input
+                        type="number"
+                        value={newTierYearlyPrice}
+                        onChange={(e) => setNewTierYearlyPrice(e.target.value)}
+                        placeholder="0"
+                        min="0"
+                        step="1"
+                        className="flex-1 px-3 py-1.5 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                      <span className="text-gray-500 text-sm">/yr</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-24 text-sm text-gray-600">One-time:</div>
+                    <div className="flex items-center gap-1 flex-1">
+                      <span className="text-gray-500">$</span>
+                      <input
+                        type="number"
+                        value={newTierOneTimePrice}
+                        onChange={(e) => setNewTierOneTimePrice(e.target.value)}
+                        placeholder="0"
+                        min="0"
+                        step="1"
+                        className="flex-1 px-3 py-1.5 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Billing Cycle
-                  </label>
-                  <select
-                    value={newTierBillingCycle}
-                    onChange={(e) => setNewTierBillingCycle(e.target.value as BillingCycle)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    <option value="monthly">Monthly</option>
-                    <option value="quarterly">Quarterly</option>
-                    <option value="yearly">Yearly</option>
-                    <option value="one-time">One-time</option>
-                  </select>
+                <p className="text-xs text-gray-500 mt-2">Leave blank for billing options you don&apos;t want to offer</p>
+              </div>
+
+              {/* Class Limit */}
+              <div className="p-4 bg-gray-50 rounded-lg">
+                <label className="block text-sm font-medium text-gray-700 mb-3">
+                  Class Limit
+                </label>
+                <div className="space-y-3">
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setNewTierClassLimitType("unlimited")}
+                      className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors ${
+                        newTierClassLimitType === "unlimited"
+                          ? "bg-green-600 text-white"
+                          : "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
+                      }`}
+                    >
+                      Unlimited
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setNewTierClassLimitType("per-month")}
+                      className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors ${
+                        newTierClassLimitType === "per-month"
+                          ? "bg-blue-600 text-white"
+                          : "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
+                      }`}
+                    >
+                      # Per Month
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setNewTierClassLimitType("fixed")}
+                      className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors ${
+                        newTierClassLimitType === "fixed"
+                          ? "bg-purple-600 text-white"
+                          : "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
+                      }`}
+                    >
+                      Fixed Total
+                    </button>
+                  </div>
+
+                  {newTierClassLimitType === "per-month" && (
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        value={newTierClassesPerMonth}
+                        onChange={(e) => setNewTierClassesPerMonth(e.target.value)}
+                        placeholder="8"
+                        min="1"
+                        className="w-24 px-3 py-1.5 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                      <span className="text-gray-600 text-sm">classes per month</span>
+                    </div>
+                  )}
+
+                  {newTierClassLimitType === "fixed" && (
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        value={newTierTotalClasses}
+                        onChange={(e) => setNewTierTotalClasses(e.target.value)}
+                        placeholder="10"
+                        min="1"
+                        className="w-24 px-3 py-1.5 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                      <span className="text-gray-600 text-sm">classes total (one-time pack)</span>
+                    </div>
+                  )}
                 </div>
               </div>
 
+              {/* Description */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Description
@@ -2807,6 +2950,7 @@ export default function GymDetailPage() {
                 />
               </div>
 
+              {/* Features */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Features (one per line)
@@ -2815,7 +2959,7 @@ export default function GymDetailPage() {
                   value={newTierFeatures}
                   onChange={(e) => setNewTierFeatures(e.target.value)}
                   placeholder="Unlimited classes&#10;Open gym access&#10;Free parking"
-                  rows={4}
+                  rows={3}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
@@ -2833,13 +2977,19 @@ export default function GymDetailPage() {
               </button>
               <button
                 onClick={() => {
-                  if (!newTierName.trim() || !newTierPrice) return;
+                  if (!newTierName.trim()) return;
+                  const hasPrice = newTierMonthlyPrice || newTierYearlyPrice || newTierOneTimePrice;
+                  if (!hasPrice) return;
 
                   const tierData: PricingTier = {
                     id: editingTier?.id || `tier_${Date.now()}`,
                     name: newTierName.trim(),
-                    price: parseFloat(newTierPrice),
-                    billingCycle: newTierBillingCycle,
+                    monthlyPrice: newTierMonthlyPrice ? parseFloat(newTierMonthlyPrice) : undefined,
+                    yearlyPrice: newTierYearlyPrice ? parseFloat(newTierYearlyPrice) : undefined,
+                    oneTimePrice: newTierOneTimePrice ? parseFloat(newTierOneTimePrice) : undefined,
+                    classLimitType: newTierClassLimitType,
+                    classesPerMonth: newTierClassLimitType === "per-month" && newTierClassesPerMonth ? parseInt(newTierClassesPerMonth) : undefined,
+                    totalClasses: newTierClassLimitType === "fixed" && newTierTotalClasses ? parseInt(newTierTotalClasses) : undefined,
                     description: newTierDescription.trim() || undefined,
                     features: newTierFeatures.split("\n").map(f => f.trim()).filter(Boolean),
                     isActive: editingTier?.isActive ?? true,
@@ -2854,7 +3004,7 @@ export default function GymDetailPage() {
                   setShowAddPricingModal(false);
                   setEditingTier(null);
                 }}
-                disabled={!newTierName.trim() || !newTierPrice}
+                disabled={!newTierName.trim() || (!newTierMonthlyPrice && !newTierYearlyPrice && !newTierOneTimePrice)}
                 className="flex-1 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-blue-300 transition-colors"
               >
                 {editingTier ? "Save Changes" : "Add Plan"}

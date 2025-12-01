@@ -34,10 +34,14 @@ export default function JoinGymPage({
 
   // Default pricing tiers (mockup - would come from gym settings in real implementation)
   const [pricingTiers] = useState<PricingTier[]>([
-    { id: "tier_1", name: "Monthly Membership", price: 150, billingCycle: "monthly", description: "Unlimited access to all classes", features: ["Unlimited classes", "Open gym access", "Member app access"], isActive: true },
-    { id: "tier_2", name: "Drop-In", price: 25, billingCycle: "one-time", description: "Single class visit", features: ["1 class access"], isActive: true },
-    { id: "tier_3", name: "10-Class Pack", price: 200, billingCycle: "one-time", description: "10 class punch card", features: ["10 class credits", "Never expires"], isActive: true },
+    { id: "tier_1", name: "Monthly Unlimited", monthlyPrice: 150, yearlyPrice: 1500, classLimitType: "unlimited", description: "Unlimited access to all classes", features: ["Unlimited classes", "Open gym access", "Member app access"], isActive: true },
+    { id: "tier_2", name: "Drop-In", oneTimePrice: 25, classLimitType: "fixed", totalClasses: 1, description: "Single class visit", features: ["1 class access"], isActive: true },
+    { id: "tier_3", name: "10-Class Pack", oneTimePrice: 200, classLimitType: "fixed", totalClasses: 10, description: "10 class punch card", features: ["10 class credits", "Never expires"], isActive: true },
   ]);
+
+  // Helper to get display price (prefer monthly, then one-time)
+  const getDisplayPrice = (tier: PricingTier) => tier.monthlyPrice || tier.oneTimePrice || tier.yearlyPrice || 0;
+  const isMonthly = (tier: PricingTier) => !!tier.monthlyPrice;
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -105,7 +109,7 @@ export default function JoinGymPage({
         // Payment mockup data
         selectedPlanId: selectedTierId,
         selectedPlanName: selectedTier?.name,
-        selectedPlanPrice: selectedTier?.price,
+        selectedPlanPrice: selectedTier ? getDisplayPrice(selectedTier) : 0,
         paymentMethod: "card_mockup",
       });
 
@@ -238,10 +242,9 @@ export default function JoinGymPage({
                       )}
                     </div>
                     <div className="text-right">
-                      <span className="text-2xl font-bold text-gray-900">${tier.price}</span>
+                      <span className="text-2xl font-bold text-gray-900">${getDisplayPrice(tier)}</span>
                       <span className="text-gray-500 text-sm">
-                        {tier.billingCycle === "monthly" && "/mo"}
-                        {tier.billingCycle === "one-time" && ""}
+                        {isMonthly(tier) && "/mo"}
                       </span>
                     </div>
                   </div>
@@ -294,13 +297,13 @@ export default function JoinGymPage({
               <div className="flex justify-between items-center">
                 <span className="text-gray-600">{selectedTier?.name}</span>
                 <span className="font-semibold text-gray-900">
-                  ${selectedTier?.price}
-                  {selectedTier?.billingCycle === "monthly" && "/mo"}
+                  ${selectedTier ? getDisplayPrice(selectedTier) : 0}
+                  {selectedTier && isMonthly(selectedTier) && "/mo"}
                 </span>
               </div>
               <div className="mt-3 pt-3 border-t border-gray-200 flex justify-between items-center">
                 <span className="font-semibold text-gray-900">Total Due Today</span>
-                <span className="text-xl font-bold text-green-600">${selectedTier?.price}</span>
+                <span className="text-xl font-bold text-green-600">${selectedTier ? getDisplayPrice(selectedTier) : 0}</span>
               </div>
             </div>
 
@@ -380,7 +383,7 @@ export default function JoinGymPage({
                 disabled={submitting || !cardName || !cardNumber || !cardExpiry || !cardCvc}
                 className="flex-1 py-3 bg-green-600 text-white rounded-xl font-semibold disabled:bg-gray-300 hover:bg-green-700 transition-colors"
               >
-                {submitting ? "Processing..." : `Pay $${selectedTier?.price}`}
+                {submitting ? "Processing..." : `Pay $${selectedTier ? getDisplayPrice(selectedTier) : 0}`}
               </button>
             </div>
           </div>
