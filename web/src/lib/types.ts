@@ -158,6 +158,9 @@ export interface PricingTier {
   description?: string;
   features?: string[];
   isActive: boolean;
+  // Hidden plan with signup code
+  isHidden?: boolean;
+  signupCode?: string;
 }
 
 export interface MemberSubscription {

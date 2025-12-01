@@ -93,6 +93,8 @@ export default function GymDetailPage() {
   const [newTierTotalClasses, setNewTierTotalClasses] = useState("");
   const [newTierDescription, setNewTierDescription] = useState("");
   const [newTierFeatures, setNewTierFeatures] = useState("");
+  const [newTierIsHidden, setNewTierIsHidden] = useState(false);
+  const [newTierSignupCode, setNewTierSignupCode] = useState("");
 
   // Member subscription tracking (mockup)
   interface MemberPlan {
@@ -1931,6 +1933,8 @@ export default function GymDetailPage() {
                     setNewTierTotalClasses("");
                     setNewTierDescription("");
                     setNewTierFeatures("");
+                    setNewTierIsHidden(false);
+                    setNewTierSignupCode("");
                     setShowAddPricingModal(true);
                   }}
                   className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
@@ -1962,9 +1966,17 @@ export default function GymDetailPage() {
                     <div className="flex justify-between items-start mb-3">
                       <div>
                         <h3 className="font-semibold text-gray-900">{tier.name}</h3>
-                        {!tier.isActive && (
-                          <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded">Inactive</span>
-                        )}
+                        <div className="flex gap-1 mt-1">
+                          {!tier.isActive && (
+                            <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded">Inactive</span>
+                          )}
+                          {tier.isHidden && (
+                            <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded">Hidden</span>
+                          )}
+                          {tier.signupCode && (
+                            <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">Code: {tier.signupCode}</span>
+                          )}
+                        </div>
                       </div>
                       <div className="flex gap-1">
                         <button
@@ -1979,6 +1991,8 @@ export default function GymDetailPage() {
                             setNewTierTotalClasses(tier.totalClasses?.toString() || "");
                             setNewTierDescription(tier.description || "");
                             setNewTierFeatures(tier.features?.join("\n") || "");
+                            setNewTierIsHidden(tier.isHidden || false);
+                            setNewTierSignupCode(tier.signupCode || "");
                             setShowAddPricingModal(true);
                           }}
                           className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded"
@@ -2963,6 +2977,45 @@ export default function GymDetailPage() {
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
+
+              {/* Hidden Plan & Signup Code */}
+              <div className="p-4 bg-purple-50 rounded-lg">
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Hidden Plan
+                    </label>
+                    <p className="text-xs text-gray-500">Hidden plans won&apos;t appear on the public signup page</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setNewTierIsHidden(!newTierIsHidden)}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      newTierIsHidden ? "bg-purple-600" : "bg-gray-200"
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        newTierIsHidden ? "translate-x-6" : "translate-x-1"
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Signup Code
+                  </label>
+                  <input
+                    type="text"
+                    value={newTierSignupCode}
+                    onChange={(e) => setNewTierSignupCode(e.target.value.toUpperCase())}
+                    placeholder="e.g., VIP2024"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-purple-500 focus:border-transparent uppercase"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Members can enter this code to access hidden plans</p>
+                </div>
+              </div>
             </div>
 
             <div className="flex gap-3 mt-6">
@@ -2993,6 +3046,8 @@ export default function GymDetailPage() {
                     description: newTierDescription.trim() || undefined,
                     features: newTierFeatures.split("\n").map(f => f.trim()).filter(Boolean),
                     isActive: editingTier?.isActive ?? true,
+                    isHidden: newTierIsHidden || undefined,
+                    signupCode: newTierSignupCode.trim() || undefined,
                   };
 
                   if (editingTier) {

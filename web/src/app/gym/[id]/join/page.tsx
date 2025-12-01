@@ -32,12 +32,27 @@ export default function JoinGymPage({
   const [cardCvc, setCardCvc] = useState("");
   const [cardName, setCardName] = useState("");
 
+  // Signup code for hidden plans
+  const [signupCode, setSignupCode] = useState("");
+  const [codeApplied, setCodeApplied] = useState(false);
+
   // Default pricing tiers (mockup - would come from gym settings in real implementation)
   const [pricingTiers] = useState<PricingTier[]>([
     { id: "tier_1", name: "Monthly Unlimited", monthlyPrice: 150, yearlyPrice: 1500, classLimitType: "unlimited", description: "Unlimited access to all classes", features: ["Unlimited classes", "Open gym access", "Member app access"], isActive: true },
     { id: "tier_2", name: "Drop-In", oneTimePrice: 25, classLimitType: "fixed", totalClasses: 1, description: "Single class visit", features: ["1 class access"], isActive: true },
     { id: "tier_3", name: "10-Class Pack", oneTimePrice: 200, classLimitType: "fixed", totalClasses: 10, description: "10 class punch card", features: ["10 class credits", "Never expires"], isActive: true },
+    { id: "tier_4", name: "VIP Founder Rate", monthlyPrice: 99, classLimitType: "unlimited", description: "Special rate for founding members", features: ["Unlimited classes", "Open gym access", "Priority booking", "Free merchandise"], isActive: true, isHidden: true, signupCode: "VIP2024" },
   ]);
+
+  // Filter visible plans: show non-hidden + any plan matching the entered code
+  const visibleTiers = pricingTiers.filter((t) =>
+    t.isActive && (!t.isHidden || (t.signupCode && t.signupCode.toUpperCase() === signupCode.toUpperCase()))
+  );
+
+  // Check if entered code matches any hidden plan
+  const codeMatchesPlan = pricingTiers.some(
+    (t) => t.isHidden && t.signupCode && t.signupCode.toUpperCase() === signupCode.toUpperCase()
+  );
 
   // Helper to get display price (prefer monthly, then one-time)
   const getDisplayPrice = (tier: PricingTier) => tier.monthlyPrice || tier.oneTimePrice || tier.yearlyPrice || 0;
@@ -216,17 +231,59 @@ export default function JoinGymPage({
           <div className="space-y-4">
             <h2 className="text-lg font-semibold text-gray-900">Select Your Plan</h2>
 
+            {/* Signup Code Entry */}
+            <div className="p-4 bg-purple-50 rounded-xl">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-purple-600">🔑</span>
+                <span className="text-sm font-medium text-gray-700">Have a signup code?</span>
+              </div>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={signupCode}
+                  onChange={(e) => {
+                    setSignupCode(e.target.value.toUpperCase());
+                    setCodeApplied(false);
+                  }}
+                  placeholder="Enter code"
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-900 uppercase focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                />
+                <button
+                  onClick={() => {
+                    if (codeMatchesPlan) {
+                      setCodeApplied(true);
+                    }
+                  }}
+                  disabled={!signupCode.trim()}
+                  className="px-4 py-2 bg-purple-600 text-white rounded-lg font-medium disabled:bg-gray-300 hover:bg-purple-700 transition-colors"
+                >
+                  Apply
+                </button>
+              </div>
+              {signupCode && !codeMatchesPlan && (
+                <p className="text-sm text-red-600 mt-2">Invalid code. Please check and try again.</p>
+              )}
+              {codeApplied && codeMatchesPlan && (
+                <p className="text-sm text-green-600 mt-2">✓ Code applied! Exclusive plan unlocked below.</p>
+              )}
+            </div>
+
             <div className="space-y-3">
-              {pricingTiers.filter((t) => t.isActive).map((tier) => (
+              {visibleTiers.map((tier) => (
                 <button
                   key={tier.id}
                   onClick={() => setSelectedTierId(tier.id)}
                   className={`w-full p-4 rounded-xl border-2 text-left transition-all ${
                     selectedTierId === tier.id
-                      ? "border-blue-500 bg-blue-50"
-                      : "border-gray-200 bg-white hover:border-gray-300"
+                      ? tier.isHidden ? "border-purple-500 bg-purple-50" : "border-blue-500 bg-blue-50"
+                      : tier.isHidden ? "border-purple-200 bg-purple-50/50 hover:border-purple-300" : "border-gray-200 bg-white hover:border-gray-300"
                   }`}
                 >
+                  {tier.isHidden && (
+                    <div className="mb-2">
+                      <span className="text-xs bg-purple-600 text-white px-2 py-0.5 rounded-full">✨ Exclusive Plan</span>
+                    </div>
+                  )}
                   <div className="flex justify-between items-start">
                     <div>
                       <h3 className="font-semibold text-gray-900">{tier.name}</h3>
@@ -249,8 +306,8 @@ export default function JoinGymPage({
                     </div>
                   </div>
                   {selectedTierId === tier.id && (
-                    <div className="mt-3 pt-3 border-t border-blue-200">
-                      <span className="text-blue-600 text-sm font-medium">✓ Selected</span>
+                    <div className={`mt-3 pt-3 border-t ${tier.isHidden ? "border-purple-200" : "border-blue-200"}`}>
+                      <span className={`${tier.isHidden ? "text-purple-600" : "text-blue-600"} text-sm font-medium`}>✓ Selected</span>
                     </div>
                   )}
                 </button>
