@@ -35,6 +35,7 @@ interface PersonalWorkout {
   id: string;
   userId: string;
   date: Timestamp;
+  dateString?: string; // YYYY-MM-DD for reliable date comparison
   components: WorkoutComponent[];
   notes?: string;
   createdAt: Timestamp;
@@ -169,6 +170,7 @@ export default function WeeklyPlanPage() {
         const workoutRef = doc(db, "personalWorkouts", editingPersonalWorkoutId);
         await updateDoc(workoutRef, {
           date: Timestamp.fromDate(workoutDate),
+          dateString: newWorkoutDate, // Store exact date string for reliable comparison
           components: workoutComponents,
         });
       } else {
@@ -176,6 +178,7 @@ export default function WeeklyPlanPage() {
         await addDoc(collection(db, "personalWorkouts"), {
           userId: user.id,
           date: Timestamp.fromDate(workoutDate),
+          dateString: newWorkoutDate, // Store exact date string for reliable comparison
           components: workoutComponents,
           createdAt: Timestamp.now(),
         });
@@ -237,18 +240,17 @@ export default function WeeklyPlanPage() {
 
   // Get personal workouts for a specific date
   const getPersonalWorkoutsForDate = (date: Date) => {
-    const targetYear = date.getFullYear();
-    const targetMonth = date.getMonth();
-    const targetDay = date.getDate();
+    const targetDateString = formatDateLocal(date);
 
     return personalWorkouts.filter((w) => {
+      // Use dateString if available (new format), fall back to timestamp comparison
+      if (w.dateString) {
+        return w.dateString === targetDateString;
+      }
+      // Legacy fallback for old data without dateString
       const workoutDate = w.date?.toDate?.();
       if (!workoutDate) return false;
-      return (
-        workoutDate.getFullYear() === targetYear &&
-        workoutDate.getMonth() === targetMonth &&
-        workoutDate.getDate() === targetDay
-      );
+      return formatDateLocal(workoutDate) === targetDateString;
     });
   };
 
