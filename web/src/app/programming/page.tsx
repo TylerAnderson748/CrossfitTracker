@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { collection, getDocs, addDoc, deleteDoc, doc, Timestamp } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
+import { Gym } from "@/lib/types";
 import Navigation from "@/components/Navigation";
 
 interface ProgrammingProvider {
@@ -110,6 +111,12 @@ export default function ProgrammingPage() {
   const [connectCode, setConnectCode] = useState("");
   const [connecting, setConnecting] = useState(false);
 
+  // Gym search state
+  const [allGyms, setAllGyms] = useState<Gym[]>([]);
+  const [myGyms, setMyGyms] = useState<Gym[]>([]);
+  const [showFindGymModal, setShowFindGymModal] = useState(false);
+  const [gymSearchQuery, setGymSearchQuery] = useState("");
+
   useEffect(() => {
     if (!loading && !switching && !user) {
       router.push("/login");
@@ -119,6 +126,7 @@ export default function ProgrammingPage() {
   useEffect(() => {
     if (user) {
       fetchConnectedPrograms();
+      fetchGyms();
     }
   }, [user]);
 
@@ -140,6 +148,45 @@ export default function ProgrammingPage() {
       setLoadingData(false);
     }
   };
+
+  const fetchGyms = async () => {
+    if (!user) return;
+
+    try {
+      const gymsSnapshot = await getDocs(collection(db, "gyms"));
+      const gyms = gymsSnapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as Gym[];
+      setAllGyms(gyms);
+
+      // Filter gyms where user is a member
+      const userGyms = gyms.filter(
+        (gym) =>
+          gym.ownerId === user.id ||
+          gym.coachIds?.includes(user.id) ||
+          gym.memberIds?.includes(user.id)
+      );
+      setMyGyms(userGyms);
+    } catch (error) {
+      console.error("Error fetching gyms:", error);
+    }
+  };
+
+  // Gyms available to join (not already a member)
+  const availableGyms = allGyms.filter(
+    (gym) =>
+      gym.ownerId !== user?.id &&
+      !gym.coachIds?.includes(user?.id || "") &&
+      !gym.memberIds?.includes(user?.id || "")
+  );
+
+  // Filter available gyms by search query
+  const filteredGyms = gymSearchQuery.trim()
+    ? availableGyms.filter((gym) =>
+        gym.name.toLowerCase().includes(gymSearchQuery.toLowerCase())
+      )
+    : availableGyms;
 
   const handleConnect = async (provider: ProgrammingProvider) => {
     if (!user) return;
@@ -239,6 +286,71 @@ export default function ProgrammingPage() {
         <div className="mb-8">
           <h1 className="text-2xl font-bold text-gray-900">Programming</h1>
           <p className="text-gray-500">Connect to external programming and follow your favorite coaches</p>
+        </div>
+
+        {/* My Gyms */}
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-gray-900">My Gyms</h2>
+            <button
+              onClick={() => setShowFindGymModal(true)}
+              className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 flex items-center gap-2"
+            >
+              <span>🔍</span> Find Gyms
+            </button>
+          </div>
+          {myGyms.length === 0 ? (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 text-center">
+              <div className="text-3xl mb-2">🏢</div>
+              <p className="text-gray-500 text-sm">You haven&apos;t joined any gyms yet</p>
+              <button
+                onClick={() => setShowFindGymModal(true)}
+                className="mt-3 px-4 py-2 bg-blue-100 text-blue-600 text-sm font-medium rounded-lg hover:bg-blue-200"
+              >
+                Find a Gym
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {myGyms.map((gym) => {
+                const role = gym.ownerId === user?.id
+                  ? "Owner"
+                  : gym.coachIds?.includes(user?.id || "")
+                  ? "Coach"
+                  : "Member";
+                const roleColor = role === "Owner"
+                  ? "bg-purple-100 text-purple-600"
+                  : role === "Coach"
+                  ? "bg-blue-100 text-blue-600"
+                  : "bg-green-100 text-green-600";
+                return (
+                  <div
+                    key={gym.id}
+                    onClick={() => router.push(`/gym/${gym.id}`)}
+                    className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex items-center justify-between cursor-pointer hover:shadow-md transition-shadow"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 bg-indigo-100 rounded-xl flex items-center justify-center text-2xl">
+                        🏢
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-gray-900">{gym.name}</h3>
+                        <p className="text-sm text-gray-500">
+                          {(gym.memberIds?.length || 0) + (gym.coachIds?.length || 0) + 1} members
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className={`px-3 py-1 text-sm font-medium rounded-full ${roleColor}`}>
+                        {role}
+                      </span>
+                      <span className="text-gray-400">→</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Connected Programs */}
@@ -451,6 +563,81 @@ export default function ProgrammingPage() {
                 {connecting ? "Connecting..." : "Connect"}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Find Gym Modal */}
+      {showFindGymModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl p-6 w-full max-w-md max-h-[80vh] overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-gray-900">Find Gyms</h2>
+              <button
+                onClick={() => {
+                  setShowFindGymModal(false);
+                  setGymSearchQuery("");
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="mb-4">
+              <input
+                type="text"
+                value={gymSearchQuery}
+                onChange={(e) => setGymSearchQuery(e.target.value)}
+                placeholder="Search gyms..."
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+
+            <div className="flex-1 overflow-y-auto">
+              {filteredGyms.length === 0 ? (
+                <div className="text-center py-8">
+                  <p className="text-gray-500">
+                    {gymSearchQuery.trim() ? "No gyms found matching your search" : "No gyms available to join"}
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {filteredGyms.map((gym) => (
+                    <div
+                      key={gym.id}
+                      className="flex items-center justify-between p-4 bg-gray-50 rounded-lg"
+                    >
+                      <div>
+                        <h3 className="font-medium text-gray-900">{gym.name}</h3>
+                        <p className="text-gray-500 text-sm">
+                          {(gym.memberIds?.length || 0) + (gym.coachIds?.length || 0) + 1} members
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          router.push(`/gym/${gym.id}/join`);
+                          setShowFindGymModal(false);
+                        }}
+                        className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors"
+                      >
+                        Join
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <button
+              onClick={() => {
+                setShowFindGymModal(false);
+                setGymSearchQuery("");
+              }}
+              className="w-full mt-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              Close
+            </button>
           </div>
         </div>
       )}
