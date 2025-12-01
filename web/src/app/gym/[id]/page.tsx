@@ -120,6 +120,12 @@ export default function GymDetailPage() {
   const isOwner = gym?.ownerId === user?.id;
   const isCoach = gym?.coachIds?.includes(user?.id || "") || isOwner;
 
+  // Helper to parse date string as local time (not UTC) to avoid timezone issues
+  const parseDateLocal = (dateStr: string): Date => {
+    const [year, month, day] = dateStr.split('-').map(Number);
+    return new Date(year, month - 1, day, 12, 0, 0, 0);
+  };
+
   useEffect(() => {
     if (!loading && !switching && !user) {
       router.push("/login");
@@ -615,14 +621,14 @@ export default function GymDetailPage() {
   const handleCreateWorkout = async () => {
     if (!user || workoutComponents.length === 0 || !newWorkoutDate || newWorkoutGroupIds.length === 0) return;
     try {
-      const startDate = new Date(newWorkoutDate);
+      const startDate = parseDateLocal(newWorkoutDate);
       const workoutDates: Date[] = [];
 
       if (recurrenceType === "none") {
         workoutDates.push(startDate);
       } else {
         const finalEndDate = hasEndDate && endDate
-          ? new Date(endDate)
+          ? parseDateLocal(endDate)
           : new Date(startDate.getTime() + 365 * 24 * 60 * 60 * 1000); // Default 1 year max
 
         const currentDate = new Date(startDate);
@@ -871,7 +877,7 @@ export default function GymDetailPage() {
         await Promise.all(updatePromises);
       } else {
         // Update single workout (also update date for single edits)
-        const workoutDate = new Date(newWorkoutDate);
+        const workoutDate = parseDateLocal(newWorkoutDate);
         await updateDoc(doc(db, "scheduledWorkouts", editingWorkoutId), {
           ...updateData,
           date: Timestamp.fromDate(workoutDate),
