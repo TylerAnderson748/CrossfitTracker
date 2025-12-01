@@ -1937,6 +1937,106 @@ export default function GymDetailPage() {
                 </div>
               )}
 
+              {/* Group Pricing Section */}
+              <div className="mt-8">
+                <h3 className="font-semibold text-gray-900 mb-4">Group Add-on Pricing</h3>
+                <p className="text-sm text-gray-500 mb-4">Set additional monthly fees for specific groups (e.g., Competition Team, Personal Training)</p>
+
+                <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
+                  {groups.map((group) => (
+                    <div key={group.id} className="p-4 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                          group.requiresPayment ? "bg-green-100" : "bg-gray-100"
+                        }`}>
+                          <span className={group.requiresPayment ? "text-green-600" : "text-gray-400"}>
+                            {group.requiresPayment ? "💰" : "👥"}
+                          </span>
+                        </div>
+                        <div>
+                          <p className="font-medium text-gray-900">{group.name}</p>
+                          <p className="text-xs text-gray-500">{group.memberIds?.length || 0} members</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        {group.requiresPayment ? (
+                          <span className="text-green-600 font-semibold">+${group.additionalFee || 0}/mo</span>
+                        ) : (
+                          <span className="text-gray-400 text-sm">No fee</span>
+                        )}
+                        <button
+                          onClick={async () => {
+                            const newRequiresPayment = !group.requiresPayment;
+                            const newFee = newRequiresPayment && !group.additionalFee ? 50 : (group.additionalFee || 0);
+
+                            // Update local state
+                            setGroups(prev => prev.map(g =>
+                              g.id === group.id
+                                ? { ...g, requiresPayment: newRequiresPayment, additionalFee: newFee }
+                                : g
+                            ));
+
+                            // Update Firestore
+                            try {
+                              await updateDoc(doc(db, "groups", group.id), {
+                                requiresPayment: newRequiresPayment,
+                                additionalFee: newFee,
+                              });
+                            } catch (err) {
+                              console.error("Error updating group pricing:", err);
+                            }
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                            group.requiresPayment
+                              ? "bg-green-100 text-green-700 hover:bg-green-200"
+                              : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                          }`}
+                        >
+                          {group.requiresPayment ? "Enabled" : "Enable"}
+                        </button>
+
+                        {group.requiresPayment && (
+                          <div className="flex items-center gap-1">
+                            <span className="text-gray-400">$</span>
+                            <input
+                              type="number"
+                              value={group.additionalFee || 0}
+                              onChange={async (e) => {
+                                const newFee = Math.max(0, parseFloat(e.target.value) || 0);
+
+                                // Update local state
+                                setGroups(prev => prev.map(g =>
+                                  g.id === group.id ? { ...g, additionalFee: newFee } : g
+                                ));
+
+                                // Update Firestore
+                                try {
+                                  await updateDoc(doc(db, "groups", group.id), {
+                                    additionalFee: newFee,
+                                  });
+                                } catch (err) {
+                                  console.error("Error updating group fee:", err);
+                                }
+                              }}
+                              min="0"
+                              step="5"
+                              className="w-16 text-right text-gray-900 border border-gray-300 rounded px-2 py-1 text-sm focus:ring-2 focus:ring-blue-500"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+
+                  {groups.length === 0 && (
+                    <div className="p-6 text-center text-gray-500">
+                      <p>No groups yet. Create groups in the Groups tab first.</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
               {/* Revenue Summary Mockup */}
               <div className="mt-8 p-5 bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl border border-green-200">
                 <h3 className="font-semibold text-gray-900 mb-4">Revenue Summary (Mockup)</h3>
