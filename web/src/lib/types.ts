@@ -163,6 +163,20 @@ export interface PricingTier {
   signupCode?: string;
 }
 
+export type DiscountType = "percentage" | "fixed";
+
+export interface DiscountCode {
+  id: string;
+  code: string;
+  discountType: DiscountType;
+  discountValue: number; // Percentage (0-100) or fixed dollar amount
+  description?: string;
+  isActive: boolean;
+  expiresAt?: Timestamp;
+  usageLimit?: number;
+  usageCount: number;
+}
+
 export interface MemberSubscription {
   id: string;
   memberId: string;

@@ -6,7 +6,7 @@ import Link from "next/link";
 import { doc, getDoc, collection, query, where, getDocs, updateDoc, arrayUnion, arrayRemove, deleteDoc, addDoc, Timestamp } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
-import { Gym, WorkoutGroup, AppUser, ScheduledWorkout, ScheduledTimeSlot, WorkoutLog, WorkoutComponent, WorkoutComponentType, workoutComponentLabels, workoutComponentColors, LiftResult, LeaderboardEntry, formatTimeSlot, GroupMembershipRequest, PricingTier, BillingCycle, ClassLimitType } from "@/lib/types";
+import { Gym, WorkoutGroup, AppUser, ScheduledWorkout, ScheduledTimeSlot, WorkoutLog, WorkoutComponent, WorkoutComponentType, workoutComponentLabels, workoutComponentColors, LiftResult, LeaderboardEntry, formatTimeSlot, GroupMembershipRequest, PricingTier, BillingCycle, ClassLimitType, DiscountCode, DiscountType } from "@/lib/types";
 import { getAllWods, getAllLifts } from "@/lib/workoutData";
 import Navigation from "@/components/Navigation";
 
@@ -95,6 +95,18 @@ export default function GymDetailPage() {
   const [newTierFeatures, setNewTierFeatures] = useState("");
   const [newTierIsHidden, setNewTierIsHidden] = useState(false);
   const [newTierSignupCode, setNewTierSignupCode] = useState("");
+
+  // Discount codes state (mockup)
+  const [discountCodes, setDiscountCodes] = useState<DiscountCode[]>([
+    { id: "disc_1", code: "SUMMER20", discountType: "percentage", discountValue: 20, description: "Summer sale - 20% off", isActive: true, usageCount: 0 },
+    { id: "disc_2", code: "FIRST10", discountType: "fixed", discountValue: 10, description: "$10 off first month", isActive: true, usageCount: 0 },
+  ]);
+  const [showAddDiscountModal, setShowAddDiscountModal] = useState(false);
+  const [editingDiscount, setEditingDiscount] = useState<DiscountCode | null>(null);
+  const [newDiscountCode, setNewDiscountCode] = useState("");
+  const [newDiscountType, setNewDiscountType] = useState<DiscountType>("percentage");
+  const [newDiscountValue, setNewDiscountValue] = useState("");
+  const [newDiscountDescription, setNewDiscountDescription] = useState("");
 
   // Member subscription tracking (mockup)
   interface MemberPlan {
@@ -2100,6 +2112,103 @@ export default function GymDetailPage() {
                 </div>
               )}
 
+              {/* Discount Codes Section */}
+              <div className="mt-8">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 className="font-semibold text-gray-900">Discount Codes</h3>
+                    <p className="text-sm text-gray-500">Create promo codes for member discounts</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setEditingDiscount(null);
+                      setNewDiscountCode("");
+                      setNewDiscountType("percentage");
+                      setNewDiscountValue("");
+                      setNewDiscountDescription("");
+                      setShowAddDiscountModal(true);
+                    }}
+                    className="px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition-colors"
+                  >
+                    + Add Code
+                  </button>
+                </div>
+
+                {discountCodes.length > 0 ? (
+                  <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
+                    {discountCodes.map((discount) => (
+                      <div key={discount.id} className="p-4 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                            discount.isActive ? "bg-green-100" : "bg-gray-100"
+                          }`}>
+                            <span className={discount.isActive ? "text-green-600" : "text-gray-400"}>🏷️</span>
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <p className="font-mono font-medium text-gray-900">{discount.code}</p>
+                              {!discount.isActive && (
+                                <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded">Inactive</span>
+                              )}
+                            </div>
+                            <p className="text-sm text-gray-500">
+                              {discount.discountType === "percentage"
+                                ? `${discount.discountValue}% off`
+                                : `$${discount.discountValue} off`}
+                              {discount.description && ` • ${discount.description}`}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-gray-400">{discount.usageCount} uses</span>
+                          <button
+                            onClick={() => {
+                              setEditingDiscount(discount);
+                              setNewDiscountCode(discount.code);
+                              setNewDiscountType(discount.discountType);
+                              setNewDiscountValue(discount.discountValue.toString());
+                              setNewDiscountDescription(discount.description || "");
+                              setShowAddDiscountModal(true);
+                            }}
+                            className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded"
+                            title="Edit"
+                          >
+                            ✏️
+                          </button>
+                          <button
+                            onClick={() => {
+                              setDiscountCodes(prev => prev.map(d =>
+                                d.id === discount.id ? { ...d, isActive: !d.isActive } : d
+                              ));
+                            }}
+                            className="p-1.5 text-gray-400 hover:text-orange-600 hover:bg-orange-50 rounded"
+                            title={discount.isActive ? "Deactivate" : "Activate"}
+                          >
+                            {discount.isActive ? "🚫" : "✅"}
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (confirm(`Delete discount code "${discount.code}"?`)) {
+                                setDiscountCodes(prev => prev.filter(d => d.id !== discount.id));
+                              }
+                            }}
+                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
+                            title="Delete"
+                          >
+                            🗑️
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 bg-gray-50 rounded-xl text-gray-500">
+                    <p className="text-3xl mb-2">🏷️</p>
+                    <p className="text-sm">No discount codes yet</p>
+                  </div>
+                )}
+              </div>
+
               {/* Group Pricing Section */}
               <div className="mt-8">
                 <h3 className="font-semibold text-gray-900 mb-4">Group Add-on Pricing</h3>
@@ -3063,6 +3172,138 @@ export default function GymDetailPage() {
                 className="flex-1 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-blue-300 transition-colors"
               >
                 {editingTier ? "Save Changes" : "Add Plan"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add/Edit Discount Code Modal */}
+      {showAddDiscountModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl p-6 w-full max-w-md">
+            <h2 className="text-xl font-bold text-gray-900 mb-4">
+              {editingDiscount ? "Edit Discount Code" : "Add Discount Code"}
+            </h2>
+
+            <div className="space-y-4">
+              {/* Code */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Code *
+                </label>
+                <input
+                  type="text"
+                  value={newDiscountCode}
+                  onChange={(e) => setNewDiscountCode(e.target.value.toUpperCase())}
+                  placeholder="e.g., SUMMER20"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 uppercase focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                />
+              </div>
+
+              {/* Discount Type */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Discount Type
+                </label>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setNewDiscountType("percentage")}
+                    className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors ${
+                      newDiscountType === "percentage"
+                        ? "bg-green-600 text-white"
+                        : "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
+                    }`}
+                  >
+                    Percentage (%)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNewDiscountType("fixed")}
+                    className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors ${
+                      newDiscountType === "fixed"
+                        ? "bg-green-600 text-white"
+                        : "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
+                    }`}
+                  >
+                    Fixed Amount ($)
+                  </button>
+                </div>
+              </div>
+
+              {/* Discount Value */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {newDiscountType === "percentage" ? "Percentage Off *" : "Amount Off *"}
+                </label>
+                <div className="flex items-center gap-2">
+                  {newDiscountType === "fixed" && <span className="text-gray-500">$</span>}
+                  <input
+                    type="number"
+                    value={newDiscountValue}
+                    onChange={(e) => setNewDiscountValue(e.target.value)}
+                    placeholder={newDiscountType === "percentage" ? "20" : "10"}
+                    min="0"
+                    max={newDiscountType === "percentage" ? "100" : undefined}
+                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  />
+                  {newDiscountType === "percentage" && <span className="text-gray-500">%</span>}
+                </div>
+              </div>
+
+              {/* Description */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Description (optional)
+                </label>
+                <input
+                  type="text"
+                  value={newDiscountDescription}
+                  onChange={(e) => setNewDiscountDescription(e.target.value)}
+                  placeholder="e.g., Summer sale discount"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => {
+                  setShowAddDiscountModal(false);
+                  setEditingDiscount(null);
+                }}
+                className="flex-1 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  if (!newDiscountCode.trim() || !newDiscountValue) return;
+
+                  const discountData: DiscountCode = {
+                    id: editingDiscount?.id || `disc_${Date.now()}`,
+                    code: newDiscountCode.trim().toUpperCase(),
+                    discountType: newDiscountType,
+                    discountValue: parseFloat(newDiscountValue),
+                    description: newDiscountDescription.trim() || undefined,
+                    isActive: editingDiscount?.isActive ?? true,
+                    usageCount: editingDiscount?.usageCount ?? 0,
+                  };
+
+                  if (editingDiscount) {
+                    setDiscountCodes(prev => prev.map(d => d.id === editingDiscount.id ? discountData : d));
+                  } else {
+                    setDiscountCodes(prev => [...prev, discountData]);
+                  }
+
+                  setShowAddDiscountModal(false);
+                  setEditingDiscount(null);
+                }}
+                disabled={!newDiscountCode.trim() || !newDiscountValue}
+                className="flex-1 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-green-300 transition-colors"
+              >
+                {editingDiscount ? "Save Changes" : "Add Code"}
               </button>
             </div>
           </div>

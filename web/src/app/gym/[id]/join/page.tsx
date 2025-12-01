@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { doc, getDoc, collection, query, where, getDocs, addDoc, Timestamp } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
-import { Gym, PricingTier, WorkoutGroup } from "@/lib/types";
+import { Gym, PricingTier, WorkoutGroup, DiscountCode } from "@/lib/types";
 import Navigation from "@/components/Navigation";
 
 export default function JoinGymPage({
@@ -36,6 +36,16 @@ export default function JoinGymPage({
   const [signupCode, setSignupCode] = useState("");
   const [codeApplied, setCodeApplied] = useState(false);
 
+  // Discount code
+  const [discountCode, setDiscountCode] = useState("");
+  const [appliedDiscount, setAppliedDiscount] = useState<DiscountCode | null>(null);
+
+  // Mockup discount codes (would come from gym settings)
+  const [discountCodes] = useState<DiscountCode[]>([
+    { id: "disc_1", code: "SUMMER20", discountType: "percentage", discountValue: 20, description: "Summer sale - 20% off", isActive: true, usageCount: 0 },
+    { id: "disc_2", code: "FIRST10", discountType: "fixed", discountValue: 10, description: "$10 off first month", isActive: true, usageCount: 0 },
+  ]);
+
   // Default pricing tiers (mockup - would come from gym settings in real implementation)
   const [pricingTiers] = useState<PricingTier[]>([
     { id: "tier_1", name: "Monthly Unlimited", monthlyPrice: 150, yearlyPrice: 1500, classLimitType: "unlimited", description: "Unlimited access to all classes", features: ["Unlimited classes", "Open gym access", "Member app access"], isActive: true },
@@ -57,6 +67,22 @@ export default function JoinGymPage({
   // Helper to get display price (prefer monthly, then one-time)
   const getDisplayPrice = (tier: PricingTier) => tier.monthlyPrice || tier.oneTimePrice || tier.yearlyPrice || 0;
   const isMonthly = (tier: PricingTier) => !!tier.monthlyPrice;
+
+  // Calculate discounted price
+  const getDiscountedPrice = (price: number, discount: DiscountCode | null) => {
+    if (!discount) return price;
+    if (discount.discountType === "percentage") {
+      return Math.max(0, price - (price * discount.discountValue / 100));
+    }
+    return Math.max(0, price - discount.discountValue);
+  };
+
+  // Find matching discount code
+  const findDiscountCode = (code: string) => {
+    return discountCodes.find(
+      (d) => d.isActive && d.code.toUpperCase() === code.toUpperCase()
+    );
+  };
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -113,6 +139,9 @@ export default function JoinGymPage({
       // Find selected tier
       const selectedTier = pricingTiers.find((t) => t.id === selectedTierId);
 
+      const originalPrice = selectedTier ? getDisplayPrice(selectedTier) : 0;
+      const finalPrice = selectedTier ? getDiscountedPrice(originalPrice, appliedDiscount) : 0;
+
       await addDoc(collection(db, "gymMembershipRequests"), {
         gymId: gym.id,
         gymName: gym.name,
@@ -124,7 +153,11 @@ export default function JoinGymPage({
         // Payment mockup data
         selectedPlanId: selectedTierId,
         selectedPlanName: selectedTier?.name,
-        selectedPlanPrice: selectedTier ? getDisplayPrice(selectedTier) : 0,
+        selectedPlanPrice: originalPrice,
+        // Discount info
+        discountCode: appliedDiscount?.code || null,
+        discountAmount: appliedDiscount ? (originalPrice - finalPrice) : 0,
+        finalPrice: finalPrice,
         paymentMethod: "card_mockup",
       });
 
@@ -268,6 +301,59 @@ export default function JoinGymPage({
               )}
             </div>
 
+            {/* Discount Code Entry */}
+            <div className="p-4 bg-green-50 rounded-xl">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-green-600">🏷️</span>
+                <span className="text-sm font-medium text-gray-700">Have a discount code?</span>
+              </div>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={discountCode}
+                  onChange={(e) => {
+                    setDiscountCode(e.target.value.toUpperCase());
+                    if (appliedDiscount) setAppliedDiscount(null);
+                  }}
+                  placeholder="Enter promo code"
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-900 uppercase focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                />
+                <button
+                  onClick={() => {
+                    const found = findDiscountCode(discountCode);
+                    if (found) {
+                      setAppliedDiscount(found);
+                    }
+                  }}
+                  disabled={!discountCode.trim() || !!appliedDiscount}
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg font-medium disabled:bg-gray-300 hover:bg-green-700 transition-colors"
+                >
+                  {appliedDiscount ? "Applied" : "Apply"}
+                </button>
+              </div>
+              {discountCode && !findDiscountCode(discountCode) && !appliedDiscount && (
+                <p className="text-sm text-red-600 mt-2">Invalid discount code.</p>
+              )}
+              {appliedDiscount && (
+                <div className="mt-2 flex items-center justify-between">
+                  <p className="text-sm text-green-600">
+                    ✓ {appliedDiscount.discountType === "percentage"
+                      ? `${appliedDiscount.discountValue}% off`
+                      : `$${appliedDiscount.discountValue} off`} applied!
+                  </p>
+                  <button
+                    onClick={() => {
+                      setAppliedDiscount(null);
+                      setDiscountCode("");
+                    }}
+                    className="text-xs text-gray-500 hover:text-red-600"
+                  >
+                    Remove
+                  </button>
+                </div>
+              )}
+            </div>
+
             <div className="space-y-3">
               {visibleTiers.map((tier) => (
                 <button
@@ -353,14 +439,28 @@ export default function JoinGymPage({
               <h3 className="font-medium text-gray-900 mb-2">Order Summary</h3>
               <div className="flex justify-between items-center">
                 <span className="text-gray-600">{selectedTier?.name}</span>
-                <span className="font-semibold text-gray-900">
+                <span className={`font-semibold ${appliedDiscount ? "text-gray-400 line-through" : "text-gray-900"}`}>
                   ${selectedTier ? getDisplayPrice(selectedTier) : 0}
                   {selectedTier && isMonthly(selectedTier) && "/mo"}
                 </span>
               </div>
+              {appliedDiscount && selectedTier && (
+                <div className="flex justify-between items-center mt-2">
+                  <span className="text-green-600 text-sm">
+                    🏷️ {appliedDiscount.discountType === "percentage"
+                      ? `${appliedDiscount.discountValue}% off`
+                      : `$${appliedDiscount.discountValue} off`}
+                  </span>
+                  <span className="text-green-600 font-medium">
+                    -${(getDisplayPrice(selectedTier) - getDiscountedPrice(getDisplayPrice(selectedTier), appliedDiscount)).toFixed(2)}
+                  </span>
+                </div>
+              )}
               <div className="mt-3 pt-3 border-t border-gray-200 flex justify-between items-center">
                 <span className="font-semibold text-gray-900">Total Due Today</span>
-                <span className="text-xl font-bold text-green-600">${selectedTier ? getDisplayPrice(selectedTier) : 0}</span>
+                <span className="text-xl font-bold text-green-600">
+                  ${selectedTier ? getDiscountedPrice(getDisplayPrice(selectedTier), appliedDiscount).toFixed(2) : "0.00"}
+                </span>
               </div>
             </div>
 
@@ -440,7 +540,7 @@ export default function JoinGymPage({
                 disabled={submitting || !cardName || !cardNumber || !cardExpiry || !cardCvc}
                 className="flex-1 py-3 bg-green-600 text-white rounded-xl font-semibold disabled:bg-gray-300 hover:bg-green-700 transition-colors"
               >
-                {submitting ? "Processing..." : `Pay $${selectedTier ? getDisplayPrice(selectedTier) : 0}`}
+                {submitting ? "Processing..." : `Pay $${selectedTier ? getDiscountedPrice(getDisplayPrice(selectedTier), appliedDiscount).toFixed(2) : "0.00"}`}
               </button>
             </div>
           </div>
