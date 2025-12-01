@@ -97,6 +97,10 @@ function NewWorkoutContent() {
       const name = searchParams.get("name") || "";
       const description = searchParams.get("description") || "";
       router.replace(`/workouts/lift?name=${encodeURIComponent(name)}&description=${encodeURIComponent(description)}`);
+    } else if (type === "skill") {
+      const name = searchParams.get("name") || "";
+      const description = searchParams.get("description") || "";
+      router.replace(`/workouts/skill?name=${encodeURIComponent(name)}&description=${encodeURIComponent(description)}`);
     }
   }, [searchParams, router]);
 
