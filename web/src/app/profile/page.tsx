@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { doc, updateDoc, collection, query, where, getDocs } from "firebase/firestore";
+import { doc, updateDoc, collection, query, where, getDocs, arrayRemove } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
 import { Gym, Gender, WorkoutGroup } from "@/lib/types";
@@ -41,6 +41,10 @@ export default function ProfilePage() {
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [groupAddOns, setGroupAddOns] = useState<GroupAddOn[]>([]);
   const [showCancelModal, setShowCancelModal] = useState<string | null>(null);
+  const [showLeaveGymModal, setShowLeaveGymModal] = useState<(Gym & { role: string }) | null>(null);
+  const [showLeaveGroupModal, setShowLeaveGroupModal] = useState<GroupAddOn | null>(null);
+  const [leavingGym, setLeavingGym] = useState(false);
+  const [leavingGroup, setLeavingGroup] = useState(false);
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
@@ -183,6 +187,65 @@ export default function ProfilePage() {
         sub.id === subId ? { ...sub, status: "active" as const } : sub
       )
     );
+  };
+
+  const handleLeaveGym = async () => {
+    if (!user || !showLeaveGymModal) return;
+
+    setLeavingGym(true);
+    try {
+      const gym = showLeaveGymModal;
+      const gymRef = doc(db, "gyms", gym.id);
+
+      // Remove user from the appropriate array based on role
+      if (gym.role === "Coach") {
+        await updateDoc(gymRef, {
+          coachIds: arrayRemove(user.id),
+        });
+      } else if (gym.role === "Member") {
+        await updateDoc(gymRef, {
+          memberIds: arrayRemove(user.id),
+        });
+      }
+
+      // Also remove from all groups in this gym
+      const groupsSnapshot = await getDocs(collection(db, "groups"));
+      const gymGroups = groupsSnapshot.docs.filter(
+        (doc) => doc.data().gymId === gym.id
+      );
+      for (const groupDoc of gymGroups) {
+        await updateDoc(doc(db, "groups", groupDoc.id), {
+          memberIds: arrayRemove(user.id),
+          coachIds: arrayRemove(user.id),
+        });
+      }
+
+      setShowLeaveGymModal(null);
+      fetchGyms(); // Refresh the data
+    } catch (error) {
+      console.error("Error leaving gym:", error);
+    } finally {
+      setLeavingGym(false);
+    }
+  };
+
+  const handleLeaveGroup = async () => {
+    if (!user || !showLeaveGroupModal) return;
+
+    setLeavingGroup(true);
+    try {
+      const groupRef = doc(db, "groups", showLeaveGroupModal.id);
+      await updateDoc(groupRef, {
+        memberIds: arrayRemove(user.id),
+      });
+
+      setShowLeaveGroupModal(null);
+      fetchGyms(); // Refresh the data
+    } catch (error) {
+      console.error("Error leaving group:", error);
+    } finally {
+      setLeavingGroup(false);
+    }
   };
 
   const getRoleColor = (role: string) => {
@@ -356,9 +419,19 @@ export default function ProfilePage() {
               {myGyms.map((gym) => (
                 <div key={gym.id} className="flex items-center justify-between">
                   <span className="font-medium text-gray-900">{gym.name}</span>
-                  <span className={`px-2 py-1 text-xs font-medium rounded ${getRoleColor(gym.role)}`}>
-                    {gym.role}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className={`px-2 py-1 text-xs font-medium rounded ${getRoleColor(gym.role)}`}>
+                      {gym.role}
+                    </span>
+                    {gym.role !== "Owner" && (
+                      <button
+                        onClick={() => setShowLeaveGymModal(gym)}
+                        className="text-xs text-red-500 hover:text-red-700 hover:underline"
+                      >
+                        Leave
+                      </button>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
@@ -501,7 +574,15 @@ export default function ProfilePage() {
                       <p className="font-medium text-gray-900">{addOn.groupName}</p>
                       <p className="text-xs text-gray-500">{addOn.gymName}</p>
                     </div>
-                    <span className="font-semibold text-amber-700">+${addOn.additionalFee}/mo</span>
+                    <div className="flex items-center gap-3">
+                      <span className="font-semibold text-amber-700">+${addOn.additionalFee}/mo</span>
+                      <button
+                        onClick={() => setShowLeaveGroupModal(addOn)}
+                        className="text-xs text-red-500 hover:text-red-700 hover:underline"
+                      >
+                        Unsubscribe
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -585,6 +666,92 @@ export default function ProfilePage() {
                 className="flex-1 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
               >
                 Yes, Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Leave Gym Modal */}
+      {showLeaveGymModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl p-6 w-full max-w-md">
+            <div className="text-center mb-6">
+              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <span className="text-3xl">🏢</span>
+              </div>
+              <h2 className="text-xl font-bold text-gray-900 mb-2">Leave {showLeaveGymModal.name}?</h2>
+              <p className="text-gray-600 text-sm">
+                Are you sure you want to leave this gym? You&apos;ll lose access to all workouts and groups.
+              </p>
+            </div>
+
+            <div className="bg-gray-50 rounded-lg p-4 mb-6">
+              <h4 className="font-medium text-gray-900 mb-2">What happens when you leave:</h4>
+              <ul className="text-sm text-gray-600 space-y-1">
+                <li>• You&apos;ll be removed from all groups at this gym</li>
+                <li>• You&apos;ll lose access to the gym&apos;s workouts and schedule</li>
+                <li>• Any active subscription will need to be cancelled separately</li>
+                <li>• You can rejoin anytime by requesting access again</li>
+              </ul>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowLeaveGymModal(null)}
+                className="flex-1 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Stay
+              </button>
+              <button
+                onClick={handleLeaveGym}
+                disabled={leavingGym}
+                className="flex-1 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-red-300 transition-colors"
+              >
+                {leavingGym ? "Leaving..." : "Leave Gym"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Leave Group Modal */}
+      {showLeaveGroupModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl p-6 w-full max-w-md">
+            <div className="text-center mb-6">
+              <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <span className="text-3xl">👥</span>
+              </div>
+              <h2 className="text-xl font-bold text-gray-900 mb-2">Unsubscribe from {showLeaveGroupModal.groupName}?</h2>
+              <p className="text-gray-600 text-sm">
+                This will remove the +${showLeaveGroupModal.additionalFee}/mo add-on from your subscription.
+              </p>
+            </div>
+
+            <div className="bg-gray-50 rounded-lg p-4 mb-6">
+              <h4 className="font-medium text-gray-900 mb-2">What happens when you unsubscribe:</h4>
+              <ul className="text-sm text-gray-600 space-y-1">
+                <li>• You&apos;ll be removed from this group</li>
+                <li>• You&apos;ll lose access to group-specific workouts</li>
+                <li>• The additional fee will be removed from your next bill</li>
+                <li>• You can rejoin anytime by requesting access again</li>
+              </ul>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowLeaveGroupModal(null)}
+                className="flex-1 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Keep Subscription
+              </button>
+              <button
+                onClick={handleLeaveGroup}
+                disabled={leavingGroup}
+                className="flex-1 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-red-300 transition-colors"
+              >
+                {leavingGroup ? "Unsubscribing..." : "Unsubscribe"}
               </button>
             </div>
           </div>
