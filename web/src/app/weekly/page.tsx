@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { collection, query, where, orderBy, getDocs, Timestamp, doc, updateDoc, arrayUnion, arrayRemove } from "firebase/firestore";
+import { collection, query, where, orderBy, getDocs, addDoc, updateDoc, deleteDoc, doc, Timestamp } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
-import { ScheduledWorkout, ScheduledTimeSlot, workoutComponentLabels, workoutComponentColors, formatTimeSlot } from "@/lib/types";
+import { ScheduledWorkout, ScheduledTimeSlot, WorkoutComponent, WorkoutComponentType, workoutComponentLabels, workoutComponentColors, formatTimeSlot } from "@/lib/types";
 import Navigation from "@/components/Navigation";
 
 interface WorkoutGroup {
@@ -15,17 +15,167 @@ interface WorkoutGroup {
   signupCutoffMinutes?: number;
 }
 
+// Personal workout log entry
+interface PersonalWorkout {
+  id: string;
+  odId: string;
+  date: Date;
+  components: WorkoutComponent[];
+  notes?: string;
+  duration?: number;
+  feeling?: "great" | "good" | "okay" | "tired" | "exhausted";
+  createdAt: Date;
+}
+
 export default function WeeklyPlanPage() {
   const { user, loading, switching } = useAuth();
   const router = useRouter();
   const [calendarRange, setCalendarRange] = useState<"next7days" | "thisWeek" | "nextWeek" | "2weeks" | "month">("next7days");
   const [workouts, setWorkouts] = useState<ScheduledWorkout[]>([]);
+  const [personalWorkouts, setPersonalWorkouts] = useState<PersonalWorkout[]>([]);
   const [groups, setGroups] = useState<Record<string, WorkoutGroup>>({});
   const [userGroupIds, setUserGroupIds] = useState<string[]>([]);
   const [userGymIds, setUserGymIds] = useState<string[]>([]);
   const [groupsLoaded, setGroupsLoaded] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
   const [userCache, setUserCache] = useState<Record<string, string>>({});
+
+  // Personal workout modal state
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [editingWorkoutId, setEditingWorkoutId] = useState<string | null>(null);
+  const [newWorkoutDate, setNewWorkoutDate] = useState(new Date().toISOString().split("T")[0]);
+  const [workoutComponents, setWorkoutComponents] = useState<WorkoutComponent[]>([]);
+  const [workoutNotes, setWorkoutNotes] = useState("");
+  const [workoutDuration, setWorkoutDuration] = useState("");
+  const [workoutFeeling, setWorkoutFeeling] = useState<PersonalWorkout["feeling"]>("good");
+  const [editingComponentId, setEditingComponentId] = useState<string | null>(null);
+  const [editingComponentTitle, setEditingComponentTitle] = useState("");
+  const [editingComponentDescription, setEditingComponentDescription] = useState("");
+
+  const feelingEmojis: Record<NonNullable<PersonalWorkout["feeling"]>, string> = {
+    great: "🔥",
+    good: "💪",
+    okay: "😐",
+    tired: "😓",
+    exhausted: "😵",
+  };
+
+  // Component management functions
+  const addComponent = (type: WorkoutComponentType) => {
+    const newComponent: WorkoutComponent = {
+      id: Date.now().toString(),
+      type,
+      title: "",
+      description: "",
+    };
+    setWorkoutComponents([...workoutComponents, newComponent]);
+    setEditingComponentId(newComponent.id);
+    setEditingComponentTitle("");
+    setEditingComponentDescription("");
+  };
+
+  const removeComponent = (id: string) => {
+    setWorkoutComponents(workoutComponents.filter((c) => c.id !== id));
+    if (editingComponentId === id) {
+      setEditingComponentId(null);
+    }
+  };
+
+  const startEditComponent = (component: WorkoutComponent) => {
+    setEditingComponentId(component.id);
+    setEditingComponentTitle(component.title);
+    setEditingComponentDescription(component.description || "");
+  };
+
+  const saveComponentEdit = () => {
+    if (!editingComponentId) return;
+    setWorkoutComponents(
+      workoutComponents.map((c) =>
+        c.id === editingComponentId
+          ? { ...c, title: editingComponentTitle, description: editingComponentDescription }
+          : c
+      )
+    );
+    setEditingComponentId(null);
+    setEditingComponentTitle("");
+    setEditingComponentDescription("");
+  };
+
+  const resetForm = () => {
+    setWorkoutComponents([]);
+    setWorkoutNotes("");
+    setWorkoutDuration("");
+    setWorkoutFeeling("good");
+    setEditingComponentId(null);
+    setEditingComponentTitle("");
+    setEditingComponentDescription("");
+    setEditingWorkoutId(null);
+  };
+
+  const openAddModal = (date: Date) => {
+    resetForm();
+    setNewWorkoutDate(date.toISOString().split("T")[0]);
+    setShowAddModal(true);
+  };
+
+  const openEditModal = (workout: PersonalWorkout) => {
+    setEditingWorkoutId(workout.id);
+    setNewWorkoutDate(workout.date.toISOString().split("T")[0]);
+    setWorkoutComponents([...workout.components]);
+    setWorkoutNotes(workout.notes || "");
+    setWorkoutDuration(workout.duration?.toString() || "");
+    setWorkoutFeeling(workout.feeling || "good");
+    setShowAddModal(true);
+  };
+
+  // Save personal workout
+  const handleSavePersonalWorkout = async () => {
+    if (!user || workoutComponents.length === 0) return;
+
+    try {
+      const workoutData = {
+        userId: user.id,
+        date: Timestamp.fromDate(new Date(newWorkoutDate)),
+        components: workoutComponents,
+        notes: workoutNotes || null,
+        duration: workoutDuration ? parseInt(workoutDuration) : null,
+        feeling: workoutFeeling,
+        updatedAt: Timestamp.now(),
+      };
+
+      if (editingWorkoutId) {
+        // Update existing
+        await updateDoc(doc(db, "personalWorkouts", editingWorkoutId), workoutData);
+      } else {
+        // Create new
+        await addDoc(collection(db, "personalWorkouts"), {
+          ...workoutData,
+          createdAt: Timestamp.now(),
+        });
+      }
+
+      setShowAddModal(false);
+      resetForm();
+      fetchPersonalWorkouts();
+    } catch (error) {
+      console.error("Error saving personal workout:", error);
+    }
+  };
+
+  const handleDeletePersonalWorkout = async (workoutId: string) => {
+    if (!confirm("Delete this workout?")) return;
+
+    try {
+      await deleteDoc(doc(db, "personalWorkouts", workoutId));
+      fetchPersonalWorkouts();
+    } catch (error) {
+      console.error("Error deleting personal workout:", error);
+    }
+  };
+
+  const getPersonalWorkoutsForDate = (date: Date) => {
+    return personalWorkouts.filter((w) => w.date.toDateString() === date.toDateString());
+  };
 
   useEffect(() => {
     if (!loading && !switching && !user) {
@@ -42,8 +192,44 @@ export default function WeeklyPlanPage() {
   useEffect(() => {
     if (user && groupsLoaded) {
       fetchWorkouts();
+      fetchPersonalWorkouts();
     }
   }, [user, calendarRange, groupsLoaded, userGroupIds, userGymIds]);
+
+  const fetchPersonalWorkouts = async () => {
+    if (!user) return;
+
+    try {
+      const { rangeStart, rangeEnd } = getDateRange();
+
+      const personalQuery = query(
+        collection(db, "personalWorkouts"),
+        where("userId", "==", user.id),
+        where("date", ">=", Timestamp.fromDate(rangeStart)),
+        where("date", "<=", Timestamp.fromDate(rangeEnd)),
+        orderBy("date", "asc")
+      );
+
+      const snapshot = await getDocs(personalQuery);
+      const personalData = snapshot.docs.map((doc) => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          odId: data.odId,
+          date: data.date.toDate(),
+          components: data.components || [],
+          notes: data.notes,
+          duration: data.duration,
+          feeling: data.feeling,
+          createdAt: data.createdAt?.toDate() || new Date(),
+        } as PersonalWorkout;
+      });
+
+      setPersonalWorkouts(personalData);
+    } catch (error) {
+      console.error("Error fetching personal workouts:", error);
+    }
+  };
 
   const fetchUserGroups = async () => {
     if (!user) return;
@@ -406,8 +592,10 @@ export default function WeeklyPlanPage() {
           <div className="space-y-3">
             {calendarDays.map((day) => {
               const dayWorkouts = getWorkoutsForDate(day);
+              const dayPersonalWorkouts = getPersonalWorkoutsForDate(day);
               const { day: dayLabel, date: dateLabel } = formatDayHeader(day);
               const isToday = day.toDateString() === new Date().toDateString();
+              const totalWorkouts = dayWorkouts.length + dayPersonalWorkouts.length;
 
               return (
                 <div
@@ -424,16 +612,27 @@ export default function WeeklyPlanPage() {
                         {dateLabel}
                       </span>
                     </div>
-                    {dayWorkouts.length > 0 && (
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${isToday ? "bg-blue-200 text-blue-700" : "bg-gray-200 text-gray-600"}`}>
-                        {dayWorkouts.length} workout{dayWorkouts.length !== 1 ? "s" : ""}
-                      </span>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {totalWorkouts > 0 && (
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${isToday ? "bg-blue-200 text-blue-700" : "bg-gray-200 text-gray-600"}`}>
+                          {totalWorkouts} workout{totalWorkouts !== 1 ? "s" : ""}
+                        </span>
+                      )}
+                      <button
+                        onClick={() => openAddModal(day)}
+                        className="p-1 rounded-full bg-green-100 text-green-700 hover:bg-green-200 transition-colors"
+                        title="Add personal workout"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                      </button>
+                    </div>
                   </div>
 
                   {/* Workouts for this day */}
                   <div className="p-2">
-                    {dayWorkouts.length === 0 ? (
+                    {totalWorkouts === 0 ? (
                       <p className="text-gray-400 text-sm text-center py-2">No workouts scheduled</p>
                     ) : (
                       <div className="space-y-2">
@@ -635,6 +834,79 @@ export default function WeeklyPlanPage() {
                             </div>
                           </div>
                         ))}
+
+                        {/* Personal Workouts */}
+                        {dayPersonalWorkouts.map((personalWorkout) => (
+                          <div
+                            key={`personal-${personalWorkout.id}`}
+                            className="p-3 bg-green-50 rounded-lg border border-green-200"
+                          >
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                {/* Personal workout badge */}
+                                <div className="flex items-center gap-2 mb-2">
+                                  <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full font-medium">
+                                    Personal Workout
+                                  </span>
+                                  {personalWorkout.feeling && (
+                                    <span className="text-sm" title={personalWorkout.feeling}>
+                                      {feelingEmojis[personalWorkout.feeling]}
+                                    </span>
+                                  )}
+                                  {personalWorkout.duration && (
+                                    <span className="text-xs text-gray-500">
+                                      {personalWorkout.duration} min
+                                    </span>
+                                  )}
+                                </div>
+
+                                {/* Components */}
+                                <div className="space-y-2">
+                                  {personalWorkout.components.map((comp) => (
+                                    <div key={comp.id} className="border-l-2 border-green-300 pl-2">
+                                      <div className="flex items-center gap-2">
+                                        <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${workoutComponentColors[comp.type]?.bg || "bg-gray-100"} ${workoutComponentColors[comp.type]?.text || "text-gray-700"}`}>
+                                          {workoutComponentLabels[comp.type] || comp.type}
+                                        </span>
+                                        <span className="font-medium text-gray-900 text-sm">{comp.title}</span>
+                                      </div>
+                                      {comp.description && (
+                                        <p className="text-gray-600 text-xs mt-1 whitespace-pre-wrap line-clamp-2 ml-1">{comp.description}</p>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+
+                                {/* Notes */}
+                                {personalWorkout.notes && (
+                                  <p className="text-gray-500 text-xs mt-2 italic">{personalWorkout.notes}</p>
+                                )}
+                              </div>
+
+                              {/* Edit/Delete buttons */}
+                              <div className="flex items-center gap-1 ml-2">
+                                <button
+                                  onClick={() => openEditModal(personalWorkout)}
+                                  className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                                  title="Edit"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                  </svg>
+                                </button>
+                                <button
+                                  onClick={() => handleDeletePersonalWorkout(personalWorkout.id)}
+                                  className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                                  title="Delete"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                  </svg>
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     )}
                   </div>
@@ -653,6 +925,202 @@ export default function WeeklyPlanPage() {
           </div>
         )}
       </main>
+
+      {/* Add/Edit Personal Workout Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-4 border-b border-gray-200 flex items-center justify-between sticky top-0 bg-white">
+              <h2 className="text-lg font-bold text-gray-900">
+                {editingWorkoutId ? "Edit Personal Workout" : "Add Personal Workout"}
+              </h2>
+              <button
+                onClick={() => {
+                  setShowAddModal(false);
+                  resetForm();
+                }}
+                className="p-1 rounded-full hover:bg-gray-100 text-gray-500"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="p-4 space-y-4">
+              {/* Date */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
+                <input
+                  type="date"
+                  value={newWorkoutDate}
+                  onChange={(e) => setNewWorkoutDate(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+
+              {/* Workout Components */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Components</label>
+
+                {/* Component type buttons */}
+                <div className="flex flex-wrap gap-2 mb-3">
+                  {(Object.keys(workoutComponentLabels) as WorkoutComponentType[]).map((type) => (
+                    <button
+                      key={type}
+                      onClick={() => addComponent(type)}
+                      className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-colors ${workoutComponentColors[type]?.bg || "bg-gray-100"} ${workoutComponentColors[type]?.text || "text-gray-700"} border-transparent hover:border-gray-300`}
+                    >
+                      + {workoutComponentLabels[type]}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Added components */}
+                <div className="space-y-2">
+                  {workoutComponents.map((comp) => (
+                    <div
+                      key={comp.id}
+                      className={`p-3 rounded-lg border ${
+                        editingComponentId === comp.id ? "border-blue-300 bg-blue-50" : "border-gray-200 bg-gray-50"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${workoutComponentColors[comp.type]?.bg || "bg-gray-100"} ${workoutComponentColors[comp.type]?.text || "text-gray-700"}`}>
+                          {workoutComponentLabels[comp.type]}
+                        </span>
+                        <div className="flex items-center gap-1">
+                          {editingComponentId !== comp.id && (
+                            <button
+                              onClick={() => startEditComponent(comp)}
+                              className="p-1 text-gray-400 hover:text-blue-600 rounded"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                              </svg>
+                            </button>
+                          )}
+                          <button
+                            onClick={() => removeComponent(comp.id)}
+                            className="p-1 text-gray-400 hover:text-red-600 rounded"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+
+                      {editingComponentId === comp.id ? (
+                        <div className="space-y-2">
+                          <input
+                            type="text"
+                            placeholder="Title"
+                            value={editingComponentTitle}
+                            onChange={(e) => setEditingComponentTitle(e.target.value)}
+                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            autoFocus
+                          />
+                          <textarea
+                            placeholder="Description (optional)"
+                            value={editingComponentDescription}
+                            onChange={(e) => setEditingComponentDescription(e.target.value)}
+                            rows={3}
+                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+                          />
+                          <button
+                            onClick={saveComponentEdit}
+                            disabled={!editingComponentTitle.trim()}
+                            className="px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                          >
+                            Save
+                          </button>
+                        </div>
+                      ) : (
+                        <div>
+                          <p className="font-medium text-gray-900 text-sm">{comp.title || "(No title)"}</p>
+                          {comp.description && (
+                            <p className="text-gray-600 text-xs mt-1 whitespace-pre-wrap">{comp.description}</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {workoutComponents.length === 0 && (
+                  <p className="text-gray-400 text-sm text-center py-4">Add components using the buttons above</p>
+                )}
+              </div>
+
+              {/* Duration and Feeling */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Duration (min)</label>
+                  <input
+                    type="number"
+                    placeholder="e.g., 60"
+                    value={workoutDuration}
+                    onChange={(e) => setWorkoutDuration(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">How did you feel?</label>
+                  <div className="flex gap-2">
+                    {(Object.keys(feelingEmojis) as NonNullable<PersonalWorkout["feeling"]>[]).map((feeling) => (
+                      <button
+                        key={feeling}
+                        onClick={() => setWorkoutFeeling(feeling)}
+                        className={`p-2 rounded-lg text-xl transition-colors ${
+                          workoutFeeling === feeling
+                            ? "bg-blue-100 ring-2 ring-blue-500"
+                            : "bg-gray-100 hover:bg-gray-200"
+                        }`}
+                        title={feeling}
+                      >
+                        {feelingEmojis[feeling]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Notes */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Notes (optional)</label>
+                <textarea
+                  placeholder="How did the workout go?"
+                  value={workoutNotes}
+                  onChange={(e) => setWorkoutNotes(e.target.value)}
+                  rows={2}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+                />
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 border-t border-gray-200 flex gap-3 sticky bottom-0 bg-white">
+              <button
+                onClick={() => {
+                  setShowAddModal(false);
+                  resetForm();
+                }}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSavePersonalWorkout}
+                disabled={workoutComponents.length === 0 || workoutComponents.some(c => !c.title)}
+                className="flex-1 px-4 py-2 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+              >
+                {editingWorkoutId ? "Update" : "Save"} Workout
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
