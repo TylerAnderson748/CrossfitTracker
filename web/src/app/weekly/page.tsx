@@ -570,11 +570,19 @@ export default function WeeklyPlanPage() {
 
   // Generate array of days for the selected range
   const getCalendarDays = () => {
-    const days: Date[] = [];
+    const days: { date: Date; dateString: string }[] = [];
     const current = new Date(rangeStart.getFullYear(), rangeStart.getMonth(), rangeStart.getDate(), 12, 0, 0, 0);
     const endDate = new Date(rangeEnd.getFullYear(), rangeEnd.getMonth(), rangeEnd.getDate(), 12, 0, 0, 0);
     while (current <= endDate) {
-      days.push(new Date(current));
+      // Generate date string directly from components to avoid any timezone issues
+      const year = current.getFullYear();
+      const month = current.getMonth();
+      const day = current.getDate();
+      const dateString = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      days.push({
+        date: new Date(current),
+        dateString: dateString
+      });
       current.setDate(current.getDate() + 1);
     }
     return days;
@@ -673,16 +681,16 @@ export default function WeeklyPlanPage() {
           </div>
         ) : (
           <div className="space-y-3">
-            {calendarDays.map((day) => {
-              const dayWorkouts = getWorkoutsForDate(day);
-              const dayPersonalWorkouts = getPersonalWorkoutsForDate(day);
-              const { day: dayLabel, date: dateLabel } = formatDayHeader(day);
-              const isToday = day.toDateString() === new Date().toDateString();
+            {calendarDays.map((dayObj) => {
+              const dayWorkouts = getWorkoutsForDate(dayObj.date);
+              const dayPersonalWorkouts = getPersonalWorkoutsForDate(dayObj.date);
+              const { day: dayLabel, date: dateLabel } = formatDayHeader(dayObj.date);
+              const isToday = dayObj.date.toDateString() === new Date().toDateString();
               const totalWorkouts = dayWorkouts.length + dayPersonalWorkouts.length;
 
               return (
                 <div
-                  key={day.toISOString()}
+                  key={dayObj.dateString}
                   className={`rounded-lg border ${isToday ? "border-blue-300 bg-blue-50" : "border-gray-200 bg-white"}`}
                 >
                   {/* Day Header */}
@@ -702,7 +710,7 @@ export default function WeeklyPlanPage() {
                         </span>
                       )}
                       <button
-                        onClick={() => openAddWorkoutModal(formatDateLocal(day))}
+                        onClick={() => openAddWorkoutModal(dayObj.dateString)}
                         className={`w-6 h-6 flex items-center justify-center rounded-full text-sm font-semibold transition-colors ${
                           isToday
                             ? "bg-blue-600 text-white hover:bg-blue-700"
