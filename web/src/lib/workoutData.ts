@@ -364,31 +364,6 @@ export const SKILL_CATEGORIES: WorkoutCategory[] = [
       { name: "False Grip Hold", description: "False grip hang on rings", type: "skill" },
     ],
   },
-  {
-    name: "Core & Midline",
-    workouts: [
-      { name: "Hollow Hold", description: "Hollow body position hold", type: "skill" },
-      { name: "Hollow Rock", description: "Rocking in hollow position", type: "skill" },
-      { name: "Arch Hold", description: "Superman position hold", type: "skill" },
-      { name: "Toes-to-Bar", description: "TTB strict or kipping", type: "skill" },
-      { name: "GHD Sit-up", description: "Sit-up on GHD machine", type: "skill" },
-      { name: "V-Up", description: "Simultaneous leg and torso lift", type: "skill" },
-      { name: "Plank Hold", description: "Front plank position", type: "skill" },
-      { name: "L-Sit", description: "Legs parallel to ground in support", type: "skill" },
-    ],
-  },
-  {
-    name: "Mobility & Flexibility",
-    workouts: [
-      { name: "Overhead Squat Mobility", description: "OHS position stretches", type: "skill" },
-      { name: "Front Rack Mobility", description: "Front rack position work", type: "skill" },
-      { name: "Hip Flexor Stretch", description: "Couch stretch and variations", type: "skill" },
-      { name: "Shoulder Mobility", description: "Shoulder stretches and band work", type: "skill" },
-      { name: "Thoracic Spine Mobility", description: "T-spine foam rolling and stretches", type: "skill" },
-      { name: "Ankle Mobility", description: "Banded ankle stretches", type: "skill" },
-      { name: "Wrist Mobility", description: "Wrist stretches for front rack", type: "skill" },
-    ],
-  },
 ];
 
 // Helper function to get all workouts from categories
