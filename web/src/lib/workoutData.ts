@@ -3,7 +3,7 @@
 export interface Workout {
   name: string;
   description: string;
-  type: "wod" | "lift";
+  type: "wod" | "lift" | "skill";
 }
 
 export interface WorkoutCategory {
@@ -299,6 +299,98 @@ export const LIFT_CATEGORIES: WorkoutCategory[] = [
   },
 ];
 
+// =====================
+// SKILL CATEGORIES
+// =====================
+
+export const SKILL_CATEGORIES: WorkoutCategory[] = [
+  {
+    name: "Gymnastics Skills",
+    icon: "🤸",
+    workouts: [
+      { name: "Muscle-up", description: "Ring or bar muscle-up", type: "skill" },
+      { name: "Bar Muscle-up", description: "Kipping or strict bar muscle-up", type: "skill" },
+      { name: "Ring Muscle-up", description: "Kipping or strict ring muscle-up", type: "skill" },
+      { name: "Handstand Walk", description: "Walking on hands", type: "skill" },
+      { name: "Handstand Push-up", description: "Strict or kipping HSPU", type: "skill" },
+      { name: "Pistol Squat", description: "Single leg squat", type: "skill" },
+      { name: "L-Sit", description: "Holding L position on rings or parallettes", type: "skill" },
+      { name: "Rope Climb", description: "Legless or with legs", type: "skill" },
+      { name: "Toes-to-Bar", description: "Kipping or strict toes to bar", type: "skill" },
+      { name: "Knees-to-Elbow", description: "Kipping or strict K2E", type: "skill" },
+    ],
+  },
+  {
+    name: "Pull-up Variations",
+    workouts: [
+      { name: "Strict Pull-up", description: "Dead hang strict pull-up", type: "skill" },
+      { name: "Kipping Pull-up", description: "Kipping pull-up", type: "skill" },
+      { name: "Butterfly Pull-up", description: "Butterfly kipping pull-up", type: "skill" },
+      { name: "Chest-to-Bar Pull-up", description: "C2B strict or kipping", type: "skill" },
+      { name: "Ring Row", description: "Horizontal body row on rings", type: "skill" },
+      { name: "Banded Pull-up", description: "Pull-up with band assistance", type: "skill" },
+    ],
+  },
+  {
+    name: "Handstand Skills",
+    workouts: [
+      { name: "Wall Handstand Hold", description: "Handstand against wall", type: "skill" },
+      { name: "Freestanding Handstand", description: "Handstand without wall support", type: "skill" },
+      { name: "Handstand Walk", description: "Walking on hands", type: "skill" },
+      { name: "Handstand Push-up", description: "Strict HSPU", type: "skill" },
+      { name: "Kipping HSPU", description: "Kipping handstand push-up", type: "skill" },
+      { name: "Deficit HSPU", description: "HSPU with hands on plates", type: "skill" },
+      { name: "Wall Walk", description: "Walk up wall to handstand position", type: "skill" },
+    ],
+  },
+  {
+    name: "Double-Under & Jump Rope",
+    workouts: [
+      { name: "Single-Under", description: "Basic jump rope", type: "skill" },
+      { name: "Double-Under", description: "Rope passes twice per jump", type: "skill" },
+      { name: "Triple-Under", description: "Rope passes three times per jump", type: "skill" },
+      { name: "Crossover", description: "Arms crossed during skip", type: "skill" },
+    ],
+  },
+  {
+    name: "Ring Skills",
+    workouts: [
+      { name: "Ring Dip", description: "Strict or kipping ring dip", type: "skill" },
+      { name: "Ring Muscle-up", description: "Kipping or strict ring MU", type: "skill" },
+      { name: "Ring Support Hold", description: "Holding support position on rings", type: "skill" },
+      { name: "Ring L-Sit", description: "L-sit on rings", type: "skill" },
+      { name: "Skin the Cat", description: "Rotation through rings", type: "skill" },
+      { name: "Ring Row", description: "Horizontal row on rings", type: "skill" },
+      { name: "False Grip Hold", description: "False grip hang on rings", type: "skill" },
+    ],
+  },
+  {
+    name: "Core & Midline",
+    workouts: [
+      { name: "Hollow Hold", description: "Hollow body position hold", type: "skill" },
+      { name: "Hollow Rock", description: "Rocking in hollow position", type: "skill" },
+      { name: "Arch Hold", description: "Superman position hold", type: "skill" },
+      { name: "Toes-to-Bar", description: "TTB strict or kipping", type: "skill" },
+      { name: "GHD Sit-up", description: "Sit-up on GHD machine", type: "skill" },
+      { name: "V-Up", description: "Simultaneous leg and torso lift", type: "skill" },
+      { name: "Plank Hold", description: "Front plank position", type: "skill" },
+      { name: "L-Sit", description: "Legs parallel to ground in support", type: "skill" },
+    ],
+  },
+  {
+    name: "Mobility & Flexibility",
+    workouts: [
+      { name: "Overhead Squat Mobility", description: "OHS position stretches", type: "skill" },
+      { name: "Front Rack Mobility", description: "Front rack position work", type: "skill" },
+      { name: "Hip Flexor Stretch", description: "Couch stretch and variations", type: "skill" },
+      { name: "Shoulder Mobility", description: "Shoulder stretches and band work", type: "skill" },
+      { name: "Thoracic Spine Mobility", description: "T-spine foam rolling and stretches", type: "skill" },
+      { name: "Ankle Mobility", description: "Banded ankle stretches", type: "skill" },
+      { name: "Wrist Mobility", description: "Wrist stretches for front rack", type: "skill" },
+    ],
+  },
+];
+
 // Helper function to get all workouts from categories
 export const getAllWods = (): Workout[] => {
   const seen = new Set<string>();
@@ -318,6 +410,20 @@ export const getAllLifts = (): Workout[] => {
   const seen = new Set<string>();
   const workouts: Workout[] = [];
   LIFT_CATEGORIES.forEach(cat => {
+    cat.workouts.forEach(w => {
+      if (!seen.has(w.name)) {
+        seen.add(w.name);
+        workouts.push(w);
+      }
+    });
+  });
+  return workouts;
+};
+
+export const getAllSkills = (): Workout[] => {
+  const seen = new Set<string>();
+  const workouts: Workout[] = [];
+  SKILL_CATEGORIES.forEach(cat => {
     cat.workouts.forEach(w => {
       if (!seen.has(w.name)) {
         seen.add(w.name);

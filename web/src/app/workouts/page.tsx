@@ -8,19 +8,19 @@ import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
 import { WorkoutLog, formatResult } from "@/lib/types";
 import Navigation from "@/components/Navigation";
-import { WOD_CATEGORIES, LIFT_CATEGORIES, WorkoutCategory, Workout, getAllWods, getAllLifts } from "@/lib/workoutData";
+import { WOD_CATEGORIES, LIFT_CATEGORIES, SKILL_CATEGORIES, WorkoutCategory, Workout, getAllWods, getAllLifts, getAllSkills } from "@/lib/workoutData";
 
 interface FrequentWorkout {
   name: string;
   count: number;
-  type: "wod" | "lift";
+  type: "wod" | "lift" | "skill";
   description: string;
 }
 
 export default function WorkoutsPage() {
   const { user, loading, switching } = useAuth();
   const router = useRouter();
-  const [workoutType, setWorkoutType] = useState<"wod" | "lift">("wod");
+  const [workoutType, setWorkoutType] = useState<"wod" | "lift" | "skill">("wod");
   const [recentLogs, setRecentLogs] = useState<WorkoutLog[]>([]);
   const [frequentWods, setFrequentWods] = useState<FrequentWorkout[]>([]);
   const [frequentLifts, setFrequentLifts] = useState<FrequentWorkout[]>([]);
@@ -126,8 +126,8 @@ export default function WorkoutsPage() {
 
   // Build categories with dynamic Frequent section
   const getCategories = (): WorkoutCategory[] => {
-    const baseCategories = workoutType === "wod" ? WOD_CATEGORIES : LIFT_CATEGORIES;
-    const frequentItems = workoutType === "wod" ? frequentWods : frequentLifts;
+    const baseCategories = workoutType === "wod" ? WOD_CATEGORIES : workoutType === "lift" ? LIFT_CATEGORIES : SKILL_CATEGORIES;
+    const frequentItems = workoutType === "wod" ? frequentWods : workoutType === "lift" ? frequentLifts : [];
 
     if (frequentItems.length > 0) {
       const frequentCategory: WorkoutCategory = {
@@ -149,7 +149,7 @@ export default function WorkoutsPage() {
   // Filter workouts across all categories when searching
   const getSearchResults = (): Workout[] => {
     if (!searchQuery.trim()) return [];
-    const allWorkouts = workoutType === "wod" ? getAllWods() : getAllLifts();
+    const allWorkouts = workoutType === "wod" ? getAllWods() : workoutType === "lift" ? getAllLifts() : getAllSkills();
     return allWorkouts.filter(
       (w) =>
         w.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -216,6 +216,20 @@ export default function WorkoutsPage() {
             }`}
           >
             Lifts
+          </button>
+          <button
+            onClick={() => {
+              setWorkoutType("skill");
+              setExpandedCategory(null);
+              setSearchQuery("");
+            }}
+            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+              workoutType === "skill"
+                ? "bg-blue-600 text-white"
+                : "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
+            }`}
+          >
+            Skills
           </button>
         </div>
 
