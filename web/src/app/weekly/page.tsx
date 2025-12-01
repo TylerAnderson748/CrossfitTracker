@@ -58,10 +58,6 @@ export default function WeeklyPlanPage() {
   const [showAddWorkoutModal, setShowAddWorkoutModal] = useState(false);
   const [newWorkoutDate, setNewWorkoutDate] = useState("");
   const [workoutComponents, setWorkoutComponents] = useState<WorkoutComponent[]>([]);
-  const [editingComponentId, setEditingComponentId] = useState<string | null>(null);
-  const [editingComponentTitle, setEditingComponentTitle] = useState("");
-  const [editingComponentDescription, setEditingComponentDescription] = useState("");
-  const [showTitleSuggestions, setShowTitleSuggestions] = useState(false);
   const [editingPersonalWorkoutId, setEditingPersonalWorkoutId] = useState<string | null>(null);
 
   // Get all workouts for suggestions
@@ -91,58 +87,35 @@ export default function WeeklyPlanPage() {
       description: "",
     };
     setWorkoutComponents([...workoutComponents, newComponent]);
-    setEditingComponentId(newComponent.id);
-    setEditingComponentTitle("");
-    setEditingComponentDescription("");
   };
 
   const removeComponent = (id: string) => {
     setWorkoutComponents(workoutComponents.filter((c) => c.id !== id));
-    if (editingComponentId === id) {
-      setEditingComponentId(null);
-    }
   };
 
-  const startEditComponent = (comp: WorkoutComponent) => {
-    setEditingComponentId(comp.id);
-    setEditingComponentTitle(comp.title);
-    setEditingComponentDescription(comp.description);
-  };
-
-  const saveComponentEdit = () => {
-    if (!editingComponentId) return;
+  const updateComponent = (id: string, field: "title" | "description", value: string) => {
     setWorkoutComponents(
       workoutComponents.map((c) =>
-        c.id === editingComponentId
-          ? { ...c, title: editingComponentTitle, description: editingComponentDescription }
-          : c
+        c.id === id ? { ...c, [field]: value } : c
       )
     );
-    setEditingComponentId(null);
-    setEditingComponentTitle("");
-    setEditingComponentDescription("");
-    setShowTitleSuggestions(false);
   };
 
-  // Filter suggestions based on component type and search text
-  const filteredSuggestions = uniqueWorkouts.filter((w) => {
-    if (!editingComponentTitle) return true;
-    return w.name.toLowerCase().includes(editingComponentTitle.toLowerCase());
-  }).slice(0, 10);
-
-  const handleSelectSuggestion = (workout: Workout) => {
-    setEditingComponentTitle(workout.name);
-    setEditingComponentDescription(workout.description || "");
-    setShowTitleSuggestions(false);
+  // Filter suggestions based on search text
+  const getFilteredSuggestions = (searchText: string) => {
+    if (!searchText) return uniqueWorkouts.slice(0, 10);
+    return uniqueWorkouts.filter((w) =>
+      w.name.toLowerCase().includes(searchText.toLowerCase())
+    ).slice(0, 10);
   };
+
+  const [activeComponentId, setActiveComponentId] = useState<string | null>(null);
 
   // Reset form for new workout
   const resetWorkoutForm = () => {
     setWorkoutComponents([]);
     setNewWorkoutDate("");
-    setEditingComponentId(null);
-    setEditingComponentTitle("");
-    setEditingComponentDescription("");
+    setActiveComponentId(null);
     setEditingPersonalWorkoutId(null);
   };
 
@@ -1122,91 +1095,67 @@ export default function WeeklyPlanPage() {
                           <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${workoutComponentColors[comp.type].bg} ${workoutComponentColors[comp.type].text}`}>
                             {workoutComponentLabels[comp.type]}
                           </span>
-                          <div className="flex gap-1">
-                            <button
-                              type="button"
-                              onClick={() => startEditComponent(comp)}
-                              className="p-1 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded"
-                            >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                              </svg>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => removeComponent(comp.id)}
-                              className="p-1 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded"
-                            >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                              </svg>
-                            </button>
-                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeComponent(comp.id)}
+                            className="p-1 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
                         </div>
 
-                        {editingComponentId === comp.id ? (
-                          <div className="space-y-2">
-                            <div className="relative">
-                              <input
-                                type="text"
-                                value={editingComponentTitle}
-                                onChange={(e) => {
-                                  setEditingComponentTitle(e.target.value);
-                                  setShowTitleSuggestions(true);
-                                }}
-                                onFocus={() => setShowTitleSuggestions(true)}
-                                onBlur={() => setTimeout(() => setShowTitleSuggestions(false), 200)}
-                                placeholder="Title"
-                                className="w-full px-3 py-1.5 border border-gray-300 rounded text-sm text-gray-900 bg-white"
-                                autoComplete="off"
-                              />
-                              {showTitleSuggestions && (
-                                <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                                  {filteredSuggestions.length > 0 ? (
-                                    filteredSuggestions.map((workout, index) => (
-                                      <button
-                                        key={index}
-                                        type="button"
-                                        onClick={() => handleSelectSuggestion(workout)}
-                                        className="w-full px-3 py-2 text-left hover:bg-blue-50 border-b border-gray-100 last:border-b-0 text-sm"
-                                      >
-                                        <span className="font-medium text-gray-900">{workout.name}</span>
-                                        {workout.description && (
-                                          <p className="text-gray-500 text-xs truncate">{workout.description}</p>
-                                        )}
-                                      </button>
-                                    ))
-                                  ) : (
-                                    <p className="px-3 py-2 text-gray-500 text-sm">
-                                      No matches found
-                                    </p>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                            <textarea
-                              value={editingComponentDescription}
-                              onChange={(e) => setEditingComponentDescription(e.target.value)}
-                              placeholder="Description (optional)"
-                              rows={2}
+                        {/* Always show editable fields */}
+                        <div className="space-y-2">
+                          <div className="relative">
+                            <input
+                              type="text"
+                              value={comp.title}
+                              onChange={(e) => updateComponent(comp.id, "title", e.target.value)}
+                              onFocus={() => setActiveComponentId(comp.id)}
+                              onBlur={() => setTimeout(() => setActiveComponentId(null), 200)}
+                              placeholder="Title (e.g., Fran, Back Squat)"
                               className="w-full px-3 py-1.5 border border-gray-300 rounded text-sm text-gray-900 bg-white"
+                              autoComplete="off"
                             />
-                            <button
-                              type="button"
-                              onClick={saveComponentEdit}
-                              className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
-                            >
-                              Save
-                            </button>
-                          </div>
-                        ) : (
-                          <>
-                            <p className="font-medium text-gray-900 text-sm">{comp.title || "(No title)"}</p>
-                            {comp.description && (
-                              <p className="text-gray-600 text-xs mt-1 whitespace-pre-wrap">{comp.description}</p>
+                            {activeComponentId === comp.id && comp.title && (
+                              <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                                {getFilteredSuggestions(comp.title).length > 0 ? (
+                                  getFilteredSuggestions(comp.title).map((workout, index) => (
+                                    <button
+                                      key={index}
+                                      type="button"
+                                      onMouseDown={(e) => {
+                                        e.preventDefault();
+                                        updateComponent(comp.id, "title", workout.name);
+                                        updateComponent(comp.id, "description", workout.description || "");
+                                        setActiveComponentId(null);
+                                      }}
+                                      className="w-full px-3 py-2 text-left hover:bg-blue-50 border-b border-gray-100 last:border-b-0 text-sm"
+                                    >
+                                      <span className="font-medium text-gray-900">{workout.name}</span>
+                                      {workout.description && (
+                                        <p className="text-gray-500 text-xs truncate">{workout.description}</p>
+                                      )}
+                                    </button>
+                                  ))
+                                ) : (
+                                  <p className="px-3 py-2 text-gray-500 text-sm">
+                                    No matches found
+                                  </p>
+                                )}
+                              </div>
                             )}
-                          </>
-                        )}
+                          </div>
+                          <textarea
+                            value={comp.description}
+                            onChange={(e) => updateComponent(comp.id, "description", e.target.value)}
+                            placeholder="Description (optional)"
+                            rows={2}
+                            className="w-full px-3 py-1.5 border border-gray-300 rounded text-sm text-gray-900 bg-white"
+                          />
+                        </div>
                       </div>
                     ))}
                   </div>
