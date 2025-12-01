@@ -25,6 +25,7 @@ export default function JoinGymPage({
 
   // Selected plan
   const [selectedTierId, setSelectedTierId] = useState<string | null>(null);
+  const [selectedBillingCycle, setSelectedBillingCycle] = useState<"monthly" | "yearly" | "one-time">("monthly");
 
   // Payment form (mockup)
   const [cardNumber, setCardNumber] = useState("");
@@ -64,9 +65,28 @@ export default function JoinGymPage({
     (t) => t.isHidden && t.signupCode && t.signupCode.toUpperCase() === signupCode.toUpperCase()
   );
 
-  // Helper to get display price (prefer monthly, then one-time)
-  const getDisplayPrice = (tier: PricingTier) => tier.monthlyPrice || tier.oneTimePrice || tier.yearlyPrice || 0;
-  const isMonthly = (tier: PricingTier) => !!tier.monthlyPrice;
+  // Helper to get price based on selected billing cycle
+  const getSelectedPrice = (tier: PricingTier, cycle: "monthly" | "yearly" | "one-time") => {
+    if (cycle === "monthly" && tier.monthlyPrice) return tier.monthlyPrice;
+    if (cycle === "yearly" && tier.yearlyPrice) return tier.yearlyPrice;
+    if (cycle === "one-time" && tier.oneTimePrice) return tier.oneTimePrice;
+    // Fallback to any available price
+    return tier.monthlyPrice || tier.yearlyPrice || tier.oneTimePrice || 0;
+  };
+
+  // Get the best available billing cycle for a tier
+  const getDefaultBillingCycle = (tier: PricingTier): "monthly" | "yearly" | "one-time" => {
+    if (tier.monthlyPrice) return "monthly";
+    if (tier.yearlyPrice) return "yearly";
+    return "one-time";
+  };
+
+  // Check if tier has a specific billing option
+  const hasBillingOption = (tier: PricingTier, cycle: "monthly" | "yearly" | "one-time") => {
+    if (cycle === "monthly") return !!tier.monthlyPrice;
+    if (cycle === "yearly") return !!tier.yearlyPrice;
+    return !!tier.oneTimePrice;
+  };
 
   // Calculate discounted price
   const getDiscountedPrice = (price: number, discount: DiscountCode | null) => {
@@ -139,7 +159,7 @@ export default function JoinGymPage({
       // Find selected tier
       const selectedTier = pricingTiers.find((t) => t.id === selectedTierId);
 
-      const originalPrice = selectedTier ? getDisplayPrice(selectedTier) : 0;
+      const originalPrice = selectedTier ? getSelectedPrice(selectedTier, selectedBillingCycle) : 0;
       const finalPrice = selectedTier ? getDiscountedPrice(originalPrice, appliedDiscount) : 0;
 
       await addDoc(collection(db, "gymMembershipRequests"), {
@@ -154,6 +174,7 @@ export default function JoinGymPage({
         selectedPlanId: selectedTierId,
         selectedPlanName: selectedTier?.name,
         selectedPlanPrice: originalPrice,
+        selectedBillingCycle: selectedBillingCycle,
         // Discount info
         discountCode: appliedDiscount?.code || null,
         discountAmount: appliedDiscount ? (originalPrice - finalPrice) : 0,
@@ -356,10 +377,16 @@ export default function JoinGymPage({
 
             <div className="space-y-3">
               {visibleTiers.map((tier) => (
-                <button
+                <div
                   key={tier.id}
-                  onClick={() => setSelectedTierId(tier.id)}
-                  className={`w-full p-4 rounded-xl border-2 text-left transition-all ${
+                  onClick={() => {
+                    setSelectedTierId(tier.id);
+                    // Set default billing cycle for this tier if current selection isn't available
+                    if (!hasBillingOption(tier, selectedBillingCycle)) {
+                      setSelectedBillingCycle(getDefaultBillingCycle(tier));
+                    }
+                  }}
+                  className={`w-full p-4 rounded-xl border-2 text-left transition-all cursor-pointer ${
                     selectedTierId === tier.id
                       ? tier.isHidden ? "border-purple-500 bg-purple-50" : "border-blue-500 bg-blue-50"
                       : tier.isHidden ? "border-purple-200 bg-purple-50/50 hover:border-purple-300" : "border-gray-200 bg-white hover:border-gray-300"
@@ -385,18 +412,86 @@ export default function JoinGymPage({
                       )}
                     </div>
                     <div className="text-right">
-                      <span className="text-2xl font-bold text-gray-900">${getDisplayPrice(tier)}</span>
-                      <span className="text-gray-500 text-sm">
-                        {isMonthly(tier) && "/mo"}
-                      </span>
+                      {/* Show all available pricing options */}
+                      <div className="space-y-1">
+                        {tier.monthlyPrice && (
+                          <div className={`${selectedTierId === tier.id && selectedBillingCycle === "monthly" ? "text-blue-600" : "text-gray-900"}`}>
+                            <span className="text-xl font-bold">${tier.monthlyPrice}</span>
+                            <span className="text-gray-500 text-sm">/mo</span>
+                          </div>
+                        )}
+                        {tier.yearlyPrice && (
+                          <div className={`${selectedTierId === tier.id && selectedBillingCycle === "yearly" ? "text-blue-600" : "text-gray-700"}`}>
+                            <span className="text-lg font-semibold">${tier.yearlyPrice}</span>
+                            <span className="text-gray-500 text-sm">/yr</span>
+                            {tier.monthlyPrice && (
+                              <span className="text-green-600 text-xs ml-1">
+                                (save ${(tier.monthlyPrice * 12) - tier.yearlyPrice})
+                              </span>
+                            )}
+                          </div>
+                        )}
+                        {tier.oneTimePrice && (
+                          <div className={`${selectedTierId === tier.id && selectedBillingCycle === "one-time" ? "text-blue-600" : "text-gray-700"}`}>
+                            <span className={`${!tier.monthlyPrice && !tier.yearlyPrice ? "text-xl font-bold" : "text-lg font-semibold"}`}>${tier.oneTimePrice}</span>
+                            <span className="text-gray-500 text-xs ml-1">one-time</span>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
+
+                  {/* Billing cycle selector - only show when selected and multiple options exist */}
                   {selectedTierId === tier.id && (
                     <div className={`mt-3 pt-3 border-t ${tier.isHidden ? "border-purple-200" : "border-blue-200"}`}>
-                      <span className={`${tier.isHidden ? "text-purple-600" : "text-blue-600"} text-sm font-medium`}>✓ Selected</span>
+                      <div className="flex items-center justify-between">
+                        <span className={`${tier.isHidden ? "text-purple-600" : "text-blue-600"} text-sm font-medium`}>✓ Selected</span>
+
+                        {/* Show billing toggle if multiple options available */}
+                        {((tier.monthlyPrice ? 1 : 0) + (tier.yearlyPrice ? 1 : 0) + (tier.oneTimePrice ? 1 : 0)) > 1 && (
+                          <div className="flex gap-1">
+                            {tier.monthlyPrice && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setSelectedBillingCycle("monthly"); }}
+                                className={`px-2 py-1 text-xs rounded ${
+                                  selectedBillingCycle === "monthly"
+                                    ? "bg-blue-600 text-white"
+                                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                                }`}
+                              >
+                                Monthly
+                              </button>
+                            )}
+                            {tier.yearlyPrice && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setSelectedBillingCycle("yearly"); }}
+                                className={`px-2 py-1 text-xs rounded ${
+                                  selectedBillingCycle === "yearly"
+                                    ? "bg-blue-600 text-white"
+                                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                                }`}
+                              >
+                                Yearly
+                              </button>
+                            )}
+                            {tier.oneTimePrice && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setSelectedBillingCycle("one-time"); }}
+                                className={`px-2 py-1 text-xs rounded ${
+                                  selectedBillingCycle === "one-time"
+                                    ? "bg-blue-600 text-white"
+                                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                                }`}
+                              >
+                                One-time
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
-                </button>
+                </div>
               ))}
             </div>
 
@@ -438,10 +533,16 @@ export default function JoinGymPage({
             <div className="p-4 bg-gray-50 rounded-xl">
               <h3 className="font-medium text-gray-900 mb-2">Order Summary</h3>
               <div className="flex justify-between items-center">
-                <span className="text-gray-600">{selectedTier?.name}</span>
+                <div>
+                  <span className="text-gray-600">{selectedTier?.name}</span>
+                  <span className="text-gray-400 text-sm ml-2">
+                    ({selectedBillingCycle === "monthly" ? "Monthly" : selectedBillingCycle === "yearly" ? "Yearly" : "One-time"})
+                  </span>
+                </div>
                 <span className={`font-semibold ${appliedDiscount ? "text-gray-400 line-through" : "text-gray-900"}`}>
-                  ${selectedTier ? getDisplayPrice(selectedTier) : 0}
-                  {selectedTier && isMonthly(selectedTier) && "/mo"}
+                  ${selectedTier ? getSelectedPrice(selectedTier, selectedBillingCycle) : 0}
+                  {selectedBillingCycle === "monthly" && "/mo"}
+                  {selectedBillingCycle === "yearly" && "/yr"}
                 </span>
               </div>
               {appliedDiscount && selectedTier && (
@@ -452,14 +553,14 @@ export default function JoinGymPage({
                       : `$${appliedDiscount.discountValue} off`}
                   </span>
                   <span className="text-green-600 font-medium">
-                    -${(getDisplayPrice(selectedTier) - getDiscountedPrice(getDisplayPrice(selectedTier), appliedDiscount)).toFixed(2)}
+                    -${(getSelectedPrice(selectedTier, selectedBillingCycle) - getDiscountedPrice(getSelectedPrice(selectedTier, selectedBillingCycle), appliedDiscount)).toFixed(2)}
                   </span>
                 </div>
               )}
               <div className="mt-3 pt-3 border-t border-gray-200 flex justify-between items-center">
                 <span className="font-semibold text-gray-900">Total Due Today</span>
                 <span className="text-xl font-bold text-green-600">
-                  ${selectedTier ? getDiscountedPrice(getDisplayPrice(selectedTier), appliedDiscount).toFixed(2) : "0.00"}
+                  ${selectedTier ? getDiscountedPrice(getSelectedPrice(selectedTier, selectedBillingCycle), appliedDiscount).toFixed(2) : "0.00"}
                 </span>
               </div>
             </div>
@@ -540,7 +641,7 @@ export default function JoinGymPage({
                 disabled={submitting || !cardName || !cardNumber || !cardExpiry || !cardCvc}
                 className="flex-1 py-3 bg-green-600 text-white rounded-xl font-semibold disabled:bg-gray-300 hover:bg-green-700 transition-colors"
               >
-                {submitting ? "Processing..." : `Pay $${selectedTier ? getDiscountedPrice(getDisplayPrice(selectedTier), appliedDiscount).toFixed(2) : "0.00"}`}
+                {submitting ? "Processing..." : `Pay $${selectedTier ? getDiscountedPrice(getSelectedPrice(selectedTier, selectedBillingCycle), appliedDiscount).toFixed(2) : "0.00"}`}
               </button>
             </div>
           </div>
