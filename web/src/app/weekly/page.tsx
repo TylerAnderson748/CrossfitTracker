@@ -180,8 +180,9 @@ export default function WeeklyPlanPage() {
     }
 
     try {
-      const workoutDate = new Date(newWorkoutDate);
-      workoutDate.setHours(12, 0, 0, 0);
+      // Parse date as local time (not UTC) to avoid timezone issues
+      const [year, month, day] = newWorkoutDate.split('-').map(Number);
+      const workoutDate = new Date(year, month - 1, day, 12, 0, 0, 0);
 
       if (editingPersonalWorkoutId) {
         // Update existing workout
