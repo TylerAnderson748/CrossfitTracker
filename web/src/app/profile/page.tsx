@@ -8,12 +8,29 @@ import { db } from "@/lib/firebase";
 import { Gym, Gender } from "@/lib/types";
 import Navigation from "@/components/Navigation";
 
+// Subscription type for member's gym memberships
+interface Subscription {
+  id: string;
+  gymId: string;
+  gymName: string;
+  planName: string;
+  billingCycle: "monthly" | "yearly" | "one-time";
+  price: number;
+  status: "active" | "cancelled" | "paused";
+  startDate: Date;
+  nextBillingDate?: Date;
+  classesRemaining?: number; // For class pack subscriptions
+  classesTotal?: number;
+}
+
 export default function ProfilePage() {
   const { user, loading, switching, signOut } = useAuth();
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [myGyms, setMyGyms] = useState<(Gym & { role: string })[]>([]);
+  const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
+  const [showCancelModal, setShowCancelModal] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
@@ -67,6 +84,23 @@ export default function ProfilePage() {
             : "Member",
         }));
       setMyGyms(userGyms);
+
+      // Generate mockup subscriptions for gyms where user is a member
+      const memberGyms = userGyms.filter((g) => g.role === "Member");
+      const mockSubscriptions: Subscription[] = memberGyms.map((gym, idx) => ({
+        id: `sub_${gym.id}`,
+        gymId: gym.id,
+        gymName: gym.name,
+        planName: idx === 0 ? "Monthly Unlimited" : "10-Class Pack",
+        billingCycle: idx === 0 ? "monthly" : "one-time",
+        price: idx === 0 ? 150 : 200,
+        status: "active",
+        startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // 30 days ago
+        nextBillingDate: idx === 0 ? new Date(Date.now() + 5 * 24 * 60 * 60 * 1000) : undefined, // 5 days from now
+        classesRemaining: idx === 0 ? undefined : 7,
+        classesTotal: idx === 0 ? undefined : 10,
+      }));
+      setSubscriptions(mockSubscriptions);
     } catch (error) {
       console.error("Error fetching gyms:", error);
     }
@@ -97,6 +131,25 @@ export default function ProfilePage() {
   const handleSignOut = async () => {
     await signOut();
     router.push("/login");
+  };
+
+  const handleCancelSubscription = (subId: string) => {
+    // Mockup - in real implementation would call API
+    setSubscriptions((prev) =>
+      prev.map((sub) =>
+        sub.id === subId ? { ...sub, status: "cancelled" as const } : sub
+      )
+    );
+    setShowCancelModal(null);
+  };
+
+  const handleReactivateSubscription = (subId: string) => {
+    // Mockup - in real implementation would call API
+    setSubscriptions((prev) =>
+      prev.map((sub) =>
+        sub.id === subId ? { ...sub, status: "active" as const } : sub
+      )
+    );
   };
 
   const getRoleColor = (role: string) => {
@@ -279,6 +332,136 @@ export default function ProfilePage() {
           )}
         </div>
 
+        {/* My Subscriptions */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">My Subscriptions</h3>
+          {subscriptions.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              <p className="text-3xl mb-2">💳</p>
+              <p className="text-sm">No active subscriptions</p>
+              <p className="text-xs text-gray-400 mt-1">Join a gym to start a membership</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {subscriptions.map((sub) => (
+                <div
+                  key={sub.id}
+                  className={`p-4 rounded-xl border-2 ${
+                    sub.status === "active"
+                      ? "border-green-200 bg-green-50/50"
+                      : sub.status === "cancelled"
+                      ? "border-gray-200 bg-gray-50"
+                      : "border-yellow-200 bg-yellow-50/50"
+                  }`}
+                >
+                  <div className="flex justify-between items-start mb-3">
+                    <div>
+                      <h4 className="font-semibold text-gray-900">{sub.gymName}</h4>
+                      <p className="text-sm text-gray-600">{sub.planName}</p>
+                    </div>
+                    <span
+                      className={`px-2 py-1 text-xs font-medium rounded-full ${
+                        sub.status === "active"
+                          ? "bg-green-100 text-green-700"
+                          : sub.status === "cancelled"
+                          ? "bg-gray-200 text-gray-600"
+                          : "bg-yellow-100 text-yellow-700"
+                      }`}
+                    >
+                      {sub.status === "active" ? "Active" : sub.status === "cancelled" ? "Cancelled" : "Paused"}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 text-sm mb-4">
+                    <div>
+                      <div className="text-gray-500">Price</div>
+                      <div className="font-medium text-gray-900">
+                        ${sub.price}
+                        {sub.billingCycle === "monthly" && "/mo"}
+                        {sub.billingCycle === "yearly" && "/yr"}
+                        {sub.billingCycle === "one-time" && " (one-time)"}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-gray-500">Started</div>
+                      <div className="font-medium text-gray-900">
+                        {sub.startDate.toLocaleDateString()}
+                      </div>
+                    </div>
+                    {sub.nextBillingDate && sub.status === "active" && (
+                      <div>
+                        <div className="text-gray-500">Next Billing</div>
+                        <div className="font-medium text-gray-900">
+                          {sub.nextBillingDate.toLocaleDateString()}
+                        </div>
+                      </div>
+                    )}
+                    {sub.classesRemaining !== undefined && (
+                      <div>
+                        <div className="text-gray-500">Classes Remaining</div>
+                        <div className="font-medium text-gray-900">
+                          {sub.classesRemaining} / {sub.classesTotal}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Progress bar for class packs */}
+                  {sub.classesRemaining !== undefined && sub.classesTotal && (
+                    <div className="mb-4">
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div
+                          className="bg-blue-600 h-2 rounded-full transition-all"
+                          style={{ width: `${(sub.classesRemaining / sub.classesTotal) * 100}%` }}
+                        />
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {sub.classesTotal - sub.classesRemaining} classes used
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Action buttons */}
+                  <div className="flex gap-2">
+                    {sub.status === "active" ? (
+                      <>
+                        <button
+                          onClick={() => router.push(`/gym/${sub.gymId}`)}
+                          className="flex-1 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors"
+                        >
+                          View Gym
+                        </button>
+                        {sub.billingCycle !== "one-time" && (
+                          <button
+                            onClick={() => setShowCancelModal(sub.id)}
+                            className="px-4 py-2 border border-red-300 text-red-600 text-sm rounded-lg hover:bg-red-50 transition-colors"
+                          >
+                            Cancel
+                          </button>
+                        )}
+                      </>
+                    ) : sub.status === "cancelled" ? (
+                      <button
+                        onClick={() => handleReactivateSubscription(sub.id)}
+                        className="flex-1 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition-colors"
+                      >
+                        Reactivate Subscription
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Payment History Link */}
+          {subscriptions.length > 0 && (
+            <button className="w-full mt-4 py-2 text-sm text-gray-600 hover:text-gray-900 flex items-center justify-center gap-2">
+              📄 View Payment History
+            </button>
+          )}
+        </div>
+
         {/* Account Info */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Account</h3>
@@ -304,6 +487,47 @@ export default function ProfilePage() {
           Sign Out
         </button>
       </main>
+
+      {/* Cancel Subscription Modal */}
+      {showCancelModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl p-6 w-full max-w-md">
+            <div className="text-center mb-6">
+              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <span className="text-3xl">⚠️</span>
+              </div>
+              <h2 className="text-xl font-bold text-gray-900 mb-2">Cancel Subscription?</h2>
+              <p className="text-gray-600 text-sm">
+                Are you sure you want to cancel your subscription? You&apos;ll lose access at the end of your current billing period.
+              </p>
+            </div>
+
+            <div className="bg-gray-50 rounded-lg p-4 mb-6">
+              <h4 className="font-medium text-gray-900 mb-2">What happens when you cancel:</h4>
+              <ul className="text-sm text-gray-600 space-y-1">
+                <li>• Your subscription will remain active until the end of your billing period</li>
+                <li>• You won&apos;t be charged again</li>
+                <li>• You can reactivate anytime</li>
+              </ul>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowCancelModal(null)}
+                className="flex-1 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Keep Subscription
+              </button>
+              <button
+                onClick={() => handleCancelSubscription(showCancelModal)}
+                className="flex-1 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+              >
+                Yes, Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
