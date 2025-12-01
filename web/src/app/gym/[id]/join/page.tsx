@@ -285,48 +285,6 @@ export default function JoinGymPage({
           <div className="space-y-4">
             <h2 className="text-lg font-semibold text-gray-900">Select Your Plan</h2>
 
-            {/* Billing Cycle Selector - Prominent at top */}
-            <div className="p-4 bg-blue-50 rounded-xl">
-              <label className="block text-sm font-medium text-gray-700 mb-3">
-                How would you like to pay?
-              </label>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setSelectedBillingCycle("monthly")}
-                  className={`flex-1 py-3 px-4 rounded-lg font-medium transition-all ${
-                    selectedBillingCycle === "monthly"
-                      ? "bg-blue-600 text-white shadow-md"
-                      : "bg-white text-gray-700 border border-gray-300 hover:border-blue-400"
-                  }`}
-                >
-                  <div className="text-sm">Monthly</div>
-                  <div className="text-xs opacity-75">Billed monthly</div>
-                </button>
-                <button
-                  onClick={() => setSelectedBillingCycle("yearly")}
-                  className={`flex-1 py-3 px-4 rounded-lg font-medium transition-all ${
-                    selectedBillingCycle === "yearly"
-                      ? "bg-blue-600 text-white shadow-md"
-                      : "bg-white text-gray-700 border border-gray-300 hover:border-blue-400"
-                  }`}
-                >
-                  <div className="text-sm">Yearly</div>
-                  <div className="text-xs opacity-75">Save more!</div>
-                </button>
-                <button
-                  onClick={() => setSelectedBillingCycle("one-time")}
-                  className={`flex-1 py-3 px-4 rounded-lg font-medium transition-all ${
-                    selectedBillingCycle === "one-time"
-                      ? "bg-blue-600 text-white shadow-md"
-                      : "bg-white text-gray-700 border border-gray-300 hover:border-blue-400"
-                  }`}
-                >
-                  <div className="text-sm">One-time</div>
-                  <div className="text-xs opacity-75">Class packs</div>
-                </button>
-              </div>
-            </div>
-
             {/* Signup Code Entry */}
             <div className="p-4 bg-purple-50 rounded-xl">
               <div className="flex items-center gap-2 mb-2">
