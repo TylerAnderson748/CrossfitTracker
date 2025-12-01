@@ -1537,6 +1537,9 @@ export default function GymDetailPage() {
                             {isGroupMember(group) && (
                               <span className="text-xs bg-green-100 text-green-600 px-2 py-0.5 rounded-full">Member</span>
                             )}
+                            {group.additionalFee && group.additionalFee > 0 && (
+                              <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">+${group.additionalFee}/mo</span>
+                            )}
                           </div>
                           <p className="text-gray-500 text-sm">
                             {group.memberIds?.length || 0} members
@@ -1555,11 +1558,16 @@ export default function GymDetailPage() {
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
+                                if (group.additionalFee && group.additionalFee > 0) {
+                                  if (!confirm(`Joining this group will add $${group.additionalFee}/month to your subscription. Continue?`)) {
+                                    return;
+                                  }
+                                }
                                 handleRequestGroupAccess(group);
                               }}
                               className="px-3 py-1 text-sm bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200"
                             >
-                              Request Access
+                              Request Access{group.additionalFee && group.additionalFee > 0 ? ` (+$${group.additionalFee}/mo)` : ''}
                             </button>
                           )
                         )}
