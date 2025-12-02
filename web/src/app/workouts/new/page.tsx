@@ -1082,8 +1082,8 @@ function NewWorkoutContent() {
                 </div>
               </div>
 
-              {/* Scoring Type - only show if not pre-set from URL */}
-              {!urlScoringType && (
+              {/* Scoring Type - only show if not pre-set from URL and not a preset workout */}
+              {!urlScoringType && !isPreset && (
                 <div className="mb-4">
                   <p className="text-xs text-gray-500 mb-2 font-semibold">Workout Type</p>
                   <div className="flex rounded-xl overflow-hidden border border-gray-200">
