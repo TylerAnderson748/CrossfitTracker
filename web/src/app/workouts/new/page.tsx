@@ -104,8 +104,10 @@ function NewWorkoutContent() {
   const [entryDate, setEntryDate] = useState(new Date().toISOString().split("T")[0]);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Timer type state
-  const [timerType, setTimerType] = useState<"standard" | "emom" | "amrap">("standard");
+  // Timer type state - initialized based on scoring type
+  const [timerType, setTimerType] = useState<"standard" | "emom" | "amrap">(
+    urlScoringType === "emom" ? "emom" : urlScoringType === "amrap" ? "amrap" : "standard"
+  );
   const [emomRounds, setEmomRounds] = useState(10);
   const [emomCurrentRound, setEmomCurrentRound] = useState(1);
   const [emomSecondsInRound, setEmomSecondsInRound] = useState(60);
