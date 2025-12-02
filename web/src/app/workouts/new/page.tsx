@@ -68,6 +68,15 @@ function NewWorkoutContent() {
   const [entryDate, setEntryDate] = useState(new Date().toISOString().split("T")[0]);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Timer type state
+  const [timerType, setTimerType] = useState<"standard" | "emom" | "amrap">("standard");
+  const [emomRounds, setEmomRounds] = useState(10);
+  const [emomCurrentRound, setEmomCurrentRound] = useState(1);
+  const [emomSecondsInRound, setEmomSecondsInRound] = useState(60);
+  const [amrapMinutes, setAmrapMinutes] = useState(12);
+  const [amrapRemainingSeconds, setAmrapRemainingSeconds] = useState(0);
+  const audioContextRef = useRef<AudioContext | null>(null);
+
   // History and leaderboard
   const [history, setHistory] = useState<WorkoutLog[]>([]);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
@@ -104,10 +113,72 @@ function NewWorkoutContent() {
     }
   }, [searchParams, router]);
 
+  // Sound functions for timer beeps
+  const playBeep = (frequency: number = 800, duration: number = 150, type: OscillatorType = "sine") => {
+    if (!audioContextRef.current) {
+      audioContextRef.current = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+    }
+    const ctx = audioContextRef.current;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.frequency.value = frequency;
+    osc.type = type;
+    gain.gain.setValueAtTime(0.3, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + duration / 1000);
+    osc.start();
+    osc.stop(ctx.currentTime + duration / 1000);
+  };
+
+  const playCountdownBeep = () => playBeep(600, 100, "sine");
+  const playRoundStartBeep = () => {
+    playBeep(1000, 200, "sine");
+    setTimeout(() => playBeep(1200, 300, "sine"), 100);
+  };
+  const playFinishBeep = () => {
+    playBeep(800, 150, "sine");
+    setTimeout(() => playBeep(1000, 150, "sine"), 150);
+    setTimeout(() => playBeep(1200, 300, "sine"), 300);
+  };
+
   useEffect(() => {
     if (timerRunning) {
       timerRef.current = setInterval(() => {
-        setElapsedSeconds((prev) => prev + 1);
+        if (timerType === "standard") {
+          setElapsedSeconds((prev) => prev + 1);
+        } else if (timerType === "emom") {
+          setEmomSecondsInRound((prev) => {
+            if (prev <= 1) {
+              // End of round
+              setEmomCurrentRound((round) => {
+                if (round >= emomRounds) {
+                  // Workout complete
+                  setTimerRunning(false);
+                  playFinishBeep();
+                  return round;
+                }
+                playRoundStartBeep();
+                return round + 1;
+              });
+              return 60;
+            }
+            if (prev <= 4 && prev > 1) playCountdownBeep();
+            return prev - 1;
+          });
+          setElapsedSeconds((prev) => prev + 1);
+        } else if (timerType === "amrap") {
+          setAmrapRemainingSeconds((prev) => {
+            if (prev <= 1) {
+              setTimerRunning(false);
+              playFinishBeep();
+              return 0;
+            }
+            if (prev <= 4 && prev > 1) playCountdownBeep();
+            return prev - 1;
+          });
+          setElapsedSeconds((prev) => prev + 1);
+        }
       }, 1000);
     } else if (timerRef.current) {
       clearInterval(timerRef.current);
@@ -115,7 +186,7 @@ function NewWorkoutContent() {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [timerRunning]);
+  }, [timerRunning, timerType, emomRounds]);
 
   useEffect(() => {
     if (user) {
@@ -281,8 +352,26 @@ function NewWorkoutContent() {
     return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
 
-  const handleStartStop = () => setTimerRunning(!timerRunning);
-  const handleReset = () => { setTimerRunning(false); setElapsedSeconds(0); };
+  const handleStartStop = () => {
+    if (!timerRunning) {
+      // Starting the timer
+      if (timerType === "emom" && emomCurrentRound === 1 && emomSecondsInRound === 60) {
+        playRoundStartBeep();
+      }
+      if (timerType === "amrap" && amrapRemainingSeconds === 0) {
+        setAmrapRemainingSeconds(amrapMinutes * 60);
+      }
+    }
+    setTimerRunning(!timerRunning);
+  };
+
+  const handleReset = () => {
+    setTimerRunning(false);
+    setElapsedSeconds(0);
+    setEmomCurrentRound(1);
+    setEmomSecondsInRound(60);
+    setAmrapRemainingSeconds(amrapMinutes * 60);
+  };
 
   const getTimeFromManual = (): number => {
     const mins = parseInt(manualMinutes) || 0;
@@ -817,13 +906,128 @@ function NewWorkoutContent() {
               {/* Timer */}
               <div className="mb-4">
                 <p className="text-xs text-gray-500 mb-2 font-semibold">Timer</p>
-                <div className="text-center mb-3">
-                  <div className="text-5xl font-mono font-semibold text-gray-900">
-                    {formatTimerDisplay(elapsedSeconds)}
-                  </div>
+
+                {/* Timer Type Selector */}
+                <div className="flex rounded-xl overflow-hidden border border-gray-200 mb-4">
+                  <button
+                    onClick={() => { setTimerType("standard"); handleReset(); }}
+                    className={`flex-1 py-2 text-xs font-semibold transition-colors ${timerType === "standard" ? "bg-blue-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
+                  >
+                    Standard
+                  </button>
+                  <button
+                    onClick={() => { setTimerType("emom"); handleReset(); }}
+                    className={`flex-1 py-2 text-xs font-semibold transition-colors ${timerType === "emom" ? "bg-orange-500 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
+                  >
+                    EMOM
+                  </button>
+                  <button
+                    onClick={() => { setTimerType("amrap"); handleReset(); }}
+                    className={`flex-1 py-2 text-xs font-semibold transition-colors ${timerType === "amrap" ? "bg-green-500 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
+                  >
+                    AMRAP
+                  </button>
                 </div>
+
+                {/* EMOM Settings */}
+                {timerType === "emom" && (
+                  <div className="mb-4 p-3 bg-orange-50 rounded-xl border border-orange-200">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-orange-800 font-medium">Rounds:</span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setEmomRounds(Math.max(1, emomRounds - 1))}
+                          className="w-8 h-8 rounded-lg bg-orange-200 text-orange-800 font-bold hover:bg-orange-300"
+                          disabled={timerRunning}
+                        >
+                          -
+                        </button>
+                        <span className="text-xl font-bold text-orange-800 w-8 text-center">{emomRounds}</span>
+                        <button
+                          onClick={() => setEmomRounds(emomRounds + 1)}
+                          className="w-8 h-8 rounded-lg bg-orange-200 text-orange-800 font-bold hover:bg-orange-300"
+                          disabled={timerRunning}
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* AMRAP Settings */}
+                {timerType === "amrap" && (
+                  <div className="mb-4 p-3 bg-green-50 rounded-xl border border-green-200">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-green-800 font-medium">Time Cap (min):</span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => { setAmrapMinutes(Math.max(1, amrapMinutes - 1)); setAmrapRemainingSeconds(Math.max(60, (amrapMinutes - 1) * 60)); }}
+                          className="w-8 h-8 rounded-lg bg-green-200 text-green-800 font-bold hover:bg-green-300"
+                          disabled={timerRunning}
+                        >
+                          -
+                        </button>
+                        <span className="text-xl font-bold text-green-800 w-8 text-center">{amrapMinutes}</span>
+                        <button
+                          onClick={() => { setAmrapMinutes(amrapMinutes + 1); setAmrapRemainingSeconds((amrapMinutes + 1) * 60); }}
+                          className="w-8 h-8 rounded-lg bg-green-200 text-green-800 font-bold hover:bg-green-300"
+                          disabled={timerRunning}
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Timer Display */}
+                <div className="text-center mb-3">
+                  {timerType === "standard" && (
+                    <div className="text-5xl font-mono font-semibold text-gray-900">
+                      {formatTimerDisplay(elapsedSeconds)}
+                    </div>
+                  )}
+
+                  {timerType === "emom" && (
+                    <div>
+                      <div className="text-sm text-orange-600 font-semibold mb-1">
+                        Round {emomCurrentRound} of {emomRounds}
+                      </div>
+                      <div className={`text-5xl font-mono font-semibold ${emomSecondsInRound <= 5 ? "text-red-500" : "text-orange-600"}`}>
+                        0:{emomSecondsInRound.toString().padStart(2, "0")}
+                      </div>
+                      <div className="text-sm text-gray-500 mt-1">
+                        Total: {formatTimerDisplay(elapsedSeconds)}
+                      </div>
+                    </div>
+                  )}
+
+                  {timerType === "amrap" && (
+                    <div>
+                      <div className={`text-5xl font-mono font-semibold ${amrapRemainingSeconds <= 10 ? "text-red-500" : "text-green-600"}`}>
+                        {formatTimerDisplay(amrapRemainingSeconds || amrapMinutes * 60)}
+                      </div>
+                      <div className="text-sm text-gray-500 mt-1">
+                        Elapsed: {formatTimerDisplay(elapsedSeconds)}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 <div className="flex flex-col gap-2">
-                  <button onClick={handleStartStop} className={`w-full py-2.5 rounded-xl font-semibold ${timerRunning ? "bg-red-500 text-white" : "bg-blue-600 text-white"}`}>
+                  <button
+                    onClick={handleStartStop}
+                    className={`w-full py-2.5 rounded-xl font-semibold ${
+                      timerRunning
+                        ? "bg-red-500 text-white"
+                        : timerType === "emom"
+                          ? "bg-orange-500 text-white"
+                          : timerType === "amrap"
+                            ? "bg-green-500 text-white"
+                            : "bg-blue-600 text-white"
+                    }`}
+                  >
                     {timerRunning ? "Stop" : "Start"}
                   </button>
                   <div className="flex gap-2">
