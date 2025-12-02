@@ -45,6 +45,7 @@ export default function Navigation() {
     { href: "/workouts", label: "Workouts", icon: "📋" },
     { href: "/profile", label: "Profile", icon: "👤" },
     { href: "/hi-devin", label: "Hi Devin!", icon: "🎉" },
+    { href: "/hi-blake", label: "Hi Blake...", icon: "💀" },
   ];
 
   return (
