@@ -305,6 +305,13 @@ function NewWorkoutContent() {
   };
 
   const loadLeaderboard = async () => {
+    // Don't load leaderboard if no workout name is entered
+    if (!wodTitle || !wodTitle.trim()) {
+      setLeaderboard([]);
+      setLoadingLeaderboard(false);
+      return;
+    }
+
     setLoadingLeaderboard(true);
     try {
       let entries: LeaderboardEntry[] = [];
@@ -320,13 +327,11 @@ function NewWorkoutContent() {
         ...doc.data(),
       })) as LeaderboardEntry[];
 
-      // Filter for this workout if we have a title
-      if (wodTitle) {
-        const normalized = normalizeWorkoutName(wodTitle.trim());
-        entries = entries.filter(
-          (e) => e.normalizedWorkoutName === normalized
-        );
-      }
+      // Filter for this workout
+      const normalized = normalizeWorkoutName(wodTitle.trim());
+      entries = entries.filter(
+        (e) => e.normalizedWorkoutName === normalized
+      );
 
       // Filter for entries with time data
       entries = entries.filter((e) => e.timeInSeconds && e.timeInSeconds > 0);
