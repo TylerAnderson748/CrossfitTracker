@@ -27,6 +27,7 @@ export default function WorkoutsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [loadingData, setLoadingData] = useState(true);
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
+  const [showLogDropdown, setShowLogDropdown] = useState(false);
 
   useEffect(() => {
     if (!loading && !switching && !user) {
@@ -179,12 +180,43 @@ export default function WorkoutsPage() {
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-bold text-gray-900">Workouts</h1>
-          <Link
-            href="/workouts/new"
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            + Log Workout
-          </Link>
+          <div className="relative">
+            <button
+              onClick={() => setShowLogDropdown(!showLogDropdown)}
+              onBlur={() => setTimeout(() => setShowLogDropdown(false), 200)}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+            >
+              + Log Workout
+              <svg className={`w-4 h-4 transition-transform ${showLogDropdown ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            {showLogDropdown && (
+              <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
+                <Link
+                  href="/workouts/new"
+                  className="block px-4 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors"
+                >
+                  <span className="font-medium">Log WOD</span>
+                  <p className="text-xs text-gray-500">For Time, EMOM, AMRAP</p>
+                </Link>
+                <Link
+                  href="/workouts/lift"
+                  className="block px-4 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors"
+                >
+                  <span className="font-medium">Log Lift</span>
+                  <p className="text-xs text-gray-500">Track weight & reps</p>
+                </Link>
+                <Link
+                  href="/workouts/skill"
+                  className="block px-4 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors"
+                >
+                  <span className="font-medium">Log Skill</span>
+                  <p className="text-xs text-gray-500">Gymnastics & skills</p>
+                </Link>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Type Selector */}
