@@ -38,14 +38,18 @@ export default function Navigation() {
     checkGymOwnership();
   }, [user]);
 
+  // Special tabs only visible to specific users
+  const specialUserEmail = "ssmp@team.com";
+  const isSpecialUser = user?.email === specialUserEmail;
+
   const navItems = [
     { href: "/weekly", label: "Home", icon: "🏠" },
     ...(isGymOwner ? [{ href: "/gym", label: "Gym", icon: "🏢" }] : []),
     { href: "/programming", label: "Programming", icon: "📅" },
     { href: "/workouts", label: "Workouts", icon: "📋" },
     { href: "/profile", label: "Profile", icon: "👤" },
-    { href: "/hi-devin", label: "Hi Devin!", icon: "🎉" },
-    { href: "/hi-blake", label: "Hi Blake...", icon: "💀" },
+    ...(isSpecialUser ? [{ href: "/hi-devin", label: "Hi Devin!", icon: "🎉" }] : []),
+    ...(isSpecialUser ? [{ href: "/hi-blake", label: "Hi Blake...", icon: "💀" }] : []),
   ];
 
   return (
