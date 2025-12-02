@@ -31,6 +31,21 @@ export type WorkoutType = "lift" | "wod";
 export type WorkoutResultType = "time" | "rounds" | "weight" | "reps" | "other";
 export type RecurrenceType = "none" | "daily" | "weekly" | "monthly";
 
+// WOD Scoring Types
+export type WODScoringType = "fortime" | "emom" | "amrap";
+
+export const wodScoringTypeLabels: Record<WODScoringType, string> = {
+  fortime: "For Time",
+  emom: "EMOM",
+  amrap: "AMRAP",
+};
+
+export const wodScoringTypeColors: Record<WODScoringType, { bg: string; text: string }> = {
+  fortime: { bg: "bg-blue-500", text: "text-white" },
+  emom: { bg: "bg-orange-500", text: "text-white" },
+  amrap: { bg: "bg-green-500", text: "text-white" },
+};
+
 // Workout component types for programming
 export type WorkoutComponentType = "warmup" | "wod" | "lift" | "skill" | "cooldown";
 

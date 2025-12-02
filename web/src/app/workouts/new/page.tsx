@@ -5,13 +5,17 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { collection, addDoc, query, where, orderBy, getDocs, Timestamp, limit, doc, updateDoc, deleteDoc } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
-import { WODCategory, normalizeWorkoutName, LeaderboardEntry, categoryOrder, categoryColors } from "@/lib/types";
+import { WODCategory, normalizeWorkoutName, LeaderboardEntry, categoryOrder, categoryColors, WODScoringType, wodScoringTypeLabels, wodScoringTypeColors } from "@/lib/types";
 import Navigation from "@/components/Navigation";
 
 interface WorkoutLog {
   id: string;
   wodTitle?: string;
   timeInSeconds: number;
+  rounds?: number;
+  reps?: number;
+  resultType?: string;
+  scoringType?: WODScoringType;
   completedDate: { toDate: () => Date };
   notes: string;
   category?: string;
@@ -21,6 +25,30 @@ function formatTime(seconds: number): string {
   const mins = Math.floor(seconds / 60);
   const secs = seconds % 60;
   return `${mins}:${secs.toString().padStart(2, "0")}`;
+}
+
+function formatScore(log: WorkoutLog): string {
+  if (log.resultType === "rounds" || log.scoringType === "amrap") {
+    const rounds = log.rounds || 0;
+    const reps = log.reps || 0;
+    if (reps > 0) {
+      return `${rounds} + ${reps}`;
+    }
+    return `${rounds} rounds`;
+  }
+  return formatTime(log.timeInSeconds);
+}
+
+function formatLeaderboardScore(entry: LeaderboardEntry): string {
+  if (entry.resultType === "rounds") {
+    const rounds = entry.rounds || 0;
+    const reps = entry.reps || 0;
+    if (reps > 0) {
+      return `${rounds} + ${reps}`;
+    }
+    return `${rounds} rds`;
+  }
+  return formatTime(entry.timeInSeconds || 0);
 }
 
 // Get hex color for category
@@ -59,6 +87,14 @@ function NewWorkoutContent() {
   const [category, setCategory] = useState<WODCategory>("RX");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+
+  // Scoring type from URL params (fortime, emom, amrap)
+  const urlScoringType = searchParams.get("scoringType") as WODScoringType | null;
+  const [scoringType, setScoringType] = useState<WODScoringType>(urlScoringType || "fortime");
+
+  // AMRAP scoring state (rounds + reps)
+  const [amrapRounds, setAmrapRounds] = useState("");
+  const [amrapReps, setAmrapReps] = useState("");
 
   // Timer state
   const [timerRunning, setTimerRunning] = useState(false);
@@ -112,6 +148,17 @@ function NewWorkoutContent() {
       router.replace(`/workouts/skill?name=${encodeURIComponent(name)}&description=${encodeURIComponent(description)}`);
     }
   }, [searchParams, router]);
+
+  // Auto-select timer type based on scoring type
+  useEffect(() => {
+    if (scoringType === "fortime") {
+      setTimerType("standard");
+    } else if (scoringType === "emom") {
+      setTimerType("emom");
+    } else if (scoringType === "amrap") {
+      setTimerType("amrap");
+    }
+  }, [scoringType]);
 
   // Sound functions for timer beeps
   const playBeep = (frequency: number = 800, duration: number = 150, type: OscillatorType = "sine") => {
@@ -328,13 +375,20 @@ function NewWorkoutContent() {
       // Sort the filtered entries
       const sortedEntries = filteredEntries.sort((a, b) => {
         if (categoryFilter === "all") {
-          // Sort by category priority first, then by time
+          // Sort by category priority first, then by score
           const aPriority = getCategoryPriority((a.category || "").toString());
           const bPriority = getCategoryPriority((b.category || "").toString());
           if (aPriority !== bPriority) {
             return aPriority - bPriority;
           }
         }
+        // For AMRAP (rounds), higher is better
+        if (a.resultType === "rounds" || b.resultType === "rounds") {
+          const aScore = ((a.rounds || 0) * 1000) + (a.reps || 0);
+          const bScore = ((b.rounds || 0) * 1000) + (b.reps || 0);
+          return bScore - aScore; // Higher score first
+        }
+        // For time-based, lower is better
         return (a.timeInSeconds || 0) - (b.timeInSeconds || 0);
       });
 
@@ -395,42 +449,69 @@ function NewWorkoutContent() {
     await saveWorkout(getTimeFromManual());
   };
 
-  const saveWorkout = async (timeInSeconds: number) => {
+  const saveWorkout = async (timeInSeconds: number, rounds?: number, reps?: number) => {
     setError("");
     setSubmitting(true);
     try {
       const now = Timestamp.now();
       const workoutDate = Timestamp.fromDate(new Date(entryDate));
 
-      const workoutLogRef = await addDoc(collection(db, "workoutLogs"), {
+      // Determine result type based on scoring type
+      const resultType = scoringType === "amrap" ? "rounds" : "time";
+
+      const workoutLogData: Record<string, unknown> = {
         userId: user!.id,
         wodTitle: wodTitle.trim(),
         wodDescription: wodDescription.trim(),
-        resultType: "time",
-        timeInSeconds,
+        resultType,
+        scoringType,
         notes: category,
         isPersonalRecord: false,
         workoutDate,
         completedDate: now,
-      });
+      };
 
-      await addDoc(collection(db, "leaderboardEntries"), {
+      // Add appropriate scoring data
+      if (scoringType === "amrap") {
+        workoutLogData.rounds = rounds || 0;
+        workoutLogData.reps = reps || 0;
+        workoutLogData.timeInSeconds = timeInSeconds; // Time cap used
+      } else {
+        workoutLogData.timeInSeconds = timeInSeconds;
+      }
+
+      const workoutLogRef = await addDoc(collection(db, "workoutLogs"), workoutLogData);
+
+      const leaderboardData: Record<string, unknown> = {
         userId: user!.id,
         userName: user!.displayName || `${user!.firstName} ${user!.lastName}`,
         userGender: user!.gender,
         workoutLogId: workoutLogRef.id,
         normalizedWorkoutName: normalizeWorkoutName(wodTitle.trim()),
         originalWorkoutName: wodTitle.trim(),
-        resultType: "time",
-        timeInSeconds,
+        resultType,
+        scoringType,
         category,
         completedDate: workoutDate,
         createdAt: now,
-      });
+      };
+
+      // Add appropriate scoring data to leaderboard
+      if (scoringType === "amrap") {
+        leaderboardData.rounds = rounds || 0;
+        leaderboardData.reps = reps || 0;
+        leaderboardData.timeInSeconds = timeInSeconds;
+      } else {
+        leaderboardData.timeInSeconds = timeInSeconds;
+      }
+
+      await addDoc(collection(db, "leaderboardEntries"), leaderboardData);
 
       // Stay on page - reset inputs and refresh data
       setManualMinutes("");
       setManualSeconds("");
+      setAmrapRounds("");
+      setAmrapReps("");
       setElapsedSeconds(0);
       setTimerRunning(false);
       loadHistory();
@@ -441,6 +522,15 @@ function NewWorkoutContent() {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  // Save AMRAP result with rounds and reps
+  const handleSaveAmrap = async () => {
+    if (!user || !wodTitle.trim()) return;
+    const rounds = parseInt(amrapRounds) || 0;
+    const reps = parseInt(amrapReps) || 0;
+    if (rounds === 0 && reps === 0) return;
+    await saveWorkout(amrapMinutes * 60, rounds, reps);
   };
 
   const startEditLog = (log: WorkoutLog) => {
@@ -799,7 +889,7 @@ function NewWorkoutContent() {
                           </p>
                         </div>
                         <span className="font-mono text-sm font-semibold text-gray-900">
-                          {formatTime(entry.timeInSeconds || 0)}
+                          {formatLeaderboardScore(entry)}
                         </span>
                       </div>
                     );
@@ -846,7 +936,16 @@ function NewWorkoutContent() {
                           <div>
                             <p className="text-xs text-gray-500">{log.completedDate?.toDate().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</p>
                             <div className="flex items-center gap-2">
-                              <p className="text-lg font-semibold text-gray-900">{formatTime(log.timeInSeconds)}</p>
+                              <p className="text-lg font-semibold text-gray-900">{formatScore(log)}</p>
+                              {log.scoringType && (
+                                <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${
+                                  log.scoringType === "amrap" ? "bg-green-100 text-green-700" :
+                                  log.scoringType === "emom" ? "bg-orange-100 text-orange-700" :
+                                  "bg-blue-100 text-blue-700"
+                                }`}>
+                                  {log.scoringType === "fortime" ? "For Time" : log.scoringType.toUpperCase()}
+                                </span>
+                              )}
                               <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${categoryColors[log.notes as WODCategory]?.badge || "bg-gray-100 text-gray-600"}`}>
                                 {log.notes || "RX"}
                               </span>
@@ -903,31 +1002,34 @@ function NewWorkoutContent() {
                 </div>
               </div>
 
-              {/* Timer */}
+              {/* Scoring Type */}
               <div className="mb-4">
-                <p className="text-xs text-gray-500 mb-2 font-semibold">Timer</p>
-
-                {/* Timer Type Selector */}
-                <div className="flex rounded-xl overflow-hidden border border-gray-200 mb-4">
+                <p className="text-xs text-gray-500 mb-2 font-semibold">Workout Type</p>
+                <div className="flex rounded-xl overflow-hidden border border-gray-200">
                   <button
-                    onClick={() => { setTimerType("standard"); handleReset(); }}
-                    className={`flex-1 py-2 text-xs font-semibold transition-colors ${timerType === "standard" ? "bg-blue-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
+                    onClick={() => { setScoringType("fortime"); handleReset(); }}
+                    className={`flex-1 py-2.5 text-xs font-semibold transition-colors ${scoringType === "fortime" ? "bg-blue-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
                   >
-                    Standard
+                    For Time
                   </button>
                   <button
-                    onClick={() => { setTimerType("emom"); handleReset(); }}
-                    className={`flex-1 py-2 text-xs font-semibold transition-colors ${timerType === "emom" ? "bg-orange-500 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
+                    onClick={() => { setScoringType("emom"); handleReset(); }}
+                    className={`flex-1 py-2.5 text-xs font-semibold transition-colors ${scoringType === "emom" ? "bg-orange-500 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
                   >
                     EMOM
                   </button>
                   <button
-                    onClick={() => { setTimerType("amrap"); handleReset(); }}
-                    className={`flex-1 py-2 text-xs font-semibold transition-colors ${timerType === "amrap" ? "bg-green-500 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
+                    onClick={() => { setScoringType("amrap"); handleReset(); }}
+                    className={`flex-1 py-2.5 text-xs font-semibold transition-colors ${scoringType === "amrap" ? "bg-green-500 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
                   >
                     AMRAP
                   </button>
                 </div>
+              </div>
+
+              {/* Timer */}
+              <div className="mb-4">
+                <p className="text-xs text-gray-500 mb-2 font-semibold">Timer</p>
 
                 {/* EMOM Settings */}
                 {timerType === "emom" && (
@@ -1039,24 +1141,77 @@ function NewWorkoutContent() {
 
               <div className="border-t border-gray-200 my-4"></div>
 
-              {/* Manual Entry */}
+              {/* Manual Entry - Different inputs based on scoring type */}
               <div>
-                <p className="text-xs text-gray-500 mb-2 font-semibold">Manual Entry</p>
-                <div className="flex gap-2 mb-2">
-                  <div className="flex-1">
-                    <p className="text-xs text-gray-400 mb-1">Min</p>
-                    <input type="number" value={manualMinutes} onChange={(e) => setManualMinutes(e.target.value)} placeholder="0" className="w-full px-2 py-2 border border-gray-300 rounded-lg text-center text-gray-900" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-xs text-gray-400 mb-1">Sec</p>
-                    <input type="number" value={manualSeconds} onChange={(e) => setManualSeconds(e.target.value)} placeholder="0" className="w-full px-2 py-2 border border-gray-300 rounded-lg text-center text-gray-900" />
-                  </div>
-                </div>
-                <div className="mb-2">
-                  <p className="text-xs text-gray-400 mb-1">Date</p>
-                  <input type="date" value={entryDate} onChange={(e) => setEntryDate(e.target.value)} className="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm text-gray-900" />
-                </div>
-                <button onClick={handleSaveManual} disabled={submitting || !isManualEntryValid()} className="w-full py-2.5 bg-blue-600 text-white rounded-xl font-semibold disabled:bg-gray-300">Save</button>
+                <p className="text-xs text-gray-500 mb-2 font-semibold">
+                  {scoringType === "amrap" ? "Score Entry" : "Manual Entry"}
+                </p>
+
+                {/* AMRAP: Rounds + Reps */}
+                {scoringType === "amrap" && (
+                  <>
+                    <div className="flex gap-2 mb-2">
+                      <div className="flex-1">
+                        <p className="text-xs text-gray-400 mb-1">Rounds</p>
+                        <input
+                          type="number"
+                          value={amrapRounds}
+                          onChange={(e) => setAmrapRounds(e.target.value)}
+                          placeholder="0"
+                          className="w-full px-2 py-2 border border-gray-300 rounded-lg text-center text-gray-900"
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-xs text-gray-400 mb-1">+ Reps</p>
+                        <input
+                          type="number"
+                          value={amrapReps}
+                          onChange={(e) => setAmrapReps(e.target.value)}
+                          placeholder="0"
+                          className="w-full px-2 py-2 border border-gray-300 rounded-lg text-center text-gray-900"
+                        />
+                      </div>
+                    </div>
+                    <div className="mb-2">
+                      <p className="text-xs text-gray-400 mb-1">Date</p>
+                      <input type="date" value={entryDate} onChange={(e) => setEntryDate(e.target.value)} className="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm text-gray-900" />
+                    </div>
+                    <button
+                      onClick={handleSaveAmrap}
+                      disabled={submitting || (!amrapRounds && !amrapReps)}
+                      className="w-full py-2.5 bg-green-500 text-white rounded-xl font-semibold disabled:bg-gray-300"
+                    >
+                      Save Score
+                    </button>
+                  </>
+                )}
+
+                {/* For Time / EMOM: Time Entry */}
+                {(scoringType === "fortime" || scoringType === "emom") && (
+                  <>
+                    <div className="flex gap-2 mb-2">
+                      <div className="flex-1">
+                        <p className="text-xs text-gray-400 mb-1">Min</p>
+                        <input type="number" value={manualMinutes} onChange={(e) => setManualMinutes(e.target.value)} placeholder="0" className="w-full px-2 py-2 border border-gray-300 rounded-lg text-center text-gray-900" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-xs text-gray-400 mb-1">Sec</p>
+                        <input type="number" value={manualSeconds} onChange={(e) => setManualSeconds(e.target.value)} placeholder="0" className="w-full px-2 py-2 border border-gray-300 rounded-lg text-center text-gray-900" />
+                      </div>
+                    </div>
+                    <div className="mb-2">
+                      <p className="text-xs text-gray-400 mb-1">Date</p>
+                      <input type="date" value={entryDate} onChange={(e) => setEntryDate(e.target.value)} className="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm text-gray-900" />
+                    </div>
+                    <button
+                      onClick={handleSaveManual}
+                      disabled={submitting || !isManualEntryValid()}
+                      className={`w-full py-2.5 rounded-xl font-semibold disabled:bg-gray-300 ${scoringType === "emom" ? "bg-orange-500 text-white" : "bg-blue-600 text-white"}`}
+                    >
+                      Save Time
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           </div>
