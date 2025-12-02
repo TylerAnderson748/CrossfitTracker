@@ -103,6 +103,8 @@ function NewWorkoutContent() {
   // Scoring type from URL params (fortime, emom, amrap)
   const urlScoringType = searchParams.get("scoringType") as WODScoringType | null;
   const [scoringType, setScoringType] = useState<WODScoringType>(urlScoringType || "fortime");
+  // Track if scoring type is locked (from URL or suggestion selection) - separate from isPreset
+  const [scoringTypeLocked, setScoringTypeLocked] = useState(!!urlScoringType);
 
   // AMRAP scoring state (rounds + reps)
   const [amrapRounds, setAmrapRounds] = useState("");
@@ -315,8 +317,9 @@ function NewWorkoutContent() {
     setLoadingLeaderboard(true);
     try {
       let entries: LeaderboardEntry[] = [];
+      const normalized = normalizeWorkoutName(wodTitle.trim());
 
-      // Always load all entries first (simpler, avoids index issues)
+      // First try leaderboardEntries collection
       const allQuery = query(
         collection(db, "leaderboardEntries"),
         limit(200)
@@ -328,12 +331,49 @@ function NewWorkoutContent() {
       })) as LeaderboardEntry[];
 
       // Filter for this workout
-      const normalized = normalizeWorkoutName(wodTitle.trim());
       entries = entries.filter(
         (e) => e.normalizedWorkoutName === normalized
       );
 
-      // Filter for entries with time data
+      // If no leaderboard entries, build from workoutLogs
+      if (entries.length === 0) {
+        const logsQuery = query(
+          collection(db, "workoutLogs"),
+          limit(500)
+        );
+        const logsSnapshot = await getDocs(logsQuery);
+        const allLogs = logsSnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        })) as any[];
+
+        // Filter for this workout and convert to leaderboard format
+        entries = allLogs
+          .filter((log) => {
+            const logNormalized = normalizeWorkoutName((log.wodTitle || "").trim());
+            return logNormalized === normalized;
+          })
+          .map((log) => ({
+            id: log.id,
+            oderId: log.userId,
+            userId: log.userId,
+            userName: log.userName || "Unknown",
+            userGender: log.userGender,
+            workoutLogId: log.id,
+            normalizedWorkoutName: normalized,
+            originalWorkoutName: log.wodTitle,
+            timeInSeconds: log.timeInSeconds || 0,
+            rounds: log.rounds,
+            reps: log.reps,
+            resultType: log.resultType || "time",
+            scoringType: log.scoringType || "fortime",
+            category: log.notes || log.category || "RX",
+            completedDate: log.completedDate,
+            createdAt: log.completedDate,
+          })) as LeaderboardEntry[];
+      }
+
+      // Filter for entries with time data (for time-based workouts)
       entries = entries.filter((e) => e.timeInSeconds && e.timeInSeconds > 0);
 
       // Apply gender filter
@@ -1042,6 +1082,7 @@ function NewWorkoutContent() {
                           setIsPreset(true);
                           if (workout.scoringType) {
                             setScoringType(workout.scoringType);
+                            setScoringTypeLocked(true);
                           }
                           setShowSuggestions(false);
                         }}
@@ -1093,8 +1134,8 @@ function NewWorkoutContent() {
                 </div>
               </div>
 
-              {/* Scoring Type - only show if not pre-set from URL and not a preset workout */}
-              {!urlScoringType && !isPreset && (
+              {/* Scoring Type - only show if not locked (from URL or suggestion selection) */}
+              {!scoringTypeLocked && (
                 <div className="mb-4">
                   <p className="text-xs text-gray-500 mb-2 font-semibold">Workout Type</p>
                   <div className="flex rounded-xl overflow-hidden border border-gray-200">
