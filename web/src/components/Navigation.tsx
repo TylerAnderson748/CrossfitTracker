@@ -44,6 +44,7 @@ export default function Navigation() {
     { href: "/programming", label: "Programming", icon: "📅" },
     { href: "/workouts", label: "Workouts", icon: "📋" },
     { href: "/profile", label: "Profile", icon: "👤" },
+    { href: "/hi-devin", label: "Hi Devin!", icon: "🎉" },
   ];
 
   return (
