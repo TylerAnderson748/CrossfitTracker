@@ -79,7 +79,7 @@ export default function WorkoutsPage() {
   const [programmedWorkouts, setProgrammedWorkouts] = useState<ProgrammedWorkout[]>([]);
   const [showAddSourceModal, setShowAddSourceModal] = useState(false);
   const [newSourceName, setNewSourceName] = useState("");
-  const [newSourceType, setNewSourceType] = useState<"online" | "pt" | "other">("online");
+  const [newSourceType, setNewSourceType] = useState<"gym" | "online" | "pt" | "other">("online");
   const [expandedSource, setExpandedSource] = useState<string | null>(null);
   const [showAddWorkoutModal, setShowAddWorkoutModal] = useState<string | null>(null);
   const [newWorkoutName, setNewWorkoutName] = useState("");
@@ -857,7 +857,7 @@ export default function WorkoutsPage() {
                             >
                               <div className="flex items-center gap-3">
                                 <span className="text-lg">
-                                  {source.type === "online" ? "🌐" : source.type === "pt" ? "👤" : "📝"}
+                                  {source.type === "gym" ? "🏋️" : source.type === "online" ? "🌐" : source.type === "pt" ? "👤" : "📝"}
                                 </span>
                                 <div>
                                   <h3 className="font-medium text-gray-900">{source.name}</h3>
@@ -868,11 +868,12 @@ export default function WorkoutsPage() {
                               </div>
                               <div className="flex items-center gap-2">
                                 <span className={`px-2 py-0.5 text-xs rounded ${
+                                  source.type === "gym" ? "bg-orange-100 text-orange-700" :
                                   source.type === "online" ? "bg-blue-100 text-blue-700" :
                                   source.type === "pt" ? "bg-purple-100 text-purple-700" :
                                   "bg-gray-100 text-gray-700"
                                 }`}>
-                                  {source.type === "online" ? "Online" : source.type === "pt" ? "PT" : "Other"}
+                                  {source.type === "gym" ? "Gym" : source.type === "online" ? "Online" : source.type === "pt" ? "PT" : "Other"}
                                 </span>
                                 <svg
                                   className={`w-5 h-5 text-gray-400 transition-transform ${isExpanded ? "rotate-90" : ""}`}
@@ -1130,10 +1131,20 @@ export default function WorkoutsPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Source Type</label>
-                <div className="flex gap-2">
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => setNewSourceType("gym")}
+                    className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      newSourceType === "gym"
+                        ? "bg-blue-600 text-white"
+                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                    }`}
+                  >
+                    Gym
+                  </button>
                   <button
                     onClick={() => setNewSourceType("online")}
-                    className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                       newSourceType === "online"
                         ? "bg-blue-600 text-white"
                         : "bg-gray-100 text-gray-700 hover:bg-gray-200"
@@ -1143,7 +1154,7 @@ export default function WorkoutsPage() {
                   </button>
                   <button
                     onClick={() => setNewSourceType("pt")}
-                    className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                       newSourceType === "pt"
                         ? "bg-blue-600 text-white"
                         : "bg-gray-100 text-gray-700 hover:bg-gray-200"
@@ -1153,7 +1164,7 @@ export default function WorkoutsPage() {
                   </button>
                   <button
                     onClick={() => setNewSourceType("other")}
-                    className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                       newSourceType === "other"
                         ? "bg-blue-600 text-white"
                         : "bg-gray-100 text-gray-700 hover:bg-gray-200"
