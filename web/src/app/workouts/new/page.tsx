@@ -463,6 +463,12 @@ function NewWorkoutContent() {
     await saveWorkout(getTimeFromManual());
   };
 
+  const handleSaveEmomCompletion = async () => {
+    if (!user || !wodTitle.trim()) return;
+    // EMOM workouts are logged as completed without a specific score
+    await saveWorkout(0);
+  };
+
   const saveWorkout = async (timeInSeconds: number, rounds?: number, reps?: number) => {
     setError("");
     setSubmitting(true);
@@ -1226,7 +1232,7 @@ function NewWorkoutContent() {
               {/* Manual Entry - Different inputs based on scoring type */}
               <div>
                 <p className="text-xs text-gray-500 mb-2 font-semibold">
-                  {scoringType === "amrap" ? "Score Entry" : "Manual Entry"}
+                  {scoringType === "amrap" ? "Score Entry" : scoringType === "emom" ? "Log Completion" : "Manual Entry"}
                 </p>
 
                 {/* AMRAP: Rounds + Reps */}
@@ -1268,8 +1274,8 @@ function NewWorkoutContent() {
                   </>
                 )}
 
-                {/* For Time / EMOM: Time Entry */}
-                {(scoringType === "fortime" || scoringType === "emom") && (
+                {/* For Time: Time Entry */}
+                {scoringType === "fortime" && (
                   <>
                     <div className="flex gap-2 mb-2">
                       <div className="flex-1">
@@ -1288,9 +1294,31 @@ function NewWorkoutContent() {
                     <button
                       onClick={handleSaveManual}
                       disabled={submitting || !isManualEntryValid()}
-                      className={`w-full py-2.5 rounded-xl font-semibold disabled:bg-gray-300 ${scoringType === "emom" ? "bg-orange-500 text-white" : "bg-blue-600 text-white"}`}
+                      className="w-full py-2.5 rounded-xl font-semibold disabled:bg-gray-300 bg-blue-600 text-white"
                     >
                       Save Time
+                    </button>
+                  </>
+                )}
+
+                {/* EMOM: Just log completion with date */}
+                {scoringType === "emom" && (
+                  <>
+                    <div className="mb-3 p-3 bg-orange-50 rounded-lg border border-orange-200">
+                      <p className="text-sm text-orange-800">
+                        EMOM workouts are logged as completed. Use the timer above if needed during your workout.
+                      </p>
+                    </div>
+                    <div className="mb-2">
+                      <p className="text-xs text-gray-400 mb-1">Date</p>
+                      <input type="date" value={entryDate} onChange={(e) => setEntryDate(e.target.value)} className="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm text-gray-900" />
+                    </div>
+                    <button
+                      onClick={handleSaveEmomCompletion}
+                      disabled={submitting || !wodTitle.trim()}
+                      className="w-full py-2.5 rounded-xl font-semibold disabled:bg-gray-300 bg-orange-500 text-white"
+                    >
+                      Log Completed
                     </button>
                   </>
                 )}
