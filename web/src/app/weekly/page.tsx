@@ -1019,8 +1019,40 @@ export default function WeeklyPlanPage() {
                                 </div>
                               </div>
 
-                              {/* Edit/Delete buttons */}
+                              {/* Action buttons */}
                               <div className="flex items-center gap-1 ml-2">
+                                {/* Log button - find first WOD component */}
+                                {(() => {
+                                  const wodComponent = personalWorkout.components.find(c => c.type === "wod");
+                                  const liftComponent = personalWorkout.components.find(c => c.type === "strength" || c.type === "accessory");
+                                  if (wodComponent) {
+                                    const scoringType = wodComponent.scoringType || "fortime";
+                                    return (
+                                      <Link
+                                        href={`/workouts/new?name=${encodeURIComponent(wodComponent.title)}&description=${encodeURIComponent(wodComponent.description || "")}&scoringType=${scoringType}`}
+                                        className="px-2 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1"
+                                      >
+                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                        </svg>
+                                        Log
+                                      </Link>
+                                    );
+                                  } else if (liftComponent) {
+                                    return (
+                                      <Link
+                                        href={`/workouts/lift?name=${encodeURIComponent(liftComponent.title)}&description=${encodeURIComponent(liftComponent.description || "")}`}
+                                        className="px-2 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1"
+                                      >
+                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                        </svg>
+                                        Log
+                                      </Link>
+                                    );
+                                  }
+                                  return null;
+                                })()}
                                 <button
                                   onClick={() => openEditWorkoutModal(personalWorkout)}
                                   className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
