@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { collection, query, where, getDocs, orderBy, limit, deleteDoc, doc } from "firebase/firestore";
+import { collection, query, where, getDocs, orderBy, limit, deleteDoc, doc, addDoc, Timestamp } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
 import { WorkoutLog, formatResult } from "@/lib/types";
@@ -33,6 +33,24 @@ interface GymWorkout {
   scheduledDate?: Date;
 }
 
+interface ProgrammingSource {
+  id: string;
+  name: string;
+  type: "gym" | "online" | "pt" | "other";
+  createdAt: Date;
+}
+
+interface ProgrammedWorkout {
+  id: string;
+  name: string;
+  description: string;
+  type: "wod" | "lift" | "skill";
+  scoringType?: string;
+  sourceId: string;
+  sourceName: string;
+  scheduledDate?: Date;
+}
+
 export default function WorkoutsPage() {
   const { user, loading, switching } = useAuth();
   const router = useRouter();
@@ -55,6 +73,19 @@ export default function WorkoutsPage() {
 
   // Delete confirmation state
   const [deletingWorkout, setDeletingWorkout] = useState<{ name: string; type: "wod" | "lift" | "skill" } | null>(null);
+
+  // Programming sources state
+  const [programmingSources, setProgrammingSources] = useState<ProgrammingSource[]>([]);
+  const [programmedWorkouts, setProgrammedWorkouts] = useState<ProgrammedWorkout[]>([]);
+  const [showAddSourceModal, setShowAddSourceModal] = useState(false);
+  const [newSourceName, setNewSourceName] = useState("");
+  const [newSourceType, setNewSourceType] = useState<"online" | "pt" | "other">("online");
+  const [expandedSource, setExpandedSource] = useState<string | null>(null);
+  const [showAddWorkoutModal, setShowAddWorkoutModal] = useState<string | null>(null);
+  const [newWorkoutName, setNewWorkoutName] = useState("");
+  const [newWorkoutDescription, setNewWorkoutDescription] = useState("");
+  const [newWorkoutType, setNewWorkoutType] = useState<"wod" | "lift" | "skill">("wod");
+  const [newWorkoutScoringType, setNewWorkoutScoringType] = useState<"fortime" | "amrap" | "emom">("fortime");
 
   useEffect(() => {
     if (!loading && !switching && !user) {
@@ -266,6 +297,45 @@ export default function WorkoutsPage() {
 
         setGymWorkouts(gymWorkoutsList.slice(0, 20));
       }
+
+      // Fetch programming sources
+      const sourcesQuery = query(
+        collection(db, "programmingSources"),
+        where("userId", "==", user.id)
+      );
+      const sourcesSnapshot = await getDocs(sourcesQuery);
+      const sourcesList: ProgrammingSource[] = sourcesSnapshot.docs.map((doc) => ({
+        id: doc.id,
+        name: doc.data().name,
+        type: doc.data().type,
+        createdAt: doc.data().createdAt?.toDate?.() || new Date(),
+      }));
+      setProgrammingSources(sourcesList);
+
+      // Fetch programmed workouts for all sources
+      if (sourcesList.length > 0) {
+        const sourceIds = sourcesList.map(s => s.id);
+        const workoutsQuery = query(
+          collection(db, "programmedWorkouts"),
+          where("userId", "==", user.id)
+        );
+        const workoutsSnapshot = await getDocs(workoutsQuery);
+        const workoutsList: ProgrammedWorkout[] = workoutsSnapshot.docs.map((doc) => {
+          const data = doc.data();
+          const source = sourcesList.find(s => s.id === data.sourceId);
+          return {
+            id: doc.id,
+            name: data.name,
+            description: data.description || "",
+            type: data.type || "wod",
+            scoringType: data.scoringType,
+            sourceId: data.sourceId,
+            sourceName: source?.name || "Unknown",
+            scheduledDate: data.scheduledDate?.toDate?.(),
+          };
+        });
+        setProgrammedWorkouts(workoutsList);
+      }
     } catch (error) {
       console.error("Error fetching data:", error);
     } finally {
@@ -373,6 +443,107 @@ export default function WorkoutsPage() {
     } finally {
       setDeletingWorkout(null);
     }
+  };
+
+  const handleAddProgrammingSource = async () => {
+    if (!user || !newSourceName.trim()) return;
+
+    try {
+      const docRef = await addDoc(collection(db, "programmingSources"), {
+        userId: user.id,
+        name: newSourceName.trim(),
+        type: newSourceType,
+        createdAt: Timestamp.now(),
+      });
+
+      setProgrammingSources(prev => [...prev, {
+        id: docRef.id,
+        name: newSourceName.trim(),
+        type: newSourceType,
+        createdAt: new Date(),
+      }]);
+
+      setNewSourceName("");
+      setNewSourceType("online");
+      setShowAddSourceModal(false);
+    } catch (error) {
+      console.error("Error adding programming source:", error);
+    }
+  };
+
+  const handleDeleteProgrammingSource = async (sourceId: string) => {
+    if (!user) return;
+
+    try {
+      // Delete the source
+      await deleteDoc(doc(db, "programmingSources", sourceId));
+
+      // Delete all workouts for this source
+      const workoutsQuery = query(
+        collection(db, "programmedWorkouts"),
+        where("sourceId", "==", sourceId)
+      );
+      const snapshot = await getDocs(workoutsQuery);
+      await Promise.all(snapshot.docs.map(d => deleteDoc(doc(db, "programmedWorkouts", d.id))));
+
+      setProgrammingSources(prev => prev.filter(s => s.id !== sourceId));
+      setProgrammedWorkouts(prev => prev.filter(w => w.sourceId !== sourceId));
+    } catch (error) {
+      console.error("Error deleting programming source:", error);
+    }
+  };
+
+  const handleAddProgrammedWorkout = async (sourceId: string) => {
+    if (!user || !newWorkoutName.trim()) return;
+
+    const source = programmingSources.find(s => s.id === sourceId);
+    if (!source) return;
+
+    try {
+      const docRef = await addDoc(collection(db, "programmedWorkouts"), {
+        userId: user.id,
+        sourceId,
+        name: newWorkoutName.trim(),
+        description: newWorkoutDescription.trim(),
+        type: newWorkoutType,
+        scoringType: newWorkoutType === "wod" ? newWorkoutScoringType : undefined,
+        createdAt: Timestamp.now(),
+      });
+
+      setProgrammedWorkouts(prev => [...prev, {
+        id: docRef.id,
+        name: newWorkoutName.trim(),
+        description: newWorkoutDescription.trim(),
+        type: newWorkoutType,
+        scoringType: newWorkoutType === "wod" ? newWorkoutScoringType : undefined,
+        sourceId,
+        sourceName: source.name,
+      }]);
+
+      setNewWorkoutName("");
+      setNewWorkoutDescription("");
+      setNewWorkoutType("wod");
+      setNewWorkoutScoringType("fortime");
+      setShowAddWorkoutModal(null);
+    } catch (error) {
+      console.error("Error adding programmed workout:", error);
+    }
+  };
+
+  const handleDeleteProgrammedWorkout = async (workoutId: string) => {
+    if (!user) return;
+
+    try {
+      await deleteDoc(doc(db, "programmedWorkouts", workoutId));
+      setProgrammedWorkouts(prev => prev.filter(w => w.id !== workoutId));
+    } catch (error) {
+      console.error("Error deleting programmed workout:", error);
+    }
+  };
+
+  // Get programmed workouts for current type
+  const getCurrentProgrammedWorkouts = (sourceId: string): ProgrammedWorkout[] => {
+    return programmedWorkouts.filter(w => w.sourceId === sourceId && w.type === workoutType);
   };
 
   if (loading || !user) {
@@ -645,6 +816,161 @@ export default function WorkoutsPage() {
                   </div>
                 )}
 
+                {/* External Programming Section */}
+                <div className="mb-6">
+                  <div className="flex items-center justify-between mb-3">
+                    <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                      <span className="text-xl">📋</span>
+                      External Programming
+                    </h2>
+                    <button
+                      onClick={() => setShowAddSourceModal(true)}
+                      className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                    >
+                      + Add Source
+                    </button>
+                  </div>
+
+                  {programmingSources.length === 0 ? (
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 text-center">
+                      <p className="text-gray-500 text-sm mb-3">
+                        Track workouts from online programs, personal trainers, or other coaches
+                      </p>
+                      <button
+                        onClick={() => setShowAddSourceModal(true)}
+                        className="text-blue-600 hover:text-blue-700 font-medium text-sm"
+                      >
+                        Add your first programming source
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {programmingSources.map((source) => {
+                        const sourceWorkouts = getCurrentProgrammedWorkouts(source.id);
+                        const isExpanded = expandedSource === source.id;
+
+                        return (
+                          <div key={source.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                            <button
+                              onClick={() => setExpandedSource(isExpanded ? null : source.id)}
+                              className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors text-left"
+                            >
+                              <div className="flex items-center gap-3">
+                                <span className="text-lg">
+                                  {source.type === "online" ? "🌐" : source.type === "pt" ? "👤" : "📝"}
+                                </span>
+                                <div>
+                                  <h3 className="font-medium text-gray-900">{source.name}</h3>
+                                  <p className="text-gray-500 text-xs">
+                                    {sourceWorkouts.length} {workoutType === "wod" ? "WODs" : workoutType === "lift" ? "lifts" : "skills"}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className={`px-2 py-0.5 text-xs rounded ${
+                                  source.type === "online" ? "bg-blue-100 text-blue-700" :
+                                  source.type === "pt" ? "bg-purple-100 text-purple-700" :
+                                  "bg-gray-100 text-gray-700"
+                                }`}>
+                                  {source.type === "online" ? "Online" : source.type === "pt" ? "PT" : "Other"}
+                                </span>
+                                <svg
+                                  className={`w-5 h-5 text-gray-400 transition-transform ${isExpanded ? "rotate-90" : ""}`}
+                                  fill="none"
+                                  stroke="currentColor"
+                                  viewBox="0 0 24 24"
+                                >
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                </svg>
+                              </div>
+                            </button>
+
+                            {isExpanded && (
+                              <div className="border-t border-gray-100 bg-gray-50">
+                                {sourceWorkouts.length === 0 ? (
+                                  <div className="p-4 text-center">
+                                    <p className="text-gray-500 text-sm mb-2">No {workoutType === "wod" ? "WODs" : workoutType === "lift" ? "lifts" : "skills"} added yet</p>
+                                    <button
+                                      onClick={() => setShowAddWorkoutModal(source.id)}
+                                      className="text-blue-600 hover:text-blue-700 font-medium text-sm"
+                                    >
+                                      + Add workout
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <>
+                                    {sourceWorkouts.map((workout, idx) => (
+                                      <div
+                                        key={workout.id}
+                                        className={`flex items-center p-4 hover:bg-gray-100 transition-colors ${
+                                          idx > 0 ? "border-t border-gray-200" : ""
+                                        }`}
+                                      >
+                                        <Link
+                                          href={
+                                            workout.type === "lift"
+                                              ? `/workouts/lift?name=${encodeURIComponent(workout.name)}`
+                                              : workout.type === "skill"
+                                              ? `/workouts/skill?name=${encodeURIComponent(workout.name)}`
+                                              : `/workouts/new?name=${encodeURIComponent(workout.name)}&description=${encodeURIComponent(workout.description)}&type=${workout.type}${workout.scoringType ? `&scoringType=${workout.scoringType}` : ""}`
+                                          }
+                                          className="flex-1 min-w-0"
+                                        >
+                                          <div className="flex items-center gap-2">
+                                            <h4 className="font-medium text-gray-800">{workout.name}</h4>
+                                            {workout.scoringType && (
+                                              <span className={`px-2 py-0.5 text-xs rounded ${
+                                                workout.scoringType === "fortime" ? "bg-blue-100 text-blue-700" :
+                                                workout.scoringType === "amrap" ? "bg-green-100 text-green-700" :
+                                                workout.scoringType === "emom" ? "bg-purple-100 text-purple-700" :
+                                                "bg-gray-100 text-gray-700"
+                                              }`}>
+                                                {workout.scoringType === "fortime" ? "For Time" :
+                                                 workout.scoringType === "amrap" ? "AMRAP" :
+                                                 workout.scoringType === "emom" ? "EMOM" : workout.scoringType}
+                                              </span>
+                                            )}
+                                          </div>
+                                          {workout.description && (
+                                            <p className="text-gray-500 text-sm truncate">{workout.description}</p>
+                                          )}
+                                        </Link>
+                                        <button
+                                          onClick={() => handleDeleteProgrammedWorkout(workout.id)}
+                                          className="ml-3 p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors shrink-0"
+                                          title="Delete workout"
+                                        >
+                                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                          </svg>
+                                        </button>
+                                      </div>
+                                    ))}
+                                    <div className="p-3 border-t border-gray-200 flex justify-between items-center">
+                                      <button
+                                        onClick={() => setShowAddWorkoutModal(source.id)}
+                                        className="text-blue-600 hover:text-blue-700 font-medium text-sm"
+                                      >
+                                        + Add workout
+                                      </button>
+                                      <button
+                                        onClick={() => handleDeleteProgrammingSource(source.id)}
+                                        className="text-red-500 hover:text-red-600 font-medium text-sm"
+                                      >
+                                        Delete source
+                                      </button>
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
                 {/* Category List */}
                 <h2 className="text-lg font-semibold text-gray-900 mb-3">
                   All {workoutType === "wod" ? "WODs" : workoutType === "lift" ? "Lifts" : "Skills"}
@@ -780,6 +1106,205 @@ export default function WorkoutsPage() {
                 className="px-4 py-2 text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors"
               >
                 Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Programming Source Modal */}
+      {showAddSourceModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Add Programming Source</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Source Name</label>
+                <input
+                  type="text"
+                  value={newSourceName}
+                  onChange={(e) => setNewSourceName(e.target.value)}
+                  placeholder="e.g., CompTrain, HWPO, My PT - John"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Source Type</label>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setNewSourceType("online")}
+                    className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      newSourceType === "online"
+                        ? "bg-blue-600 text-white"
+                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                    }`}
+                  >
+                    Online Program
+                  </button>
+                  <button
+                    onClick={() => setNewSourceType("pt")}
+                    className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      newSourceType === "pt"
+                        ? "bg-blue-600 text-white"
+                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                    }`}
+                  >
+                    Personal Trainer
+                  </button>
+                  <button
+                    onClick={() => setNewSourceType("other")}
+                    className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      newSourceType === "other"
+                        ? "bg-blue-600 text-white"
+                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                    }`}
+                  >
+                    Other
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-3 justify-end mt-6">
+              <button
+                onClick={() => {
+                  setShowAddSourceModal(false);
+                  setNewSourceName("");
+                  setNewSourceType("online");
+                }}
+                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAddProgrammingSource}
+                disabled={!newSourceName.trim()}
+                className="px-4 py-2 text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Add Source
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Programmed Workout Modal */}
+      {showAddWorkoutModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Add Workout</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Workout Name</label>
+                <input
+                  type="text"
+                  value={newWorkoutName}
+                  onChange={(e) => setNewWorkoutName(e.target.value)}
+                  placeholder="e.g., Monday WOD, Back Squat Day"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Description (optional)</label>
+                <textarea
+                  value={newWorkoutDescription}
+                  onChange={(e) => setNewWorkoutDescription(e.target.value)}
+                  placeholder="Workout details..."
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Workout Type</label>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setNewWorkoutType("wod")}
+                    className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      newWorkoutType === "wod"
+                        ? "bg-blue-600 text-white"
+                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                    }`}
+                  >
+                    WOD
+                  </button>
+                  <button
+                    onClick={() => setNewWorkoutType("lift")}
+                    className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      newWorkoutType === "lift"
+                        ? "bg-blue-600 text-white"
+                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                    }`}
+                  >
+                    Lift
+                  </button>
+                  <button
+                    onClick={() => setNewWorkoutType("skill")}
+                    className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      newWorkoutType === "skill"
+                        ? "bg-blue-600 text-white"
+                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                    }`}
+                  >
+                    Skill
+                  </button>
+                </div>
+              </div>
+              {newWorkoutType === "wod" && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Scoring Type</label>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setNewWorkoutScoringType("fortime")}
+                      className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        newWorkoutScoringType === "fortime"
+                          ? "bg-blue-600 text-white"
+                          : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                      }`}
+                    >
+                      For Time
+                    </button>
+                    <button
+                      onClick={() => setNewWorkoutScoringType("amrap")}
+                      className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        newWorkoutScoringType === "amrap"
+                          ? "bg-blue-600 text-white"
+                          : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                      }`}
+                    >
+                      AMRAP
+                    </button>
+                    <button
+                      onClick={() => setNewWorkoutScoringType("emom")}
+                      className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        newWorkoutScoringType === "emom"
+                          ? "bg-blue-600 text-white"
+                          : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                      }`}
+                    >
+                      EMOM
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="flex gap-3 justify-end mt-6">
+              <button
+                onClick={() => {
+                  setShowAddWorkoutModal(null);
+                  setNewWorkoutName("");
+                  setNewWorkoutDescription("");
+                  setNewWorkoutType("wod");
+                  setNewWorkoutScoringType("fortime");
+                }}
+                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleAddProgrammedWorkout(showAddWorkoutModal)}
+                disabled={!newWorkoutName.trim()}
+                className="px-4 py-2 text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Add Workout
               </button>
             </div>
           </div>
