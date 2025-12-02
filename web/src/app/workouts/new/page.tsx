@@ -1059,6 +1059,8 @@ function NewWorkoutContent() {
                     if (!isPreset) {
                       setWodTitle(e.target.value);
                       setShowSuggestions(true);
+                      // Unlock scoring type when manually typing a workout name
+                      setScoringTypeLocked(false);
                     }
                   }}
                   onFocus={() => !isPreset && setShowSuggestions(true)}
