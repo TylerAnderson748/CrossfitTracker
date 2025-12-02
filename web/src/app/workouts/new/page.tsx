@@ -7,6 +7,7 @@ import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
 import { WODCategory, normalizeWorkoutName, LeaderboardEntry, categoryOrder, categoryColors, WODScoringType, wodScoringTypeLabels, wodScoringTypeColors } from "@/lib/types";
 import Navigation from "@/components/Navigation";
+import { getAllWods } from "@/lib/workoutData";
 
 interface WorkoutLog {
   id: string;
@@ -88,6 +89,16 @@ function NewWorkoutContent() {
   const [category, setCategory] = useState<WODCategory>("RX");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [showSuggestions, setShowSuggestions] = useState(false);
+
+  // Get all WODs for suggestions
+  const allWods = getAllWods();
+  const getFilteredSuggestions = (searchText: string) => {
+    if (!searchText || searchText.length < 2) return [];
+    return allWods.filter((w) =>
+      w.name.toLowerCase().includes(searchText.toLowerCase())
+    ).slice(0, 8);
+  };
 
   // Scoring type from URL params (fortime, emom, amrap)
   const urlScoringType = searchParams.get("scoringType") as WODScoringType | null;
@@ -989,14 +1000,60 @@ function NewWorkoutContent() {
                   </button>
                 </div>
               )}
-              <input
-                type="text"
-                value={wodTitle}
-                onChange={(e) => !isPreset && setWodTitle(e.target.value)}
-                placeholder="Workout Name"
-                className={`w-full text-xl font-bold text-gray-900 border-none focus:ring-0 p-0 mb-2 placeholder-gray-400 ${isPreset ? "bg-transparent cursor-default" : ""}`}
-                readOnly={isPreset}
-              />
+              <div className="relative">
+                <input
+                  type="text"
+                  value={wodTitle}
+                  onChange={(e) => {
+                    if (!isPreset) {
+                      setWodTitle(e.target.value);
+                      setShowSuggestions(true);
+                    }
+                  }}
+                  onFocus={() => !isPreset && setShowSuggestions(true)}
+                  onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                  placeholder="Workout Name"
+                  className={`w-full text-xl font-bold text-gray-900 border-none focus:ring-0 p-0 mb-2 placeholder-gray-400 ${isPreset ? "bg-transparent cursor-default" : ""}`}
+                  readOnly={isPreset}
+                  autoComplete="off"
+                />
+                {/* Suggestions dropdown */}
+                {showSuggestions && !isPreset && getFilteredSuggestions(wodTitle).length > 0 && (
+                  <div className="absolute z-50 w-full bg-white border border-gray-300 rounded-lg shadow-lg max-h-64 overflow-y-auto">
+                    {getFilteredSuggestions(wodTitle).map((workout, index) => (
+                      <button
+                        key={index}
+                        type="button"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          setWodTitle(workout.name);
+                          setWodDescription(workout.description);
+                          setIsPreset(true);
+                          if (workout.scoringType) {
+                            setScoringType(workout.scoringType);
+                          }
+                          setShowSuggestions(false);
+                        }}
+                        className="w-full px-3 py-2 text-left hover:bg-blue-50 border-b border-gray-100 last:border-b-0"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium text-gray-900">{workout.name}</span>
+                          {workout.scoringType && (
+                            <span className={`px-2 py-0.5 text-xs rounded font-medium ${
+                              workout.scoringType === "fortime" ? "bg-blue-100 text-blue-700" :
+                              workout.scoringType === "emom" ? "bg-orange-100 text-orange-700" :
+                              "bg-green-100 text-green-700"
+                            }`}>
+                              {workout.scoringType === "fortime" ? "For Time" : workout.scoringType.toUpperCase()}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-gray-500 text-sm truncate">{workout.description}</p>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
               <textarea
                 value={wodDescription}
                 onChange={(e) => !isPreset && setWodDescription(e.target.value)}
