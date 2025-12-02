@@ -261,7 +261,7 @@ export default function WorkoutsPage() {
                         href={
                           workout.type === "lift"
                             ? `/workouts/lift?name=${encodeURIComponent(workout.name)}`
-                            : `/workouts/new?name=${encodeURIComponent(workout.name)}&description=${encodeURIComponent(workout.description)}&type=${workout.type}`
+                            : `/workouts/new?name=${encodeURIComponent(workout.name)}&description=${encodeURIComponent(workout.description)}&type=${workout.type}${workout.scoringType ? `&scoringType=${workout.scoringType}` : ""}`
                         }
                         className={`flex items-center justify-between p-4 hover:bg-gray-50 transition-colors ${
                           idx > 0 ? "border-t border-gray-100" : ""
@@ -320,7 +320,7 @@ export default function WorkoutsPage() {
                             href={
                               workout.type === "lift"
                                 ? `/workouts/lift?name=${encodeURIComponent(workout.name)}`
-                                : `/workouts/new?name=${encodeURIComponent(workout.name)}&description=${encodeURIComponent(workout.description)}&type=${workout.type}`
+                                : `/workouts/new?name=${encodeURIComponent(workout.name)}&description=${encodeURIComponent(workout.description)}&type=${workout.type}${workout.scoringType ? `&scoringType=${workout.scoringType}` : ""}`
                             }
                             className={`flex items-center justify-between p-4 pl-8 hover:bg-gray-100 transition-colors ${
                               idx > 0 ? "border-t border-gray-200" : ""
