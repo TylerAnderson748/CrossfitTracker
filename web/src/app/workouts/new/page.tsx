@@ -1101,7 +1101,7 @@ function NewWorkoutContent() {
                         Round {emomCurrentRound} of {emomRounds}
                       </div>
                       <div className={`text-5xl font-mono font-semibold ${emomSecondsInRound <= 5 ? "text-red-500" : "text-orange-600"}`}>
-                        0:{emomSecondsInRound.toString().padStart(2, "0")}
+                        {formatTimerDisplay(emomSecondsInRound)}
                       </div>
                       <div className="text-sm text-gray-500 mt-1">
                         Total: {formatTimerDisplay(elapsedSeconds)}
