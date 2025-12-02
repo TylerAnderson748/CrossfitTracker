@@ -12,6 +12,8 @@ export default function HiCrystalPage() {
   const [caffeineLevel, setCaffeineLevel] = useState(0);
   const [hyperMode, setHyperMode] = useState(false);
   const [showNutritionFacts, setShowNutritionFacts] = useState(false);
+  const [showPRCelebration, setShowPRCelebration] = useState(false);
+  const [prCount, setPrCount] = useState(0);
   const audioContextRef = useRef<AudioContext | null>(null);
 
   useEffect(() => {
@@ -75,13 +77,72 @@ export default function HiCrystalPage() {
     });
   };
 
+  // PR Celebration fanfare - triumphant coffee-themed melody
+  const playPRCelebration = () => {
+    if (!audioContextRef.current) {
+      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+    }
+    const ctx = audioContextRef.current;
+
+    // Triumphant fanfare melody (C major ascending with harmony)
+    const melody = [
+      { freq: 523, time: 0, duration: 0.15 },      // C5
+      { freq: 659, time: 0.15, duration: 0.15 },   // E5
+      { freq: 784, time: 0.3, duration: 0.15 },    // G5
+      { freq: 1047, time: 0.45, duration: 0.3 },   // C6
+      { freq: 784, time: 0.75, duration: 0.1 },    // G5
+      { freq: 1047, time: 0.85, duration: 0.4 },   // C6
+      { freq: 1319, time: 1.25, duration: 0.5 },   // E6 (final high note)
+    ];
+
+    melody.forEach(({ freq, time, duration }) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.frequency.value = freq;
+      osc.type = 'sine';
+      gain.gain.setValueAtTime(0, ctx.currentTime + time);
+      gain.gain.linearRampToValueAtTime(0.25, ctx.currentTime + time + 0.02);
+      gain.gain.setValueAtTime(0.25, ctx.currentTime + time + duration - 0.05);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + time + duration);
+      osc.start(ctx.currentTime + time);
+      osc.stop(ctx.currentTime + time + duration);
+    });
+
+    // Add sparkly high notes
+    [2093, 2349, 2637, 2793].forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.frequency.value = freq;
+      osc.type = 'sine';
+      gain.gain.setValueAtTime(0.1, ctx.currentTime + 0.5 + i * 0.1);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.7 + i * 0.1);
+      osc.start(ctx.currentTime + 0.5 + i * 0.1);
+      osc.stop(ctx.currentTime + 0.7 + i * 0.1);
+    });
+  };
+
+  const triggerPRCelebration = () => {
+    setShowPRCelebration(true);
+    setPrCount(c => c + 1);
+    playPRCelebration();
+    setTimeout(() => setShowPRCelebration(false), 4000);
+  };
+
   const drinkCoffee = () => {
     playCoffeeSound();
     setCoffeeCount(c => c + 1);
-    setCaffeineLevel(l => Math.min(l + 20, 100));
-    if (caffeineLevel >= 80) {
+    const newLevel = Math.min(caffeineLevel + 20, 100);
+    setCaffeineLevel(newLevel);
+    if (newLevel >= 80) {
       setHyperMode(true);
       playEnergySound();
+    }
+    if (newLevel === 100 && caffeineLevel < 100) {
+      triggerPRCelebration();
     }
   };
 
@@ -172,6 +233,35 @@ export default function HiCrystalPage() {
           100% { transform: scale(1) rotate(0deg); opacity: 1; }
         }
 
+        @keyframes pr-zoom {
+          0% { transform: scale(0) rotate(-20deg); opacity: 0; }
+          50% { transform: scale(1.2) rotate(10deg); opacity: 1; }
+          100% { transform: scale(1) rotate(0deg); opacity: 1; }
+        }
+
+        @keyframes pr-confetti {
+          0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+          100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
+        }
+
+        @keyframes pr-glow-pulse {
+          0%, 100% { box-shadow: 0 0 30px rgba(251, 191, 36, 0.5), 0 0 60px rgba(34, 197, 94, 0.3); }
+          50% { box-shadow: 0 0 60px rgba(251, 191, 36, 0.8), 0 0 120px rgba(34, 197, 94, 0.5), 0 0 180px rgba(251, 191, 36, 0.3); }
+        }
+
+        @keyframes pr-text-rainbow {
+          0% { color: #fbbf24; }
+          25% { color: #22c55e; }
+          50% { color: #f97316; }
+          75% { color: #84cc16; }
+          100% { color: #fbbf24; }
+        }
+
+        @keyframes pr-trophy-bounce {
+          0%, 100% { transform: translateY(0) scale(1); }
+          50% { transform: translateY(-30px) scale(1.2); }
+        }
+
         .animate-float-coffee { animation: float-coffee 3s ease-in-out infinite; }
         .animate-steam { animation: steam 2s ease-out infinite; }
         .animate-bean-spin { animation: bean-spin 2s ease-in-out infinite; }
@@ -182,6 +272,11 @@ export default function HiCrystalPage() {
         .animate-avocado-bounce { animation: avocado-bounce 2s ease-in-out infinite; }
         .animate-smoothie-swirl { animation: smoothie-swirl 3s linear infinite; }
         .animate-nutrition-pop { animation: nutrition-pop 0.5s ease-out forwards; }
+        .animate-pr-zoom { animation: pr-zoom 0.6s ease-out forwards; }
+        .animate-pr-confetti { animation: pr-confetti 3s ease-out forwards; }
+        .animate-pr-glow-pulse { animation: pr-glow-pulse 0.5s ease-in-out infinite; }
+        .animate-pr-text-rainbow { animation: pr-text-rainbow 1s ease-in-out infinite; }
+        .animate-pr-trophy-bounce { animation: pr-trophy-bounce 0.5s ease-in-out infinite; }
       `}</style>
 
       <Navigation />
@@ -359,7 +454,60 @@ export default function HiCrystalPage() {
             </p>
             <p className="text-amber-600 mt-2">- Crystal&apos;s Fitness Philosophy</p>
           </div>
+
+          {/* PR Counter */}
+          {prCount > 0 && (
+            <div className="mt-8 bg-gradient-to-r from-amber-400 via-green-400 to-amber-400 rounded-2xl p-4 text-center">
+              <p className="text-xl font-black text-white drop-shadow-lg">
+                🏆 CAFFEINE PRs: {prCount} 🏆
+              </p>
+            </div>
+          )}
         </div>
+
+        {/* PR Celebration Overlay */}
+        {showPRCelebration && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
+            {/* Confetti */}
+            <div className="absolute inset-0 overflow-hidden">
+              {[...Array(50)].map((_, i) => (
+                <div
+                  key={i}
+                  className="absolute text-3xl animate-pr-confetti"
+                  style={{
+                    left: `${Math.random() * 100}%`,
+                    top: '-50px',
+                    animationDelay: `${Math.random() * 0.5}s`,
+                    animationDuration: `${2 + Math.random() * 2}s`,
+                  }}
+                >
+                  {['☕', '🥑', '💪', '✨', '🏆', '⭐', '🎉', '💚', '🥗', '🌟'][i % 10]}
+                </div>
+              ))}
+            </div>
+
+            {/* Main celebration card */}
+            <div className="bg-gradient-to-br from-amber-400 via-green-400 to-emerald-500 rounded-3xl p-8 animate-pr-zoom animate-pr-glow-pulse text-center max-w-md mx-4">
+              <div className="text-8xl mb-4 animate-pr-trophy-bounce">🏆</div>
+              <h2 className="text-4xl font-black text-white mb-2 drop-shadow-lg animate-pr-text-rainbow">
+                NEW PR!
+              </h2>
+              <p className="text-2xl font-bold text-white/90 mb-4">
+                ☕ MAXIMUM CAFFEINE ACHIEVED! ☕
+              </p>
+              <div className="flex justify-center gap-2 text-4xl mb-4">
+                {['💪', '⚡', '🔥', '✨', '💚'].map((emoji, i) => (
+                  <span key={i} className="animate-pr-trophy-bounce" style={{ animationDelay: `${i * 0.1}s` }}>
+                    {emoji}
+                  </span>
+                ))}
+              </div>
+              <p className="text-lg text-white/80 font-medium">
+                You&apos;re officially UNSTOPPABLE!
+              </p>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );

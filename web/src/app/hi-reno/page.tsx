@@ -13,6 +13,8 @@ export default function HiRenoPage() {
   const [flameIntensity, setFlameIntensity] = useState(1);
   const [headbangCount, setHeadbangCount] = useState(0);
   const [earthquakeMode, setEarthquakeMode] = useState(false);
+  const [showPRCelebration, setShowPRCelebration] = useState(false);
+  const [prCount, setPrCount] = useState(0);
   const audioContextRef = useRef<AudioContext | null>(null);
 
   useEffect(() => {
@@ -120,13 +122,115 @@ export default function HiRenoPage() {
     });
   }, []);
 
+  // BRUTAL PR CELEBRATION - Epic metal breakdown
+  const playPRCelebration = useCallback(() => {
+    if (!audioContextRef.current) {
+      audioContextRef.current = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+    }
+    const ctx = audioContextRef.current;
+
+    // Create heavy distortion
+    const distortion = ctx.createWaveShaper();
+    const makeDistortionCurve = (amount: number) => {
+      const k = amount;
+      const samples = 44100;
+      const curve = new Float32Array(samples);
+      const deg = Math.PI / 180;
+      for (let i = 0; i < samples; ++i) {
+        const x = (i * 2) / samples - 1;
+        curve[i] = ((3 + k) * x * 20 * deg) / (Math.PI + k * Math.abs(x));
+      }
+      return curve;
+    };
+    distortion.curve = makeDistortionCurve(800);
+    distortion.oversample = '4x';
+
+    // EPIC breakdown riff - descending power chords
+    const breakdown = [
+      { freqs: [82.41, 123.47], time: 0, duration: 0.3 },     // E2
+      { freqs: [77.78, 116.54], time: 0.35, duration: 0.3 },  // Eb2
+      { freqs: [73.42, 110.00], time: 0.7, duration: 0.3 },   // D2
+      { freqs: [65.41, 98.00], time: 1.05, duration: 0.5 },   // C2 - CHUG
+      { freqs: [65.41, 98.00], time: 1.6, duration: 0.15 },   // C2
+      { freqs: [65.41, 98.00], time: 1.8, duration: 0.15 },   // C2
+      { freqs: [65.41, 98.00], time: 2.0, duration: 0.8 },    // C2 - HOLD
+    ];
+
+    breakdown.forEach(({ freqs, time, duration }) => {
+      freqs.forEach((freq) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(distortion);
+        distortion.connect(gain);
+        gain.connect(ctx.destination);
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(freq, ctx.currentTime + time);
+        gain.gain.setValueAtTime(0.2, ctx.currentTime + time);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + time + duration);
+        osc.start(ctx.currentTime + time);
+        osc.stop(ctx.currentTime + time + duration + 0.1);
+      });
+    });
+
+    // Add brutal double bass drums
+    [...Array(12)].forEach((_, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      const time = i * 0.15;
+      osc.frequency.setValueAtTime(120, ctx.currentTime + time);
+      osc.frequency.exponentialRampToValueAtTime(35, ctx.currentTime + time + 0.08);
+      gain.gain.setValueAtTime(0.35, ctx.currentTime + time);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + time + 0.1);
+      osc.start(ctx.currentTime + time);
+      osc.stop(ctx.currentTime + time + 0.1);
+    });
+
+    // Add noise burst for extra brutality
+    const bufferSize = ctx.sampleRate * 0.5;
+    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = Math.random() * 2 - 1;
+    }
+    const noise = ctx.createBufferSource();
+    const noiseGain = ctx.createGain();
+    const noiseFilter = ctx.createBiquadFilter();
+    noiseFilter.type = 'lowpass';
+    noiseFilter.frequency.value = 500;
+    noise.buffer = buffer;
+    noise.connect(noiseFilter);
+    noiseFilter.connect(noiseGain);
+    noiseGain.connect(ctx.destination);
+    noiseGain.gain.setValueAtTime(0.15, ctx.currentTime);
+    noiseGain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+    noise.start(ctx.currentTime);
+  }, []);
+
+  const triggerPRCelebration = useCallback(() => {
+    setShowPRCelebration(true);
+    setPrCount(c => c + 1);
+    setEarthquakeMode(true);
+    setFlameIntensity(5);
+    playPRCelebration();
+    setTimeout(() => {
+      setShowPRCelebration(false);
+      setEarthquakeMode(false);
+    }, 4000);
+  }, [playPRCelebration]);
+
   const headbang = () => {
     playMetalRiff();
     setHeadbangCount(c => c + 1);
-    setMetalLevel(l => Math.min(l + 15, 100));
-    if (metalLevel >= 70) {
+    const newLevel = Math.min(metalLevel + 15, 100);
+    setMetalLevel(newLevel);
+    if (newLevel >= 70) {
       setBrutalMode(true);
       playBrutalDrop();
+    }
+    if (newLevel === 100 && metalLevel < 100) {
+      triggerPRCelebration();
     }
   };
 
@@ -249,6 +353,39 @@ export default function HiRenoPage() {
           50% { transform: rotate(5deg); }
         }
 
+        @keyframes pr-brutal-zoom {
+          0% { transform: scale(0) rotate(-30deg); opacity: 0; }
+          30% { transform: scale(1.5) rotate(15deg); opacity: 1; }
+          50% { transform: scale(0.9) rotate(-5deg); opacity: 1; }
+          70% { transform: scale(1.2) rotate(5deg); opacity: 1; }
+          100% { transform: scale(1) rotate(0deg); opacity: 1; }
+        }
+
+        @keyframes pr-fire-rain {
+          0% { transform: translateY(-100px) rotate(0deg); opacity: 1; }
+          100% { transform: translateY(100vh) rotate(360deg); opacity: 0; }
+        }
+
+        @keyframes pr-skull-spin {
+          0% { transform: rotate(0deg) scale(1); }
+          25% { transform: rotate(90deg) scale(1.3); }
+          50% { transform: rotate(180deg) scale(1); }
+          75% { transform: rotate(270deg) scale(1.3); }
+          100% { transform: rotate(360deg) scale(1); }
+        }
+
+        @keyframes pr-blood-pulse {
+          0%, 100% { box-shadow: 0 0 30px rgba(255, 0, 0, 0.5), 0 0 60px rgba(255, 68, 0, 0.3); }
+          50% { box-shadow: 0 0 80px rgba(255, 0, 0, 0.8), 0 0 150px rgba(255, 68, 0, 0.5), 0 0 200px rgba(255, 0, 0, 0.3); }
+        }
+
+        @keyframes pr-metal-flash {
+          0%, 100% { background: linear-gradient(45deg, #1a0000, #330000, #1a0000); }
+          25% { background: linear-gradient(45deg, #ff0000, #ff4400, #ff0000); }
+          50% { background: linear-gradient(45deg, #330000, #660000, #330000); }
+          75% { background: linear-gradient(45deg, #ff4400, #ff8800, #ff4400); }
+        }
+
         .animate-flame-flicker { animation: flame-flicker 0.3s ease-in-out infinite; }
         .animate-headbang { animation: headbang 0.3s ease-in-out infinite; }
         .animate-metal-pulse { animation: metal-pulse 1s ease-in-out infinite; }
@@ -261,6 +398,11 @@ export default function HiRenoPage() {
         .animate-inferno { animation: inferno 3s ease infinite; background-size: 200% 200%; }
         .animate-demon-eyes { animation: demon-eyes 3s ease-in-out infinite; }
         .animate-chain-swing { animation: chain-swing 2s ease-in-out infinite; }
+        .animate-pr-brutal-zoom { animation: pr-brutal-zoom 0.8s ease-out forwards; }
+        .animate-pr-fire-rain { animation: pr-fire-rain 2s ease-out forwards; }
+        .animate-pr-skull-spin { animation: pr-skull-spin 1s ease-in-out infinite; }
+        .animate-pr-blood-pulse { animation: pr-blood-pulse 0.3s ease-in-out infinite; }
+        .animate-pr-metal-flash { animation: pr-metal-flash 0.2s ease-in-out infinite; }
 
         .metal-gradient {
           background: linear-gradient(180deg, #1a0000 0%, #330000 30%, #1a0000 50%, #000000 100%);
@@ -470,7 +612,63 @@ export default function HiRenoPage() {
             </p>
             <p className="text-gray-600 text-sm mt-2">Click the title to headbang. The more you bang, the more brutal it gets.</p>
           </div>
+
+          {/* PR Counter */}
+          {prCount > 0 && (
+            <div className="mt-8 bg-gradient-to-r from-red-900 via-orange-600 to-red-900 rounded-2xl p-4 text-center border-4 border-red-600">
+              <p className="text-xl font-black text-white drop-shadow-lg">
+                💀 BRUTAL PRs: {prCount} 💀
+              </p>
+            </div>
+          )}
         </div>
+
+        {/* PR Celebration Overlay */}
+        {showPRCelebration && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none animate-pr-metal-flash">
+            {/* Fire and skull rain */}
+            <div className="absolute inset-0 overflow-hidden">
+              {[...Array(60)].map((_, i) => (
+                <div
+                  key={i}
+                  className="absolute text-4xl animate-pr-fire-rain"
+                  style={{
+                    left: `${Math.random() * 100}%`,
+                    top: '-100px',
+                    animationDelay: `${Math.random() * 0.8}s`,
+                    animationDuration: `${1.5 + Math.random() * 1.5}s`,
+                  }}
+                >
+                  {['🔥', '💀', '⚡', '☠️', '🤘', '🎸', '👹', '⛓️', '🦇', '💥'][i % 10]}
+                </div>
+              ))}
+            </div>
+
+            {/* Main celebration card */}
+            <div className="bg-gradient-to-br from-black via-red-950 to-black rounded-3xl p-8 animate-pr-brutal-zoom animate-pr-blood-pulse text-center max-w-md mx-4 border-4 border-red-600">
+              <div className="text-8xl mb-4 animate-pr-skull-spin">💀</div>
+              <h2 className="text-4xl font-black text-red-500 mb-2 drop-shadow-lg animate-metal-pulse">
+                BRUTAL PR!
+              </h2>
+              <p className="text-2xl font-black text-orange-500 mb-4 tracking-widest">
+                🔥 MAXIMUM METAL ACHIEVED 🔥
+              </p>
+              <div className="flex justify-center gap-2 text-4xl mb-4">
+                {['🤘', '⚡', '🎸', '💀', '🔥'].map((emoji, i) => (
+                  <span key={i} className="animate-headbang" style={{ animationDelay: `${i * 0.1}s` }}>
+                    {emoji}
+                  </span>
+                ))}
+              </div>
+              <p className="text-lg text-gray-400 font-black tracking-widest">
+                YOU ARE UNSTOPPABLE
+              </p>
+              <p className="text-red-600 text-sm mt-2 font-bold">
+                &quot;PAIN IS TEMPORARY, METAL IS FOREVER&quot;
+              </p>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );
