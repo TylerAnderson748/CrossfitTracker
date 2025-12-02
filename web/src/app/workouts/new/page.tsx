@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { collection, addDoc, query, where, orderBy, getDocs, Timestamp, limit, doc, updateDoc, deleteDoc } from "firebase/firestore";
+import { collection, addDoc, query, where, orderBy, getDocs, getDoc, Timestamp, limit, doc, updateDoc, deleteDoc } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
 import { WODCategory, normalizeWorkoutName, LeaderboardEntry, categoryOrder, categoryColors, WODScoringType, wodScoringTypeLabels, wodScoringTypeColors } from "@/lib/types";
@@ -360,11 +360,20 @@ function NewWorkoutContent() {
         for (const oderId of userIds) {
           if (!oderId) continue;
           try {
-            const userQuery = query(collection(db, "users"), where("id", "==", oderId), limit(1));
-            const userSnapshot = await getDocs(userQuery);
-            if (!userSnapshot.empty) {
-              const userData = userSnapshot.docs[0].data();
+            // Try fetching by document ID first
+            const userDocRef = doc(db, "users", oderId);
+            const userDoc = await getDoc(userDocRef);
+            if (userDoc.exists()) {
+              const userData = userDoc.data();
               userNames[oderId] = userData.displayName || `${userData.firstName || ""} ${userData.lastName || ""}`.trim() || "Unknown";
+            } else {
+              // Fallback: try querying by id field
+              const userQuery = query(collection(db, "users"), where("id", "==", oderId), limit(1));
+              const userSnapshot = await getDocs(userQuery);
+              if (!userSnapshot.empty) {
+                const userData = userSnapshot.docs[0].data();
+                userNames[oderId] = userData.displayName || `${userData.firstName || ""} ${userData.lastName || ""}`.trim() || "Unknown";
+              }
             }
           } catch (e) {
             // Ignore errors fetching user names
