@@ -910,7 +910,7 @@ export default function GymDetailPage() {
     setWorkoutComponents(workoutComponents.filter(c => c.id !== id));
   };
 
-  const updateComponent = (id: string, field: "title" | "description" | "scoringType", value: string) => {
+  const updateComponent = (id: string, field: "title" | "description" | "scoringType" | "isPreset", value: string | boolean) => {
     setWorkoutComponents(workoutComponents.map(c =>
       c.id === id ? { ...c, [field]: value } : c
     ));

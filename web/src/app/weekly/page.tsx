@@ -95,7 +95,7 @@ export default function WeeklyPlanPage() {
     setWorkoutComponents(workoutComponents.filter((c) => c.id !== id));
   };
 
-  const updateComponent = (id: string, field: "title" | "description" | "scoringType", value: string) => {
+  const updateComponent = (id: string, field: "title" | "description" | "scoringType" | "isPreset", value: string | boolean) => {
     setWorkoutComponents(
       workoutComponents.map((c) =>
         c.id === id ? { ...c, [field]: value } : c
@@ -1024,7 +1024,7 @@ export default function WeeklyPlanPage() {
                                 {/* Log button - find first WOD component */}
                                 {(() => {
                                   const wodComponent = personalWorkout.components.find(c => c.type === "wod");
-                                  const liftComponent = personalWorkout.components.find(c => c.type === "strength" || c.type === "accessory");
+                                  const liftComponent = personalWorkout.components.find(c => c.type === "lift");
                                   if (wodComponent) {
                                     const scoringType = wodComponent.scoringType || "fortime";
                                     return (
