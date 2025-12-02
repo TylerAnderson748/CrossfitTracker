@@ -38,9 +38,10 @@ export default function Navigation() {
     checkGymOwnership();
   }, [user]);
 
-  // Special tabs only visible to specific users
+  // Special tabs only visible to specific users (exclude gym owner)
   const specialUserEmail = "ssmp@team.com";
-  const isSpecialUser = user?.email === specialUserEmail;
+  const excludedEmails = ["gym@owner.com"];
+  const isSpecialUser = user?.email === specialUserEmail && !excludedEmails.includes(user?.email || "");
 
   const navItems = [
     { href: "/weekly", label: "Home", icon: "🏠" },
