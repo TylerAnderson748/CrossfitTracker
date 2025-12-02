@@ -96,8 +96,8 @@ export default function WeeklyPlanPage() {
   };
 
   const updateComponent = (id: string, field: "title" | "description" | "scoringType" | "isPreset", value: string | boolean) => {
-    setWorkoutComponents(
-      workoutComponents.map((c) =>
+    setWorkoutComponents(prev =>
+      prev.map((c) =>
         c.id === id ? { ...c, [field]: value } : c
       )
     );
