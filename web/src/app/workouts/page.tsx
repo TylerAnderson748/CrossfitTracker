@@ -661,9 +661,10 @@ export default function WorkoutsPage() {
             ) : (
               <div className="space-y-3">
                 {recentLogs.map((log) => (
-                  <div
+                  <Link
                     key={log.id}
-                    className="bg-white rounded-lg shadow-sm border border-gray-200 p-4"
+                    href={`/workouts/new?name=${encodeURIComponent(log.wodTitle)}&description=${encodeURIComponent(log.wodDescription || "")}`}
+                    className="block bg-white rounded-lg shadow-sm border border-gray-200 p-4 hover:border-blue-300 hover:shadow-md transition-all cursor-pointer"
                   >
                     <div className="flex justify-between items-start">
                       <div>
@@ -692,7 +693,7 @@ export default function WorkoutsPage() {
                         {log.notes}
                       </span>
                     )}
-                  </div>
+                  </Link>
                 ))}
               </div>
             )}
