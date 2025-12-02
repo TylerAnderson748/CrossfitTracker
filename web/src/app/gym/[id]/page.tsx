@@ -276,6 +276,7 @@ export default function GymDetailPage() {
       if (groupIds.length > 0) {
         // Get workouts for the next 30 days
         const now = new Date();
+        now.setHours(0, 0, 0, 0); // Start of today to include today's workouts
         const thirtyDaysFromNow = new Date();
         thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
 
