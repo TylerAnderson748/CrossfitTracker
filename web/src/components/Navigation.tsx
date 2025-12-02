@@ -38,9 +38,10 @@ export default function Navigation() {
     checkGymOwnership();
   }, [user]);
 
-  // Only show special tabs to these specific users
+  // Only show special tabs to these specific users (by email or UID)
   const allowedEmails = ["indi@user.com", "1@1.com", "cheese@cheese.com", "tyguy4201@gmail.com"];
-  const canSeeSpecialTabs = user?.email && allowedEmails.includes(user.email);
+  const allowedUIDs = ["ttgK41hHOnPiUKemZoPZSiktQXC3"];
+  const canSeeSpecialTabs = (user?.email && allowedEmails.includes(user.email)) || (user?.id && allowedUIDs.includes(user.id));
 
   // Crystal and Reno tabs visible only to specific UIDs
   const crystalRenoAllowedUIDs = ["uknIhGe53pcj6sZBbSYVRo9NF713", "WuxjspCO48ZWyhiuWkTLbRRNKDz2"];
