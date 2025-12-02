@@ -6,7 +6,7 @@ import Link from "next/link";
 import { collection, query, where, orderBy, getDocs, updateDoc, doc, Timestamp, limit, addDoc, deleteDoc } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
-import { ScheduledWorkout, ScheduledTimeSlot, workoutComponentLabels, workoutComponentColors, formatTimeSlot, LeaderboardEntry, formatResult, normalizeWorkoutName, WorkoutComponent, WorkoutComponentType } from "@/lib/types";
+import { ScheduledWorkout, ScheduledTimeSlot, workoutComponentLabels, workoutComponentColors, formatTimeSlot, LeaderboardEntry, formatResult, normalizeWorkoutName, WorkoutComponent, WorkoutComponentType, WODScoringType, wodScoringTypeLabels, wodScoringTypeColors } from "@/lib/types";
 import { getAllWods, getAllLifts, Workout } from "@/lib/workoutData";
 import Navigation from "@/components/Navigation";
 
@@ -86,6 +86,7 @@ export default function WeeklyPlanPage() {
       type,
       title: "",
       description: "",
+      ...(type === "wod" && { scoringType: "fortime" as WODScoringType }),
     };
     setWorkoutComponents([...workoutComponents, newComponent]);
   };
@@ -94,7 +95,7 @@ export default function WeeklyPlanPage() {
     setWorkoutComponents(workoutComponents.filter((c) => c.id !== id));
   };
 
-  const updateComponent = (id: string, field: "title" | "description", value: string) => {
+  const updateComponent = (id: string, field: "title" | "description" | "scoringType", value: string) => {
     setWorkoutComponents(
       workoutComponents.map((c) =>
         c.id === id ? { ...c, [field]: value } : c
@@ -911,9 +912,14 @@ export default function WeeklyPlanPage() {
                               {/* Action buttons */}
                               <div className="flex items-center gap-1 ml-2">
                                 <Link
-                                  href={workout.workoutType?.toLowerCase().includes("lift")
-                                    ? `/workouts/lift?name=${encodeURIComponent(workout.wodTitle)}&description=${encodeURIComponent(workout.wodDescription || "")}`
-                                    : `/workouts/new?name=${encodeURIComponent(workout.wodTitle)}&description=${encodeURIComponent(workout.wodDescription || "")}`}
+                                  href={(() => {
+                                    const wodComponent = workout.components?.find(c => c.type === "wod");
+                                    const scoringType = wodComponent?.scoringType || "fortime";
+                                    if (workout.workoutType?.toLowerCase().includes("lift")) {
+                                      return `/workouts/lift?name=${encodeURIComponent(workout.wodTitle)}&description=${encodeURIComponent(workout.wodDescription || "")}`;
+                                    }
+                                    return `/workouts/new?name=${encodeURIComponent(workout.wodTitle)}&description=${encodeURIComponent(workout.wodDescription || "")}&scoringType=${scoringType}`;
+                                  })()}
                                   className={`px-2 py-1.5 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1 ${
                                     workout.workoutType?.toLowerCase().includes("lift")
                                       ? "bg-purple-600 hover:bg-purple-700"
@@ -1182,6 +1188,29 @@ export default function WeeklyPlanPage() {
                             rows={2}
                             className="w-full px-3 py-1.5 border border-gray-300 rounded text-sm text-gray-900 bg-white"
                           />
+
+                          {/* Scoring Type selector for WOD components */}
+                          {comp.type === "wod" && (
+                            <div className="flex items-center gap-2 mt-2">
+                              <span className="text-xs text-gray-500">Scoring:</span>
+                              <div className="flex rounded-lg overflow-hidden border border-gray-200">
+                                {(["fortime", "emom", "amrap"] as WODScoringType[]).map((type) => (
+                                  <button
+                                    key={type}
+                                    type="button"
+                                    onClick={() => updateComponent(comp.id, "scoringType", type)}
+                                    className={`px-2 py-1 text-xs font-medium transition-colors ${
+                                      comp.scoringType === type || (!comp.scoringType && type === "fortime")
+                                        ? `${wodScoringTypeColors[type].bg} ${wodScoringTypeColors[type].text}`
+                                        : "bg-white text-gray-600 hover:bg-gray-50"
+                                    }`}
+                                  >
+                                    {wodScoringTypeLabels[type]}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
                     ))}

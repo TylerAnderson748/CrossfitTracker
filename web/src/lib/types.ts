@@ -54,6 +54,7 @@ export interface WorkoutComponent {
   type: WorkoutComponentType;
   title: string;
   description: string;
+  scoringType?: WODScoringType; // For WOD components: fortime, emom, amrap
 }
 
 export const workoutComponentLabels: Record<WorkoutComponentType, string> = {

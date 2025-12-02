@@ -6,7 +6,7 @@ import Link from "next/link";
 import { doc, getDoc, collection, query, where, getDocs, updateDoc, arrayUnion, arrayRemove, deleteDoc, addDoc, Timestamp } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
-import { Gym, WorkoutGroup, AppUser, ScheduledWorkout, ScheduledTimeSlot, WorkoutLog, WorkoutComponent, WorkoutComponentType, workoutComponentLabels, workoutComponentColors, LiftResult, LeaderboardEntry, formatTimeSlot, GroupMembershipRequest, PricingTier, BillingCycle, ClassLimitType, DiscountCode, DiscountType } from "@/lib/types";
+import { Gym, WorkoutGroup, AppUser, ScheduledWorkout, ScheduledTimeSlot, WorkoutLog, WorkoutComponent, WorkoutComponentType, workoutComponentLabels, workoutComponentColors, LiftResult, LeaderboardEntry, formatTimeSlot, GroupMembershipRequest, PricingTier, BillingCycle, ClassLimitType, DiscountCode, DiscountType, WODScoringType, wodScoringTypeLabels, wodScoringTypeColors } from "@/lib/types";
 import { getAllWods, getAllLifts } from "@/lib/workoutData";
 import Navigation from "@/components/Navigation";
 
@@ -897,6 +897,7 @@ export default function GymDetailPage() {
       type,
       title: "",
       description: "",
+      ...(type === "wod" && { scoringType: "fortime" as WODScoringType }),
     };
     setWorkoutComponents([...workoutComponents, newComponent]);
   };
@@ -905,7 +906,7 @@ export default function GymDetailPage() {
     setWorkoutComponents(workoutComponents.filter(c => c.id !== id));
   };
 
-  const updateComponent = (id: string, field: "title" | "description", value: string) => {
+  const updateComponent = (id: string, field: "title" | "description" | "scoringType", value: string) => {
     setWorkoutComponents(workoutComponents.map(c =>
       c.id === id ? { ...c, [field]: value } : c
     ));
@@ -2602,6 +2603,29 @@ export default function GymDetailPage() {
                             rows={2}
                             className="w-full px-3 py-1.5 border border-gray-300 rounded text-sm text-gray-900 bg-white"
                           />
+
+                          {/* Scoring Type selector for WOD components */}
+                          {comp.type === "wod" && (
+                            <div className="flex items-center gap-2 mt-2">
+                              <span className="text-xs text-gray-500">Scoring:</span>
+                              <div className="flex rounded-lg overflow-hidden border border-gray-200">
+                                {(["fortime", "emom", "amrap"] as WODScoringType[]).map((type) => (
+                                  <button
+                                    key={type}
+                                    type="button"
+                                    onClick={() => updateComponent(comp.id, "scoringType", type)}
+                                    className={`px-2 py-1 text-xs font-medium transition-colors ${
+                                      comp.scoringType === type || (!comp.scoringType && type === "fortime")
+                                        ? `${wodScoringTypeColors[type].bg} ${wodScoringTypeColors[type].text}`
+                                        : "bg-white text-gray-600 hover:bg-gray-50"
+                                    }`}
+                                  >
+                                    {wodScoringTypeLabels[type]}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
                     ))}
