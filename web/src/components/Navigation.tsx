@@ -38,10 +38,9 @@ export default function Navigation() {
     checkGymOwnership();
   }, [user]);
 
-  // Special tabs only visible to specific users (exclude gym owner)
-  const specialUserEmail = "ssmp@team.com";
-  const excludedEmails = ["gym@owner.com"];
-  const isSpecialUser = user?.email === specialUserEmail && !excludedEmails.includes(user?.email || "");
+  // Hide special tabs from these users
+  const excludedEmails = ["ssmp@team.com", "gym@owner.com"];
+  const canSeeSpecialTabs = user?.email && !excludedEmails.includes(user.email);
 
   const navItems = [
     { href: "/weekly", label: "Home", icon: "🏠" },
@@ -49,8 +48,8 @@ export default function Navigation() {
     { href: "/programming", label: "Programming", icon: "📅" },
     { href: "/workouts", label: "Workouts", icon: "📋" },
     { href: "/profile", label: "Profile", icon: "👤" },
-    ...(isSpecialUser ? [{ href: "/hi-devin", label: "Hi Devin!", icon: "🎉" }] : []),
-    ...(isSpecialUser ? [{ href: "/hi-blake", label: "Hi Blake...", icon: "💀" }] : []),
+    ...(canSeeSpecialTabs ? [{ href: "/hi-devin", label: "Hi Devin!", icon: "🎉" }] : []),
+    ...(canSeeSpecialTabs ? [{ href: "/hi-blake", label: "Hi Blake...", icon: "💀" }] : []),
   ];
 
   return (
