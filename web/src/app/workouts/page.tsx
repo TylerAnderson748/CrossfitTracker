@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { collection, query, where, getDocs, orderBy, limit } from "firebase/firestore";
+import { collection, query, where, getDocs, orderBy, limit, deleteDoc, doc } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
 import { WorkoutLog, formatResult } from "@/lib/types";
@@ -52,6 +52,9 @@ export default function WorkoutsPage() {
 
   // Gym programming workouts
   const [gymWorkouts, setGymWorkouts] = useState<GymWorkout[]>([]);
+
+  // Delete confirmation state
+  const [deletingWorkout, setDeletingWorkout] = useState<{ name: string; type: "wod" | "lift" | "skill" } | null>(null);
 
   useEffect(() => {
     if (!loading && !switching && !user) {
@@ -327,6 +330,51 @@ export default function WorkoutsPage() {
     setExpandedCategory(expandedCategory === categoryName ? null : categoryName);
   };
 
+  const handleDeleteCustomWorkout = async (workoutName: string, workoutType: "wod" | "lift" | "skill") => {
+    if (!user) return;
+
+    try {
+      if (workoutType === "wod") {
+        // Delete all WOD logs with this name
+        const logsQuery = query(
+          collection(db, "workoutLogs"),
+          where("userId", "==", user.id),
+          where("wodTitle", "==", workoutName)
+        );
+        const snapshot = await getDocs(logsQuery);
+        await Promise.all(snapshot.docs.map(d => deleteDoc(doc(db, "workoutLogs", d.id))));
+        setCustomWods(prev => prev.filter(w => w.name !== workoutName));
+      } else if (workoutType === "lift") {
+        // Delete all lift results with this name
+        const liftsQuery = query(
+          collection(db, "liftResults"),
+          where("userId", "==", user.id),
+          where("liftTitle", "==", workoutName)
+        );
+        const snapshot = await getDocs(liftsQuery);
+        await Promise.all(snapshot.docs.map(d => deleteDoc(doc(db, "liftResults", d.id))));
+        setCustomLifts(prev => prev.filter(w => w.name !== workoutName));
+      } else if (workoutType === "skill") {
+        // Delete all skill results with this name
+        const skillsQuery = query(
+          collection(db, "skillResults"),
+          where("userId", "==", user.id),
+          where("skillTitle", "==", workoutName)
+        );
+        const snapshot = await getDocs(skillsQuery);
+        await Promise.all(snapshot.docs.map(d => deleteDoc(doc(db, "skillResults", d.id))));
+        setCustomSkills(prev => prev.filter(w => w.name !== workoutName));
+      }
+
+      // Refresh recent logs
+      fetchUserData();
+    } catch (error) {
+      console.error("Error deleting workout:", error);
+    } finally {
+      setDeletingWorkout(null);
+    }
+  };
+
   if (loading || !user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -490,20 +538,22 @@ export default function WorkoutsPage() {
                     </h2>
                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                       {currentCustomWorkouts.slice(0, 5).map((workout, idx) => (
-                        <Link
+                        <div
                           key={`custom-${workout.name}-${idx}`}
-                          href={
-                            workout.type === "lift"
-                              ? `/workouts/lift?name=${encodeURIComponent(workout.name)}`
-                              : workout.type === "skill"
-                              ? `/workouts/skill?name=${encodeURIComponent(workout.name)}`
-                              : `/workouts/new?name=${encodeURIComponent(workout.name)}&description=${encodeURIComponent(workout.description)}&type=${workout.type}${workout.scoringType ? `&scoringType=${workout.scoringType}` : ""}`
-                          }
-                          className={`flex items-center justify-between p-4 hover:bg-gray-50 transition-colors ${
+                          className={`flex items-center p-4 hover:bg-gray-50 transition-colors ${
                             idx > 0 ? "border-t border-gray-100" : ""
                           }`}
                         >
-                          <div className="flex-1 min-w-0">
+                          <Link
+                            href={
+                              workout.type === "lift"
+                                ? `/workouts/lift?name=${encodeURIComponent(workout.name)}`
+                                : workout.type === "skill"
+                                ? `/workouts/skill?name=${encodeURIComponent(workout.name)}`
+                                : `/workouts/new?name=${encodeURIComponent(workout.name)}&description=${encodeURIComponent(workout.description)}&type=${workout.type}${workout.scoringType ? `&scoringType=${workout.scoringType}` : ""}`
+                            }
+                            className="flex-1 min-w-0"
+                          >
                             <div className="flex items-center gap-2">
                               <h3 className="font-medium text-gray-900">{workout.name}</h3>
                               <span className="px-2 py-0.5 text-xs rounded bg-amber-100 text-amber-700">
@@ -513,11 +563,20 @@ export default function WorkoutsPage() {
                             <p className="text-gray-500 text-sm truncate">
                               {workout.description || `Logged ${workout.count} times`}
                             </p>
-                          </div>
-                          <svg className="w-5 h-5 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                          </svg>
-                        </Link>
+                          </Link>
+                          <button
+                            onClick={(e) => {
+                              e.preventDefault();
+                              setDeletingWorkout({ name: workout.name, type: workout.type });
+                            }}
+                            className="ml-3 p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors shrink-0"
+                            title="Delete workout"
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        </div>
                       ))}
                       {currentCustomWorkouts.length > 5 && (
                         <div className="px-4 py-3 bg-gray-50 text-center border-t border-gray-100">
@@ -700,6 +759,32 @@ export default function WorkoutsPage() {
           </div>
         </div>
       </main>
+
+      {/* Delete Confirmation Modal */}
+      {deletingWorkout && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Delete "{deletingWorkout.name}"?</h3>
+            <p className="text-gray-600 mb-6">
+              This will permanently delete all your logged entries for this {deletingWorkout.type === "wod" ? "workout" : deletingWorkout.type}. This action cannot be undone.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setDeletingWorkout(null)}
+                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleDeleteCustomWorkout(deletingWorkout.name, deletingWorkout.type)}
+                className="px-4 py-2 text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
