@@ -47,6 +47,11 @@ export default function Navigation() {
   const crystalRenoAllowedUIDs = ["uknIhGe53pcj6sZBbSYVRo9NF713", "WuxjspCO48ZWyhiuWkTLbRRNKDz2"];
   const canSeeCrystalRenoTabs = user?.id && crystalRenoAllowedUIDs.includes(user.id);
 
+  // My Wife tab visible to specific user
+  const myWifeAllowedUIDs = ["WuxjspCO48ZWyhiuWkTLbRRNKDz2"];
+  const myWifeAllowedEmails = ["tyguy4201@gmail.com"];
+  const canSeeMyWifeTab = (user?.id && myWifeAllowedUIDs.includes(user.id)) || (user?.email && myWifeAllowedEmails.includes(user.email));
+
   const navItems = [
     { href: "/weekly", label: "Home", icon: "🏠" },
     ...(isGymOwner ? [{ href: "/gym", label: "Gym", icon: "🏢" }] : []),
@@ -57,6 +62,7 @@ export default function Navigation() {
     ...(canSeeSpecialTabs ? [{ href: "/hi-blake", label: "Hi Blake...", icon: "💀" }] : []),
     ...(canSeeCrystalRenoTabs ? [{ href: "/hi-crystal", label: "Hi Crystal!", icon: "☕" }] : []),
     ...(canSeeCrystalRenoTabs ? [{ href: "/hi-reno", label: "Hi Reno...", icon: "🤘" }] : []),
+    ...(canSeeMyWifeTab ? [{ href: "/my-wife", label: "My Wife!", icon: "👍" }] : []),
   ];
 
   return (
