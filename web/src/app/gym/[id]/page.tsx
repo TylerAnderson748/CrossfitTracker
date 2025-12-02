@@ -54,6 +54,8 @@ export default function GymDetailPage() {
   const [editingComponentTitle, setEditingComponentTitle] = useState("");
   const [editingComponentDescription, setEditingComponentDescription] = useState("");
   const [showTitleSuggestions, setShowTitleSuggestions] = useState(false);
+  const [isPresetWorkout, setIsPresetWorkout] = useState(false);
+  const [presetScoringType, setPresetScoringType] = useState<WODScoringType | null>(null);
   // Recurrence state
   const [recurrenceType, setRecurrenceType] = useState<"none" | "daily" | "weekly" | "monthly">("none");
   const [repeatDays, setRepeatDays] = useState<number[]>([1]); // 0=Sun, 1=Mon, etc.
@@ -786,6 +788,8 @@ export default function GymDetailPage() {
     setEditingComponentId(null);
     setEditingComponentTitle("");
     setEditingComponentDescription("");
+    setIsPresetWorkout(false);
+    setPresetScoringType(null);
     setRecurrenceType("none");
     setRepeatDays([1]);
     setHasEndDate(false);
@@ -1059,30 +1063,34 @@ export default function GymDetailPage() {
 
   // Get unique workout titles and their descriptions for autocomplete
   const getUniqueWorkouts = () => {
-    const workoutMap = new Map<string, { title: string; description: string }>();
+    const workoutMap = new Map<string, { title: string; description: string; scoringType?: WODScoringType; isPreset: boolean }>();
 
-    // First, add all WODs from workoutData (Girls, Heroes, etc.)
+    // First, add all WODs from workoutData (Girls, Heroes, etc.) - these are presets
     getAllWods().forEach((w) => {
       workoutMap.set(w.name.toLowerCase(), {
         title: w.name,
         description: w.description,
+        scoringType: w.scoringType,
+        isPreset: true,
       });
     });
 
-    // Add all lifts from workoutData
+    // Add all lifts from workoutData - these are presets but no scoring type
     getAllLifts().forEach((w) => {
       workoutMap.set(w.name.toLowerCase(), {
         title: w.name,
         description: w.description,
+        isPreset: true,
       });
     });
 
-    // Add from ALL scheduled workouts (entire database) - custom workouts
+    // Add from ALL scheduled workouts (entire database) - custom workouts (not presets)
     allScheduledWorkouts.forEach((w) => {
       if (w.wodTitle && !workoutMap.has(w.wodTitle.toLowerCase())) {
         workoutMap.set(w.wodTitle.toLowerCase(), {
           title: w.wodTitle,
           description: w.wodDescription || "",
+          isPreset: false,
         });
       }
     });
@@ -1093,6 +1101,7 @@ export default function GymDetailPage() {
         workoutMap.set(w.wodTitle.toLowerCase(), {
           title: w.wodTitle,
           description: w.wodDescription || "",
+          isPreset: false,
         });
       }
     });
@@ -1103,6 +1112,7 @@ export default function GymDetailPage() {
         workoutMap.set(w.wodTitle.toLowerCase(), {
           title: w.wodTitle,
           description: w.wodDescription || "",
+          isPreset: false,
         });
       }
     });
@@ -1113,6 +1123,7 @@ export default function GymDetailPage() {
         workoutMap.set(lift.liftName.toLowerCase(), {
           title: lift.liftName,
           description: "",
+          isPreset: false,
         });
       }
     });
@@ -1123,6 +1134,7 @@ export default function GymDetailPage() {
         workoutMap.set(entry.originalWorkoutName.toLowerCase(), {
           title: entry.originalWorkoutName,
           description: "",
+          isPreset: false,
         });
       }
     });
@@ -1139,10 +1151,17 @@ export default function GymDetailPage() {
       ).slice(0, 10)
     : uniqueWorkouts.slice(0, 10); // Show first 10 when empty
 
-  const handleSelectSuggestion = (workout: { title: string; description: string }) => {
+  const handleSelectSuggestion = (workout: { title: string; description: string; scoringType?: WODScoringType; isPreset: boolean }) => {
     setEditingComponentTitle(workout.title);
     setEditingComponentDescription(workout.description);
     setShowTitleSuggestions(false);
+    setIsPresetWorkout(workout.isPreset);
+    setPresetScoringType(workout.scoringType || null);
+
+    // If it's a preset WOD with a scoring type, update the component's scoring type
+    if (workout.isPreset && workout.scoringType && editingComponentId) {
+      updateComponent(editingComponentId, "scoringType", workout.scoringType);
+    }
   };
 
   // Calendar helper functions
@@ -2556,16 +2575,43 @@ export default function GymDetailPage() {
 
                         {/* Always show editable fields */}
                         <div className="space-y-2">
+                          {/* Preset indicator and unlock button */}
+                          {comp.isPreset && (
+                            <div className="flex items-center justify-between bg-blue-50 px-2 py-1 rounded-lg border border-blue-200">
+                              <div className="flex items-center gap-2">
+                                <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                                </svg>
+                                <span className="text-xs font-medium text-blue-700">Preset Workout - Fields locked</span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => updateComponent(comp.id, "isPreset", false)}
+                                className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                              >
+                                Unlock
+                              </button>
+                            </div>
+                          )}
                           <div className="relative">
                             <input
                               type="text"
                               value={comp.title}
-                              onChange={(e) => updateComponent(comp.id, "title", e.target.value)}
-                              onFocus={() => setActiveComponentId(comp.id)}
+                              onChange={(e) => {
+                                if (!comp.isPreset) {
+                                  updateComponent(comp.id, "title", e.target.value);
+                                }
+                              }}
+                              onFocus={() => !comp.isPreset && setActiveComponentId(comp.id)}
                               onBlur={() => setTimeout(() => setActiveComponentId(null), 200)}
                               placeholder="Title (e.g., Fran, Back Squat)"
-                              className="w-full px-3 py-1.5 border border-gray-300 rounded text-sm text-gray-900 bg-white"
+                              className={`w-full px-3 py-1.5 border rounded text-sm text-gray-900 ${
+                                comp.isPreset
+                                  ? "bg-gray-100 border-gray-200 cursor-not-allowed"
+                                  : "bg-white border-gray-300"
+                              }`}
                               autoComplete="off"
+                              readOnly={comp.isPreset}
                             />
                             {activeComponentId === comp.id && comp.title && (
                               <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto">
@@ -2578,11 +2624,20 @@ export default function GymDetailPage() {
                                         e.preventDefault();
                                         updateComponent(comp.id, "title", workout.title);
                                         updateComponent(comp.id, "description", workout.description || "");
+                                        updateComponent(comp.id, "isPreset", workout.isPreset);
+                                        if (workout.isPreset && workout.scoringType) {
+                                          updateComponent(comp.id, "scoringType", workout.scoringType);
+                                        }
                                         setActiveComponentId(null);
                                       }}
                                       className="w-full px-3 py-2 text-left hover:bg-blue-50 border-b border-gray-100 last:border-b-0 text-sm"
                                     >
-                                      <span className="font-medium text-gray-900">{workout.title}</span>
+                                      <div className="flex items-center gap-2">
+                                        <span className="font-medium text-gray-900">{workout.title}</span>
+                                        {workout.isPreset && (
+                                          <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 text-[10px] rounded font-medium">Preset</span>
+                                        )}
+                                      </div>
                                       {workout.description && (
                                         <p className="text-gray-500 text-xs truncate">{workout.description}</p>
                                       )}
@@ -2598,27 +2653,37 @@ export default function GymDetailPage() {
                           </div>
                           <textarea
                             value={comp.description}
-                            onChange={(e) => updateComponent(comp.id, "description", e.target.value)}
+                            onChange={(e) => {
+                              if (!comp.isPreset) {
+                                updateComponent(comp.id, "description", e.target.value);
+                              }
+                            }}
                             placeholder="Description (optional)"
                             rows={2}
-                            className="w-full px-3 py-1.5 border border-gray-300 rounded text-sm text-gray-900 bg-white"
+                            className={`w-full px-3 py-1.5 border rounded text-sm text-gray-900 ${
+                              comp.isPreset
+                                ? "bg-gray-100 border-gray-200 cursor-not-allowed"
+                                : "bg-white border-gray-300"
+                            }`}
+                            readOnly={comp.isPreset}
                           />
 
                           {/* Scoring Type selector for WOD components */}
                           {comp.type === "wod" && (
                             <div className="flex items-center gap-2 mt-2">
                               <span className="text-xs text-gray-500">Scoring:</span>
-                              <div className="flex rounded-lg overflow-hidden border border-gray-200">
+                              <div className={`flex rounded-lg overflow-hidden border ${comp.isPreset ? "border-gray-200 opacity-75" : "border-gray-200"}`}>
                                 {(["fortime", "emom", "amrap"] as WODScoringType[]).map((type) => (
                                   <button
                                     key={type}
                                     type="button"
-                                    onClick={() => updateComponent(comp.id, "scoringType", type)}
+                                    onClick={() => !comp.isPreset && updateComponent(comp.id, "scoringType", type)}
+                                    disabled={comp.isPreset}
                                     className={`px-2 py-1 text-xs font-medium transition-colors ${
                                       comp.scoringType === type || (!comp.scoringType && type === "fortime")
                                         ? `${wodScoringTypeColors[type].bg} ${wodScoringTypeColors[type].text}`
                                         : "bg-white text-gray-600 hover:bg-gray-50"
-                                    }`}
+                                    } ${comp.isPreset ? "cursor-not-allowed" : ""}`}
                                   >
                                     {wodScoringTypeLabels[type]}
                                   </button>

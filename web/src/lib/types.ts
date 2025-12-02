@@ -55,6 +55,7 @@ export interface WorkoutComponent {
   title: string;
   description: string;
   scoringType?: WODScoringType; // For WOD components: fortime, emom, amrap
+  isPreset?: boolean; // True if this is a preset workout (locked fields)
 }
 
 export const workoutComponentLabels: Record<WorkoutComponentType, string> = {
