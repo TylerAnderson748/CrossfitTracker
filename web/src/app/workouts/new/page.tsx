@@ -106,6 +106,18 @@ function NewWorkoutContent() {
   // Track if scoring type is locked (from URL or suggestion selection) - separate from isPreset
   const [scoringTypeLocked, setScoringTypeLocked] = useState(!!urlScoringType);
 
+  // Type mismatch modal state
+  const [showTypeMismatchModal, setShowTypeMismatchModal] = useState(false);
+  const [existingWorkoutType, setExistingWorkoutType] = useState<WODScoringType | null>(null);
+  const [pendingScoringType, setPendingScoringType] = useState<WODScoringType | null>(null);
+
+  // Check if workout name matches a preset workout
+  const getPresetWorkout = (name: string) => {
+    if (!name) return null;
+    const normalizedName = name.toLowerCase().trim();
+    return allWods.find(w => w.name.toLowerCase() === normalizedName);
+  };
+
   // AMRAP scoring state (rounds + reps)
   const [amrapRounds, setAmrapRounds] = useState("");
   const [amrapReps, setAmrapReps] = useState("");
@@ -175,6 +187,65 @@ function NewWorkoutContent() {
       setTimerType("amrap");
     }
   }, [scoringType]);
+
+  // Check for existing workout type in user's logs
+  const checkExistingWorkoutType = async (workoutName: string): Promise<WODScoringType | null> => {
+    if (!user || !workoutName.trim()) return null;
+
+    // First check if it's a preset workout
+    const preset = getPresetWorkout(workoutName);
+    if (preset && preset.scoringType) {
+      return preset.scoringType;
+    }
+
+    // Check user's existing logs for this workout
+    try {
+      const normalized = normalizeWorkoutName(workoutName.trim());
+      const logsQuery = query(
+        collection(db, "workoutLogs"),
+        where("userId", "==", user.id),
+        limit(100)
+      );
+      const logsSnapshot = await getDocs(logsQuery);
+      const logs = logsSnapshot.docs.map(doc => doc.data());
+
+      // Find logs for this workout
+      const matchingLog = logs.find(log =>
+        normalizeWorkoutName((log.wodTitle || "").trim()) === normalized && log.scoringType
+      );
+
+      return matchingLog?.scoringType as WODScoringType || null;
+    } catch (e) {
+      console.error("Error checking existing workout type:", e);
+      return null;
+    }
+  };
+
+  // Handle scoring type change with conflict check
+  const handleScoringTypeChange = async (newType: WODScoringType) => {
+    if (!wodTitle.trim()) {
+      setScoringType(newType);
+      return;
+    }
+
+    // Check if it's a preset workout - don't allow changing preset types
+    const preset = getPresetWorkout(wodTitle);
+    if (preset && preset.scoringType && preset.scoringType !== newType) {
+      // Don't allow changing preset workout types
+      return;
+    }
+
+    // Check for existing logs with different type
+    const existingType = await checkExistingWorkoutType(wodTitle);
+    if (existingType && existingType !== newType) {
+      setExistingWorkoutType(existingType);
+      setPendingScoringType(newType);
+      setShowTypeMismatchModal(true);
+      return;
+    }
+
+    setScoringType(newType);
+  };
 
   // Sound functions for timer beeps
   const playBeep = (frequency: number = 800, duration: number = 150, type: OscillatorType = "sine") => {
@@ -1170,19 +1241,19 @@ function NewWorkoutContent() {
                   <p className="text-xs text-gray-500 mb-2 font-semibold">Workout Type</p>
                   <div className="flex rounded-xl overflow-hidden border border-gray-200">
                     <button
-                      onClick={() => { setScoringType("fortime"); handleReset(); }}
+                      onClick={() => { handleScoringTypeChange("fortime"); handleReset(); }}
                       className={`flex-1 py-2.5 text-xs font-semibold transition-colors ${scoringType === "fortime" ? "bg-blue-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
                     >
                       For Time
                     </button>
                     <button
-                      onClick={() => { setScoringType("emom"); handleReset(); }}
+                      onClick={() => { handleScoringTypeChange("emom"); handleReset(); }}
                       className={`flex-1 py-2.5 text-xs font-semibold transition-colors ${scoringType === "emom" ? "bg-orange-500 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
                     >
                       EMOM
                     </button>
                     <button
-                      onClick={() => { setScoringType("amrap"); handleReset(); }}
+                      onClick={() => { handleScoringTypeChange("amrap"); handleReset(); }}
                       className={`flex-1 py-2.5 text-xs font-semibold transition-colors ${scoringType === "amrap" ? "bg-green-500 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
                     >
                       AMRAP
@@ -1403,6 +1474,68 @@ function NewWorkoutContent() {
           </div>
         </div>
       </main>
+
+      {/* Type Mismatch Modal */}
+      {showTypeMismatchModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
+            <h3 className="text-lg font-bold text-gray-900 mb-2">Workout Type Conflict</h3>
+            <p className="text-gray-600 mb-4">
+              You have existing logs for "<strong>{wodTitle}</strong>" as a{" "}
+              <span className={`font-semibold ${
+                existingWorkoutType === "fortime" ? "text-blue-600" :
+                existingWorkoutType === "emom" ? "text-orange-500" : "text-green-600"
+              }`}>
+                {existingWorkoutType === "fortime" ? "For Time" : existingWorkoutType?.toUpperCase()}
+              </span>{" "}
+              workout.
+            </p>
+            <p className="text-gray-600 mb-6">
+              You're trying to log it as{" "}
+              <span className={`font-semibold ${
+                pendingScoringType === "fortime" ? "text-blue-600" :
+                pendingScoringType === "emom" ? "text-orange-500" : "text-green-600"
+              }`}>
+                {pendingScoringType === "fortime" ? "For Time" : pendingScoringType?.toUpperCase()}
+              </span>.
+              What would you like to do?
+            </p>
+            <div className="space-y-3">
+              <button
+                onClick={() => {
+                  // Use existing type
+                  if (existingWorkoutType) {
+                    setScoringType(existingWorkoutType);
+                  }
+                  setShowTypeMismatchModal(false);
+                }}
+                className="w-full py-2.5 px-4 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700"
+              >
+                Keep as {existingWorkoutType === "fortime" ? "For Time" : existingWorkoutType?.toUpperCase()}
+              </button>
+              <button
+                onClick={() => {
+                  // Create new workout with different name
+                  setWodTitle(`${wodTitle} (${pendingScoringType === "fortime" ? "For Time" : pendingScoringType?.toUpperCase()})`);
+                  if (pendingScoringType) {
+                    setScoringType(pendingScoringType);
+                  }
+                  setShowTypeMismatchModal(false);
+                }}
+                className="w-full py-2.5 px-4 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200"
+              >
+                Create New Workout "{wodTitle} ({pendingScoringType === "fortime" ? "For Time" : pendingScoringType?.toUpperCase()})"
+              </button>
+              <button
+                onClick={() => setShowTypeMismatchModal(false)}
+                className="w-full py-2 text-gray-500 text-sm hover:text-gray-700"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
