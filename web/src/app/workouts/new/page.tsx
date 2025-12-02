@@ -347,17 +347,36 @@ function NewWorkoutContent() {
           ...doc.data(),
         })) as any[];
 
-        // Filter for this workout and convert to leaderboard format
-        entries = allLogs
-          .filter((log) => {
-            const logNormalized = normalizeWorkoutName((log.wodTitle || "").trim());
-            return logNormalized === normalized;
-          })
-          .map((log) => ({
+        // Filter for this workout
+        const filteredLogs = allLogs.filter((log) => {
+          const logNormalized = normalizeWorkoutName((log.wodTitle || "").trim());
+          return logNormalized === normalized;
+        });
+
+        // Get unique user IDs and fetch their names
+        const userIds = [...new Set(filteredLogs.map((log) => log.userId))];
+        const userNames: Record<string, string> = {};
+
+        for (const oderId of userIds) {
+          if (!oderId) continue;
+          try {
+            const userQuery = query(collection(db, "users"), where("id", "==", oderId), limit(1));
+            const userSnapshot = await getDocs(userQuery);
+            if (!userSnapshot.empty) {
+              const userData = userSnapshot.docs[0].data();
+              userNames[oderId] = userData.displayName || `${userData.firstName || ""} ${userData.lastName || ""}`.trim() || "Unknown";
+            }
+          } catch (e) {
+            // Ignore errors fetching user names
+          }
+        }
+
+        // Convert to leaderboard format
+        entries = filteredLogs.map((log) => ({
             id: log.id,
             oderId: log.userId,
             userId: log.userId,
-            userName: log.userName || "Unknown",
+            userName: userNames[log.userId] || log.userName || "Unknown",
             userGender: log.userGender,
             workoutLogId: log.id,
             normalizedWorkoutName: normalized,
