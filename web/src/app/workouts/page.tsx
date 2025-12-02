@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { collection, query, where, getDocs } from "firebase/firestore";
+import { collection, query, where, getDocs, orderBy, limit } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
 import { WorkoutLog, formatResult } from "@/lib/types";
@@ -17,6 +17,22 @@ interface FrequentWorkout {
   description: string;
 }
 
+interface CustomWorkout {
+  name: string;
+  description: string;
+  type: "wod" | "lift" | "skill";
+  scoringType?: string;
+  count: number;
+}
+
+interface GymWorkout {
+  name: string;
+  description: string;
+  type: "wod" | "lift" | "skill";
+  scoringType?: string;
+  scheduledDate?: Date;
+}
+
 export default function WorkoutsPage() {
   const { user, loading, switching } = useAuth();
   const router = useRouter();
@@ -28,6 +44,14 @@ export default function WorkoutsPage() {
   const [loadingData, setLoadingData] = useState(true);
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
   const [showLogDropdown, setShowLogDropdown] = useState(false);
+
+  // Custom (user-created) workouts
+  const [customWods, setCustomWods] = useState<CustomWorkout[]>([]);
+  const [customLifts, setCustomLifts] = useState<CustomWorkout[]>([]);
+  const [customSkills, setCustomSkills] = useState<CustomWorkout[]>([]);
+
+  // Gym programming workouts
+  const [gymWorkouts, setGymWorkouts] = useState<GymWorkout[]>([]);
 
   useEffect(() => {
     if (!loading && !switching && !user) {
@@ -45,6 +69,15 @@ export default function WorkoutsPage() {
     if (!user) return;
 
     try {
+      const allWods = getAllWods();
+      const allLifts = getAllLifts();
+      const allSkills = getAllSkills();
+
+      // Create sets of preset names for quick lookup
+      const presetWodNames = new Set(allWods.map(w => w.name.toLowerCase()));
+      const presetLiftNames = new Set(allLifts.map(l => l.name.toLowerCase()));
+      const presetSkillNames = new Set(allSkills.map(s => s.name.toLowerCase()));
+
       // Fetch WOD logs
       const logsQuery = query(
         collection(db, "workoutLogs"),
@@ -62,38 +95,64 @@ export default function WorkoutsPage() {
       });
       setRecentLogs(logs.slice(0, 10));
 
-      // Count WOD frequency
-      const wodCounts: Record<string, number> = {};
+      // Count WOD frequency and identify custom WODs
+      const wodCounts: Record<string, { count: number; description: string; scoringType?: string }> = {};
       logs.forEach((log) => {
         if (log.wodTitle) {
-          wodCounts[log.wodTitle] = (wodCounts[log.wodTitle] || 0) + 1;
+          if (!wodCounts[log.wodTitle]) {
+            // Infer scoring type from result type
+            let scoringType: string | undefined;
+            if (log.resultType === "time") scoringType = "fortime";
+            else if (log.resultType === "rounds" || log.resultType === "reps") scoringType = "amrap";
+
+            wodCounts[log.wodTitle] = {
+              count: 0,
+              description: log.wodDescription || "",
+              scoringType,
+            };
+          }
+          wodCounts[log.wodTitle].count++;
         }
       });
 
-      // Get top frequent WODs
-      const allWods = getAllWods();
-      const frequentWodsList: FrequentWorkout[] = Object.entries(wodCounts)
-        .sort(([, a], [, b]) => b - a)
-        .slice(0, 6)
-        .map(([name, count]) => {
-          const wod = allWods.find((w) => w.name.toLowerCase() === name.toLowerCase());
-          return {
-            name,
-            count,
-            type: "wod" as const,
-            description: wod?.description || "",
-          };
+      // Separate preset WODs from custom WODs
+      const frequentWodsList: FrequentWorkout[] = [];
+      const customWodsList: CustomWorkout[] = [];
+
+      Object.entries(wodCounts)
+        .sort(([, a], [, b]) => b.count - a.count)
+        .forEach(([name, data]) => {
+          const isPreset = presetWodNames.has(name.toLowerCase());
+          if (isPreset) {
+            const wod = allWods.find((w) => w.name.toLowerCase() === name.toLowerCase());
+            frequentWodsList.push({
+              name,
+              count: data.count,
+              type: "wod",
+              description: wod?.description || data.description,
+            });
+          } else {
+            customWodsList.push({
+              name,
+              description: data.description,
+              type: "wod",
+              scoringType: data.scoringType,
+              count: data.count,
+            });
+          }
         });
-      setFrequentWods(frequentWodsList);
+
+      setFrequentWods(frequentWodsList.slice(0, 6));
+      setCustomWods(customWodsList);
 
       // Fetch lift results
       const liftsQuery = query(
         collection(db, "liftResults"),
-        where("oderId", "==", user.id)
+        where("userId", "==", user.id)
       );
       const liftsSnapshot = await getDocs(liftsQuery);
 
-      // Count lift frequency
+      // Count lift frequency and identify custom lifts
       const liftCounts: Record<string, number> = {};
       liftsSnapshot.docs.forEach((doc) => {
         const data = doc.data();
@@ -103,21 +162,107 @@ export default function WorkoutsPage() {
         }
       });
 
-      // Get top frequent lifts
-      const allLifts = getAllLifts();
-      const frequentLiftsList: FrequentWorkout[] = Object.entries(liftCounts)
+      // Separate preset lifts from custom lifts
+      const frequentLiftsList: FrequentWorkout[] = [];
+      const customLiftsList: CustomWorkout[] = [];
+
+      Object.entries(liftCounts)
         .sort(([, a], [, b]) => b - a)
-        .slice(0, 6)
-        .map(([name, count]) => {
-          const lift = allLifts.find((l) => l.name.toLowerCase() === name.toLowerCase());
-          return {
-            name,
-            count,
-            type: "lift" as const,
-            description: lift?.description || "",
-          };
+        .forEach(([name, count]) => {
+          const isPreset = presetLiftNames.has(name.toLowerCase());
+          if (isPreset) {
+            const lift = allLifts.find((l) => l.name.toLowerCase() === name.toLowerCase());
+            frequentLiftsList.push({
+              name,
+              count,
+              type: "lift",
+              description: lift?.description || "",
+            });
+          } else {
+            customLiftsList.push({
+              name,
+              description: `Logged ${count} times`,
+              type: "lift",
+              count,
+            });
+          }
         });
-      setFrequentLifts(frequentLiftsList);
+
+      setFrequentLifts(frequentLiftsList.slice(0, 6));
+      setCustomLifts(customLiftsList);
+
+      // Fetch skill results
+      const skillsQuery = query(
+        collection(db, "skillResults"),
+        where("userId", "==", user.id)
+      );
+      const skillsSnapshot = await getDocs(skillsQuery);
+
+      // Count skill frequency and identify custom skills
+      const skillCounts: Record<string, number> = {};
+      skillsSnapshot.docs.forEach((doc) => {
+        const data = doc.data();
+        const skillName = data.skillTitle || data.skillName;
+        if (skillName) {
+          skillCounts[skillName] = (skillCounts[skillName] || 0) + 1;
+        }
+      });
+
+      // Separate preset skills from custom skills
+      const customSkillsList: CustomWorkout[] = [];
+
+      Object.entries(skillCounts)
+        .sort(([, a], [, b]) => b - a)
+        .forEach(([name, count]) => {
+          const isPreset = presetSkillNames.has(name.toLowerCase());
+          if (!isPreset) {
+            customSkillsList.push({
+              name,
+              description: `Logged ${count} times`,
+              type: "skill",
+              count,
+            });
+          }
+        });
+
+      setCustomSkills(customSkillsList);
+
+      // Fetch gym programming workouts if user has a gym
+      if (user.gymId) {
+        const now = new Date();
+        const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+        const gymProgrammingQuery = query(
+          collection(db, "scheduledWorkouts"),
+          where("gymId", "==", user.gymId)
+        );
+        const gymProgrammingSnapshot = await getDocs(gymProgrammingQuery);
+
+        const gymWorkoutsList: GymWorkout[] = [];
+        const seenNames = new Set<string>();
+
+        gymProgrammingSnapshot.docs.forEach((doc) => {
+          const data = doc.data();
+          // Check each component in the workout
+          const components = data.components || [];
+          components.forEach((component: { title?: string; description?: string; type?: string; scoringType?: string }) => {
+            const name = component.title;
+            if (name && !seenNames.has(name.toLowerCase())) {
+              seenNames.add(name.toLowerCase());
+              const componentType = component.type === "lift" ? "lift" : component.type === "skill" ? "skill" : "wod";
+              gymWorkoutsList.push({
+                name,
+                description: component.description || "",
+                type: componentType,
+                scoringType: component.scoringType,
+                scheduledDate: data.date?.toDate?.(),
+              });
+            }
+          });
+        });
+
+        setGymWorkouts(gymWorkoutsList.slice(0, 20));
+      }
     } catch (error) {
       console.error("Error fetching data:", error);
     } finally {
@@ -160,6 +305,23 @@ export default function WorkoutsPage() {
 
   const searchResults = getSearchResults();
   const isSearching = searchQuery.trim().length > 0;
+
+  // Get custom workouts for current type
+  const getCurrentCustomWorkouts = (): CustomWorkout[] => {
+    switch (workoutType) {
+      case "wod": return customWods;
+      case "lift": return customLifts;
+      case "skill": return customSkills;
+      default: return [];
+    }
+  };
+  const currentCustomWorkouts = getCurrentCustomWorkouts();
+
+  // Get gym workouts for current type
+  const getCurrentGymWorkouts = (): GymWorkout[] => {
+    return gymWorkouts.filter(w => w.type === workoutType);
+  };
+  const currentGymWorkouts = getCurrentGymWorkouts();
 
   const toggleCategory = (categoryName: string) => {
     setExpandedCategory(expandedCategory === categoryName ? null : categoryName);
@@ -293,6 +455,8 @@ export default function WorkoutsPage() {
                         href={
                           workout.type === "lift"
                             ? `/workouts/lift?name=${encodeURIComponent(workout.name)}`
+                            : workout.type === "skill"
+                            ? `/workouts/skill?name=${encodeURIComponent(workout.name)}`
                             : `/workouts/new?name=${encodeURIComponent(workout.name)}&description=${encodeURIComponent(workout.description)}&type=${workout.type}${workout.scoringType ? `&scoringType=${workout.scoringType}` : ""}`
                         }
                         className={`flex items-center justify-between p-4 hover:bg-gray-50 transition-colors ${
@@ -316,8 +480,117 @@ export default function WorkoutsPage() {
                 )}
               </>
             ) : (
-              // Category List
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+              <>
+                {/* My Saved Workouts Section */}
+                {currentCustomWorkouts.length > 0 && (
+                  <div className="mb-6">
+                    <h2 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                      <span className="text-xl">📝</span>
+                      My Saved {workoutType === "wod" ? "WODs" : workoutType === "lift" ? "Lifts" : "Skills"}
+                    </h2>
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                      {currentCustomWorkouts.slice(0, 5).map((workout, idx) => (
+                        <Link
+                          key={`custom-${workout.name}-${idx}`}
+                          href={
+                            workout.type === "lift"
+                              ? `/workouts/lift?name=${encodeURIComponent(workout.name)}`
+                              : workout.type === "skill"
+                              ? `/workouts/skill?name=${encodeURIComponent(workout.name)}`
+                              : `/workouts/new?name=${encodeURIComponent(workout.name)}&description=${encodeURIComponent(workout.description)}&type=${workout.type}${workout.scoringType ? `&scoringType=${workout.scoringType}` : ""}`
+                          }
+                          className={`flex items-center justify-between p-4 hover:bg-gray-50 transition-colors ${
+                            idx > 0 ? "border-t border-gray-100" : ""
+                          }`}
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <h3 className="font-medium text-gray-900">{workout.name}</h3>
+                              <span className="px-2 py-0.5 text-xs rounded bg-amber-100 text-amber-700">
+                                Custom
+                              </span>
+                            </div>
+                            <p className="text-gray-500 text-sm truncate">
+                              {workout.description || `Logged ${workout.count} times`}
+                            </p>
+                          </div>
+                          <svg className="w-5 h-5 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
+                        </Link>
+                      ))}
+                      {currentCustomWorkouts.length > 5 && (
+                        <div className="px-4 py-3 bg-gray-50 text-center border-t border-gray-100">
+                          <span className="text-sm text-gray-500">
+                            +{currentCustomWorkouts.length - 5} more saved {workoutType === "wod" ? "WODs" : workoutType === "lift" ? "lifts" : "skills"}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* From My Gym Section */}
+                {currentGymWorkouts.length > 0 && (
+                  <div className="mb-6">
+                    <h2 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                      <span className="text-xl">🏋️</span>
+                      From My Gym
+                    </h2>
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                      {currentGymWorkouts.slice(0, 5).map((workout, idx) => (
+                        <Link
+                          key={`gym-${workout.name}-${idx}`}
+                          href={
+                            workout.type === "lift"
+                              ? `/workouts/lift?name=${encodeURIComponent(workout.name)}`
+                              : workout.type === "skill"
+                              ? `/workouts/skill?name=${encodeURIComponent(workout.name)}`
+                              : `/workouts/new?name=${encodeURIComponent(workout.name)}&description=${encodeURIComponent(workout.description)}&type=${workout.type}${workout.scoringType ? `&scoringType=${workout.scoringType}` : ""}`
+                          }
+                          className={`flex items-center justify-between p-4 hover:bg-gray-50 transition-colors ${
+                            idx > 0 ? "border-t border-gray-100" : ""
+                          }`}
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <h3 className="font-medium text-gray-900">{workout.name}</h3>
+                              {workout.scoringType && (
+                                <span className={`px-2 py-0.5 text-xs rounded ${
+                                  workout.scoringType === "fortime" ? "bg-blue-100 text-blue-700" :
+                                  workout.scoringType === "amrap" ? "bg-green-100 text-green-700" :
+                                  workout.scoringType === "emom" ? "bg-purple-100 text-purple-700" :
+                                  "bg-gray-100 text-gray-700"
+                                }`}>
+                                  {workout.scoringType === "fortime" ? "For Time" :
+                                   workout.scoringType === "amrap" ? "AMRAP" :
+                                   workout.scoringType === "emom" ? "EMOM" : workout.scoringType}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-gray-500 text-sm truncate">{workout.description}</p>
+                          </div>
+                          <svg className="w-5 h-5 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
+                        </Link>
+                      ))}
+                      {currentGymWorkouts.length > 5 && (
+                        <div className="px-4 py-3 bg-gray-50 text-center border-t border-gray-100">
+                          <span className="text-sm text-gray-500">
+                            +{currentGymWorkouts.length - 5} more from gym programming
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Category List */}
+                <h2 className="text-lg font-semibold text-gray-900 mb-3">
+                  All {workoutType === "wod" ? "WODs" : workoutType === "lift" ? "Lifts" : "Skills"}
+                </h2>
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                 {categories.map((category, catIdx) => (
                   <div key={category.name}>
                     {/* Category Header */}
@@ -372,6 +645,7 @@ export default function WorkoutsPage() {
                   </div>
                 ))}
               </div>
+              </>
             )}
           </div>
 
