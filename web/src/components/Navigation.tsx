@@ -38,9 +38,9 @@ export default function Navigation() {
     checkGymOwnership();
   }, [user]);
 
-  // Hide special tabs from these users
-  const excludedEmails = ["ssmp@team.com", "gym@owner.com"];
-  const canSeeSpecialTabs = user?.email && !excludedEmails.includes(user.email);
+  // Only show special tabs to these specific users
+  const allowedEmails = ["indi@user.com", "1@1.com", "cheese@cheese.com", "tyguy4201@gmail.com"];
+  const canSeeSpecialTabs = user?.email && allowedEmails.includes(user.email);
 
   const navItems = [
     { href: "/weekly", label: "Home", icon: "🏠" },
