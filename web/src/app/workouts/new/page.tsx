@@ -1004,30 +1004,32 @@ function NewWorkoutContent() {
                 </div>
               </div>
 
-              {/* Scoring Type */}
-              <div className="mb-4">
-                <p className="text-xs text-gray-500 mb-2 font-semibold">Workout Type</p>
-                <div className="flex rounded-xl overflow-hidden border border-gray-200">
-                  <button
-                    onClick={() => { setScoringType("fortime"); handleReset(); }}
-                    className={`flex-1 py-2.5 text-xs font-semibold transition-colors ${scoringType === "fortime" ? "bg-blue-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
-                  >
-                    For Time
-                  </button>
-                  <button
-                    onClick={() => { setScoringType("emom"); handleReset(); }}
-                    className={`flex-1 py-2.5 text-xs font-semibold transition-colors ${scoringType === "emom" ? "bg-orange-500 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
-                  >
-                    EMOM
-                  </button>
-                  <button
-                    onClick={() => { setScoringType("amrap"); handleReset(); }}
-                    className={`flex-1 py-2.5 text-xs font-semibold transition-colors ${scoringType === "amrap" ? "bg-green-500 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
-                  >
-                    AMRAP
-                  </button>
+              {/* Scoring Type - only show if not pre-set from URL */}
+              {!urlScoringType && (
+                <div className="mb-4">
+                  <p className="text-xs text-gray-500 mb-2 font-semibold">Workout Type</p>
+                  <div className="flex rounded-xl overflow-hidden border border-gray-200">
+                    <button
+                      onClick={() => { setScoringType("fortime"); handleReset(); }}
+                      className={`flex-1 py-2.5 text-xs font-semibold transition-colors ${scoringType === "fortime" ? "bg-blue-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
+                    >
+                      For Time
+                    </button>
+                    <button
+                      onClick={() => { setScoringType("emom"); handleReset(); }}
+                      className={`flex-1 py-2.5 text-xs font-semibold transition-colors ${scoringType === "emom" ? "bg-orange-500 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
+                    >
+                      EMOM
+                    </button>
+                    <button
+                      onClick={() => { setScoringType("amrap"); handleReset(); }}
+                      className={`flex-1 py-2.5 text-xs font-semibold transition-colors ${scoringType === "amrap" ? "bg-green-500 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
+                    >
+                      AMRAP
+                    </button>
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Timer */}
               <div className="mb-4">
