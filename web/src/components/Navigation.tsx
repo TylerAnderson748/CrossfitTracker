@@ -38,14 +38,25 @@ export default function Navigation() {
     checkGymOwnership();
   }, [user]);
 
+  // Only show special tabs to these specific users (by email or UID)
+  const allowedEmails = ["indi@user.com", "1@1.com", "cheese@cheese.com", "tyguy4201@gmail.com"];
+  const allowedUIDs = ["ttgK41hHOnPiUKemZoPZSiktQXC3"];
+  const canSeeSpecialTabs = (user?.email && allowedEmails.includes(user.email)) || (user?.id && allowedUIDs.includes(user.id));
+
+  // Crystal and Reno tabs visible only to specific UIDs
+  const crystalRenoAllowedUIDs = ["uknIhGe53pcj6sZBbSYVRo9NF713", "WuxjspCO48ZWyhiuWkTLbRRNKDz2"];
+  const canSeeCrystalRenoTabs = user?.id && crystalRenoAllowedUIDs.includes(user.id);
+
   const navItems = [
     { href: "/weekly", label: "Home", icon: "🏠" },
     ...(isGymOwner ? [{ href: "/gym", label: "Gym", icon: "🏢" }] : []),
     { href: "/programming", label: "Programming", icon: "📅" },
     { href: "/workouts", label: "Workouts", icon: "📋" },
     { href: "/profile", label: "Profile", icon: "👤" },
-    { href: "/hi-devin", label: "Hi Devin!", icon: "🎉" },
-    { href: "/hi-blake", label: "Hi Blake...", icon: "💀" },
+    ...(canSeeSpecialTabs ? [{ href: "/hi-devin", label: "Hi Devin!", icon: "🎉" }] : []),
+    ...(canSeeSpecialTabs ? [{ href: "/hi-blake", label: "Hi Blake...", icon: "💀" }] : []),
+    ...(canSeeCrystalRenoTabs ? [{ href: "/hi-crystal", label: "Hi Crystal!", icon: "☕" }] : []),
+    ...(canSeeCrystalRenoTabs ? [{ href: "/hi-reno", label: "Hi Reno...", icon: "🤘" }] : []),
   ];
 
   return (
