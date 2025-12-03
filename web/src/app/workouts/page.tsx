@@ -110,10 +110,23 @@ export default function WorkoutsPage() {
 
   useEffect(() => {
     if (user) {
+      // Reset all user-specific state when user changes to prevent data leaking between accounts
+      setCustomWods([]);
+      setCustomLifts([]);
+      setCustomSkills([]);
+      setProgrammingSources([]);
+      setProgrammedWorkouts([]);
+      setFrequentWods([]);
+      setFrequentLifts([]);
+      setRecentLogs([]);
+      setSearchQuery("");
+
       // Load hidden source IDs from localStorage
       const savedHidden = localStorage.getItem(`hiddenSources_${user.id}`);
       if (savedHidden) {
         setHiddenSourceIds(JSON.parse(savedHidden));
+      } else {
+        setHiddenSourceIds([]);
       }
       fetchUserData();
     }
