@@ -425,65 +425,8 @@ export default function WorkoutsPage() {
         };
       });
 
-      // Fetch external programmed workouts (from connected providers)
-      const externalWorkoutsList: ProgrammedWorkout[] = [];
-      if (user.gymId) {
-        const externalWorkoutsQuery = query(
-          collection(db, "externalProgrammedWorkouts"),
-          where("gymId", "==", user.gymId),
-          where("isPublished", "==", true)
-        );
-        const externalWorkoutsSnapshot = await getDocs(externalWorkoutsQuery);
-
-        externalWorkoutsSnapshot.docs.forEach((docSnap) => {
-          const data = docSnap.data();
-          // Check if user has access based on published groups
-          const publishedGroups = data.publishedToGroupIds || [];
-          const hasAccess = publishedGroups.length === 0 || publishedGroups.some((gid: string) => userGroupIds.includes(gid));
-
-          if (hasAccess) {
-            // Extract workout components as individual programmed workouts
-            const components = data.components || [];
-            components.forEach((component: { title?: string; description?: string; type?: string; scoringType?: string }, idx: number) => {
-              if (component.title) {
-                const componentType = component.type === "lift" ? "lift" : component.type === "skill" ? "skill" : "wod";
-                externalWorkoutsList.push({
-                  id: `external-${docSnap.id}-${idx}`,
-                  name: component.title,
-                  description: component.description || "",
-                  type: componentType as "wod" | "lift" | "skill",
-                  scoringType: component.scoringType,
-                  sourceId: `external-${data.providerId}`,
-                  sourceName: data.providerName || "External Provider",
-                  scheduledDate: data.scheduledDate?.toDate?.(),
-                  groupNames: publishedGroups.map((gid: string) => groupIdToName[gid]).filter(Boolean),
-                });
-              }
-            });
-          }
-        });
-
-        // Add external provider as a source if we have external workouts
-        if (externalWorkoutsList.length > 0) {
-          const providerNames = new Set(externalWorkoutsList.map(w => w.sourceName));
-          providerNames.forEach(providerName => {
-            const externalSource: ProgrammingSource = {
-              id: `external-${providerName}`,
-              name: providerName,
-              type: "online",
-              createdAt: new Date(),
-              isAutomatic: true,
-            };
-            if (!allSources.find(s => s.id === externalSource.id)) {
-              allSources.push(externalSource);
-            }
-          });
-          setProgrammingSources([...allSources]);
-        }
-      }
-
-      // Combine automatic, external, and user-created workouts
-      setProgrammedWorkouts([...automaticWorkouts, ...externalWorkoutsList, ...userWorkoutsList]);
+      // Combine automatic and user-created workouts
+      setProgrammedWorkouts([...automaticWorkouts, ...userWorkoutsList]);
     } catch (error) {
       console.error("Error fetching data:", error);
     } finally {
