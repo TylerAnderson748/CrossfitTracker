@@ -308,7 +308,7 @@ export default function WorkoutsPage() {
             gymId: user.gymId,
           });
 
-          // Fetch groups user is a member of to get their workouts
+          // Fetch groups user is a member of
           const groupsQuery = query(
             collection(db, "groups"),
             where("gymId", "==", user.gymId)
@@ -325,36 +325,39 @@ export default function WorkoutsPage() {
           }
           console.log("User is member of groups:", userGroupIds);
 
-          // Fetch scheduled workouts for groups user is a member of
-          if (userGroupIds.length > 0) {
-            for (const groupId of userGroupIds) {
-              const groupWorkoutsQuery = query(
-                collection(db, "scheduledWorkouts"),
-                where("groupId", "==", groupId)
-              );
-              const groupWorkoutsSnapshot = await getDocs(groupWorkoutsQuery);
+          // Fetch all scheduled workouts for the gym
+          const gymWorkoutsQuery = query(
+            collection(db, "scheduledWorkouts"),
+            where("gymId", "==", user.gymId)
+          );
+          const gymWorkoutsSnapshot = await getDocs(gymWorkoutsQuery);
+          console.log("Gym scheduled workouts found:", gymWorkoutsSnapshot.docs.length);
 
-              groupWorkoutsSnapshot.docs.forEach((workoutDoc) => {
-                const data = workoutDoc.data();
-                const components = data.components || [];
-                components.forEach((component: { title?: string; description?: string; type?: string; scoringType?: string }, idx: number) => {
-                  if (component.title) {
-                    const componentType = component.type === "lift" ? "lift" : component.type === "skill" ? "skill" : "wod";
-                    automaticWorkouts.push({
-                      id: `group-workout-${workoutDoc.id}-${idx}`,
-                      name: component.title,
-                      description: component.description || "",
-                      type: componentType as "wod" | "lift" | "skill",
-                      scoringType: component.scoringType,
-                      sourceId: gymSourceId,
-                      sourceName: gymName,
-                      scheduledDate: data.date?.toDate?.(),
-                    });
-                  }
-                });
+          // Add workouts that either have no groupId or belong to a group the user is in
+          gymWorkoutsSnapshot.docs.forEach((workoutDoc) => {
+            const data = workoutDoc.data();
+            const workoutGroupId = data.groupId;
+
+            // Include workout if: no groupId (gym-wide) OR user is member of that group
+            if (!workoutGroupId || userGroupIds.includes(workoutGroupId)) {
+              const components = data.components || [];
+              components.forEach((component: { title?: string; description?: string; type?: string; scoringType?: string }, idx: number) => {
+                if (component.title) {
+                  const componentType = component.type === "lift" ? "lift" : component.type === "skill" ? "skill" : "wod";
+                  automaticWorkouts.push({
+                    id: `workout-${workoutDoc.id}-${idx}`,
+                    name: component.title,
+                    description: component.description || "",
+                    type: componentType as "wod" | "lift" | "skill",
+                    scoringType: component.scoringType,
+                    sourceId: gymSourceId,
+                    sourceName: gymName,
+                    scheduledDate: data.date?.toDate?.(),
+                  });
+                }
               });
             }
-          }
+          });
         }
       }
 
