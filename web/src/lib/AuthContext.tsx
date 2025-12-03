@@ -8,7 +8,7 @@ import {
   createUserWithEmailAndPassword,
   signOut as firebaseSignOut,
 } from "firebase/auth";
-import { doc, getDoc, setDoc, Timestamp } from "firebase/firestore";
+import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs, Timestamp } from "firebase/firestore";
 import { auth, db } from "./firebase";
 import { AppUser, StoredAccount } from "./types";
 
@@ -63,6 +63,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setStoredAccounts(getStoredAccountsFromStorage());
   }, []);
 
+  // Sync gymId for users who are members of a gym but don't have gymId set
+  const syncUserGymId = async (userId: string, currentGymId: string | undefined) => {
+    if (currentGymId) return; // Already has gymId set
+
+    try {
+      // Check if user is owner of any gym
+      const ownerQuery = query(collection(db, "gyms"), where("ownerId", "==", userId));
+      const ownerSnapshot = await getDocs(ownerQuery);
+      if (!ownerSnapshot.empty) {
+        const gymId = ownerSnapshot.docs[0].id;
+        await updateDoc(doc(db, "users", userId), { gymId });
+        return gymId;
+      }
+
+      // Check if user is a coach of any gym
+      const coachQuery = query(collection(db, "gyms"), where("coachIds", "array-contains", userId));
+      const coachSnapshot = await getDocs(coachQuery);
+      if (!coachSnapshot.empty) {
+        const gymId = coachSnapshot.docs[0].id;
+        await updateDoc(doc(db, "users", userId), { gymId });
+        return gymId;
+      }
+
+      // Check if user is a member of any gym
+      const memberQuery = query(collection(db, "gyms"), where("memberIds", "array-contains", userId));
+      const memberSnapshot = await getDocs(memberQuery);
+      if (!memberSnapshot.empty) {
+        const gymId = memberSnapshot.docs[0].id;
+        await updateDoc(doc(db, "users", userId), { gymId });
+        return gymId;
+      }
+    } catch (error) {
+      console.error("Error syncing gymId:", error);
+    }
+    return undefined;
+  };
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setFirebaseUser(firebaseUser);
@@ -70,7 +107,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (firebaseUser) {
         const userDoc = await getDoc(doc(db, "users", firebaseUser.uid));
         if (userDoc.exists()) {
-          setUser({ id: userDoc.id, ...userDoc.data() } as AppUser);
+          const userData = { id: userDoc.id, ...userDoc.data() } as AppUser;
+
+          // Sync gymId if not set
+          const syncedGymId = await syncUserGymId(userDoc.id, userData.gymId);
+          if (syncedGymId) {
+            userData.gymId = syncedGymId;
+          }
+
+          setUser(userData);
         }
       } else {
         // Only clear user if we're not in the middle of switching accounts
