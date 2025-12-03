@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebase-admin";
-import { FieldValue } from "firebase-admin/firestore";
+import admin from "firebase-admin";
 import crypto from "crypto";
+
+const FieldValue = admin.firestore.FieldValue;
 
 // POST /api/providers/connect
 // Endpoint for gyms to connect to an external programming provider

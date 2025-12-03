@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebase-admin";
-import { FieldValue } from "firebase-admin/firestore";
+import admin from "firebase-admin";
 import crypto from "crypto";
+
+const FieldValue = admin.firestore.FieldValue;
 
 interface ProviderRegistrationPayload {
   name: string;

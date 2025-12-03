@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebase-admin";
-import { Timestamp, FieldValue } from "firebase-admin/firestore";
+import admin from "firebase-admin";
 import crypto from "crypto";
 
 // Types for the webhook payload
@@ -129,7 +129,7 @@ export async function POST(request: NextRequest) {
           }
         } else {
           // Create or update the workout
-          const scheduledDate = Timestamp.fromDate(new Date(payload.workout.scheduledDate));
+          const scheduledDate = admin.firestore.Timestamp.fromDate(new Date(payload.workout.scheduledDate));
 
           const workoutData = {
             externalId: payload.workout.externalId,
@@ -154,8 +154,8 @@ export async function POST(request: NextRequest) {
             coachNotes: payload.workout.coachNotes,
             isPublished: connection.autoPublish || false,
             publishedToGroupIds: connection.autoPublish ? connection.targetGroupIds : [],
-            receivedAt: FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp(),
+            receivedAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
           };
 
           // Check if workout already exists (for updates)
@@ -183,7 +183,7 @@ export async function POST(request: NextRequest) {
 
           // Update connection's last workout received timestamp
           await connectionDoc.ref.update({
-            lastWorkoutReceivedAt: FieldValue.serverTimestamp(),
+            lastWorkoutReceivedAt: admin.firestore.FieldValue.serverTimestamp(),
           });
 
           results.push({ gymId, workoutId });
