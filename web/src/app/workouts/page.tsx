@@ -80,6 +80,7 @@ export default function WorkoutsPage() {
   // Programming sources state
   const [programmingSources, setProgrammingSources] = useState<ProgrammingSource[]>([]);
   const [programmedWorkouts, setProgrammedWorkouts] = useState<ProgrammedWorkout[]>([]);
+  const [hiddenSourceIds, setHiddenSourceIds] = useState<string[]>([]);
   const [showAddSourceModal, setShowAddSourceModal] = useState(false);
   const [newSourceName, setNewSourceName] = useState("");
   const [newSourceType, setNewSourceType] = useState<"gym" | "online" | "pt" | "other">("online");
@@ -98,6 +99,11 @@ export default function WorkoutsPage() {
 
   useEffect(() => {
     if (user) {
+      // Load hidden source IDs from localStorage
+      const savedHidden = localStorage.getItem(`hiddenSources_${user.id}`);
+      if (savedHidden) {
+        setHiddenSourceIds(JSON.parse(savedHidden));
+      }
       fetchUserData();
     }
   }, [user]);
@@ -561,9 +567,10 @@ export default function WorkoutsPage() {
     const source = programmingSources.find(s => s.id === sourceId);
 
     if (source?.isAutomatic) {
-      // For automatic sources (gym/groups), just hide from state
-      setProgrammingSources(prev => prev.filter(s => s.id !== sourceId));
-      setProgrammedWorkouts(prev => prev.filter(w => w.sourceId !== sourceId));
+      // For automatic sources (gym/groups), save to localStorage as hidden
+      const newHidden = [...hiddenSourceIds, sourceId];
+      setHiddenSourceIds(newHidden);
+      localStorage.setItem(`hiddenSources_${user.id}`, JSON.stringify(newHidden));
       return;
     }
 
@@ -584,6 +591,13 @@ export default function WorkoutsPage() {
     } catch (error) {
       console.error("Error deleting programming source:", error);
     }
+  };
+
+  const handleUnhideSource = (sourceId: string) => {
+    if (!user) return;
+    const newHidden = hiddenSourceIds.filter(id => id !== sourceId);
+    setHiddenSourceIds(newHidden);
+    localStorage.setItem(`hiddenSources_${user.id}`, JSON.stringify(newHidden));
   };
 
   const handleAddProgrammedWorkout = async (sourceId: string) => {
@@ -924,7 +938,11 @@ export default function WorkoutsPage() {
                     </button>
                   </div>
 
-                  {programmingSources.length === 0 ? (
+                  {(() => {
+                    const visibleSources = programmingSources.filter(s => !hiddenSourceIds.includes(s.id));
+                    const hiddenSources = programmingSources.filter(s => hiddenSourceIds.includes(s.id));
+
+                    return visibleSources.length === 0 && hiddenSources.length === 0 ? (
                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 text-center">
                       <p className="text-gray-500 text-sm mb-3">
                         Track workouts from online programs, personal trainers, or other coaches
@@ -938,7 +956,28 @@ export default function WorkoutsPage() {
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      {programmingSources.map((source) => {
+                      {/* Show hidden sources notice */}
+                      {hiddenSources.length > 0 && (
+                        <div className="bg-gray-50 rounded-lg border border-gray-200 p-3">
+                          <p className="text-gray-600 text-sm mb-2">
+                            {hiddenSources.length} hidden source{hiddenSources.length > 1 ? 's' : ''}:
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            {hiddenSources.map(source => (
+                              <button
+                                key={source.id}
+                                onClick={() => handleUnhideSource(source.id)}
+                                className="inline-flex items-center gap-1 px-2 py-1 bg-white border border-gray-300 rounded text-sm text-gray-700 hover:bg-blue-50 hover:border-blue-300 transition-colors"
+                              >
+                                <span>{source.type === "gym" ? "🏋️" : source.type === "group" ? "👥" : "📝"}</span>
+                                {source.name}
+                                <span className="text-blue-600 ml-1">+ Show</span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {visibleSources.map((source) => {
                         const sourceWorkouts = getCurrentProgrammedWorkouts(source.id);
                         const isExpanded = expandedSource === source.id;
 
@@ -1081,7 +1120,8 @@ export default function WorkoutsPage() {
                         );
                       })}
                     </div>
-                  )}
+                  );
+                  })()}
                 </div>
 
                 {/* Category List */}
