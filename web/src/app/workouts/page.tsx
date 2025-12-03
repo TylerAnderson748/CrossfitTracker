@@ -311,6 +311,8 @@ export default function WorkoutsPage() {
       // Auto-add gym as programming source if user has one
       const automaticSources: ProgrammingSource[] = [];
       const automaticWorkouts: ProgrammedWorkout[] = [];
+      let userGroupIds: string[] = [];
+      let groupIdToName: Record<string, string> = {};
 
       if (user.gymId) {
         // Fetch gym info
@@ -335,8 +337,6 @@ export default function WorkoutsPage() {
             where("gymId", "==", user.gymId)
           );
           const groupsSnapshot = await getDocs(groupsQuery);
-          const userGroupIds: string[] = [];
-          const groupIdToName: Record<string, string> = {};
 
           for (const groupDoc of groupsSnapshot.docs) {
             const groupData = groupDoc.data();
