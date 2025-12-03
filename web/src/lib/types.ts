@@ -317,3 +317,155 @@ export function formatTimeSlot(hour: number, minute: number): string {
   const displayMinute = safeMinute.toString().padStart(2, "0");
   return `${displayHour}:${displayMinute} ${period}`;
 }
+
+// =====================
+// EXTERNAL PROGRAMMING API TYPES
+// =====================
+
+// Status of a provider's API connection
+export type ProviderConnectionStatus = "active" | "inactive" | "pending" | "error";
+
+// Authentication method for external providers
+export type ProviderAuthMethod = "api_key" | "oauth" | "webhook_secret";
+
+// External Programming Provider - represents a programming service that can push workouts via API
+export interface ExternalProgrammingProvider {
+  id: string;
+  name: string;
+  slug: string; // URL-safe identifier (e.g., "elite-programming")
+  description: string;
+  logoUrl?: string;
+  websiteUrl?: string;
+  // API configuration
+  authMethod: ProviderAuthMethod;
+  apiEndpoint?: string; // Their callback URL for OAuth or outbound API
+  webhookEndpoint?: string; // Our endpoint they'll call to push workouts
+  // Provider capabilities
+  supportsScheduledWorkouts: boolean;
+  supportsDailyWorkouts: boolean;
+  supportsMultiplePrograms: boolean; // Can offer different tracks/programs
+  // Metadata
+  isActive: boolean;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+// API credentials for a provider (stored securely)
+export interface ProviderAPICredentials {
+  id: string;
+  providerId: string;
+  gymId: string;
+  // Credentials (only one will be used based on authMethod)
+  apiKey?: string;
+  apiSecret?: string;
+  webhookSecret?: string; // For verifying incoming webhook requests
+  oauthAccessToken?: string;
+  oauthRefreshToken?: string;
+  oauthExpiresAt?: Timestamp;
+  // Status
+  status: ProviderConnectionStatus;
+  lastSyncAt?: Timestamp;
+  lastError?: string;
+  createdAt: Timestamp;
+}
+
+// Connection between a gym and an external provider
+export interface GymProviderConnection {
+  id: string;
+  gymId: string;
+  providerId: string;
+  providerName: string;
+  // Which program/track from this provider (if they offer multiple)
+  programId?: string;
+  programName?: string;
+  // Mapping to gym groups - which groups receive these workouts
+  targetGroupIds: string[];
+  // Settings
+  autoPublish: boolean; // Automatically publish workouts when received
+  defaultHideDetails: boolean; // Hide workout details by default
+  // Status
+  status: ProviderConnectionStatus;
+  connectedAt: Timestamp;
+  lastWorkoutReceivedAt?: Timestamp;
+}
+
+// Workout pushed from an external provider
+export interface ExternalProgrammedWorkout {
+  id: string;
+  // Source tracking
+  externalId: string; // Provider's unique ID for this workout
+  providerId: string;
+  providerName: string;
+  connectionId: string; // GymProviderConnection ID
+  gymId: string;
+  // Workout details
+  title: string;
+  description: string;
+  scheduledDate: Timestamp;
+  // Multi-component support (warmup, wod, lift, skill, cooldown)
+  components: WorkoutComponent[];
+  // Provider metadata
+  programName?: string; // e.g., "Competition Track", "Fitness Track"
+  trackName?: string;
+  difficulty?: string;
+  estimatedDuration?: number; // in minutes
+  coachNotes?: string;
+  // Publishing status
+  isPublished: boolean;
+  publishedAt?: Timestamp;
+  publishedToGroupIds: string[];
+  // Timestamps
+  receivedAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+// Webhook payload structure for providers to push workouts
+export interface ProviderWebhookPayload {
+  event: "workout.created" | "workout.updated" | "workout.deleted";
+  timestamp: string; // ISO 8601
+  provider: {
+    id: string;
+    name: string;
+  };
+  workout: {
+    externalId: string;
+    title: string;
+    description: string;
+    scheduledDate: string; // ISO 8601
+    programName?: string;
+    trackName?: string;
+    difficulty?: string;
+    estimatedDuration?: number;
+    coachNotes?: string;
+    components: Array<{
+      type: WorkoutComponentType;
+      title: string;
+      description: string;
+      scoringType?: WODScoringType;
+    }>;
+  };
+  signature: string; // HMAC signature for verification
+}
+
+// Response from our webhook endpoint
+export interface WebhookResponse {
+  success: boolean;
+  message: string;
+  workoutId?: string;
+  error?: string;
+}
+
+// Provider registration request (for new providers to sign up)
+export interface ProviderRegistrationRequest {
+  id: string;
+  name: string;
+  email: string;
+  websiteUrl: string;
+  description: string;
+  status: "pending" | "approved" | "rejected";
+  createdAt: Timestamp;
+  reviewedAt?: Timestamp;
+  reviewedBy?: string;
+  notes?: string;
+}
+

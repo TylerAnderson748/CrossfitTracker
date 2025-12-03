@@ -9,6 +9,7 @@ import { db } from "@/lib/firebase";
 import { Gym, WorkoutGroup, AppUser, ScheduledWorkout, ScheduledTimeSlot, WorkoutLog, WorkoutComponent, WorkoutComponentType, workoutComponentLabels, workoutComponentColors, LiftResult, LeaderboardEntry, formatTimeSlot, GroupMembershipRequest, PricingTier, BillingCycle, ClassLimitType, DiscountCode, DiscountType, WODScoringType, wodScoringTypeLabels, wodScoringTypeColors } from "@/lib/types";
 import { getAllWods, getAllLifts } from "@/lib/workoutData";
 import Navigation from "@/components/Navigation";
+import ExternalProgrammingManager from "@/components/ExternalProgrammingManager";
 
 interface MembershipRequest {
   id: string;
@@ -1920,6 +1921,16 @@ export default function GymDetailPage() {
                   );
                 })}
               </div>
+
+              {/* External Programming Section */}
+              {user && gymId && (
+                <ExternalProgrammingManager
+                  gymId={gymId}
+                  userId={user.id}
+                  groups={groups}
+                  isOwner={isOwner}
+                />
+              )}
             </div>
           )}
 
