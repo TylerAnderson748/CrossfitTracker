@@ -337,9 +337,17 @@ export default function WorkoutsPage() {
           gymWorkoutsSnapshot.docs.forEach((workoutDoc) => {
             const data = workoutDoc.data();
             const workoutGroupId = data.groupId;
+            const workoutGroupIds = data.groupIds || []; // Some workouts may use groupIds array
 
-            // Include workout if: no groupId (gym-wide) OR user is member of that group
-            if (!workoutGroupId || userGroupIds.includes(workoutGroupId)) {
+            // Check if user has access to this workout
+            const hasNoGroupRestriction = !workoutGroupId && workoutGroupIds.length === 0;
+            const isInSingleGroup = workoutGroupId && userGroupIds.includes(workoutGroupId);
+            const isInGroupArray = workoutGroupIds.length > 0 && workoutGroupIds.some((gid: string) => userGroupIds.includes(gid));
+            const hasAccess = hasNoGroupRestriction || isInSingleGroup || isInGroupArray;
+
+            console.log("Workout:", data.date?.toDate?.()?.toLocaleDateString(), "groupId:", workoutGroupId, "groupIds:", workoutGroupIds, "hasAccess:", hasAccess);
+
+            if (hasAccess) {
               const components = data.components || [];
               components.forEach((component: { title?: string; description?: string; type?: string; scoringType?: string }, idx: number) => {
                 if (component.title) {
