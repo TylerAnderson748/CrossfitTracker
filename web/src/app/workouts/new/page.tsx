@@ -390,6 +390,11 @@ function NewWorkoutContent() {
       let entries: LeaderboardEntry[] = [];
       const normalized = normalizeWorkoutName(wodTitle.trim());
 
+      // Check if this is a preset workout (standard benchmark)
+      const isPresetWorkout = allWods.some(w =>
+        normalizeWorkoutName(w.name) === normalized
+      );
+
       // First try leaderboardEntries collection
       const allQuery = query(
         collection(db, "leaderboardEntries"),
@@ -406,6 +411,11 @@ function NewWorkoutContent() {
         (e) => e.normalizedWorkoutName === normalized
       );
 
+      // For custom (non-preset) workouts, only show current user's entries
+      if (!isPresetWorkout && user) {
+        entries = entries.filter((e) => e.userId === user.id);
+      }
+
       // If no leaderboard entries, build from workoutLogs
       if (entries.length === 0) {
         const logsQuery = query(
@@ -419,10 +429,15 @@ function NewWorkoutContent() {
         })) as any[];
 
         // Filter for this workout
-        const filteredLogs = allLogs.filter((log) => {
+        let filteredLogs = allLogs.filter((log) => {
           const logNormalized = normalizeWorkoutName((log.wodTitle || "").trim());
           return logNormalized === normalized;
         });
+
+        // For custom (non-preset) workouts, only show current user's logs
+        if (!isPresetWorkout && user) {
+          filteredLogs = filteredLogs.filter((log) => log.userId === user.id);
+        }
 
         // Get unique user IDs and fetch their names
         const userIds = [...new Set(filteredLogs.map((log) => log.userId))];
