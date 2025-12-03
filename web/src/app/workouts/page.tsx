@@ -282,9 +282,12 @@ export default function WorkoutsPage() {
       const automaticSources: ProgrammingSource[] = [];
       const automaticWorkouts: ProgrammedWorkout[] = [];
 
+      console.log("User gymId:", user.gymId);
+
       if (user.gymId) {
         // Fetch gym info
         const gymDoc = await getDoc(doc(db, "gyms", user.gymId));
+        console.log("Gym doc exists:", gymDoc.exists(), gymDoc.data());
         if (gymDoc.exists()) {
           const gymData = gymDoc.data();
           const gymSourceId = `gym-${user.gymId}`;
@@ -304,6 +307,7 @@ export default function WorkoutsPage() {
             where("gymId", "==", user.gymId)
           );
           const gymProgrammingSnapshot = await getDocs(gymProgrammingQuery);
+          console.log("Gym scheduled workouts found:", gymProgrammingSnapshot.docs.length);
 
           // Convert gym scheduled workouts to programmed workouts
           gymProgrammingSnapshot.docs.forEach((docSnap) => {
@@ -333,10 +337,12 @@ export default function WorkoutsPage() {
           where("gymId", "==", user.gymId)
         );
         const groupsSnapshot = await getDocs(groupsQuery);
+        console.log("Groups in gym:", groupsSnapshot.docs.length);
 
         for (const groupDoc of groupsSnapshot.docs) {
           const groupData = groupDoc.data();
           const memberIds = groupData.memberIds || [];
+          console.log("Group:", groupData.name, "memberIds:", memberIds, "user.id:", user.id, "isMember:", memberIds.includes(user.id));
 
           // Check if user is a member of this group
           if (memberIds.includes(user.id)) {
@@ -382,6 +388,9 @@ export default function WorkoutsPage() {
       }
 
       // Combine automatic and user-created sources
+      console.log("Automatic sources:", automaticSources.length, automaticSources);
+      console.log("Automatic workouts:", automaticWorkouts.length);
+      console.log("User sources:", userSourcesList.length);
       const allSources = [...automaticSources, ...userSourcesList];
       setProgrammingSources(allSources);
 
