@@ -55,6 +55,16 @@ interface ProgrammedWorkout {
   groupNames?: string[]; // Groups this workout belongs to
 }
 
+interface SearchResult {
+  name: string;
+  description: string;
+  type: "wod" | "lift" | "skill";
+  scoringType?: string;
+  source: "preset" | "programmed" | "custom";
+  sourceName?: string; // For programmed workouts
+  groupNames?: string[]; // For programmed workouts with groups
+}
+
 export default function WorkoutsPage() {
   const { user, loading, switching } = useAuth();
   const router = useRouter();
@@ -289,12 +299,9 @@ export default function WorkoutsPage() {
       const automaticSources: ProgrammingSource[] = [];
       const automaticWorkouts: ProgrammedWorkout[] = [];
 
-      console.log("User gymId:", user.gymId);
-
       if (user.gymId) {
         // Fetch gym info
         const gymDoc = await getDoc(doc(db, "gyms", user.gymId));
-        console.log("Gym doc exists:", gymDoc.exists(), gymDoc.data());
         if (gymDoc.exists()) {
           const gymData = gymDoc.data();
           const gymSourceId = `gym-${user.gymId}`;
@@ -326,7 +333,6 @@ export default function WorkoutsPage() {
               userGroupIds.push(groupDoc.id);
             }
           }
-          console.log("User is member of groups:", userGroupIds);
 
           // Fetch all scheduled workouts for the gym
           const gymWorkoutsQuery = query(
@@ -334,7 +340,6 @@ export default function WorkoutsPage() {
             where("gymId", "==", user.gymId)
           );
           const gymWorkoutsSnapshot = await getDocs(gymWorkoutsQuery);
-          console.log("Gym scheduled workouts found:", gymWorkoutsSnapshot.docs.length);
 
           // Add workouts that either have no groupId or belong to a group the user is in
           gymWorkoutsSnapshot.docs.forEach((workoutDoc) => {
@@ -358,8 +363,6 @@ export default function WorkoutsPage() {
                 workoutGroupNames.push(groupIdToName[gid]);
               }
             });
-
-            console.log("Workout:", data.date?.toDate?.()?.toLocaleDateString(), "groupId:", workoutGroupId, "groupIds:", workoutGroupIds, "groups:", workoutGroupNames, "hasAccess:", hasAccess);
 
             if (hasAccess) {
               const components = data.components || [];
@@ -385,9 +388,6 @@ export default function WorkoutsPage() {
       }
 
       // Combine automatic and user-created sources
-      console.log("Automatic sources:", automaticSources.length, automaticSources);
-      console.log("Automatic workouts:", automaticWorkouts.length);
-      console.log("User sources:", userSourcesList.length);
       const allSources = [...automaticSources, ...userSourcesList];
       setProgrammingSources(allSources);
 
@@ -444,14 +444,63 @@ export default function WorkoutsPage() {
   const categories = getCategories();
 
   // Filter workouts across all categories when searching
-  const getSearchResults = (): Workout[] => {
+  const getSearchResults = (): SearchResult[] => {
     if (!searchQuery.trim()) return [];
-    const allWorkouts = workoutType === "wod" ? getAllWods() : workoutType === "lift" ? getAllLifts() : getAllSkills();
-    return allWorkouts.filter(
-      (w) =>
-        w.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        w.description.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+    const query = searchQuery.toLowerCase();
+    const results: SearchResult[] = [];
+
+    // Search preset workouts
+    const allPresetWorkouts = workoutType === "wod" ? getAllWods() : workoutType === "lift" ? getAllLifts() : getAllSkills();
+    allPresetWorkouts.forEach((w) => {
+      if (w.name.toLowerCase().includes(query) || w.description.toLowerCase().includes(query)) {
+        results.push({
+          name: w.name,
+          description: w.description,
+          type: w.type,
+          scoringType: w.scoringType,
+          source: "preset",
+        });
+      }
+    });
+
+    // Search programmed workouts from sources
+    programmedWorkouts
+      .filter((w) => w.type === workoutType)
+      .forEach((w) => {
+        if (w.name.toLowerCase().includes(query) || w.description.toLowerCase().includes(query)) {
+          // Check if this workout is already in results (avoid duplicates)
+          if (!results.some((r) => r.name.toLowerCase() === w.name.toLowerCase() && r.source === "programmed")) {
+            results.push({
+              name: w.name,
+              description: w.description,
+              type: w.type,
+              scoringType: w.scoringType,
+              source: "programmed",
+              sourceName: w.sourceName,
+              groupNames: w.groupNames,
+            });
+          }
+        }
+      });
+
+    // Search custom (saved) workouts
+    const currentCustom = workoutType === "wod" ? customWods : workoutType === "lift" ? customLifts : customSkills;
+    currentCustom.forEach((w) => {
+      if (w.name.toLowerCase().includes(query) || w.description.toLowerCase().includes(query)) {
+        // Check if this workout is already in results
+        if (!results.some((r) => r.name.toLowerCase() === w.name.toLowerCase())) {
+          results.push({
+            name: w.name,
+            description: w.description,
+            type: w.type,
+            scoringType: w.scoringType,
+            source: "custom",
+          });
+        }
+      }
+    });
+
+    return results;
   };
 
   const searchResults = getSearchResults();
@@ -768,7 +817,7 @@ export default function WorkoutsPage() {
                   <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                     {searchResults.map((workout, idx) => (
                       <Link
-                        key={`${workout.name}-${idx}`}
+                        key={`${workout.name}-${workout.source}-${idx}`}
                         href={
                           workout.type === "lift"
                             ? `/workouts/lift?name=${encodeURIComponent(workout.name)}`
@@ -780,11 +829,40 @@ export default function WorkoutsPage() {
                           idx > 0 ? "border-t border-gray-100" : ""
                         }`}
                       >
-                        <div>
-                          <h3 className="font-medium text-gray-900">{workout.name}</h3>
-                          <p className="text-gray-500 text-sm">{workout.description}</p>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className="font-medium text-gray-900">{workout.name}</h3>
+                            {workout.source === "custom" && (
+                              <span className="px-2 py-0.5 text-xs rounded bg-amber-100 text-amber-700">
+                                Custom
+                              </span>
+                            )}
+                            {workout.source === "programmed" && workout.sourceName && (
+                              <span className="px-2 py-0.5 text-xs rounded bg-orange-100 text-orange-700">
+                                {workout.sourceName}
+                              </span>
+                            )}
+                            {workout.scoringType && (
+                              <span className={`px-2 py-0.5 text-xs rounded ${
+                                workout.scoringType === "fortime" ? "bg-blue-100 text-blue-700" :
+                                workout.scoringType === "amrap" ? "bg-green-100 text-green-700" :
+                                workout.scoringType === "emom" ? "bg-purple-100 text-purple-700" :
+                                "bg-gray-100 text-gray-700"
+                              }`}>
+                                {workout.scoringType === "fortime" ? "For Time" :
+                                 workout.scoringType === "amrap" ? "AMRAP" :
+                                 workout.scoringType === "emom" ? "EMOM" : workout.scoringType}
+                              </span>
+                            )}
+                            {workout.groupNames && workout.groupNames.map((groupName, gIdx) => (
+                              <span key={gIdx} className="px-2 py-0.5 text-xs rounded bg-teal-100 text-teal-700">
+                                {groupName}
+                              </span>
+                            ))}
+                          </div>
+                          <p className="text-gray-500 text-sm truncate">{workout.description}</p>
                         </div>
-                        <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-5 h-5 text-gray-400 shrink-0 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                         </svg>
                       </Link>
