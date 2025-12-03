@@ -9,6 +9,7 @@ import { db } from "@/lib/firebase";
 import { Gym, WorkoutGroup, AppUser, ScheduledWorkout, ScheduledTimeSlot, WorkoutLog, WorkoutComponent, WorkoutComponentType, workoutComponentLabels, workoutComponentColors, LiftResult, LeaderboardEntry, formatTimeSlot, GroupMembershipRequest, PricingTier, BillingCycle, ClassLimitType, DiscountCode, DiscountType, WODScoringType, wodScoringTypeLabels, wodScoringTypeColors } from "@/lib/types";
 import { getAllWods, getAllLifts } from "@/lib/workoutData";
 import Navigation from "@/components/Navigation";
+import AIProgrammingChat from "@/components/AIProgrammingChat";
 
 interface MembershipRequest {
   id: string;
@@ -1659,6 +1660,21 @@ export default function GymDetailPage() {
                   </button>
                 </div>
               </div>
+
+              {/* AI Programming Assistant */}
+              {isOwner && user && (
+                <div className="mb-6">
+                  <AIProgrammingChat
+                    gymId={gymId}
+                    userId={user.id}
+                    groups={groups}
+                    onPublish={() => {
+                      // Refresh workouts after publishing
+                      fetchGymData();
+                    }}
+                  />
+                </div>
+              )}
 
               {/* Time Range Selector */}
               <div className="flex gap-2 mb-4 overflow-x-auto pb-2">

@@ -318,4 +318,46 @@ export function formatTimeSlot(hour: number, minute: number): string {
   return `${displayHour}:${displayMinute} ${period}`;
 }
 
+// =====================
+// AI PROGRAMMING TYPES
+// =====================
+
+export interface AIChatMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  timestamp: Timestamp;
+  // If assistant message contains generated workouts
+  generatedWorkouts?: AIGeneratedDay[];
+}
+
+export interface AIProgrammingSession {
+  id: string;
+  gymId: string;
+  createdBy: string;
+  title: string;
+  status: "active" | "published" | "archived";
+  messages: AIChatMessage[];
+  // Generated program details
+  programWeeks?: number;
+  programStartDate?: Timestamp;
+  targetGroupIds?: string[];
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+export interface AIGeneratedWorkout {
+  type: WorkoutComponentType;
+  title: string;
+  description: string;
+  scoringType?: WODScoringType;
+}
+
+export interface AIGeneratedDay {
+  date: string; // ISO date string
+  dayOfWeek: string;
+  isRestDay: boolean;
+  components: AIGeneratedWorkout[];
+}
+
 
