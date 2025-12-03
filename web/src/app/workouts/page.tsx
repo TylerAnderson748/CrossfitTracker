@@ -557,8 +557,18 @@ export default function WorkoutsPage() {
   const handleDeleteProgrammingSource = async (sourceId: string) => {
     if (!user) return;
 
+    // Find the source to check if it's automatic
+    const source = programmingSources.find(s => s.id === sourceId);
+
+    if (source?.isAutomatic) {
+      // For automatic sources (gym/groups), just hide from state
+      setProgrammingSources(prev => prev.filter(s => s.id !== sourceId));
+      setProgrammedWorkouts(prev => prev.filter(w => w.sourceId !== sourceId));
+      return;
+    }
+
     try {
-      // Delete the source
+      // Delete the source from Firestore
       await deleteDoc(doc(db, "programmingSources", sourceId));
 
       // Delete all workouts for this source
@@ -973,18 +983,26 @@ export default function WorkoutsPage() {
                             {isExpanded && (
                               <div className="border-t border-gray-100 bg-gray-50">
                                 {sourceWorkouts.length === 0 ? (
-                                  <div className="p-4 text-center">
-                                    <p className="text-gray-500 text-sm mb-2">
+                                  <div className="p-4">
+                                    <p className="text-gray-500 text-sm mb-3 text-center">
                                       No {workoutType === "wod" ? "WODs" : workoutType === "lift" ? "lifts" : "skills"} {source.isAutomatic ? "programmed" : "added"} yet
                                     </p>
-                                    {!source.isAutomatic && (
+                                    <div className="flex justify-center gap-4">
+                                      {!source.isAutomatic && (
+                                        <button
+                                          onClick={() => setShowAddWorkoutModal(source.id)}
+                                          className="text-blue-600 hover:text-blue-700 font-medium text-sm"
+                                        >
+                                          + Add workout
+                                        </button>
+                                      )}
                                       <button
-                                        onClick={() => setShowAddWorkoutModal(source.id)}
-                                        className="text-blue-600 hover:text-blue-700 font-medium text-sm"
+                                        onClick={() => handleDeleteProgrammingSource(source.id)}
+                                        className="text-red-500 hover:text-red-600 font-medium text-sm"
                                       >
-                                        + Add workout
+                                        {source.isAutomatic ? "Hide source" : "Delete source"}
                                       </button>
-                                    )}
+                                    </div>
                                   </div>
                                 ) : (
                                   <>
@@ -1037,22 +1055,24 @@ export default function WorkoutsPage() {
                                         )}
                                       </div>
                                     ))}
-                                    {!source.isAutomatic && (
-                                      <div className="p-3 border-t border-gray-200 flex justify-between items-center">
+                                    <div className="p-3 border-t border-gray-200 flex justify-between items-center">
+                                      {!source.isAutomatic ? (
                                         <button
                                           onClick={() => setShowAddWorkoutModal(source.id)}
                                           className="text-blue-600 hover:text-blue-700 font-medium text-sm"
                                         >
                                           + Add workout
                                         </button>
-                                        <button
-                                          onClick={() => handleDeleteProgrammingSource(source.id)}
-                                          className="text-red-500 hover:text-red-600 font-medium text-sm"
-                                        >
-                                          Delete source
-                                        </button>
-                                      </div>
-                                    )}
+                                      ) : (
+                                        <span></span>
+                                      )}
+                                      <button
+                                        onClick={() => handleDeleteProgrammingSource(source.id)}
+                                        className="text-red-500 hover:text-red-600 font-medium text-sm"
+                                      >
+                                        {source.isAutomatic ? "Hide source" : "Delete source"}
+                                      </button>
+                                    </div>
                                   </>
                                 )}
                               </div>
