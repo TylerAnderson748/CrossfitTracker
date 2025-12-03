@@ -181,6 +181,7 @@ export const LIFT_CATEGORIES: WorkoutCategory[] = [
       { name: "Bench Press", description: "Barbell bench press", type: "lift" },
       { name: "Strict Press", description: "Shoulder press", type: "lift" },
       { name: "Push Press", description: "Push press", type: "lift" },
+      { name: "Jane Lift", description: "Custom benchmark lift", type: "lift" },
     ],
   },
   {
