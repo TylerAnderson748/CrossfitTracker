@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { collection, query, where, getDocs, addDoc, Timestamp } from "firebase/firestore";
+import { collection, query, where, getDocs, addDoc, updateDoc, doc, Timestamp } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
 import { Gym } from "@/lib/types";
@@ -73,6 +73,11 @@ export default function GymPage() {
         coachIds: [],
         memberIds: [],
         createdAt: Timestamp.now(),
+      });
+
+      // Set gymId on the owner's user document
+      await updateDoc(doc(db, "users", user.id), {
+        gymId: gymRef.id,
       });
 
       // Create the default "Members" group for this gym

@@ -413,6 +413,10 @@ export default function GymDetailPage() {
       await updateDoc(doc(db, "gyms", gymId), {
         memberIds: arrayUnion(request.userId),
       });
+      // Set gymId on the user document
+      await updateDoc(doc(db, "users", request.userId), {
+        gymId: gymId,
+      });
       // Update request status
       await updateDoc(doc(db, "gymMembershipRequests", request.id), {
         status: "approved",
