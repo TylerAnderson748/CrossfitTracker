@@ -104,6 +104,11 @@ function LiftPageContent() {
     if (!liftName) return;
     setLoadingLeaderboard(true);
     try {
+      // Check if this is a preset lift (standard benchmark)
+      const allLifts = getAllLifts();
+      const liftNameLower = liftName.toLowerCase().trim();
+      const isPresetLift = allLifts.some(l => l.name.toLowerCase().trim() === liftNameLower);
+
       // Fetch all lift results and filter client-side for case-insensitive matching
       const q = query(
         collection(db, "liftResults"),
@@ -116,8 +121,12 @@ function LiftPageContent() {
       })) as LiftResult[];
 
       // Case-insensitive match for lift name (iOS uses liftTitle field)
-      const liftNameLower = liftName.toLowerCase().trim();
       results = results.filter((r) => r.liftTitle?.toLowerCase().trim() === liftNameLower);
+
+      // For custom (non-preset) lifts, only show current user's entries
+      if (!isPresetLift && user) {
+        results = results.filter((r) => r.userId === user.id);
+      }
 
       // Filter by reps
       results = results.filter((r) => r.reps === selectedReps);

@@ -106,6 +106,11 @@ function SkillPageContent() {
     if (!skillName) return;
     setLoadingLeaderboard(true);
     try {
+      // Check if this is a preset skill (standard benchmark)
+      const allSkills = getAllSkills();
+      const skillNameLower = skillName.toLowerCase().trim();
+      const isPresetSkill = allSkills.some(s => s.name.toLowerCase().trim() === skillNameLower);
+
       const q = query(
         collection(db, "skillResults"),
         limit(500)
@@ -117,8 +122,12 @@ function SkillPageContent() {
       })) as SkillResult[];
 
       // Case-insensitive match for skill name
-      const skillNameLower = skillName.toLowerCase().trim();
       results = results.filter((r) => r.skillTitle?.toLowerCase().trim() === skillNameLower);
+
+      // For custom (non-preset) skills, only show current user's entries
+      if (!isPresetSkill && user) {
+        results = results.filter((r) => r.userId === user.id);
+      }
 
       // Filter by gym if scope is gym
       if (leaderboardScope === "gym" && user?.gymId) {
