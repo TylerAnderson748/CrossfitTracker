@@ -882,9 +882,10 @@ export default function WorkoutsPage() {
                     <h2 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
                       <span className="text-xl">📝</span>
                       My Saved {workoutType === "wod" ? "WODs" : workoutType === "lift" ? "Lifts" : "Skills"}
+                      <span className="text-sm font-normal text-gray-500">({currentCustomWorkouts.length})</span>
                     </h2>
-                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                      {currentCustomWorkouts.slice(0, 5).map((workout, idx) => (
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden max-h-80 overflow-y-auto">
+                      {currentCustomWorkouts.map((workout, idx) => (
                         <div
                           key={`custom-${workout.name}-${idx}`}
                           className={`flex items-center p-4 hover:bg-gray-50 transition-colors ${
@@ -925,13 +926,6 @@ export default function WorkoutsPage() {
                           </button>
                         </div>
                       ))}
-                      {currentCustomWorkouts.length > 5 && (
-                        <div className="px-4 py-3 bg-gray-50 text-center border-t border-gray-100">
-                          <span className="text-sm text-gray-500">
-                            +{currentCustomWorkouts.length - 5} more saved {workoutType === "wod" ? "WODs" : workoutType === "lift" ? "lifts" : "skills"}
-                          </span>
-                        </div>
-                      )}
                     </div>
                   </div>
                 )}
