@@ -63,15 +63,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setStoredAccounts(getStoredAccountsFromStorage());
   }, []);
 
-  // Sync gymId for users who are members of a gym but don't have gymId set
+  // Sync gymId for users - verifies current gymId is valid or finds a new one
   const syncUserGymId = async (userId: string, currentGymId: string | undefined) => {
     console.log("syncUserGymId called with userId:", userId, "currentGymId:", currentGymId);
-    if (currentGymId) {
-      console.log("User already has gymId, skipping sync");
-      return;
-    }
 
     try {
+      // If user has a gymId, verify they're still a member/coach/owner
+      if (currentGymId) {
+        console.log("Verifying user still belongs to gym:", currentGymId);
+        const gymDoc = await getDoc(doc(db, "gyms", currentGymId));
+
+        if (gymDoc.exists()) {
+          const gymData = gymDoc.data();
+          const isOwner = gymData.ownerId === userId;
+          const isCoach = gymData.coachIds?.includes(userId);
+          const isMember = gymData.memberIds?.includes(userId);
+
+          if (isOwner || isCoach || isMember) {
+            console.log("User still belongs to gym, gymId is valid");
+            return currentGymId;
+          }
+        }
+
+        // User no longer belongs to this gym, clear it
+        console.log("User no longer belongs to gym, clearing gymId...");
+        await updateDoc(doc(db, "users", userId), { gymId: null });
+      }
+
       // Check if user is owner of any gym
       console.log("Checking if user is gym owner...");
       const ownerQuery = query(collection(db, "gyms"), where("ownerId", "==", userId));
