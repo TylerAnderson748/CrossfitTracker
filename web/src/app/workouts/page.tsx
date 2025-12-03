@@ -284,7 +284,7 @@ export default function WorkoutsPage() {
         isAutomatic: false,
       }));
 
-      // Auto-add gym as a programming source if user has one
+      // Auto-add gym and groups as programming sources if user has a gym
       const automaticSources: ProgrammingSource[] = [];
       const automaticWorkouts: ProgrammedWorkout[] = [];
 
