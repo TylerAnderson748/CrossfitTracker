@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { collection, query, where, getDocs, orderBy, limit, deleteDoc, doc, addDoc, Timestamp } from "firebase/firestore";
+import { collection, query, where, getDocs, getDoc, orderBy, limit, deleteDoc, doc, addDoc, Timestamp } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
 import { WorkoutLog, formatResult } from "@/lib/types";
@@ -36,8 +36,11 @@ interface GymWorkout {
 interface ProgrammingSource {
   id: string;
   name: string;
-  type: "gym" | "online" | "pt" | "other";
+  type: "gym" | "online" | "pt" | "other" | "group";
   createdAt: Date;
+  isAutomatic?: boolean; // true for gym/group sources that are auto-added
+  gymId?: string;
+  groupId?: string;
 }
 
 interface ProgrammedWorkout {
@@ -261,81 +264,150 @@ export default function WorkoutsPage() {
 
       setCustomSkills(customSkillsList);
 
-      // Fetch gym programming workouts if user has a gym
-      if (user.gymId) {
-        const now = new Date();
-        const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-
-        const gymProgrammingQuery = query(
-          collection(db, "scheduledWorkouts"),
-          where("gymId", "==", user.gymId)
-        );
-        const gymProgrammingSnapshot = await getDocs(gymProgrammingQuery);
-
-        const gymWorkoutsList: GymWorkout[] = [];
-        const seenNames = new Set<string>();
-
-        gymProgrammingSnapshot.docs.forEach((doc) => {
-          const data = doc.data();
-          // Check each component in the workout
-          const components = data.components || [];
-          components.forEach((component: { title?: string; description?: string; type?: string; scoringType?: string }) => {
-            const name = component.title;
-            if (name && !seenNames.has(name.toLowerCase())) {
-              seenNames.add(name.toLowerCase());
-              const componentType = component.type === "lift" ? "lift" : component.type === "skill" ? "skill" : "wod";
-              gymWorkoutsList.push({
-                name,
-                description: component.description || "",
-                type: componentType,
-                scoringType: component.scoringType,
-                scheduledDate: data.date?.toDate?.(),
-              });
-            }
-          });
-        });
-
-        setGymWorkouts(gymWorkoutsList.slice(0, 20));
-      }
-
-      // Fetch programming sources
+      // Fetch user-created programming sources
       const sourcesQuery = query(
         collection(db, "programmingSources"),
         where("userId", "==", user.id)
       );
       const sourcesSnapshot = await getDocs(sourcesQuery);
-      const sourcesList: ProgrammingSource[] = sourcesSnapshot.docs.map((doc) => ({
-        id: doc.id,
-        name: doc.data().name,
-        type: doc.data().type,
-        createdAt: doc.data().createdAt?.toDate?.() || new Date(),
+      const userSourcesList: ProgrammingSource[] = sourcesSnapshot.docs.map((docSnap) => ({
+        id: docSnap.id,
+        name: docSnap.data().name,
+        type: docSnap.data().type,
+        createdAt: docSnap.data().createdAt?.toDate?.() || new Date(),
+        isAutomatic: false,
       }));
-      setProgrammingSources(sourcesList);
 
-      // Fetch programmed workouts for all sources
-      if (sourcesList.length > 0) {
-        const sourceIds = sourcesList.map(s => s.id);
-        const workoutsQuery = query(
-          collection(db, "programmedWorkouts"),
-          where("userId", "==", user.id)
+      // Auto-add gym as a programming source if user has one
+      const automaticSources: ProgrammingSource[] = [];
+      const automaticWorkouts: ProgrammedWorkout[] = [];
+
+      if (user.gymId) {
+        // Fetch gym info
+        const gymDoc = await getDoc(doc(db, "gyms", user.gymId));
+        if (gymDoc.exists()) {
+          const gymData = gymDoc.data();
+          const gymSourceId = `gym-${user.gymId}`;
+
+          automaticSources.push({
+            id: gymSourceId,
+            name: gymData.name || "My Gym",
+            type: "gym",
+            createdAt: new Date(),
+            isAutomatic: true,
+            gymId: user.gymId,
+          });
+
+          // Fetch gym scheduled workouts
+          const gymProgrammingQuery = query(
+            collection(db, "scheduledWorkouts"),
+            where("gymId", "==", user.gymId)
+          );
+          const gymProgrammingSnapshot = await getDocs(gymProgrammingQuery);
+
+          // Convert gym scheduled workouts to programmed workouts
+          gymProgrammingSnapshot.docs.forEach((docSnap) => {
+            const data = docSnap.data();
+            const components = data.components || [];
+            components.forEach((component: { title?: string; description?: string; type?: string; scoringType?: string }, idx: number) => {
+              if (component.title) {
+                const componentType = component.type === "lift" ? "lift" : component.type === "skill" ? "skill" : "wod";
+                automaticWorkouts.push({
+                  id: `gym-workout-${docSnap.id}-${idx}`,
+                  name: component.title,
+                  description: component.description || "",
+                  type: componentType as "wod" | "lift" | "skill",
+                  scoringType: component.scoringType,
+                  sourceId: gymSourceId,
+                  sourceName: gymData.name || "My Gym",
+                  scheduledDate: data.date?.toDate?.(),
+                });
+              }
+            });
+          });
+        }
+
+        // Fetch groups user is a member of
+        const groupsQuery = query(
+          collection(db, "groups"),
+          where("gymId", "==", user.gymId)
         );
-        const workoutsSnapshot = await getDocs(workoutsQuery);
-        const workoutsList: ProgrammedWorkout[] = workoutsSnapshot.docs.map((doc) => {
-          const data = doc.data();
-          const source = sourcesList.find(s => s.id === data.sourceId);
-          return {
-            id: doc.id,
-            name: data.name,
-            description: data.description || "",
-            type: data.type || "wod",
-            scoringType: data.scoringType,
-            sourceId: data.sourceId,
-            sourceName: source?.name || "Unknown",
-            scheduledDate: data.scheduledDate?.toDate?.(),
-          };
-        });
-        setProgrammedWorkouts(workoutsList);
+        const groupsSnapshot = await getDocs(groupsQuery);
+
+        for (const groupDoc of groupsSnapshot.docs) {
+          const groupData = groupDoc.data();
+          const memberIds = groupData.memberIds || [];
+
+          // Check if user is a member of this group
+          if (memberIds.includes(user.id)) {
+            const groupSourceId = `group-${groupDoc.id}`;
+
+            automaticSources.push({
+              id: groupSourceId,
+              name: groupData.name || "Group",
+              type: "group",
+              createdAt: new Date(),
+              isAutomatic: true,
+              groupId: groupDoc.id,
+            });
+
+            // Fetch scheduled workouts for this group
+            const groupWorkoutsQuery = query(
+              collection(db, "scheduledWorkouts"),
+              where("groupId", "==", groupDoc.id)
+            );
+            const groupWorkoutsSnapshot = await getDocs(groupWorkoutsQuery);
+
+            groupWorkoutsSnapshot.docs.forEach((workoutDoc) => {
+              const data = workoutDoc.data();
+              const components = data.components || [];
+              components.forEach((component: { title?: string; description?: string; type?: string; scoringType?: string }, idx: number) => {
+                if (component.title) {
+                  const componentType = component.type === "lift" ? "lift" : component.type === "skill" ? "skill" : "wod";
+                  automaticWorkouts.push({
+                    id: `group-workout-${workoutDoc.id}-${idx}`,
+                    name: component.title,
+                    description: component.description || "",
+                    type: componentType as "wod" | "lift" | "skill",
+                    scoringType: component.scoringType,
+                    sourceId: groupSourceId,
+                    sourceName: groupData.name || "Group",
+                    scheduledDate: data.date?.toDate?.(),
+                  });
+                }
+              });
+            });
+          }
+        }
       }
+
+      // Combine automatic and user-created sources
+      const allSources = [...automaticSources, ...userSourcesList];
+      setProgrammingSources(allSources);
+
+      // Fetch user-created programmed workouts
+      const workoutsQuery = query(
+        collection(db, "programmedWorkouts"),
+        where("userId", "==", user.id)
+      );
+      const workoutsSnapshot = await getDocs(workoutsQuery);
+      const userWorkoutsList: ProgrammedWorkout[] = workoutsSnapshot.docs.map((docSnap) => {
+        const data = docSnap.data();
+        const source = userSourcesList.find(s => s.id === data.sourceId);
+        return {
+          id: docSnap.id,
+          name: data.name,
+          description: data.description || "",
+          type: data.type || "wod",
+          scoringType: data.scoringType,
+          sourceId: data.sourceId,
+          sourceName: source?.name || "Unknown",
+          scheduledDate: data.scheduledDate?.toDate?.(),
+        };
+      });
+
+      // Combine automatic and user-created workouts
+      setProgrammedWorkouts([...automaticWorkouts, ...userWorkoutsList]);
     } catch (error) {
       console.error("Error fetching data:", error);
     } finally {
@@ -859,7 +931,7 @@ export default function WorkoutsPage() {
                             >
                               <div className="flex items-center gap-3">
                                 <span className="text-lg">
-                                  {source.type === "gym" ? "🏋️" : source.type === "online" ? "🌐" : source.type === "pt" ? "👤" : "📝"}
+                                  {source.type === "gym" ? "🏋️" : source.type === "group" ? "👥" : source.type === "online" ? "🌐" : source.type === "pt" ? "👤" : "📝"}
                                 </span>
                                 <div>
                                   <h3 className="font-medium text-gray-900">{source.name}</h3>
@@ -871,11 +943,12 @@ export default function WorkoutsPage() {
                               <div className="flex items-center gap-2">
                                 <span className={`px-2 py-0.5 text-xs rounded ${
                                   source.type === "gym" ? "bg-orange-100 text-orange-700" :
+                                  source.type === "group" ? "bg-teal-100 text-teal-700" :
                                   source.type === "online" ? "bg-blue-100 text-blue-700" :
                                   source.type === "pt" ? "bg-purple-100 text-purple-700" :
                                   "bg-gray-100 text-gray-700"
                                 }`}>
-                                  {source.type === "gym" ? "Gym" : source.type === "online" ? "Online" : source.type === "pt" ? "PT" : "Other"}
+                                  {source.type === "gym" ? "Gym" : source.type === "group" ? "Group" : source.type === "online" ? "Online" : source.type === "pt" ? "PT" : "Other"}
                                 </span>
                                 <svg
                                   className={`w-5 h-5 text-gray-400 transition-transform ${isExpanded ? "rotate-90" : ""}`}
@@ -892,13 +965,17 @@ export default function WorkoutsPage() {
                               <div className="border-t border-gray-100 bg-gray-50">
                                 {sourceWorkouts.length === 0 ? (
                                   <div className="p-4 text-center">
-                                    <p className="text-gray-500 text-sm mb-2">No {workoutType === "wod" ? "WODs" : workoutType === "lift" ? "lifts" : "skills"} added yet</p>
-                                    <button
-                                      onClick={() => setShowAddWorkoutModal(source.id)}
-                                      className="text-blue-600 hover:text-blue-700 font-medium text-sm"
-                                    >
-                                      + Add workout
-                                    </button>
+                                    <p className="text-gray-500 text-sm mb-2">
+                                      No {workoutType === "wod" ? "WODs" : workoutType === "lift" ? "lifts" : "skills"} {source.isAutomatic ? "programmed" : "added"} yet
+                                    </p>
+                                    {!source.isAutomatic && (
+                                      <button
+                                        onClick={() => setShowAddWorkoutModal(source.id)}
+                                        className="text-blue-600 hover:text-blue-700 font-medium text-sm"
+                                      >
+                                        + Add workout
+                                      </button>
+                                    )}
                                   </div>
                                 ) : (
                                   <>
@@ -938,31 +1015,35 @@ export default function WorkoutsPage() {
                                             <p className="text-gray-500 text-sm truncate">{workout.description}</p>
                                           )}
                                         </Link>
-                                        <button
-                                          onClick={() => handleDeleteProgrammedWorkout(workout.id)}
-                                          className="ml-3 p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors shrink-0"
-                                          title="Delete workout"
-                                        >
-                                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                          </svg>
-                                        </button>
+                                        {!source.isAutomatic && (
+                                          <button
+                                            onClick={() => handleDeleteProgrammedWorkout(workout.id)}
+                                            className="ml-3 p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors shrink-0"
+                                            title="Delete workout"
+                                          >
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                            </svg>
+                                          </button>
+                                        )}
                                       </div>
                                     ))}
-                                    <div className="p-3 border-t border-gray-200 flex justify-between items-center">
-                                      <button
-                                        onClick={() => setShowAddWorkoutModal(source.id)}
-                                        className="text-blue-600 hover:text-blue-700 font-medium text-sm"
-                                      >
-                                        + Add workout
-                                      </button>
-                                      <button
-                                        onClick={() => handleDeleteProgrammingSource(source.id)}
-                                        className="text-red-500 hover:text-red-600 font-medium text-sm"
-                                      >
-                                        Delete source
-                                      </button>
-                                    </div>
+                                    {!source.isAutomatic && (
+                                      <div className="p-3 border-t border-gray-200 flex justify-between items-center">
+                                        <button
+                                          onClick={() => setShowAddWorkoutModal(source.id)}
+                                          className="text-blue-600 hover:text-blue-700 font-medium text-sm"
+                                        >
+                                          + Add workout
+                                        </button>
+                                        <button
+                                          onClick={() => handleDeleteProgrammingSource(source.id)}
+                                          className="text-red-500 hover:text-red-600 font-medium text-sm"
+                                        >
+                                          Delete source
+                                        </button>
+                                      </div>
+                                    )}
                                   </>
                                 )}
                               </div>
