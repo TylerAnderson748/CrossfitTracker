@@ -65,35 +65,53 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Sync gymId for users who are members of a gym but don't have gymId set
   const syncUserGymId = async (userId: string, currentGymId: string | undefined) => {
-    if (currentGymId) return; // Already has gymId set
+    console.log("syncUserGymId called with userId:", userId, "currentGymId:", currentGymId);
+    if (currentGymId) {
+      console.log("User already has gymId, skipping sync");
+      return;
+    }
 
     try {
       // Check if user is owner of any gym
+      console.log("Checking if user is gym owner...");
       const ownerQuery = query(collection(db, "gyms"), where("ownerId", "==", userId));
       const ownerSnapshot = await getDocs(ownerQuery);
+      console.log("Owner query results:", ownerSnapshot.size, "gyms found");
       if (!ownerSnapshot.empty) {
         const gymId = ownerSnapshot.docs[0].id;
+        console.log("User is owner of gym:", gymId, "- updating user document...");
         await updateDoc(doc(db, "users", userId), { gymId });
+        console.log("Successfully set gymId on user document");
         return gymId;
       }
 
       // Check if user is a coach of any gym
+      console.log("Checking if user is gym coach...");
       const coachQuery = query(collection(db, "gyms"), where("coachIds", "array-contains", userId));
       const coachSnapshot = await getDocs(coachQuery);
+      console.log("Coach query results:", coachSnapshot.size, "gyms found");
       if (!coachSnapshot.empty) {
         const gymId = coachSnapshot.docs[0].id;
+        console.log("User is coach of gym:", gymId, "- updating user document...");
         await updateDoc(doc(db, "users", userId), { gymId });
+        console.log("Successfully set gymId on user document");
         return gymId;
       }
 
       // Check if user is a member of any gym
+      console.log("Checking if user is gym member...");
       const memberQuery = query(collection(db, "gyms"), where("memberIds", "array-contains", userId));
       const memberSnapshot = await getDocs(memberQuery);
+      console.log("Member query results:", memberSnapshot.size, "gyms found");
       if (!memberSnapshot.empty) {
         const gymId = memberSnapshot.docs[0].id;
+        console.log("User is member of gym:", gymId, "- updating user document...");
         await updateDoc(doc(db, "users", userId), { gymId });
+        console.log("Successfully set gymId on user document");
         return gymId;
       }
+
+      console.log("User is not associated with any gym");
     } catch (error) {
       console.error("Error syncing gymId:", error);
     }
