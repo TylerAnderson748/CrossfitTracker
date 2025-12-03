@@ -532,6 +532,10 @@ export default function GymDetailPage() {
       await updateDoc(doc(db, "gyms", gymId), {
         memberIds: arrayRemove(member.id),
       });
+      // Clear gymId from the user document
+      await updateDoc(doc(db, "users", member.id), {
+        gymId: null,
+      });
       fetchGymData();
     } catch (error) {
       console.error("Error removing member:", error);
