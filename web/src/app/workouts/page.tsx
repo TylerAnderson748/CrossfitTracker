@@ -466,8 +466,10 @@ export default function WorkoutsPage() {
       setNewSourceName("");
       setNewSourceType("online");
       setShowAddSourceModal(false);
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error adding programming source:", error);
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      alert(`Failed to add source: ${errorMessage}`);
     }
   };
 
