@@ -52,6 +52,7 @@ interface ProgrammedWorkout {
   sourceId: string;
   sourceName: string;
   scheduledDate?: Date;
+  groupNames?: string[]; // Groups this workout belongs to
 }
 
 export default function WorkoutsPage() {
@@ -308,16 +309,18 @@ export default function WorkoutsPage() {
             gymId: user.gymId,
           });
 
-          // Fetch groups user is a member of
+          // Fetch groups and create a map of groupId to groupName
           const groupsQuery = query(
             collection(db, "groups"),
             where("gymId", "==", user.gymId)
           );
           const groupsSnapshot = await getDocs(groupsQuery);
           const userGroupIds: string[] = [];
+          const groupIdToName: Record<string, string> = {};
 
           for (const groupDoc of groupsSnapshot.docs) {
             const groupData = groupDoc.data();
+            groupIdToName[groupDoc.id] = groupData.name || "Unknown Group";
             const memberIds = groupData.memberIds || [];
             if (memberIds.includes(user.id)) {
               userGroupIds.push(groupDoc.id);
@@ -345,7 +348,18 @@ export default function WorkoutsPage() {
             const isInGroupArray = workoutGroupIds.length > 0 && workoutGroupIds.some((gid: string) => userGroupIds.includes(gid));
             const hasAccess = hasNoGroupRestriction || isInSingleGroup || isInGroupArray;
 
-            console.log("Workout:", data.date?.toDate?.()?.toLocaleDateString(), "groupId:", workoutGroupId, "groupIds:", workoutGroupIds, "hasAccess:", hasAccess);
+            // Get group names for this workout
+            const workoutGroupNames: string[] = [];
+            if (workoutGroupId && groupIdToName[workoutGroupId]) {
+              workoutGroupNames.push(groupIdToName[workoutGroupId]);
+            }
+            workoutGroupIds.forEach((gid: string) => {
+              if (groupIdToName[gid] && !workoutGroupNames.includes(groupIdToName[gid])) {
+                workoutGroupNames.push(groupIdToName[gid]);
+              }
+            });
+
+            console.log("Workout:", data.date?.toDate?.()?.toLocaleDateString(), "groupId:", workoutGroupId, "groupIds:", workoutGroupIds, "groups:", workoutGroupNames, "hasAccess:", hasAccess);
 
             if (hasAccess) {
               const components = data.components || [];
@@ -361,6 +375,7 @@ export default function WorkoutsPage() {
                     sourceId: gymSourceId,
                     sourceName: gymName,
                     scheduledDate: data.date?.toDate?.(),
+                    groupNames: workoutGroupNames.length > 0 ? workoutGroupNames : undefined,
                   });
                 }
               });
@@ -1038,7 +1053,7 @@ export default function WorkoutsPage() {
                                           }
                                           className="flex-1 min-w-0"
                                         >
-                                          <div className="flex items-center gap-2">
+                                          <div className="flex items-center gap-2 flex-wrap">
                                             <h4 className="font-medium text-gray-800">{workout.name}</h4>
                                             {workout.scoringType && (
                                               <span className={`px-2 py-0.5 text-xs rounded ${
@@ -1052,6 +1067,11 @@ export default function WorkoutsPage() {
                                                  workout.scoringType === "emom" ? "EMOM" : workout.scoringType}
                                               </span>
                                             )}
+                                            {workout.groupNames && workout.groupNames.map((groupName, gIdx) => (
+                                              <span key={gIdx} className="px-2 py-0.5 text-xs rounded bg-teal-100 text-teal-700">
+                                                {groupName}
+                                              </span>
+                                            ))}
                                           </div>
                                           {workout.description && (
                                             <p className="text-gray-500 text-sm truncate">{workout.description}</p>
