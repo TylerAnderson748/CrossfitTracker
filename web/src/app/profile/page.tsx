@@ -48,6 +48,8 @@ export default function ProfilePage() {
   const [leavingGroup, setLeavingGroup] = useState(false);
   const [editingAIPrefs, setEditingAIPrefs] = useState(false);
   const [savingAIPrefs, setSavingAIPrefs] = useState(false);
+  const [showCancelAICoachModal, setShowCancelAICoachModal] = useState(false);
+  const [cancelingAICoach, setCancelingAICoach] = useState(false);
   const [aiPrefsForm, setAiPrefsForm] = useState<AICoachPreferences>({
     goals: "",
     injuries: "",
@@ -210,6 +212,24 @@ export default function ProfilePage() {
         ? prev.focusAreas.filter(a => a !== area)
         : [...(prev.focusAreas || []), area],
     }));
+  };
+
+  const handleCancelAICoach = async () => {
+    if (!user) return;
+
+    setCancelingAICoach(true);
+    try {
+      await updateDoc(doc(db, "users", user.id), {
+        "aiTrainerSubscription.status": "canceled",
+      });
+      await refreshUser();
+      setShowCancelAICoachModal(false);
+    } catch (error) {
+      console.error("Error canceling AI Coach:", error);
+      alert("Failed to cancel subscription. Please try again.");
+    } finally {
+      setCancelingAICoach(false);
+    }
   };
 
   const handleSignOut = async () => {
@@ -713,6 +733,14 @@ export default function ProfilePage() {
                   </li>
                 </ul>
               </div>
+
+              {/* Cancel Button */}
+              <button
+                onClick={() => setShowCancelAICoachModal(true)}
+                className="mt-4 text-sm text-purple-300 hover:text-white transition-colors"
+              >
+                Cancel Subscription
+              </button>
             </div>
           ) : (
             <div>
@@ -1030,6 +1058,51 @@ export default function ProfilePage() {
                 className="flex-1 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-red-300 transition-colors"
               >
                 {leavingGroup ? "Unsubscribing..." : "Unsubscribe"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cancel AI Coach Modal */}
+      {showCancelAICoachModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl p-6 w-full max-w-md">
+            <div className="text-center mb-6">
+              <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+              </div>
+              <h2 className="text-xl font-bold text-gray-900 mb-2">Cancel AI Coach?</h2>
+              <p className="text-gray-600 text-sm">
+                Are you sure you want to cancel your AI Coach subscription?
+              </p>
+            </div>
+
+            <div className="bg-gray-50 rounded-lg p-4 mb-6">
+              <h4 className="font-medium text-gray-900 mb-2">What you&apos;ll lose:</h4>
+              <ul className="text-sm text-gray-600 space-y-1">
+                <li>• Personalized weight recommendations</li>
+                <li>• AI-powered scaling suggestions</li>
+                <li>• Smart workout analysis</li>
+                <li>• Unlimited AI programming conversations</li>
+              </ul>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowCancelAICoachModal(false)}
+                className="flex-1 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium"
+              >
+                Keep AI Coach
+              </button>
+              <button
+                onClick={handleCancelAICoach}
+                disabled={cancelingAICoach}
+                className="flex-1 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:bg-gray-100 transition-colors"
+              >
+                {cancelingAICoach ? "Canceling..." : "Cancel Subscription"}
               </button>
             </div>
           </div>
