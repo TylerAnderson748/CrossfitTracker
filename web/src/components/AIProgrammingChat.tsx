@@ -265,13 +265,19 @@ export default function AIProgrammingChat({ gymId, userId, groups, onPublish }: 
       for (const day of workouts) {
         if (day.isRestDay) continue;
 
-        const components: WorkoutComponent[] = day.components.map((comp, idx) => ({
-          id: `comp-${idx}`,
-          type: comp.type,
-          title: comp.title,
-          description: comp.description,
-          scoringType: comp.scoringType,
-        }));
+        const components: WorkoutComponent[] = day.components.map((comp, idx) => {
+          const component: WorkoutComponent = {
+            id: `comp-${idx}`,
+            type: comp.type,
+            title: comp.title,
+            description: comp.description,
+          };
+          // Only add scoringType if it exists (typically for WODs)
+          if (comp.scoringType) {
+            component.scoringType = comp.scoringType;
+          }
+          return component;
+        });
 
         const scheduledWorkout = {
           gymId,
