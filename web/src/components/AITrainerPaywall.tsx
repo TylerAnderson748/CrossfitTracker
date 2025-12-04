@@ -35,6 +35,9 @@ export default function AITrainerPaywall({ onClose }: AITrainerPaywallProps) {
   ];
 
   const handleSubscribe = async () => {
+    console.log("handleSubscribe called!");
+    console.log("router:", router);
+    alert("DEBUG: handleSubscribe called - about to navigate to /subscribe");
     setIsLoading(true);
     // Navigate to the subscription page
     router.push("/subscribe");
