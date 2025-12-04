@@ -10,7 +10,6 @@ import { ScheduledWorkout, ScheduledTimeSlot, workoutComponentLabels, workoutCom
 import { getAllWods, getAllLifts, Workout } from "@/lib/workoutData";
 import Navigation from "@/components/Navigation";
 import PersonalAITrainer from "@/components/PersonalAITrainer";
-import AITrainerPaywall from "@/components/AITrainerPaywall";
 
 // Combined result type for both WODs and lifts
 interface WorkoutResult {
@@ -648,23 +647,19 @@ export default function WeeklyPlanPage() {
           </button>
         </div>
 
-        {/* AI Personal Trainer Section */}
-        {user && (
+        {/* AI Personal Trainer Section - Only show for subscribers */}
+        {user && user.aiTrainerSubscription &&
+         (user.aiTrainerSubscription.status === "active" || user.aiTrainerSubscription.status === "trialing") && (
           <div className="mb-4">
-            {user.aiTrainerSubscription &&
-             (user.aiTrainerSubscription.status === "active" || user.aiTrainerSubscription.status === "trialing") ? (
-              <PersonalAITrainer
-                userId={user.id}
-                gymId={user.gymId}
-                userPreferences={user.aiCoachPreferences}
-                todayWorkout={workouts.find(w => {
-                  const workoutDate = w.date instanceof Timestamp ? w.date.toDate() : new Date(w.date);
-                  return workoutDate.toDateString() === new Date().toDateString();
-                }) || null}
-              />
-            ) : (
-              <AITrainerPaywall userEmail={user.email} />
-            )}
+            <PersonalAITrainer
+              userId={user.id}
+              gymId={user.gymId}
+              userPreferences={user.aiCoachPreferences}
+              todayWorkout={workouts.find(w => {
+                const workoutDate = w.date instanceof Timestamp ? w.date.toDate() : new Date(w.date);
+                return workoutDate.toDateString() === new Date().toDateString();
+              }) || null}
+            />
           </div>
         )}
 
