@@ -288,11 +288,10 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
         const sixMonthsAgo = new Date();
         sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
 
-        // Query scheduled workouts from the last 6 months
+        // Query all scheduled workouts for this gym (filter by date client-side to avoid index requirement)
         const workoutsQuery = query(
           collection(db, "scheduledWorkouts"),
-          where("gymId", "==", gymId),
-          where("date", ">=", Timestamp.fromDate(sixMonthsAgo))
+          where("gymId", "==", gymId)
         );
         const snapshot = await getDocs(workoutsQuery);
 
@@ -301,6 +300,11 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
 
         snapshot.docs.forEach(doc => {
           const data = doc.data();
+
+          // Check if workout is within last 6 months
+          const workoutDate = data.date?.toDate?.();
+          if (!workoutDate || workoutDate < sixMonthsAgo) return;
+
           // Add the main workout title if it exists
           if (data.wodTitle && !data.wodTitle.includes("Programming")) {
             usedWorkouts.add(data.wodTitle);
