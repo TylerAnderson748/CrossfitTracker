@@ -289,8 +289,12 @@ export default function AIProgrammingChat({ gymId, userId, groups, onPublish }: 
     setError(null);
 
     try {
+      console.log("Starting publish, total workouts:", workouts.length);
+
       // Create scheduled workouts for each day
       for (const day of workouts) {
+        console.log("Processing day:", day.dayOfWeek, "isRestDay:", day.isRestDay, "components:", day.components?.length);
+
         if (day.isRestDay) continue;
         if (!day.components || day.components.length === 0) continue;
 
