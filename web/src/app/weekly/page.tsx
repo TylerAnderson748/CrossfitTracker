@@ -916,8 +916,10 @@ export default function WeeklyPlanPage() {
                                 })()}
                               </div>
 
-                              {/* Action buttons */}
-                              <div className="flex items-center gap-1 ml-2 flex-wrap">
+                              {/* Action buttons and scaling info column */}
+                              <div className="flex flex-col gap-2 ml-2 min-w-[140px]">
+                                {/* Log buttons row */}
+                                <div className="flex items-center gap-1 flex-wrap">
                                 {/* Individual log buttons for each component type */}
                                 {(() => {
                                   const wodComponent = workout.components?.find(c => c.type === "wod");
@@ -1004,6 +1006,27 @@ export default function WeeklyPlanPage() {
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                                   </svg>
                                 </Link>
+                                </div>
+
+                                {/* Workout summary under buttons */}
+                                {workout.components && workout.components.length > 0 && (
+                                  <div className="text-xs space-y-1.5 bg-gray-100 rounded-lg p-2">
+                                    {workout.components.map((comp) => (
+                                      <div key={comp.id} className="flex items-start gap-1.5">
+                                        <span className={`px-1 py-0.5 rounded text-[10px] font-medium flex-shrink-0 ${
+                                          comp.type === "wod" ? "bg-orange-100 text-orange-700" :
+                                          comp.type === "lift" ? "bg-purple-100 text-purple-700" :
+                                          comp.type === "skill" ? "bg-green-100 text-green-700" :
+                                          comp.type === "warmup" ? "bg-yellow-100 text-yellow-700" :
+                                          "bg-gray-200 text-gray-700"
+                                        }`}>
+                                          {comp.type === "warmup" ? "WU" : comp.type === "cooldown" ? "CD" : comp.type.toUpperCase()}
+                                        </span>
+                                        <span className="text-gray-700 font-medium">{comp.title}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
                               </div>
                             </div>
 
