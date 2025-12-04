@@ -220,7 +220,7 @@ Respond in a friendly, coach-like tone. Use their actual numbers when giving rec
             </svg>
           </div>
           <div>
-            <h3 className="font-semibold">Your AI Trainer</h3>
+            <h3 className="font-semibold">Your AI Coach</h3>
             <p className="text-white/70 text-xs">Personalized scaling & advice</p>
           </div>
         </div>

@@ -48,7 +48,7 @@ export default function AITrainerPaywall({ onClose }: AITrainerPaywallProps) {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
           </svg>
         </div>
-        <h2 className="text-2xl font-bold mb-2">Unlock Your Personal AI Trainer</h2>
+        <h2 className="text-2xl font-bold mb-2">Unlock Your Personal AI Coach</h2>
         <p className="text-purple-200 text-sm">
           Get personalized scaling and weight recommendations based on your actual workout history
         </p>
@@ -143,7 +143,7 @@ export default function AITrainerPaywall({ onClose }: AITrainerPaywallProps) {
             Processing...
           </span>
         ) : (
-          "Start Your AI Training"
+          "Start Your AI Coaching"
         )}
       </button>
 
