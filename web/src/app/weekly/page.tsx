@@ -426,6 +426,12 @@ export default function WeeklyPlanPage() {
       // Fetch recent results for each workout
       const logsMap: { [key: string]: WorkoutResult[] } = {};
       for (const workout of filteredWorkouts) {
+        // Skip personal workouts (from scan) that don't have wodTitle
+        if (!workout.wodTitle) {
+          logsMap[workout.id] = [];
+          continue;
+        }
+
         const isLift = workout.workoutType?.toLowerCase().includes("lift");
 
         if (isLift) {
