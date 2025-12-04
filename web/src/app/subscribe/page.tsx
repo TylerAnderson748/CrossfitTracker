@@ -84,7 +84,7 @@ export default function SubscribePage() {
       // Coaches skip the goals step, go straight to programming
       if (variant === "coach") {
         await refreshUser();
-        router.push("/ai-coach/programming");
+        router.push("/programming");
       } else {
         setShowGoalsStep(true);
       }
@@ -123,7 +123,7 @@ export default function SubscribePage() {
       // Coaches skip the goals step, go straight to programming
       if (variant === "coach") {
         await refreshUser();
-        router.push("/ai-coach/programming");
+        router.push("/programming");
       } else {
         setShowGoalsStep(true);
       }
