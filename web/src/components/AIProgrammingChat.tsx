@@ -31,7 +31,7 @@ interface AIProgrammingChatProps {
   subscription?: AITrainerSubscription;
 }
 
-const getSystemPrompt = (preferences?: Omit<AIProgrammingPreferences, "gymId" | "updatedAt">) => {
+const getSystemPrompt = (preferences?: Omit<AIProgrammingPreferences, "gymId" | "updatedAt">, recentlyUsedWorkouts?: string[]) => {
   const today = new Date();
   const todayStr = today.toISOString().split('T')[0]; // YYYY-MM-DD format
   const dayOfWeek = today.toLocaleDateString('en-US', { weekday: 'long' });
@@ -94,8 +94,21 @@ ${prefParts.join("\n")}
     }
   }
 
+  // Build recently used workouts section
+  let recentlyUsedSection = "";
+  if (recentlyUsedWorkouts && recentlyUsedWorkouts.length > 0) {
+    recentlyUsedSection = `
+CRITICAL - AVOID THESE WORKOUTS (Used in the last 6 months):
+The following workouts have been programmed recently and MUST NOT be repeated for at least 6 months:
+${recentlyUsedWorkouts.join(", ")}
+
+DO NOT use any of the above workout names. Create NEW, unique workouts instead. This is very important for keeping programming fresh and varied.
+
+`;
+  }
+
   return `You are a CrossFit programming assistant helping gym owners and coaches create workout programming.
-${gymPreferencesSection}IMPORTANT: Today's date is ${todayStr} (${dayOfWeek}). Current month: ${monthName}. Current season: ${season}.
+${gymPreferencesSection}${recentlyUsedSection}IMPORTANT: Today's date is ${todayStr} (${dayOfWeek}). Current month: ${monthName}. Current season: ${season}.
 When generating workouts, start from today or the next upcoming day. Use real, current dates.
 
 When generating workouts, you MUST respond with valid JSON in this exact format:
@@ -261,6 +274,56 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
   const [showSettings, setShowSettings] = useState(false);
   const [preferencesDocId, setPreferencesDocId] = useState<string | null>(null);
   const [savingPreferences, setSavingPreferences] = useState(false);
+
+  // Recently used workouts (last 6 months) - to avoid repetition
+  const [recentlyUsedWorkouts, setRecentlyUsedWorkouts] = useState<string[]>([]);
+
+  // Load recently used workouts from the last 6 months
+  useEffect(() => {
+    const loadRecentWorkouts = async () => {
+      if (!gymId) return;
+
+      try {
+        // Get date 6 months ago
+        const sixMonthsAgo = new Date();
+        sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+
+        // Query scheduled workouts from the last 6 months
+        const workoutsQuery = query(
+          collection(db, "scheduledWorkouts"),
+          where("gymId", "==", gymId),
+          where("date", ">=", Timestamp.fromDate(sixMonthsAgo))
+        );
+        const snapshot = await getDocs(workoutsQuery);
+
+        // Extract unique workout names from components
+        const usedWorkouts = new Set<string>();
+
+        snapshot.docs.forEach(doc => {
+          const data = doc.data();
+          // Add the main workout title if it exists
+          if (data.wodTitle && !data.wodTitle.includes("Programming")) {
+            usedWorkouts.add(data.wodTitle);
+          }
+          // Extract component titles (WODs, lifts, skills)
+          if (data.components && Array.isArray(data.components)) {
+            data.components.forEach((comp: { type?: string; title?: string }) => {
+              if (comp.title && comp.type === "wod") {
+                // Only track WOD names to avoid repetition
+                usedWorkouts.add(comp.title);
+              }
+            });
+          }
+        });
+
+        setRecentlyUsedWorkouts(Array.from(usedWorkouts));
+      } catch (err) {
+        console.error("Error loading recent workouts:", err);
+      }
+    };
+
+    loadRecentWorkouts();
+  }, [gymId]);
 
   // Load existing sessions
   useEffect(() => {
@@ -566,7 +629,7 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
         `${msg.role === "user" ? "User" : "Assistant"}: ${msg.content}`
       ).join("\n\n");
 
-      const prompt = `${getSystemPrompt(preferences)}\n\nConversation so far:\n${conversationHistory}\n\nRespond to the user's latest message. Remember to output valid JSON only.`;
+      const prompt = `${getSystemPrompt(preferences, recentlyUsedWorkouts)}\n\nConversation so far:\n${conversationHistory}\n\nRespond to the user's latest message. Remember to output valid JSON only.`;
 
       const result = await model.generateContent(prompt);
       const response = result.response;
