@@ -331,16 +331,16 @@ IMPORTANT: Only respond with valid JSON. No additional text before or after the 
         order: idx,
       }));
 
-      // Create a personal scheduled workout (no gymId, personal userId)
+      // Create a personal workout in the personalWorkouts collection
       const personalWorkout = {
         userId: user.id,
         date: Timestamp.fromDate(workoutDate),
+        dateString: dateToUse, // YYYY-MM-DD format for reliable date comparison
         components,
         createdAt: Timestamp.now(),
-        isPersonal: true,
       };
 
-      await addDoc(collection(db, "scheduledWorkouts"), personalWorkout);
+      await addDoc(collection(db, "personalWorkouts"), personalWorkout);
 
       setSaveSuccess(`Saved ${generatedWorkouts.length} workout${generatedWorkouts.length > 1 ? "s" : ""} to your personal calendar for ${workoutDate.toLocaleDateString()}`);
       setShowDatePicker(false);
