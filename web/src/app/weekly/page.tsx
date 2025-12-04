@@ -1008,7 +1008,6 @@ export default function WeeklyPlanPage() {
                                   </div>
                                   );
                                 })()}
-                              </div>
                             </div>
 
                             {/* Recent Results */}
