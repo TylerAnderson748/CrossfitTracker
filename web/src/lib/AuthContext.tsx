@@ -22,6 +22,7 @@ interface AuthContextType {
   signIn: (email: string, password: string, saveAccount?: boolean) => Promise<void>;
   signUp: (email: string, password: string, userData: Partial<AppUser>) => Promise<void>;
   signOut: () => Promise<void>;
+  refreshUser: () => Promise<void>; // Refresh user data from Firestore
   // Multi-account management
   storedAccounts: StoredAccount[];
   switchAccount: (accountId: string) => Promise<void>;
@@ -238,6 +239,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   };
 
+  const refreshUser = async () => {
+    if (!firebaseUser) return;
+
+    const userDoc = await getDoc(doc(db, "users", firebaseUser.uid));
+    if (userDoc.exists()) {
+      const userData = { id: userDoc.id, ...userDoc.data() } as AppUser;
+      setUser(userData);
+    }
+  };
+
   const switchAccount = async (accountId: string) => {
     const account = storedAccounts.find((a) => a.id === accountId);
     if (!account) {
@@ -306,6 +317,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signIn,
         signUp,
         signOut,
+        refreshUser,
         storedAccounts,
         switchAccount,
         addAccount,

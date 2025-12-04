@@ -9,7 +9,7 @@ import Navigation from "@/components/Navigation";
 import { AITrainerSubscription, AICoachPreferences } from "@/lib/types";
 
 export default function SubscribePage() {
-  const { user, loading } = useAuth();
+  const { user, loading, refreshUser } = useAuth();
   const router = useRouter();
   const [selectedPlan, setSelectedPlan] = useState<"monthly" | "yearly">("monthly");
   const [isProcessing, setIsProcessing] = useState(false);
@@ -131,6 +131,8 @@ export default function SubscribePage() {
           updatedAt: Timestamp.now(),
         },
       });
+      // Refresh user data so subscription and preferences are available
+      await refreshUser();
       router.push("/weekly");
     } catch (error) {
       console.error("Error saving goals:", error);
@@ -140,7 +142,9 @@ export default function SubscribePage() {
     }
   };
 
-  const handleSkipGoals = () => {
+  const handleSkipGoals = async () => {
+    // Refresh user data so subscription is available
+    await refreshUser();
     router.push("/weekly");
   };
 

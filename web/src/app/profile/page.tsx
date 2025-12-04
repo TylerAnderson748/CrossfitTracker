@@ -34,7 +34,7 @@ interface GroupAddOn {
 }
 
 export default function ProfilePage() {
-  const { user, loading, switching, signOut } = useAuth();
+  const { user, loading, switching, signOut, refreshUser } = useAuth();
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -194,6 +194,7 @@ export default function ProfilePage() {
           updatedAt: Timestamp.now(),
         },
       });
+      await refreshUser();
       setEditingAIPrefs(false);
     } catch (error) {
       console.error("Error updating AI preferences:", error);
