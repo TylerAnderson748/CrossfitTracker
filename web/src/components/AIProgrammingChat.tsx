@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { collection, addDoc, updateDoc, doc, query, where, getDocs, orderBy, Timestamp, serverTimestamp } from "firebase/firestore";
+import { collection, addDoc, updateDoc, doc, query, where, getDocs, orderBy, Timestamp, serverTimestamp, deleteDoc } from "firebase/firestore";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { db } from "@/lib/firebase";
 import { AIProgrammingSession, AIChatMessage, AIGeneratedDay, WorkoutGroup, WorkoutComponent } from "@/lib/types";
@@ -107,6 +107,7 @@ export default function AIProgrammingChat({ gymId, userId, groups, onPublish }: 
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState("");
   const [isPublishing, setIsPublishing] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [loadingSessions, setLoadingSessions] = useState(true);
 
@@ -195,6 +196,142 @@ export default function AIProgrammingChat({ gymId, userId, groups, onPublish }: 
       setEditingTitle("");
     } catch (err) {
       console.error("Error updating session title:", err);
+    }
+  };
+
+  const deletePublishedWorkouts = async (sessionId: string) => {
+    if (!confirm("Are you sure you want to delete all workouts from this program? This cannot be undone.")) {
+      return;
+    }
+
+    setIsDeleting(true);
+    setError(null);
+
+    try {
+      // Find all scheduled workouts created by this session
+      // We'll match by createdBy (userId) and date range from the session's workouts
+      const session = sessions.find(s => s.id === sessionId);
+      if (!session) {
+        throw new Error("Session not found");
+      }
+
+      // Get all workouts for this gym
+      const workoutsQuery = query(
+        collection(db, "scheduledWorkouts"),
+        where("gymId", "==", gymId),
+        where("createdBy", "==", userId)
+      );
+      const snapshot = await getDocs(workoutsQuery);
+
+      // Get the generated workouts from this session to match dates
+      const generatedDates = new Set<string>();
+      session.messages.forEach(msg => {
+        if (msg.generatedWorkouts) {
+          msg.generatedWorkouts.forEach(w => {
+            if (w.date) generatedDates.add(w.date);
+          });
+        }
+      });
+
+      // Delete matching workouts
+      let deletedCount = 0;
+      for (const docSnap of snapshot.docs) {
+        const data = docSnap.data();
+        const workoutDate = data.date?.toDate();
+        if (workoutDate) {
+          const dateStr = workoutDate.toISOString().split('T')[0];
+          // Check if this workout's date matches one of the generated dates
+          // or if the wodTitle contains "Programming" (AI-generated pattern)
+          if (generatedDates.has(dateStr) || data.wodTitle?.includes("Programming")) {
+            await deleteDoc(doc(db, "scheduledWorkouts", docSnap.id));
+            deletedCount++;
+          }
+        }
+      }
+
+      // Update session status back to active
+      await updateDoc(doc(db, "aiProgrammingSessions", sessionId), {
+        status: "active",
+        updatedAt: Timestamp.now(),
+      });
+
+      // Update local state
+      setSessions(prev => prev.map(s =>
+        s.id === sessionId ? { ...s, status: "active" } : s
+      ));
+
+      if (activeSession?.id === sessionId) {
+        setActiveSession(prev => prev ? { ...prev, status: "active" } : null);
+      }
+
+      onPublish?.(); // Refresh the calendar
+      alert(`Deleted ${deletedCount} workouts from the calendar.`);
+    } catch (err) {
+      console.error("Error deleting workouts:", err);
+      setError("Failed to delete workouts");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const deleteSession = async (sessionId: string) => {
+    if (!confirm("Are you sure you want to delete this program? If published, workouts will also be deleted.")) {
+      return;
+    }
+
+    setIsDeleting(true);
+    setError(null);
+
+    try {
+      const session = sessions.find(s => s.id === sessionId);
+
+      // If session was published, delete the workouts first
+      if (session?.status === "published") {
+        const workoutsQuery = query(
+          collection(db, "scheduledWorkouts"),
+          where("gymId", "==", gymId),
+          where("createdBy", "==", userId)
+        );
+        const snapshot = await getDocs(workoutsQuery);
+
+        // Get the generated dates from this session
+        const generatedDates = new Set<string>();
+        session.messages.forEach(msg => {
+          if (msg.generatedWorkouts) {
+            msg.generatedWorkouts.forEach(w => {
+              if (w.date) generatedDates.add(w.date);
+            });
+          }
+        });
+
+        for (const docSnap of snapshot.docs) {
+          const data = docSnap.data();
+          const workoutDate = data.date?.toDate();
+          if (workoutDate) {
+            const dateStr = workoutDate.toISOString().split('T')[0];
+            if (generatedDates.has(dateStr) || data.wodTitle?.includes("Programming")) {
+              await deleteDoc(doc(db, "scheduledWorkouts", docSnap.id));
+            }
+          }
+        }
+      }
+
+      // Delete the session itself
+      await deleteDoc(doc(db, "aiProgrammingSessions", sessionId));
+
+      // Update local state
+      setSessions(prev => prev.filter(s => s.id !== sessionId));
+
+      if (activeSession?.id === sessionId) {
+        setActiveSession(null);
+      }
+
+      onPublish?.(); // Refresh the calendar
+    } catch (err) {
+      console.error("Error deleting session:", err);
+      setError("Failed to delete program");
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -427,7 +564,7 @@ export default function AIProgrammingChat({ gymId, userId, groups, onPublish }: 
       {sessions.length > 0 && (
         <div className="flex gap-2 p-3 border-b border-gray-200 overflow-x-auto bg-gray-50">
           {sessions.slice(0, 5).map(session => (
-            <div key={session.id} className="relative group">
+            <div key={session.id} className="relative group flex items-center gap-1">
               {editingSessionId === session.id ? (
                 <input
                   type="text"
@@ -445,24 +582,40 @@ export default function AIProgrammingChat({ gymId, userId, groups, onPublish }: 
                   className="px-3 py-1.5 rounded-lg text-sm border-2 border-purple-500 focus:outline-none min-w-[120px]"
                 />
               ) : (
-                <button
-                  onClick={() => setActiveSession(session)}
-                  onDoubleClick={() => {
-                    setEditingSessionId(session.id);
-                    setEditingTitle(session.title);
-                  }}
-                  className={`px-3 py-1.5 rounded-lg text-sm whitespace-nowrap transition-colors ${
-                    activeSession?.id === session.id
-                      ? "bg-purple-600 text-white"
-                      : "bg-white text-gray-700 hover:bg-gray-100 border border-gray-200"
-                  }`}
-                  title="Double-click to rename"
-                >
-                  {session.title}
-                  {session.status === "published" && (
-                    <span className="ml-2 text-xs opacity-70">Published</span>
-                  )}
-                </button>
+                <>
+                  <button
+                    onClick={() => setActiveSession(session)}
+                    onDoubleClick={() => {
+                      setEditingSessionId(session.id);
+                      setEditingTitle(session.title);
+                    }}
+                    className={`px-3 py-1.5 rounded-lg text-sm whitespace-nowrap transition-colors ${
+                      activeSession?.id === session.id
+                        ? "bg-purple-600 text-white"
+                        : "bg-white text-gray-700 hover:bg-gray-100 border border-gray-200"
+                    }`}
+                    title="Double-click to rename"
+                  >
+                    {session.title}
+                    {session.status === "published" && (
+                      <span className="ml-2 text-xs opacity-70">Published</span>
+                    )}
+                  </button>
+                  {/* Delete button - shows on hover */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deleteSession(session.id);
+                    }}
+                    disabled={isDeleting}
+                    className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-all"
+                    title="Delete program"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
+                </>
               )}
             </div>
           ))}
@@ -583,9 +736,18 @@ export default function AIProgrammingChat({ gymId, userId, groups, onPublish }: 
               </button>
             </div>
             {activeSession.status === "published" && (
-              <p className="text-sm text-gray-500 mt-2">
-                This program has been published. Create a new program to continue.
-              </p>
+              <div className="flex items-center gap-3 mt-2">
+                <p className="text-sm text-gray-500">
+                  This program has been published.
+                </p>
+                <button
+                  onClick={() => deletePublishedWorkouts(activeSession.id)}
+                  disabled={isDeleting}
+                  className="px-3 py-1 text-xs font-medium text-red-600 hover:text-red-700 hover:bg-red-50 border border-red-200 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {isDeleting ? "Deleting..." : "Unpublish & Delete Workouts"}
+                </button>
+              </div>
             )}
           </div>
         </>
