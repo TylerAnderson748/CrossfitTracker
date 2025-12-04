@@ -23,9 +23,11 @@ export default function AIScanPage() {
   const [rawResponse, setRawResponse] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Check subscription
+  // Check subscription or if user is a coach/owner
   const hasSubscription = user?.aiTrainerSubscription?.status === "active" ||
     user?.aiTrainerSubscription?.status === "trialing";
+  const isCoach = user?.role === "coach" || user?.role === "owner";
+  const hasAccess = hasSubscription || isCoach;
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -185,7 +187,7 @@ IMPORTANT: Only respond with valid JSON. No additional text before or after the 
     return null;
   }
 
-  if (!hasSubscription) {
+  if (!hasAccess) {
     return (
       <div className="min-h-screen bg-gray-50">
         <Navigation />
@@ -198,7 +200,7 @@ IMPORTANT: Only respond with valid JSON. No additional text before or after the 
             </div>
             <h2 className="text-xl font-bold text-gray-900 mb-2">AI Coach Feature</h2>
             <p className="text-gray-600 mb-4">
-              Photo scanning is an AI Coach premium feature. Subscribe to unlock this and more!
+              Photo scanning is available for AI Coach subscribers and gym coaches/owners.
             </p>
             <button
               onClick={() => router.push("/subscribe")}
