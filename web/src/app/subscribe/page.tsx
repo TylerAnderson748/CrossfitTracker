@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { doc, updateDoc, Timestamp } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
@@ -8,7 +8,7 @@ import { db } from "@/lib/firebase";
 import Navigation from "@/components/Navigation";
 import { AITrainerSubscription, AICoachPreferences } from "@/lib/types";
 
-export default function SubscribePage() {
+function SubscribeContent() {
   const { user, loading, refreshUser } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -649,5 +649,17 @@ export default function SubscribePage() {
         </div>
       </main>
     </div>
+  );
+}
+
+export default function SubscribePage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-blue-50 flex items-center justify-center">
+        <div className="animate-pulse text-purple-600">Loading...</div>
+      </div>
+    }>
+      <SubscribeContent />
+    </Suspense>
   );
 }

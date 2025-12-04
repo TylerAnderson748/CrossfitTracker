@@ -275,6 +275,10 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
   const [preferencesDocId, setPreferencesDocId] = useState<string | null>(null);
   const [savingPreferences, setSavingPreferences] = useState(false);
 
+  // Cancel subscription state
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [isCanceling, setIsCanceling] = useState(false);
+
   // Recently used workouts (last 6 months) - to avoid repetition
   const [recentlyUsedWorkouts, setRecentlyUsedWorkouts] = useState<string[]>([]);
 
@@ -409,6 +413,25 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
       setError("Failed to save preferences");
     } finally {
       setSavingPreferences(false);
+    }
+  };
+
+  const handleCancelSubscription = async () => {
+    if (!userId) return;
+
+    setIsCanceling(true);
+    try {
+      await updateDoc(doc(db, "users", userId), {
+        "aiProgrammingSubscription.status": "canceled",
+      });
+      setShowCancelModal(false);
+      // Force page reload to refresh subscription status
+      window.location.reload();
+    } catch (err) {
+      console.error("Error canceling subscription:", err);
+      setError("Failed to cancel subscription. Please try again.");
+    } finally {
+      setIsCanceling(false);
     }
   };
 
@@ -886,6 +909,25 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
             </button>
           </div>
         </div>
+
+        {/* Subscription Status Bar */}
+        {subscription && (
+          <div className="px-4 py-2 bg-white/10 flex items-center justify-between text-xs">
+            <span className="text-white/80">
+              {subscription.status === "trialing" ? (
+                <>Trial ends {subscription.trialEndsAt?.toDate?.().toLocaleDateString() || "soon"}</>
+              ) : (
+                <>Subscription {subscription.status === "active" ? "active" : subscription.status}</>
+              )}
+            </span>
+            <button
+              onClick={() => setShowCancelModal(true)}
+              className="text-red-200 hover:text-red-100 hover:underline"
+            >
+              Cancel Subscription
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Session Tabs */}
@@ -1351,6 +1393,42 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
               >
                 {savingPreferences ? "Saving..." : "Save Preferences"}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cancel Subscription Modal */}
+      {showCancelModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full">
+            <div className="p-6">
+              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 text-center mb-2">
+                Cancel AI Programming?
+              </h3>
+              <p className="text-gray-600 text-sm text-center mb-6">
+                Are you sure you want to cancel your AI Programming subscription? You&apos;ll lose access to the AI programming assistant at the end of your current billing period.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowCancelModal(false)}
+                  className="flex-1 px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+                >
+                  Keep Subscription
+                </button>
+                <button
+                  onClick={handleCancelSubscription}
+                  disabled={isCanceling}
+                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isCanceling ? "Canceling..." : "Yes, Cancel"}
+                </button>
+              </div>
             </div>
           </div>
         </div>
