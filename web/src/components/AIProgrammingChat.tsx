@@ -71,6 +71,24 @@ If the user is just chatting or asking questions (not requesting workouts), resp
 
 IMPORTANT: Always respond with valid JSON only. No markdown, no code blocks, just pure JSON.`;
 
+// Helper to remove undefined values from objects (Firestore doesn't accept undefined)
+function removeUndefined<T>(obj: T): T {
+  if (obj === null || obj === undefined) return obj;
+  if (Array.isArray(obj)) {
+    return obj.map(item => removeUndefined(item)) as T;
+  }
+  if (typeof obj === 'object') {
+    const cleaned: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
+      if (value !== undefined) {
+        cleaned[key] = removeUndefined(value);
+      }
+    }
+    return cleaned as T;
+  }
+  return obj;
+}
+
 export default function AIProgrammingChat({ gymId, userId, groups, onPublish }: AIProgrammingChatProps) {
   const [sessions, setSessions] = useState<AIProgrammingSession[]>([]);
   const [activeSession, setActiveSession] = useState<AIProgrammingSession | null>(null);
@@ -284,7 +302,7 @@ export default function AIProgrammingChat({ gymId, userId, groups, onPublish }: 
         // Skip if no valid components
         if (components.length === 0) continue;
 
-        const scheduledWorkout = {
+        const scheduledWorkout = removeUndefined({
           gymId,
           wodTitle: `${day.dayOfWeek} Programming`,
           wodDescription: components.map(c => c.title).join(", "),
@@ -293,10 +311,10 @@ export default function AIProgrammingChat({ gymId, userId, groups, onPublish }: 
           groupIds: selectedGroups,
           createdBy: userId,
           recurrenceType: "none" as const,
-          components,
+          components: removeUndefined(components),
           hideDetails: false,
           createdAt: Timestamp.now(),
-        };
+        });
 
         await addDoc(collection(db, "scheduledWorkouts"), scheduledWorkout);
       }
