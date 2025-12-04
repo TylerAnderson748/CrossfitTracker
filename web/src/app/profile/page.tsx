@@ -605,6 +605,83 @@ export default function ProfilePage() {
           )}
         </div>
 
+        {/* AI Coach Subscription */}
+        <div className="bg-gradient-to-br from-purple-900 via-purple-800 to-indigo-900 rounded-xl p-6 mb-6 text-white">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full flex items-center justify-center">
+              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+            </div>
+            <h3 className="text-lg font-semibold">AI Coach</h3>
+          </div>
+
+          {user.aiTrainerSubscription?.status === "active" || user.aiTrainerSubscription?.status === "trialing" ? (
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                  user.aiTrainerSubscription.status === "trialing"
+                    ? "bg-yellow-400 text-yellow-900"
+                    : "bg-green-400 text-green-900"
+                }`}>
+                  {user.aiTrainerSubscription.status === "trialing" ? "Free Trial" : "Active"}
+                </span>
+                <span className="text-purple-200 text-sm">
+                  {user.aiTrainerSubscription.tier === "pro" ? "Pro Plan" : "Elite Plan"}
+                </span>
+              </div>
+
+              {user.aiTrainerSubscription.trialEndsAt && (
+                <p className="text-sm text-purple-200 mb-3">
+                  Trial ends: {user.aiTrainerSubscription.trialEndsAt.toDate().toLocaleDateString()}
+                </p>
+              )}
+
+              {user.aiTrainerSubscription.endDate && user.aiTrainerSubscription.status === "active" && (
+                <p className="text-sm text-purple-200 mb-3">
+                  Renews: {user.aiTrainerSubscription.endDate.toDate().toLocaleDateString()}
+                </p>
+              )}
+
+              <div className="text-sm text-purple-100">
+                <p>You have access to:</p>
+                <ul className="mt-2 space-y-1">
+                  <li className="flex items-center gap-2">
+                    <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Personalized weight recommendations
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    AI scaling analysis
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Unlimited AI programming
+                  </li>
+                </ul>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <p className="text-purple-200 text-sm mb-4">
+                Get personalized coaching powered by AI that learns from your workout history.
+              </p>
+              <button
+                onClick={() => router.push("/subscribe")}
+                className="w-full py-2 bg-gradient-to-r from-yellow-400 to-orange-500 text-gray-900 font-bold rounded-lg hover:from-yellow-500 hover:to-orange-600 transition-colors"
+              >
+                Start Free Trial
+              </button>
+            </div>
+          )}
+        </div>
+
         {/* Account Info */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Account</h3>
