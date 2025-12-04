@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { collection, addDoc, updateDoc, doc, query, where, getDocs, orderBy, Timestamp } from "firebase/firestore";
+import { collection, addDoc, updateDoc, doc, query, where, getDocs, orderBy, Timestamp, serverTimestamp } from "firebase/firestore";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { db } from "@/lib/firebase";
 import { AIProgrammingSession, AIChatMessage, AIGeneratedDay, WorkoutGroup, WorkoutComponent } from "@/lib/types";
@@ -350,8 +350,12 @@ export default function AIProgrammingChat({ gymId, userId, groups, onPublish }: 
         const scheduledWorkout = {
           ...baseData,
           date: Timestamp.fromDate(workoutDate),
-          createdAt: Timestamp.now(),
+          createdAt: serverTimestamp(),
         };
+
+        // Debug: log the data being sent
+        console.log("Publishing workout:", JSON.stringify(baseData, null, 2));
+        console.log("Full scheduledWorkout keys:", Object.keys(scheduledWorkout));
 
         await addDoc(collection(db, "scheduledWorkouts"), scheduledWorkout);
       }
