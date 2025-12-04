@@ -11,9 +11,15 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    // Check if user is the document owner
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
     // Check if user is gym owner
     function isGymOwner(gymId) {
       return isAuthenticated() &&
+             gymId != null &&
              exists(/databases/$(database)/documents/gyms/$(gymId)) &&
              get(/databases/$(database)/documents/gyms/$(gymId)).data.ownerId == request.auth.uid;
     }
@@ -21,6 +27,7 @@ service cloud.firestore {
     // Check if user is gym coach
     function isGymCoach(gymId) {
       return isAuthenticated() &&
+             gymId != null &&
              exists(/databases/$(database)/documents/gyms/$(gymId)) &&
              get(/databases/$(database)/documents/gyms/$(gymId)).data.coachIds.hasAny([request.auth.uid]);
     }
@@ -28,6 +35,7 @@ service cloud.firestore {
     // Check if user is gym member
     function isGymMember(gymId) {
       return isAuthenticated() &&
+             gymId != null &&
              exists(/databases/$(database)/documents/gyms/$(gymId)) &&
              get(/databases/$(database)/documents/gyms/$(gymId)).data.memberIds.hasAny([request.auth.uid]);
     }
@@ -43,21 +51,103 @@ service cloud.firestore {
     }
 
     // ==========================================
-    // USER DATA
+    // VALIDATION FUNCTIONS
     // ==========================================
 
-    // Users collection
-    // NOTE: Currently allows authenticated users to read other profiles for
-    // leaderboards and member lists. RECOMMENDED IMPROVEMENT: Split into
-    // /users (private) and /userProfiles (public: name, photo only).
-    // Sensitive fields (email, subscription, stripeIds) should be in private collection.
+    // Validate string field
+    function isValidString(field, minLen, maxLen) {
+      return field is string && field.size() >= minLen && field.size() <= maxLen;
+    }
+
+    // Validate optional string field
+    function isValidOptionalString(data, fieldName, maxLen) {
+      return !(fieldName in data) ||
+             data[fieldName] == null ||
+             (data[fieldName] is string && data[fieldName].size() <= maxLen);
+    }
+
+    // Validate email format (basic check)
+    function isValidEmail(email) {
+      return email is string &&
+             email.size() >= 5 &&
+             email.size() <= 254 &&
+             email.matches('.*@.*\\..*');
+    }
+
+    // Validate timestamp
+    function isValidTimestamp(field) {
+      return field is timestamp;
+    }
+
+    // Validate user role
+    function isValidRole(role) {
+      return role in ['athlete', 'coach', 'owner', 'superAdmin'];
+    }
+
+    // Validate subscription status
+    function isValidSubscriptionStatus(status) {
+      return status in ['active', 'canceled', 'past_due', 'trialing'];
+    }
+
+    // Check document size (prevent bloat attacks)
+    function isReasonableSize() {
+      return request.resource.size() < 1048576; // 1MB limit
+    }
+
+    // Prevent timestamp manipulation (must be server time or recent)
+    function isValidCreatedAt() {
+      return !('createdAt' in request.resource.data) ||
+             request.resource.data.createdAt == request.time ||
+             (resource != null && request.resource.data.createdAt == resource.data.createdAt);
+    }
+
+    // ==========================================
+    // USER DATA (PRIVATE)
+    // ==========================================
+
+    // Private user data - only owner can access
+    // Contains: email, subscription info, Stripe IDs, AI preferences
     match /users/{userId} {
-      // Allow reads for member lists and leaderboards (see note above)
+      allow read: if isOwner(userId);
+
+      allow create: if isOwner(userId) &&
+                       isReasonableSize() &&
+                       isValidEmail(request.resource.data.email) &&
+                       isValidRole(request.resource.data.role) &&
+                       request.resource.data.id == userId;
+
+      allow update: if isOwner(userId) &&
+                       isReasonableSize() &&
+                       // Prevent changing immutable fields
+                       request.resource.data.id == resource.data.id &&
+                       request.resource.data.email == resource.data.email &&
+                       request.resource.data.createdAt == resource.data.createdAt &&
+                       // Validate role if changing
+                       isValidRole(request.resource.data.role);
+
+      allow delete: if isOwner(userId);
+    }
+
+    // Public user profiles - readable by all authenticated users
+    // Contains only: displayName, firstName, lastName, gymId, role, hideFromLeaderboards
+    match /userProfiles/{userId} {
       allow read: if isAuthenticated();
-      // Users can only write their own profile
-      allow create: if isAuthenticated() && request.auth.uid == userId;
-      allow update: if isAuthenticated() && request.auth.uid == userId;
-      allow delete: if isAuthenticated() && request.auth.uid == userId;
+
+      allow create: if isOwner(userId) &&
+                       isReasonableSize() &&
+                       request.resource.data.id == userId &&
+                       isValidOptionalString(request.resource.data, 'displayName', 100) &&
+                       isValidOptionalString(request.resource.data, 'firstName', 50) &&
+                       isValidOptionalString(request.resource.data, 'lastName', 50);
+
+      allow update: if isOwner(userId) &&
+                       isReasonableSize() &&
+                       request.resource.data.id == resource.data.id &&
+                       isValidOptionalString(request.resource.data, 'displayName', 100) &&
+                       isValidOptionalString(request.resource.data, 'firstName', 50) &&
+                       isValidOptionalString(request.resource.data, 'lastName', 50);
+
+      allow delete: if isOwner(userId);
     }
 
     // ==========================================
@@ -66,75 +156,82 @@ service cloud.firestore {
 
     // Gyms collection
     match /gyms/{gymId} {
-      // Anyone authenticated can read gyms (for browsing/finding gyms)
       allow read: if isAuthenticated();
 
-      // Anyone authenticated can create a gym (they become the owner)
       allow create: if isAuthenticated() &&
-                       request.resource.data.ownerId == request.auth.uid;
+                       isReasonableSize() &&
+                       request.resource.data.ownerId == request.auth.uid &&
+                       isValidString(request.resource.data.name, 1, 100) &&
+                       isValidCreatedAt();
 
-      // Only owner can update gym
-      allow update: if isGymOwner(gymId);
+      allow update: if isGymOwner(gymId) &&
+                       isReasonableSize() &&
+                       // Prevent changing owner (use separate transfer function)
+                       request.resource.data.ownerId == resource.data.ownerId &&
+                       request.resource.data.createdAt == resource.data.createdAt &&
+                       isValidString(request.resource.data.name, 1, 100);
 
-      // Only owner can delete gym
       allow delete: if isGymOwner(gymId);
     }
 
-    // Gym Membership Requests collection
+    // Gym Membership Requests
     match /gymMembershipRequests/{requestId} {
-      // Users can create their own membership requests
       allow create: if isAuthenticated() &&
+                       isReasonableSize() &&
                        request.resource.data.userId == request.auth.uid &&
-                       request.resource.data.status == 'pending';
+                       request.resource.data.status == 'pending' &&
+                       isValidString(request.resource.data.gymId, 1, 100);
 
-      // Users can read their own requests, gym owners can read requests for their gyms
       allow read: if isAuthenticated() &&
                      (resource.data.userId == request.auth.uid ||
                       isGymOwner(resource.data.gymId));
 
-      // Only gym owners can update requests (approve/deny)
-      allow update: if isGymOwner(resource.data.gymId);
+      allow update: if isGymOwner(resource.data.gymId) &&
+                       // Can only change status, not userId or gymId
+                       request.resource.data.userId == resource.data.userId &&
+                       request.resource.data.gymId == resource.data.gymId;
 
-      // Users can delete their own pending requests, owners can delete any requests for their gym
       allow delete: if isAuthenticated() &&
                        (resource.data.userId == request.auth.uid ||
                         isGymOwner(resource.data.gymId));
     }
 
-    // Group Membership Requests collection
+    // Group Membership Requests
     match /groupMembershipRequests/{requestId} {
-      // Users can create their own group membership requests
       allow create: if isAuthenticated() &&
+                       isReasonableSize() &&
                        request.resource.data.userId == request.auth.uid &&
                        request.resource.data.status == 'pending';
 
-      // Users can read their own requests, gym owners/coaches can read requests for their gyms
       allow read: if isAuthenticated() &&
                      (resource.data.userId == request.auth.uid ||
                       isGymStaff(resource.data.gymId));
 
-      // Gym owners and coaches can update requests (approve/deny)
-      allow update: if isGymStaff(resource.data.gymId);
+      allow update: if isGymStaff(resource.data.gymId) &&
+                       request.resource.data.userId == resource.data.userId &&
+                       request.resource.data.gymId == resource.data.gymId;
 
-      // Users can delete their own pending requests, owners/coaches can delete any requests for their gym
       allow delete: if isAuthenticated() &&
                        (resource.data.userId == request.auth.uid ||
                         isGymStaff(resource.data.gymId));
     }
 
-    // Groups collection - only gym staff can manage
+    // Groups collection
     match /groups/{groupId} {
-      // Gym members can read their gym's groups
       allow read: if isAuthenticated() &&
                      (resource.data.gymId == null || isGymAffiliated(resource.data.gymId));
 
-      // Only gym staff can create groups
       allow create: if isAuthenticated() &&
-                       (request.resource.data.gymId == null || isGymStaff(request.resource.data.gymId));
+                       isReasonableSize() &&
+                       (request.resource.data.gymId == null || isGymStaff(request.resource.data.gymId)) &&
+                       isValidString(request.resource.data.name, 1, 100);
 
-      // Only gym staff can update/delete groups
       allow update: if isAuthenticated() &&
-                       (resource.data.gymId == null || isGymStaff(resource.data.gymId));
+                       isReasonableSize() &&
+                       (resource.data.gymId == null || isGymStaff(resource.data.gymId)) &&
+                       // Can't change gymId
+                       request.resource.data.gymId == resource.data.gymId;
+
       allow delete: if isAuthenticated() &&
                        (resource.data.gymId == null || isGymStaff(resource.data.gymId));
     }
@@ -143,204 +240,308 @@ service cloud.firestore {
     // WORKOUTS & PROGRAMMING
     // ==========================================
 
-    // Workouts collection - personal workouts
+    // Personal workouts
     match /workouts/{workoutId} {
-      // Users can read all workouts (for sharing/templates)
       allow read: if isAuthenticated();
 
-      // Users can only create workouts they own
       allow create: if isAuthenticated() &&
-                       request.resource.data.userId == request.auth.uid;
+                       isReasonableSize() &&
+                       request.resource.data.userId == request.auth.uid &&
+                       isValidOptionalString(request.resource.data, 'title', 200) &&
+                       isValidCreatedAt();
 
-      // Users can only update/delete their own workouts
       allow update: if isAuthenticated() &&
-                       resource.data.userId == request.auth.uid;
+                       isReasonableSize() &&
+                       resource.data.userId == request.auth.uid &&
+                       request.resource.data.userId == resource.data.userId;
+
       allow delete: if isAuthenticated() &&
                        resource.data.userId == request.auth.uid;
     }
 
-    // Workout logs collection - user's workout history
+    // Workout logs
     match /workoutLogs/{logId} {
-      // Users can read all logs (for leaderboards/community)
       allow read: if isAuthenticated();
 
-      // Users can only create logs for themselves
       allow create: if isAuthenticated() &&
-                       request.resource.data.userId == request.auth.uid;
+                       isReasonableSize() &&
+                       request.resource.data.userId == request.auth.uid &&
+                       isValidCreatedAt();
 
-      // Users can only update/delete their own logs
       allow update: if isAuthenticated() &&
-                       resource.data.userId == request.auth.uid;
+                       isReasonableSize() &&
+                       resource.data.userId == request.auth.uid &&
+                       request.resource.data.userId == resource.data.userId &&
+                       request.resource.data.createdAt == resource.data.createdAt;
+
       allow delete: if isAuthenticated() &&
                        resource.data.userId == request.auth.uid;
     }
 
-    // Weekly plans collection - personal plans
+    // Weekly plans - private to user
     match /weeklyPlans/{planId} {
       allow read: if isAuthenticated() &&
                      resource.data.userId == request.auth.uid;
+
       allow create: if isAuthenticated() &&
+                       isReasonableSize() &&
                        request.resource.data.userId == request.auth.uid;
+
       allow update: if isAuthenticated() &&
-                       resource.data.userId == request.auth.uid;
+                       isReasonableSize() &&
+                       resource.data.userId == request.auth.uid &&
+                       request.resource.data.userId == resource.data.userId;
+
       allow delete: if isAuthenticated() &&
                        resource.data.userId == request.auth.uid;
     }
 
-    // Workout templates collection
+    // Workout templates
     match /workoutTemplates/{templateId} {
-      // Anyone can read templates (shared resource)
       allow read: if isAuthenticated();
 
-      // Users can only create templates they own
       allow create: if isAuthenticated() &&
-                       request.resource.data.createdBy == request.auth.uid;
+                       isReasonableSize() &&
+                       request.resource.data.createdBy == request.auth.uid &&
+                       isValidOptionalString(request.resource.data, 'name', 200);
 
-      // Users can only update/delete their own templates
       allow update: if isAuthenticated() &&
-                       resource.data.createdBy == request.auth.uid;
+                       isReasonableSize() &&
+                       resource.data.createdBy == request.auth.uid &&
+                       request.resource.data.createdBy == resource.data.createdBy;
+
       allow delete: if isAuthenticated() &&
                        resource.data.createdBy == request.auth.uid;
     }
 
-    // Scheduled workouts collection (gym programming)
+    // Scheduled workouts (gym programming)
     match /scheduledWorkouts/{workoutId} {
-      // Gym members can read their gym's scheduled workouts
       allow read: if isAuthenticated() &&
                      isGymAffiliated(resource.data.gymId);
 
-      // Only gym staff can create scheduled workouts
       allow create: if isAuthenticated() &&
-                       isGymStaff(request.resource.data.gymId);
+                       isReasonableSize() &&
+                       isGymStaff(request.resource.data.gymId) &&
+                       request.resource.data.createdBy == request.auth.uid &&
+                       isValidOptionalString(request.resource.data, 'wodTitle', 200);
 
-      // Only gym staff can update scheduled workouts
-      // Also allow members to update for signups (timeSlots field only)
+      // Staff can update everything, members can only update timeSlots (for signups)
       allow update: if isAuthenticated() &&
+                       isReasonableSize() &&
                        (isGymStaff(resource.data.gymId) ||
                         (isGymMember(resource.data.gymId) &&
-                         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['timeSlots'])));
+                         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['timeSlots']))) &&
+                       // Can't change gymId or createdBy
+                       request.resource.data.gymId == resource.data.gymId &&
+                       request.resource.data.createdBy == resource.data.createdBy;
 
-      // Only gym staff can delete scheduled workouts
       allow delete: if isAuthenticated() &&
                        isGymStaff(resource.data.gymId);
     }
 
-    // AI Programming Sessions collection - creator only
+    // AI Programming Sessions - private to creator
     match /aiProgrammingSessions/{sessionId} {
       allow read: if isAuthenticated() &&
                      resource.data.createdBy == request.auth.uid;
+
       allow create: if isAuthenticated() &&
-                       request.resource.data.createdBy == request.auth.uid;
+                       isReasonableSize() &&
+                       request.resource.data.createdBy == request.auth.uid &&
+                       request.resource.data.gymId is string &&
+                       isValidOptionalString(request.resource.data, 'title', 200);
+
       allow update: if isAuthenticated() &&
-                       resource.data.createdBy == request.auth.uid;
+                       isReasonableSize() &&
+                       resource.data.createdBy == request.auth.uid &&
+                       request.resource.data.createdBy == resource.data.createdBy &&
+                       request.resource.data.gymId == resource.data.gymId;
+
       allow delete: if isAuthenticated() &&
                        resource.data.createdBy == request.auth.uid;
     }
 
-    // AI Programming Preferences collection - gym staff only
+    // AI Programming Preferences - gym staff only
     match /aiProgrammingPreferences/{prefId} {
       allow read: if isAuthenticated() &&
                      isGymStaff(resource.data.gymId);
+
       allow create: if isAuthenticated() &&
-                       isGymStaff(request.resource.data.gymId);
+                       isReasonableSize() &&
+                       isGymStaff(request.resource.data.gymId) &&
+                       isValidOptionalString(request.resource.data, 'philosophy', 2000) &&
+                       isValidOptionalString(request.resource.data, 'additionalRules', 2000);
+
       allow update: if isAuthenticated() &&
-                       isGymStaff(resource.data.gymId);
+                       isReasonableSize() &&
+                       isGymStaff(resource.data.gymId) &&
+                       request.resource.data.gymId == resource.data.gymId;
+
       allow delete: if isAuthenticated() &&
                        isGymStaff(resource.data.gymId);
     }
 
-    // Workout Groups collection - gym staff only
+    // Workout Groups
     match /workoutGroups/{groupId} {
       allow read: if isAuthenticated() &&
                      isGymAffiliated(resource.data.gymId);
+
       allow create: if isAuthenticated() &&
-                       isGymStaff(request.resource.data.gymId);
+                       isReasonableSize() &&
+                       isGymStaff(request.resource.data.gymId) &&
+                       isValidString(request.resource.data.name, 1, 100);
+
       allow update: if isAuthenticated() &&
-                       isGymStaff(resource.data.gymId);
+                       isReasonableSize() &&
+                       isGymStaff(resource.data.gymId) &&
+                       request.resource.data.gymId == resource.data.gymId;
+
       allow delete: if isAuthenticated() &&
                        isGymStaff(resource.data.gymId);
     }
 
-    // Personal/Saved Workouts collection
+    // Personal/Saved Workouts
     match /personalWorkouts/{docId} {
-      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
-      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
-      allow update, delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow read: if isAuthenticated() &&
+                     resource.data.userId == request.auth.uid;
+
+      allow create: if isAuthenticated() &&
+                       isReasonableSize() &&
+                       request.resource.data.userId == request.auth.uid;
+
+      allow update: if isAuthenticated() &&
+                       isReasonableSize() &&
+                       resource.data.userId == request.auth.uid &&
+                       request.resource.data.userId == resource.data.userId;
+
+      allow delete: if isAuthenticated() &&
+                       resource.data.userId == request.auth.uid;
     }
 
     // ==========================================
     // EXTERNAL PROGRAMMING SOURCES
     // ==========================================
 
-    // Programming sources (gyms, online programs, PTs, etc.)
+    // Programming sources
     match /programmingSources/{sourceId} {
-      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
-      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
-      allow update, delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow read: if isAuthenticated() &&
+                     resource.data.userId == request.auth.uid;
+
+      allow create: if isAuthenticated() &&
+                       isReasonableSize() &&
+                       request.resource.data.userId == request.auth.uid &&
+                       isValidOptionalString(request.resource.data, 'name', 200);
+
+      allow update: if isAuthenticated() &&
+                       isReasonableSize() &&
+                       resource.data.userId == request.auth.uid &&
+                       request.resource.data.userId == resource.data.userId;
+
+      allow delete: if isAuthenticated() &&
+                       resource.data.userId == request.auth.uid;
     }
 
     // Programmed workouts from external sources
     match /programmedWorkouts/{workoutId} {
-      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
-      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
-      allow update, delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow read: if isAuthenticated() &&
+                     resource.data.userId == request.auth.uid;
+
+      allow create: if isAuthenticated() &&
+                       isReasonableSize() &&
+                       request.resource.data.userId == request.auth.uid;
+
+      allow update: if isAuthenticated() &&
+                       isReasonableSize() &&
+                       resource.data.userId == request.auth.uid &&
+                       request.resource.data.userId == resource.data.userId;
+
+      allow delete: if isAuthenticated() &&
+                       resource.data.userId == request.auth.uid;
     }
 
-    // Connected programs - user's own connections only
+    // Connected programs
     match /connectedPrograms/{docId} {
-      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
-      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
-      allow update, delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow read: if isAuthenticated() &&
+                     resource.data.userId == request.auth.uid;
+
+      allow create: if isAuthenticated() &&
+                       isReasonableSize() &&
+                       request.resource.data.userId == request.auth.uid;
+
+      allow update: if isAuthenticated() &&
+                       isReasonableSize() &&
+                       resource.data.userId == request.auth.uid &&
+                       request.resource.data.userId == resource.data.userId;
+
+      allow delete: if isAuthenticated() &&
+                       resource.data.userId == request.auth.uid;
     }
 
     // ==========================================
     // RESULTS & TRACKING
     // ==========================================
 
-    // Lift Results collection
+    // Lift Results
     match /liftResults/{resultId} {
-      // Anyone can read for leaderboards
       allow read: if isAuthenticated();
 
-      // Users can only create their own results
       allow create: if isAuthenticated() &&
-                       request.resource.data.userId == request.auth.uid;
+                       isReasonableSize() &&
+                       request.resource.data.userId == request.auth.uid &&
+                       isValidCreatedAt();
 
-      // Users can only update/delete their own results
       allow update: if isAuthenticated() &&
-                       resource.data.userId == request.auth.uid;
+                       isReasonableSize() &&
+                       resource.data.userId == request.auth.uid &&
+                       request.resource.data.userId == resource.data.userId &&
+                       request.resource.data.createdAt == resource.data.createdAt;
+
       allow delete: if isAuthenticated() &&
                        resource.data.userId == request.auth.uid;
     }
 
-    // Skill Results collection
+    // Skill Results
     match /skillResults/{resultId} {
-      // Anyone can read for leaderboards
       allow read: if isAuthenticated();
 
-      // Users can only create their own results
       allow create: if isAuthenticated() &&
+                       isReasonableSize() &&
                        request.resource.data.userId == request.auth.uid;
 
-      // Users can only update/delete their own results
-      allow update, delete: if isAuthenticated() &&
+      allow update: if isAuthenticated() &&
+                       isReasonableSize() &&
+                       resource.data.userId == request.auth.uid &&
+                       request.resource.data.userId == resource.data.userId;
+
+      allow delete: if isAuthenticated() &&
                        resource.data.userId == request.auth.uid;
     }
 
-    // Leaderboard entries collection - users can only manage their own entries
+    // Leaderboard entries
     match /leaderboardEntries/{entryId} {
-      // Anyone can read for leaderboard display
       allow read: if isAuthenticated();
 
-      // Users can only create entries for themselves
       allow create: if isAuthenticated() &&
-                       request.resource.data.userId == request.auth.uid;
+                       isReasonableSize() &&
+                       request.resource.data.userId == request.auth.uid &&
+                       isValidCreatedAt();
 
-      // Users can only update/delete their own entries
       allow update: if isAuthenticated() &&
-                       resource.data.userId == request.auth.uid;
+                       isReasonableSize() &&
+                       resource.data.userId == request.auth.uid &&
+                       request.resource.data.userId == resource.data.userId &&
+                       request.resource.data.createdAt == resource.data.createdAt;
+
       allow delete: if isAuthenticated() &&
                        resource.data.userId == request.auth.uid;
+    }
+
+    // ==========================================
+    // CATCH-ALL: DENY EVERYTHING ELSE
+    // ==========================================
+
+    // Deny access to any collection not explicitly defined
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

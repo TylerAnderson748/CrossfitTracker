@@ -106,10 +106,10 @@ export default function GroupDetailPage({
           gymData.ownerId === user?.id || gymData.coachIds?.includes(user?.id || "")
         );
 
-        // Load all gym members for the add member modal
+        // Load all gym members for the add member modal (from public profiles)
         if (gymData.memberIds && gymData.memberIds.length > 0) {
           const membersQuery = query(
-            collection(db, "users"),
+            collection(db, "userProfiles"),
             where("__name__", "in", gymData.memberIds.slice(0, 10)) // Firestore limit
           );
           const membersSnapshot = await getDocs(membersQuery);
@@ -146,7 +146,7 @@ export default function GroupDetailPage({
         setAdditionalFee(groupData.additionalFee ?? 0);
         setMemberIds(groupData.memberIds || []);
 
-        // Load member details
+        // Load member details from public profiles
         if (groupData.memberIds && groupData.memberIds.length > 0) {
           const memberChunks = [];
           for (let i = 0; i < groupData.memberIds.length; i += 10) {
@@ -156,7 +156,7 @@ export default function GroupDetailPage({
           const allMembers: AppUser[] = [];
           for (const chunk of memberChunks) {
             const membersQuery = query(
-              collection(db, "users"),
+              collection(db, "userProfiles"),
               where("__name__", "in", chunk)
             );
             const membersSnapshot = await getDocs(membersQuery);

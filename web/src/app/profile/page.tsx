@@ -2,12 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { doc, updateDoc, collection, query, where, getDocs, arrayRemove } from "firebase/firestore";
+import { doc, updateDoc, setDoc, collection, query, where, getDocs, arrayRemove } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
 import { Gym, Gender, WorkoutGroup, AICoachPreferences } from "@/lib/types";
 import { Timestamp } from "firebase/firestore";
 import Navigation from "@/components/Navigation";
+import { sanitizeString } from "@/lib/security";
 
 // Subscription type for member's gym memberships
 interface Subscription {
@@ -168,14 +169,33 @@ export default function ProfilePage() {
 
     setSaving(true);
     try {
+      // Sanitize all user inputs
+      const sanitizedFirstName = sanitizeString(formData.firstName, 50);
+      const sanitizedLastName = sanitizeString(formData.lastName, 50);
+      const sanitizedUsername = sanitizeString(formData.username, 30).toLowerCase();
+      const sanitizedDisplayName = `${sanitizedFirstName} ${sanitizedLastName}`.trim();
+
+      // Update private user data
       await updateDoc(doc(db, "users", user.id), {
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-        displayName: `${formData.firstName} ${formData.lastName}`,
-        username: formData.username.toLowerCase(),
+        firstName: sanitizedFirstName,
+        lastName: sanitizedLastName,
+        displayName: sanitizedDisplayName,
+        username: sanitizedUsername,
         gender: formData.gender,
         hideFromLeaderboards: formData.hideFromLeaderboards,
       });
+
+      // Sync public profile (for leaderboards, member lists)
+      await setDoc(doc(db, "userProfiles", user.id), {
+        id: user.id,
+        firstName: sanitizedFirstName,
+        lastName: sanitizedLastName,
+        displayName: sanitizedDisplayName,
+        role: user.role,
+        gymId: user.gymId,
+        hideFromLeaderboards: formData.hideFromLeaderboards,
+      }, { merge: true });
+
       setEditing(false);
       window.location.reload();
     } catch (error) {

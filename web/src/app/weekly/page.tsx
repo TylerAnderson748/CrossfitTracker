@@ -451,11 +451,12 @@ export default function WeeklyPlanPage() {
         const userCacheMap: Record<string, string> = {};
         for (let i = 0; i < userIds.length; i += 10) {
           const batch = userIds.slice(i, i + 10);
-          const usersQuery = query(collection(db, "users"), where("__name__", "in", batch));
+          // Read from userProfiles (public) instead of users (private)
+          const usersQuery = query(collection(db, "userProfiles"), where("__name__", "in", batch));
           const usersSnapshot = await getDocs(usersQuery);
           usersSnapshot.docs.forEach((doc) => {
             const userData = doc.data();
-            userCacheMap[doc.id] = userData.displayName || userData.name || userData.email || 'Unknown User';
+            userCacheMap[doc.id] = userData.displayName || userData.firstName || 'Unknown User';
           });
         }
         setUserCache(userCacheMap);
