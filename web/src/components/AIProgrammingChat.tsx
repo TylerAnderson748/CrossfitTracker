@@ -274,7 +274,6 @@ export default function AIProgrammingChat({ gymId, userId, groups, onPublish }: 
   };
 
   const publishToCalendar = async () => {
-    alert("V2 CODE RUNNING"); // Remove after testing
     if (!activeSession || selectedGroups.length === 0) return;
 
     const workouts = getAllGeneratedWorkouts();
@@ -290,12 +289,8 @@ export default function AIProgrammingChat({ gymId, userId, groups, onPublish }: 
     setError(null);
 
     try {
-      console.log("Starting publish, total workouts:", workouts.length);
-
       // Create scheduled workouts for each day
       for (const day of workouts) {
-        console.log("Processing day:", day.dayOfWeek, "isRestDay:", day.isRestDay, "components:", day.components?.length);
-
         if (day.isRestDay) continue;
         if (!day.components || day.components.length === 0) continue;
 
@@ -322,10 +317,7 @@ export default function AIProgrammingChat({ gymId, userId, groups, onPublish }: 
         const workoutDate = new Date(day.date);
         if (isNaN(workoutDate.getTime())) continue; // Skip invalid dates
 
-        // Debug logs
-        console.log("Publishing day:", day.dayOfWeek, "with", cleanComponents.length, "components");
-
-        // Create document with NO spread operators and NO optional fields
+        // Create document
         await addDoc(collection(db, "scheduledWorkouts"), {
           gymId: String(gymId),
           wodTitle: String(`${day.dayOfWeek || "Day"} Programming`),
