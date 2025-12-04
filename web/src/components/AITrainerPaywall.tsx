@@ -84,24 +84,65 @@ export default function AITrainerPaywall({ onClose, variant = "athlete" }: AITra
 
       {/* Preview of what they're missing */}
       {variant === "coach" ? (
-        <div className="space-y-3 mb-6">
+        <div className="space-y-4 mb-6">
+          {/* Example AI Output */}
           <div className="bg-white/10 backdrop-blur rounded-lg p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-yellow-400 font-semibold text-sm">Option 1: AI Drafts It</span>
+            <div className="flex items-center gap-2 mb-3">
+              <svg className="w-5 h-5 text-yellow-400" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+              </svg>
+              <span className="font-semibold text-yellow-400 text-sm">Example: &ldquo;Give me 3 days of programming&rdquo;</span>
             </div>
-            <p className="text-xs text-purple-200 mb-2">You say: &ldquo;Give me a strength week focused on squats&rdquo;</p>
-            <p className="text-sm text-purple-100 italic">
-              AI creates a full week → you review → tweak what you want → publish
+            <div className="grid grid-cols-3 gap-2 text-xs">
+              <div className="bg-white/10 rounded p-2">
+                <p className="font-semibold text-purple-100 mb-1">Thursday</p>
+                <div className="space-y-1">
+                  <span className="inline-block px-1.5 py-0.5 bg-orange-500/30 text-orange-200 rounded text-[10px]">WARMUP</span>
+                  <p className="text-purple-200">General Warm-up</p>
+                  <span className="inline-block px-1.5 py-0.5 bg-yellow-500/30 text-yellow-200 rounded text-[10px]">LIFT</span>
+                  <p className="text-purple-200">Deadlift 5-3-1+</p>
+                  <span className="inline-block px-1.5 py-0.5 bg-green-500/30 text-green-200 rounded text-[10px]">SKILL</span>
+                  <p className="text-purple-200">Toes-to-Bar</p>
+                </div>
+              </div>
+              <div className="bg-white/10 rounded p-2">
+                <p className="font-semibold text-purple-100 mb-1">Friday</p>
+                <div className="space-y-1">
+                  <span className="inline-block px-1.5 py-0.5 bg-orange-500/30 text-orange-200 rounded text-[10px]">WARMUP</span>
+                  <p className="text-purple-200">General Warm-up</p>
+                  <span className="inline-block px-1.5 py-0.5 bg-green-500/30 text-green-200 rounded text-[10px]">SKILL</span>
+                  <p className="text-purple-200">Handstand Walk</p>
+                  <span className="inline-block px-1.5 py-0.5 bg-red-500/30 text-red-200 rounded text-[10px]">WOD</span>
+                  <p className="text-purple-200">Arctic Blast</p>
+                </div>
+              </div>
+              <div className="bg-white/10 rounded p-2">
+                <p className="font-semibold text-purple-100 mb-1">Saturday</p>
+                <div className="space-y-1">
+                  <span className="inline-block px-1.5 py-0.5 bg-orange-500/30 text-orange-200 rounded text-[10px]">WARMUP</span>
+                  <p className="text-purple-200">Partner Warm-up</p>
+                  <span className="inline-block px-1.5 py-0.5 bg-red-500/30 text-red-200 rounded text-[10px]">WOD</span>
+                  <p className="text-purple-200">Weekend Warrior</p>
+                  <span className="inline-block px-1.5 py-0.5 bg-blue-500/30 text-blue-200 rounded text-[10px]">COOLDOWN</span>
+                  <p className="text-purple-200">Stretching</p>
+                </div>
+              </div>
+            </div>
+            <p className="text-[10px] text-purple-300 mt-2 text-center">
+              Complete with scaling options, stimulus notes & coaching cues
             </p>
           </div>
-          <div className="bg-white/10 backdrop-blur rounded-lg p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-yellow-400 font-semibold text-sm">Option 2: You Paste, AI Formats</span>
+
+          {/* Two options */}
+          <div className="grid grid-cols-2 gap-2">
+            <div className="bg-white/5 rounded-lg p-3 text-center">
+              <span className="text-yellow-400 font-semibold text-xs">Option 1</span>
+              <p className="text-purple-100 text-xs mt-1">AI drafts it → you fine-tune</p>
             </div>
-            <p className="text-xs text-purple-200 mb-2">Paste your workout from notes, email, or anywhere</p>
-            <p className="text-sm text-purple-100 italic">
-              AI formats it perfectly for the app → ready to publish in seconds
-            </p>
+            <div className="bg-white/5 rounded-lg p-3 text-center">
+              <span className="text-yellow-400 font-semibold text-xs">Option 2</span>
+              <p className="text-purple-100 text-xs mt-1">You paste → AI formats it</p>
+            </div>
           </div>
         </div>
       ) : (
