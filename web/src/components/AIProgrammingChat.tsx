@@ -128,7 +128,7 @@ When generating workouts, you MUST respond with valid JSON in this exact format:
           "title": "Fran",
           "description": "21-15-9\\nThrusters (95/65)\\nPull-ups",
           "scoringType": "fortime",
-          "notes": "Stimulus: Fast and intense, aim for sub-10 minutes.\\nScaling: 65/45 thrusters, ring rows or jumping pull-ups.\\nIntent: Sprint effort, unbroken if possible."
+          "notes": "Stimulus: Fast and intense, aim for sub-10 minutes.\\nRx: Thrusters (95/65), Kipping Pull-ups\\nScaled: Thrusters (65/45), Ring Rows or Banded Pull-ups\\nFoundations: Thrusters (45/35), Ring Rows\\n\\nScoring: Using scaled weights? Log as Scaled. Using less than scaled or ring rows? Log as Foundations.\\nIntent: Sprint effort, unbroken if possible."
         }
       ]
     }
@@ -189,6 +189,22 @@ The notes field for skills MUST include:
 - For skills and lifts, ONLY use the preset names listed above
 - For WODs, use benchmark WODs when appropriate, but get CREATIVE with custom WOD names using themes!
 - Pay attention to any themes, preferences, or special requests from the user
+
+IMPORTANT - WOD SCALING AND SCORING CATEGORIES:
+For ALL WOD components, you MUST include THREE scaling levels in the notes:
+1. Rx (prescribed): The standard weights and movements
+2. Scaled: Lighter weights or easier movement variations
+3. Foundations: Lightest weights or most accessible modifications
+
+ALWAYS include scoring guidance like:
+"Scoring: Using Rx weights? Log as Rx. Using scaled weights? Log as Scaled. Using less than scaled weights or significant modifications? Log as Foundations."
+
+Example scaling formats:
+- Barbell movements: "Rx: 135/95, Scaled: 95/65, Foundations: 65/45 or empty bar"
+- Kettlebell: "Rx: 53/35, Scaled: 35/26, Foundations: 26/18"
+- Pull-ups: "Rx: Kipping Pull-ups, Scaled: Banded Pull-ups, Foundations: Ring Rows"
+- Box Jumps: "Rx: 24/20, Scaled: 20/16, Foundations: Step-ups"
+- Wall Balls: "Rx: 20/14 to 10/9ft, Scaled: 14/10, Foundations: 10/6 to 9ft"
 
 If the user is just chatting or asking questions (not requesting workouts), respond with just:
 {
