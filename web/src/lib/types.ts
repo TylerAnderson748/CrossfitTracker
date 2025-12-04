@@ -362,4 +362,14 @@ export interface AIGeneratedDay {
   components: AIGeneratedWorkout[];
 }
 
+export interface AIProgrammingPreferences {
+  gymId: string;
+  philosophy: string; // Free-form text describing gym's programming philosophy
+  workoutDuration: "short" | "medium" | "long" | "varied"; // Preferred workout length
+  benchmarkFrequency: "often" | "sometimes" | "rarely"; // How often to program benchmarks
+  programmingStyle: string; // e.g., "Mayhem", "CompTrain", "HWPO", "Custom"
+  additionalRules: string; // Any other rules or preferences
+  updatedAt: Timestamp;
+}
+
 

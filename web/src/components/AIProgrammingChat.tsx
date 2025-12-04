@@ -4,13 +4,22 @@ import { useState, useRef, useEffect } from "react";
 import { collection, addDoc, updateDoc, doc, query, where, getDocs, orderBy, Timestamp, serverTimestamp, deleteDoc } from "firebase/firestore";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { db } from "@/lib/firebase";
-import { AIProgrammingSession, AIChatMessage, AIGeneratedDay, WorkoutGroup, WorkoutComponent } from "@/lib/types";
+import { AIProgrammingSession, AIChatMessage, AIGeneratedDay, WorkoutGroup, WorkoutComponent, AIProgrammingPreferences } from "@/lib/types";
 import { getAllSkills, getAllLifts, getAllWods } from "@/lib/workoutData";
 
 // Get preset workout names for the AI prompt
 const getPresetSkillNames = () => getAllSkills().map(s => s.name);
 const getPresetLiftNames = () => getAllLifts().map(l => l.name);
 const getPresetWodNames = () => getAllWods().map(w => w.name);
+
+// Default preferences
+const defaultPreferences: Omit<AIProgrammingPreferences, "gymId" | "updatedAt"> = {
+  philosophy: "",
+  workoutDuration: "varied",
+  benchmarkFrequency: "sometimes",
+  programmingStyle: "",
+  additionalRules: "",
+};
 
 interface AIProgrammingChatProps {
   gymId: string;
@@ -19,7 +28,7 @@ interface AIProgrammingChatProps {
   onPublish?: () => void;
 }
 
-const getSystemPrompt = () => {
+const getSystemPrompt = (preferences?: Omit<AIProgrammingPreferences, "gymId" | "updatedAt">) => {
   const today = new Date();
   const todayStr = today.toISOString().split('T')[0]; // YYYY-MM-DD format
   const dayOfWeek = today.toLocaleDateString('en-US', { weekday: 'long' });
@@ -37,8 +46,53 @@ const getSystemPrompt = () => {
   const liftNames = getPresetLiftNames();
   const wodNames = getPresetWodNames();
 
-  return `You are a CrossFit programming assistant helping gym owners and coaches create workout programming.
+  // Build gym preferences section
+  let gymPreferencesSection = "";
+  if (preferences) {
+    const prefParts: string[] = [];
 
+    if (preferences.philosophy) {
+      prefParts.push(`Gym Philosophy: ${preferences.philosophy}`);
+    }
+
+    if (preferences.workoutDuration && preferences.workoutDuration !== "varied") {
+      const durationMap = {
+        short: "shorter workouts (under 15 minutes)",
+        medium: "medium-length workouts (15-25 minutes)",
+        long: "longer workouts (25+ minutes)",
+        varied: "varied workout lengths"
+      };
+      prefParts.push(`Workout Duration Preference: ${durationMap[preferences.workoutDuration]}`);
+    }
+
+    if (preferences.benchmarkFrequency) {
+      const freqMap = {
+        often: "Program benchmark WODs frequently (1-2 per week)",
+        sometimes: "Program benchmark WODs occasionally (1-2 per month)",
+        rarely: "Rarely program benchmark WODs - prefer custom workouts"
+      };
+      prefParts.push(`Benchmark Frequency: ${freqMap[preferences.benchmarkFrequency]}`);
+    }
+
+    if (preferences.programmingStyle) {
+      prefParts.push(`Programming Style Inspiration: ${preferences.programmingStyle}`);
+    }
+
+    if (preferences.additionalRules) {
+      prefParts.push(`Additional Rules/Preferences: ${preferences.additionalRules}`);
+    }
+
+    if (prefParts.length > 0) {
+      gymPreferencesSection = `
+GYM OWNER PREFERENCES (IMPORTANT - Follow these rules):
+${prefParts.join("\n")}
+
+`;
+    }
+  }
+
+  return `You are a CrossFit programming assistant helping gym owners and coaches create workout programming.
+${gymPreferencesSection}
 IMPORTANT: Today's date is ${todayStr} (${dayOfWeek}). Current month: ${monthName}. Current season: ${season}.
 When generating workouts, start from today or the next upcoming day. Use real, current dates.
 
@@ -163,6 +217,12 @@ export default function AIProgrammingChat({ gymId, userId, groups, onPublish }: 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [loadingSessions, setLoadingSessions] = useState(true);
 
+  // Programming preferences state
+  const [preferences, setPreferences] = useState<Omit<AIProgrammingPreferences, "gymId" | "updatedAt">>(defaultPreferences);
+  const [showSettings, setShowSettings] = useState(false);
+  const [preferencesDocId, setPreferencesDocId] = useState<string | null>(null);
+  const [savingPreferences, setSavingPreferences] = useState(false);
+
   // Scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -197,6 +257,59 @@ export default function AIProgrammingChat({ gymId, userId, groups, onPublish }: 
     };
     loadSessions();
   }, [gymId]);
+
+  // Load programming preferences
+  useEffect(() => {
+    const loadPreferences = async () => {
+      try {
+        const prefsQuery = query(
+          collection(db, "aiProgrammingPreferences"),
+          where("gymId", "==", gymId)
+        );
+        const snapshot = await getDocs(prefsQuery);
+        if (!snapshot.empty) {
+          const prefDoc = snapshot.docs[0];
+          const prefData = prefDoc.data();
+          setPreferencesDocId(prefDoc.id);
+          setPreferences({
+            philosophy: prefData.philosophy || "",
+            workoutDuration: prefData.workoutDuration || "varied",
+            benchmarkFrequency: prefData.benchmarkFrequency || "sometimes",
+            programmingStyle: prefData.programmingStyle || "",
+            additionalRules: prefData.additionalRules || "",
+          });
+        }
+      } catch (err) {
+        console.error("Error loading preferences:", err);
+      }
+    };
+    loadPreferences();
+  }, [gymId]);
+
+  // Save preferences
+  const savePreferences = async () => {
+    setSavingPreferences(true);
+    try {
+      const prefData = {
+        gymId,
+        ...preferences,
+        updatedAt: serverTimestamp(),
+      };
+
+      if (preferencesDocId) {
+        await updateDoc(doc(db, "aiProgrammingPreferences", preferencesDocId), prefData);
+      } else {
+        const docRef = await addDoc(collection(db, "aiProgrammingPreferences"), prefData);
+        setPreferencesDocId(docRef.id);
+      }
+      setShowSettings(false);
+    } catch (err) {
+      console.error("Error saving preferences:", err);
+      setError("Failed to save preferences");
+    } finally {
+      setSavingPreferences(false);
+    }
+  };
 
   const createNewSession = async () => {
     // Generate unique name with count
@@ -419,7 +532,7 @@ export default function AIProgrammingChat({ gymId, userId, groups, onPublish }: 
         `${msg.role === "user" ? "User" : "Assistant"}: ${msg.content}`
       ).join("\n\n");
 
-      const prompt = `${getSystemPrompt()}\n\nConversation so far:\n${conversationHistory}\n\nRespond to the user's latest message. Remember to output valid JSON only.`;
+      const prompt = `${getSystemPrompt(preferences)}\n\nConversation so far:\n${conversationHistory}\n\nRespond to the user's latest message. Remember to output valid JSON only.`;
 
       const result = await model.generateContent(prompt);
       const response = result.response;
@@ -610,12 +723,24 @@ export default function AIProgrammingChat({ gymId, userId, groups, onPublish }: 
               <p className="text-white/80 text-sm">Generate months of workouts with AI</p>
             </div>
           </div>
-          <button
-            onClick={createNewSession}
-            className="px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg text-sm font-medium transition-colors"
-          >
-            + New Program
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowSettings(true)}
+              className="p-2 bg-white/20 hover:bg-white/30 text-white rounded-lg transition-colors"
+              title="AI Programming Preferences"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            </button>
+            <button
+              onClick={createNewSession}
+              className="px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg text-sm font-medium transition-colors"
+            >
+              + New Program
+            </button>
+          </div>
         </div>
       </div>
 
@@ -943,6 +1068,134 @@ export default function AIProgrammingChat({ gymId, userId, groups, onPublish }: 
                   {isPublishing ? "Publishing..." : `Publish ${generatedWorkouts.filter(d => !d.isRestDay).length} Workouts`}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Settings Modal */}
+      {showSettings && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-4 border-b border-gray-200 bg-gradient-to-r from-purple-600 to-indigo-600 rounded-t-xl">
+              <h3 className="text-lg font-semibold text-white">AI Programming Preferences</h3>
+              <p className="text-white/80 text-sm">Set rules and philosophy for the AI to follow</p>
+            </div>
+
+            <div className="p-4 space-y-4">
+              {/* Gym Philosophy */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Gym Philosophy
+                </label>
+                <textarea
+                  value={preferences.philosophy}
+                  onChange={(e) => setPreferences(prev => ({ ...prev, philosophy: e.target.value }))}
+                  placeholder="e.g., We focus on functional fitness for all levels. We emphasize proper form over heavy weights. Our members enjoy longer, challenging workouts..."
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
+                />
+              </div>
+
+              {/* Workout Duration */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Preferred Workout Duration
+                </label>
+                <div className="grid grid-cols-4 gap-2">
+                  {[
+                    { value: "short", label: "Short", desc: "<15 min" },
+                    { value: "medium", label: "Medium", desc: "15-25 min" },
+                    { value: "long", label: "Long", desc: "25+ min" },
+                    { value: "varied", label: "Varied", desc: "Mix it up" },
+                  ].map(opt => (
+                    <button
+                      key={opt.value}
+                      onClick={() => setPreferences(prev => ({ ...prev, workoutDuration: opt.value as AIProgrammingPreferences["workoutDuration"] }))}
+                      className={`p-2 rounded-lg text-center transition-colors ${
+                        preferences.workoutDuration === opt.value
+                          ? "bg-purple-600 text-white"
+                          : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                      }`}
+                    >
+                      <div className="text-sm font-medium">{opt.label}</div>
+                      <div className="text-xs opacity-80">{opt.desc}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Benchmark Frequency */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Benchmark WOD Frequency
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { value: "often", label: "Often", desc: "1-2/week" },
+                    { value: "sometimes", label: "Sometimes", desc: "1-2/month" },
+                    { value: "rarely", label: "Rarely", desc: "Custom only" },
+                  ].map(opt => (
+                    <button
+                      key={opt.value}
+                      onClick={() => setPreferences(prev => ({ ...prev, benchmarkFrequency: opt.value as AIProgrammingPreferences["benchmarkFrequency"] }))}
+                      className={`p-2 rounded-lg text-center transition-colors ${
+                        preferences.benchmarkFrequency === opt.value
+                          ? "bg-purple-600 text-white"
+                          : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                      }`}
+                    >
+                      <div className="text-sm font-medium">{opt.label}</div>
+                      <div className="text-xs opacity-80">{opt.desc}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Programming Style */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Programming Style Inspiration
+                </label>
+                <input
+                  type="text"
+                  value={preferences.programmingStyle}
+                  onChange={(e) => setPreferences(prev => ({ ...prev, programmingStyle: e.target.value }))}
+                  placeholder="e.g., Mayhem, CompTrain, HWPO, CrossFit Main Site, Custom..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                />
+                <p className="text-xs text-gray-500 mt-1">The AI will try to match this programming style</p>
+              </div>
+
+              {/* Additional Rules */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Additional Rules or Preferences
+                </label>
+                <textarea
+                  value={preferences.additionalRules}
+                  onChange={(e) => setPreferences(prev => ({ ...prev, additionalRules: e.target.value }))}
+                  placeholder="e.g., Always include a strength component. No running on Mondays. Include skill work at least 2x per week. Avoid programming heavy deadlifts and back squats on consecutive days..."
+                  rows={4}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
+                />
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-gray-200 bg-gray-50 rounded-b-xl flex justify-end gap-3">
+              <button
+                onClick={() => setShowSettings(false)}
+                className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={savePreferences}
+                disabled={savingPreferences}
+                className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {savingPreferences ? "Saving..." : "Save Preferences"}
+              </button>
             </div>
           </div>
         </div>
