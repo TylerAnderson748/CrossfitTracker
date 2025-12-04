@@ -297,15 +297,17 @@ IMPORTANT: Only respond with valid JSON. No additional text before or after the 
   };
 
   // Save to personal workouts
-  const handleSaveToPersonal = async () => {
+  const handleSaveToPersonal = async (overrideDate?: string) => {
     if (!user || generatedWorkouts.length === 0) return;
 
     setIsSaving(true);
     setSaveSuccess(null);
 
     try {
-      // Parse the selected date as local time
-      const [year, month, day] = selectedDate.split("-").map(Number);
+      // Use override date if provided, otherwise use selected date
+      const dateToUse = overrideDate || selectedDate;
+      // Parse the date as local time
+      const [year, month, day] = dateToUse.split("-").map(Number);
       const workoutDate = new Date(year, month - 1, day, 12, 0, 0, 0);
 
       // Map workout type to component type
@@ -576,10 +578,10 @@ IMPORTANT: Only respond with valid JSON. No additional text before or after the 
                   </div>
                 )}
 
-                {/* Date/Group Picker for Saving */}
-                {showDatePicker && !saveSuccess && (
+                {/* Date/Group Picker for Saving (Coach flow) */}
+                {showDatePicker && !saveSuccess && isCoach && userGym && (
                   <div className="bg-purple-50 border border-purple-200 rounded-xl p-4 space-y-4">
-                    <h3 className="font-semibold text-purple-900">Save Workouts</h3>
+                    <h3 className="font-semibold text-purple-900">Save to {userGym.name}</h3>
 
                     {/* Date Selection */}
                     <div>
@@ -595,7 +597,7 @@ IMPORTANT: Only respond with valid JSON. No additional text before or after the 
                     </div>
 
                     {/* Group Selection for Gym */}
-                    {userGym && gymGroups.length > 0 && (
+                    {gymGroups.length > 0 && (
                       <div>
                         <label className="block text-sm font-medium text-purple-800 mb-2">
                           Select Groups
@@ -627,23 +629,50 @@ IMPORTANT: Only respond with valid JSON. No additional text before or after the 
                       >
                         Cancel
                       </button>
-                      {userGym ? (
-                        <button
-                          onClick={handleSaveToGym}
-                          disabled={isSaving}
-                          className="flex-1 py-2 bg-purple-600 text-white font-medium rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-colors"
-                        >
-                          {isSaving ? "Saving..." : `Save to ${userGym.name}`}
-                        </button>
-                      ) : (
-                        <button
-                          onClick={handleSaveToPersonal}
-                          disabled={isSaving}
-                          className="flex-1 py-2 bg-purple-600 text-white font-medium rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-colors"
-                        >
-                          {isSaving ? "Saving..." : "Save to My Workouts"}
-                        </button>
-                      )}
+                      <button
+                        onClick={handleSaveToGym}
+                        disabled={isSaving}
+                        className="flex-1 py-2 bg-purple-600 text-white font-medium rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-colors"
+                      >
+                        {isSaving ? "Saving..." : `Save to ${userGym.name}`}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Custom Date Picker for Personal Workouts (Athlete flow) */}
+                {showDatePicker && !saveSuccess && !isCoach && (
+                  <div className="bg-purple-50 border border-purple-200 rounded-xl p-4 space-y-4">
+                    <h3 className="font-semibold text-purple-900">Save to My Workouts</h3>
+
+                    {/* Date Selection */}
+                    <div>
+                      <label className="block text-sm font-medium text-purple-800 mb-1">
+                        Select Date
+                      </label>
+                      <input
+                        type="date"
+                        value={selectedDate}
+                        onChange={(e) => setSelectedDate(e.target.value)}
+                        className="w-full px-3 py-2 border border-purple-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-purple-500"
+                      />
+                    </div>
+
+                    {/* Save Buttons */}
+                    <div className="flex gap-3 pt-2">
+                      <button
+                        onClick={() => setShowDatePicker(false)}
+                        className="flex-1 py-2 border border-purple-300 text-purple-700 rounded-lg hover:bg-purple-100 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleSaveToPersonal}
+                        disabled={isSaving}
+                        className="flex-1 py-2 bg-purple-600 text-white font-medium rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-colors"
+                      >
+                        {isSaving ? "Saving..." : "Save"}
+                      </button>
                     </div>
                   </div>
                 )}
@@ -651,8 +680,8 @@ IMPORTANT: Only respond with valid JSON. No additional text before or after the 
                 {/* Action Buttons */}
                 {!showDatePicker && !saveSuccess && (
                   <div className="space-y-3">
-                    {/* Primary Save Button */}
-                    {userGym ? (
+                    {/* Coach: Add to Gym Programming */}
+                    {isCoach && userGym ? (
                       <button
                         onClick={() => setShowDatePicker(true)}
                         className="w-full py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold rounded-lg hover:from-purple-700 hover:to-indigo-700 transition-colors flex items-center justify-center gap-2"
@@ -663,15 +692,42 @@ IMPORTANT: Only respond with valid JSON. No additional text before or after the 
                         Add to {userGym.name} Programming
                       </button>
                     ) : (
-                      <button
-                        onClick={() => setShowDatePicker(true)}
-                        className="w-full py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold rounded-lg hover:from-purple-700 hover:to-indigo-700 transition-colors flex items-center justify-center gap-2"
-                      >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                        </svg>
-                        Add to My Workouts
-                      </button>
+                      /* Athlete: Friendly date options */
+                      <div className="space-y-2">
+                        <button
+                          onClick={() => {
+                            const today = new Date().toISOString().split("T")[0];
+                            handleSaveToPersonal(today);
+                          }}
+                          disabled={isSaving}
+                          className="w-full py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold rounded-lg hover:from-purple-700 hover:to-indigo-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                          </svg>
+                          {isSaving ? "Saving..." : "Add to Today"}
+                        </button>
+                        <button
+                          onClick={() => {
+                            const tomorrow = new Date();
+                            tomorrow.setDate(tomorrow.getDate() + 1);
+                            handleSaveToPersonal(tomorrow.toISOString().split("T")[0]);
+                          }}
+                          disabled={isSaving}
+                          className="w-full py-3 bg-purple-100 text-purple-700 font-bold rounded-lg hover:bg-purple-200 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          </svg>
+                          Add to Tomorrow
+                        </button>
+                        <button
+                          onClick={() => setShowDatePicker(true)}
+                          className="w-full py-2.5 border border-purple-300 text-purple-700 font-medium rounded-lg hover:bg-purple-50 transition-colors"
+                        >
+                          Pick a Different Date
+                        </button>
+                      </div>
                     )}
 
                     {/* Secondary Actions */}
