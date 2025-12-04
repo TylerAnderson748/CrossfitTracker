@@ -344,6 +344,13 @@ IMPORTANT: Only respond with valid JSON. No additional text before or after the 
 
       setSaveSuccess(`Saved ${generatedWorkouts.length} workout${generatedWorkouts.length > 1 ? "s" : ""} to your personal calendar for ${workoutDate.toLocaleDateString()}`);
       setShowDatePicker(false);
+      setIsSaving(false);
+
+      // Redirect to weekly page after a short delay to see the workout
+      setTimeout(() => {
+        window.location.href = "/weekly";
+      }, 1500);
+      return;
     } catch (err) {
       console.error("Error saving personal workout:", err);
       setError("Failed to save workouts. Please try again.");
