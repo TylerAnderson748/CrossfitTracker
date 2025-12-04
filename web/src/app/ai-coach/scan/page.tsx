@@ -1,9 +1,12 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { collection, query, where, getDocs, addDoc, Timestamp } from "firebase/firestore";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { useAuth } from "@/lib/AuthContext";
+import { db } from "@/lib/firebase";
+import { Gym, WorkoutGroup } from "@/lib/types";
 import Navigation from "@/components/Navigation";
 
 interface GeneratedWorkout {
@@ -23,11 +26,72 @@ export default function AIScanPage() {
   const [rawResponse, setRawResponse] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Gym/coach state
+  const [userGym, setUserGym] = useState<Gym | null>(null);
+  const [gymGroups, setGymGroups] = useState<WorkoutGroup[]>([]);
+  const [loadingGym, setLoadingGym] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<string>(
+    new Date().toISOString().split("T")[0]
+  );
+  const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
+
   // Check subscription or if user is a coach/owner
   const hasSubscription = user?.aiTrainerSubscription?.status === "active" ||
     user?.aiTrainerSubscription?.status === "trialing";
   const isCoach = user?.role === "coach" || user?.role === "owner";
   const hasAccess = hasSubscription || isCoach;
+
+  // Fetch user's gym if they're a coach
+  useEffect(() => {
+    const fetchUserGym = async () => {
+      if (!user) {
+        setLoadingGym(false);
+        return;
+      }
+
+      try {
+        // Check if user is owner of any gym
+        let gymDoc = null;
+        const ownerQuery = query(collection(db, "gyms"), where("ownerId", "==", user.id));
+        const ownerSnapshot = await getDocs(ownerQuery);
+        if (!ownerSnapshot.empty) {
+          gymDoc = { id: ownerSnapshot.docs[0].id, ...ownerSnapshot.docs[0].data() } as Gym;
+        }
+
+        // Check if user is a coach of any gym
+        if (!gymDoc) {
+          const coachQuery = query(collection(db, "gyms"), where("coachIds", "array-contains", user.id));
+          const coachSnapshot = await getDocs(coachQuery);
+          if (!coachSnapshot.empty) {
+            gymDoc = { id: coachSnapshot.docs[0].id, ...coachSnapshot.docs[0].data() } as Gym;
+          }
+        }
+
+        if (gymDoc) {
+          setUserGym(gymDoc);
+          // Fetch groups for this gym
+          const groupsQuery = query(collection(db, "groups"), where("gymId", "==", gymDoc.id));
+          const groupsSnapshot = await getDocs(groupsQuery);
+          const groups = groupsSnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          })) as WorkoutGroup[];
+          setGymGroups(groups);
+          // Select all groups by default
+          setSelectedGroupIds(groups.map(g => g.id));
+        }
+      } catch (err) {
+        console.error("Error fetching user gym:", err);
+      }
+
+      setLoadingGym(false);
+    };
+
+    fetchUserGym();
+  }, [user]);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -169,9 +233,129 @@ IMPORTANT: Only respond with valid JSON. No additional text before or after the 
     setGeneratedWorkouts([]);
     setRawResponse(null);
     setError(null);
+    setSaveSuccess(null);
+    setShowDatePicker(false);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
+  };
+
+  // Save to gym programming
+  const handleSaveToGym = async () => {
+    if (!user || !userGym || generatedWorkouts.length === 0) return;
+
+    setIsSaving(true);
+    setSaveSuccess(null);
+
+    try {
+      // Parse the selected date as local time
+      const [year, month, day] = selectedDate.split("-").map(Number);
+      const workoutDate = new Date(year, month - 1, day, 12, 0, 0, 0);
+
+      // Map workout type to component type
+      const mapType = (type: string): string => {
+        const typeLower = type.toLowerCase();
+        if (typeLower.includes("strength") || typeLower.includes("lift")) return "lift";
+        if (typeLower.includes("wod") || typeLower.includes("metcon") || typeLower.includes("conditioning")) return "wod";
+        if (typeLower.includes("skill") || typeLower.includes("gymnastics")) return "skill";
+        if (typeLower.includes("warmup") || typeLower.includes("warm-up")) return "warmup";
+        if (typeLower.includes("cooldown") || typeLower.includes("cool-down")) return "cooldown";
+        return "wod";
+      };
+
+      // Create workout components from generated workouts
+      const components = generatedWorkouts.map((w, idx) => ({
+        id: `comp_${Date.now()}_${idx}`,
+        type: mapType(w.type),
+        title: w.title,
+        description: w.description,
+        notes: w.notes || "",
+        order: idx,
+      }));
+
+      // Create the scheduled workout
+      const scheduledWorkout = {
+        gymId: userGym.id,
+        groupIds: selectedGroupIds.length > 0 ? selectedGroupIds : gymGroups.map(g => g.id),
+        date: Timestamp.fromDate(workoutDate),
+        components,
+        createdAt: Timestamp.now(),
+        createdBy: user.id,
+        timeSlots: [],
+      };
+
+      await addDoc(collection(db, "scheduledWorkouts"), scheduledWorkout);
+
+      setSaveSuccess(`Saved ${generatedWorkouts.length} workout${generatedWorkouts.length > 1 ? "s" : ""} to ${userGym.name} for ${workoutDate.toLocaleDateString()}`);
+      setShowDatePicker(false);
+    } catch (err) {
+      console.error("Error saving to gym:", err);
+      setError("Failed to save workouts. Please try again.");
+    }
+
+    setIsSaving(false);
+  };
+
+  // Save to personal workouts
+  const handleSaveToPersonal = async () => {
+    if (!user || generatedWorkouts.length === 0) return;
+
+    setIsSaving(true);
+    setSaveSuccess(null);
+
+    try {
+      // Parse the selected date as local time
+      const [year, month, day] = selectedDate.split("-").map(Number);
+      const workoutDate = new Date(year, month - 1, day, 12, 0, 0, 0);
+
+      // Map workout type to component type
+      const mapType = (type: string): string => {
+        const typeLower = type.toLowerCase();
+        if (typeLower.includes("strength") || typeLower.includes("lift")) return "lift";
+        if (typeLower.includes("wod") || typeLower.includes("metcon") || typeLower.includes("conditioning")) return "wod";
+        if (typeLower.includes("skill") || typeLower.includes("gymnastics")) return "skill";
+        if (typeLower.includes("warmup") || typeLower.includes("warm-up")) return "warmup";
+        if (typeLower.includes("cooldown") || typeLower.includes("cool-down")) return "cooldown";
+        return "wod";
+      };
+
+      // Create workout components from generated workouts
+      const components = generatedWorkouts.map((w, idx) => ({
+        id: `comp_${Date.now()}_${idx}`,
+        type: mapType(w.type),
+        title: w.title,
+        description: w.description,
+        notes: w.notes || "",
+        order: idx,
+      }));
+
+      // Create a personal scheduled workout (no gymId, personal userId)
+      const personalWorkout = {
+        userId: user.id,
+        date: Timestamp.fromDate(workoutDate),
+        components,
+        createdAt: Timestamp.now(),
+        isPersonal: true,
+      };
+
+      await addDoc(collection(db, "scheduledWorkouts"), personalWorkout);
+
+      setSaveSuccess(`Saved ${generatedWorkouts.length} workout${generatedWorkouts.length > 1 ? "s" : ""} to your personal calendar for ${workoutDate.toLocaleDateString()}`);
+      setShowDatePicker(false);
+    } catch (err) {
+      console.error("Error saving personal workout:", err);
+      setError("Failed to save workouts. Please try again.");
+    }
+
+    setIsSaving(false);
+  };
+
+  const toggleGroupSelection = (groupId: string) => {
+    setSelectedGroupIds(prev =>
+      prev.includes(groupId)
+        ? prev.filter(id => id !== groupId)
+        : [...prev, groupId]
+    );
   };
 
   if (loading) {
@@ -352,12 +536,6 @@ IMPORTANT: Only respond with valid JSON. No additional text before or after the 
                   <h2 className="text-lg font-bold text-gray-900">
                     Found {generatedWorkouts.length} Workout{generatedWorkouts.length !== 1 ? "s" : ""}
                   </h2>
-                  <button
-                    onClick={clearImage}
-                    className="text-sm text-purple-600 hover:text-purple-700"
-                  >
-                    Scan Another
-                  </button>
                 </div>
 
                 {generatedWorkouts.map((workout, index) => (
@@ -386,25 +564,142 @@ IMPORTANT: Only respond with valid JSON. No additional text before or after the 
                   </div>
                 ))}
 
+                {/* Success Message */}
+                {saveSuccess && (
+                  <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-3">
+                    <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
+                      <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                    <p className="text-green-700 text-sm">{saveSuccess}</p>
+                  </div>
+                )}
+
+                {/* Date/Group Picker for Saving */}
+                {showDatePicker && !saveSuccess && (
+                  <div className="bg-purple-50 border border-purple-200 rounded-xl p-4 space-y-4">
+                    <h3 className="font-semibold text-purple-900">Save Workouts</h3>
+
+                    {/* Date Selection */}
+                    <div>
+                      <label className="block text-sm font-medium text-purple-800 mb-1">
+                        Select Date
+                      </label>
+                      <input
+                        type="date"
+                        value={selectedDate}
+                        onChange={(e) => setSelectedDate(e.target.value)}
+                        className="w-full px-3 py-2 border border-purple-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-purple-500"
+                      />
+                    </div>
+
+                    {/* Group Selection for Gym */}
+                    {userGym && gymGroups.length > 0 && (
+                      <div>
+                        <label className="block text-sm font-medium text-purple-800 mb-2">
+                          Select Groups
+                        </label>
+                        <div className="flex flex-wrap gap-2">
+                          {gymGroups.map((group) => (
+                            <button
+                              key={group.id}
+                              type="button"
+                              onClick={() => toggleGroupSelection(group.id)}
+                              className={`px-3 py-1.5 text-sm rounded-full transition-colors ${
+                                selectedGroupIds.includes(group.id)
+                                  ? "bg-purple-600 text-white"
+                                  : "bg-white text-purple-700 border border-purple-300"
+                              }`}
+                            >
+                              {group.name}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Save Buttons */}
+                    <div className="flex gap-3 pt-2">
+                      <button
+                        onClick={() => setShowDatePicker(false)}
+                        className="flex-1 py-2 border border-purple-300 text-purple-700 rounded-lg hover:bg-purple-100 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      {userGym ? (
+                        <button
+                          onClick={handleSaveToGym}
+                          disabled={isSaving}
+                          className="flex-1 py-2 bg-purple-600 text-white font-medium rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-colors"
+                        >
+                          {isSaving ? "Saving..." : `Save to ${userGym.name}`}
+                        </button>
+                      ) : (
+                        <button
+                          onClick={handleSaveToPersonal}
+                          disabled={isSaving}
+                          className="flex-1 py-2 bg-purple-600 text-white font-medium rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-colors"
+                        >
+                          {isSaving ? "Saving..." : "Save to My Workouts"}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {/* Action Buttons */}
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => {
-                      // Copy workouts to clipboard
-                      const text = generatedWorkouts.map(w =>
-                        `${w.title} (${w.type})\n${w.description}${w.notes ? `\nNotes: ${w.notes}` : ""}`
-                      ).join("\n\n");
-                      navigator.clipboard.writeText(text);
-                      alert("Workouts copied to clipboard!");
-                    }}
-                    className="flex-1 py-3 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
-                    </svg>
-                    Copy All
-                  </button>
-                </div>
+                {!showDatePicker && !saveSuccess && (
+                  <div className="space-y-3">
+                    {/* Primary Save Button */}
+                    {userGym ? (
+                      <button
+                        onClick={() => setShowDatePicker(true)}
+                        className="w-full py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold rounded-lg hover:from-purple-700 hover:to-indigo-700 transition-colors flex items-center justify-center gap-2"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                        </svg>
+                        Add to {userGym.name} Programming
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => setShowDatePicker(true)}
+                        className="w-full py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold rounded-lg hover:from-purple-700 hover:to-indigo-700 transition-colors flex items-center justify-center gap-2"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                        </svg>
+                        Add to My Workouts
+                      </button>
+                    )}
+
+                    {/* Secondary Actions */}
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => {
+                          const text = generatedWorkouts.map(w =>
+                            `${w.title} (${w.type})\n${w.description}${w.notes ? `\nNotes: ${w.notes}` : ""}`
+                          ).join("\n\n");
+                          navigator.clipboard.writeText(text);
+                          alert("Workouts copied to clipboard!");
+                        }}
+                        className="flex-1 py-2.5 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                        </svg>
+                        Copy
+                      </button>
+                      <button
+                        onClick={clearImage}
+                        className="flex-1 py-2.5 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors"
+                      >
+                        Scan Another
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
