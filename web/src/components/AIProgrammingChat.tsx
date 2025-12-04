@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { collection, addDoc, updateDoc, doc, query, where, getDocs, orderBy, Timestamp, serverTimestamp, deleteDoc } from "firebase/firestore";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { db } from "@/lib/firebase";
@@ -233,8 +233,7 @@ export default function AIProgrammingChat({ gymId, userId, groups, onPublish }: 
   const [editingTitle, setEditingTitle] = useState("");
   const [isPublishing, setIsPublishing] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const [loadingSessions, setLoadingSessions] = useState(true);
+    const [loadingSessions, setLoadingSessions] = useState(true);
 
   // Programming preferences state
   const [preferences, setPreferences] = useState<Omit<AIProgrammingPreferences, "gymId" | "updatedAt">>(defaultPreferences);
@@ -242,10 +241,6 @@ export default function AIProgrammingChat({ gymId, userId, groups, onPublish }: 
   const [preferencesDocId, setPreferencesDocId] = useState<string | null>(null);
   const [savingPreferences, setSavingPreferences] = useState(false);
 
-  // Scroll to bottom when messages change
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [activeSession?.messages]);
 
   // Load existing sessions
   useEffect(() => {
@@ -917,7 +912,6 @@ export default function AIProgrammingChat({ gymId, userId, groups, onPublish }: 
               </div>
             )}
 
-            <div ref={messagesEndRef} />
           </div>
 
           {/* Error Display */}
