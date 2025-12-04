@@ -156,15 +156,6 @@ export default function GymPage() {
             <h2 className="font-semibold text-gray-900 mb-4">What you&apos;ll get:</h2>
             <div className="space-y-4">
               <div className="flex items-start gap-4">
-                <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                  <span className="text-xl">🤖</span>
-                </div>
-                <div>
-                  <h3 className="font-medium text-gray-900">AI Programming</h3>
-                  <p className="text-gray-500 text-sm">Generate weeks of programming with AI - just describe what you want</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-4">
                 <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
                   <span className="text-xl">👥</span>
                 </div>
@@ -183,13 +174,40 @@ export default function GymPage() {
                 </div>
               </div>
               <div className="flex items-start gap-4">
-                <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                  <span className="text-xl">📸</span>
+                <div className="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <span className="text-xl">📋</span>
                 </div>
                 <div>
-                  <h3 className="font-medium text-gray-900">Scan & Publish</h3>
-                  <p className="text-gray-500 text-sm">Take a photo of any whiteboard workout and publish it instantly</p>
+                  <h3 className="font-medium text-gray-900">Manual Programming</h3>
+                  <p className="text-gray-500 text-sm">Create and publish workouts for your athletes</p>
                 </div>
+              </div>
+              <div className="flex items-start gap-4">
+                <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <span className="text-xl">📊</span>
+                </div>
+                <div>
+                  <h3 className="font-medium text-gray-900">Leaderboards</h3>
+                  <p className="text-gray-500 text-sm">Track results and see how athletes compare</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* AI Features Upsell */}
+          <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-2xl p-6 mb-8">
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-xl flex items-center justify-center flex-shrink-0">
+                <span className="text-2xl">🤖</span>
+              </div>
+              <div>
+                <h3 className="font-semibold text-gray-900">Want AI-Powered Features?</h3>
+                <p className="text-gray-600 text-sm mt-1">
+                  Subscribe to AI Coach Pro to unlock AI programming, photo scanning, and personalized coaching for just $9.99/month.
+                </p>
+                <Link href="/subscribe" className="inline-block mt-3 text-sm text-purple-600 font-medium hover:underline">
+                  Learn more about AI Coach Pro →
+                </Link>
               </div>
             </div>
           </div>

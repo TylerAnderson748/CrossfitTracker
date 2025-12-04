@@ -38,11 +38,10 @@ export default function AIScanPage() {
   );
   const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
 
-  // Check subscription or if user is a coach/owner
+  // Check subscription - coaches/owners also need subscription for AI features
   const hasSubscription = user?.aiTrainerSubscription?.status === "active" ||
     user?.aiTrainerSubscription?.status === "trialing";
   const isCoach = user?.role === "coach" || user?.role === "owner";
-  const hasAccess = hasSubscription || isCoach;
 
   // Fetch user's gym if they're a coach
   useEffect(() => {
@@ -411,7 +410,7 @@ IMPORTANT: Only respond with valid JSON. No additional text before or after the 
     return null;
   }
 
-  if (!hasAccess) {
+  if (!hasSubscription) {
     return (
       <div className="min-h-screen bg-gray-50">
         <Navigation />

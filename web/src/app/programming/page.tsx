@@ -72,7 +72,7 @@ export default function ProgrammingPage() {
       )
     : availableGyms;
 
-  // AI Subscription status
+  // AI Subscription status - everyone needs subscription for AI features
   const aiSubscription = user?.aiTrainerSubscription;
   const hasActiveAI = aiSubscription?.status === "active" || aiSubscription?.status === "trialing";
   const isCoachOrOwner = user?.role === "coach" || user?.role === "owner";
@@ -109,20 +109,20 @@ export default function ProgrammingPage() {
                 <div>
                   <h3 className="text-xl font-bold">AI Coach Pro</h3>
                   <p className="text-purple-200 text-sm mt-1">
-                    {hasActiveAI || isCoachOrOwner
+                    {hasActiveAI
                       ? "Personalized scaling, workout analysis & AI programming"
                       : "Get personalized coaching powered by AI"}
                   </p>
                 </div>
               </div>
-              {(hasActiveAI || isCoachOrOwner) && (
+              {hasActiveAI && (
                 <span className="px-3 py-1 bg-green-400/20 text-green-100 text-sm font-medium rounded-full border border-green-400/30">
                   Active
                 </span>
               )}
             </div>
 
-            {hasActiveAI || isCoachOrOwner ? (
+            {hasActiveAI ? (
               <>
                 {/* Active subscription features */}
                 <div className="mt-6 grid grid-cols-2 gap-3">
@@ -173,7 +173,7 @@ export default function ProgrammingPage() {
                 </div>
 
                 {/* Subscription info */}
-                {aiSubscription && !isCoachOrOwner && (
+                {aiSubscription && (
                   <div className="mt-6 pt-4 border-t border-white/20 flex items-center justify-between text-sm">
                     <span className="text-purple-200">
                       {aiSubscription.status === "trialing" ? "Trial ends" : "Renews"}{" "}
@@ -187,11 +187,6 @@ export default function ProgrammingPage() {
                     >
                       Manage Subscription →
                     </button>
-                  </div>
-                )}
-                {isCoachOrOwner && (
-                  <div className="mt-6 pt-4 border-t border-white/20 text-sm text-purple-200">
-                    <span>✓ Included with your Coach/Owner role</span>
                   </div>
                 )}
               </>
