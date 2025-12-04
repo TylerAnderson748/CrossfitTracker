@@ -207,19 +207,27 @@ export default function AIProgrammingChat({ gymId, userId, groups, onPublish }: 
         role: "assistant",
         content: parsedResponse.message,
         timestamp: Timestamp.now(),
-        generatedWorkouts: parsedResponse.workouts.length > 0 ? parsedResponse.workouts : undefined,
       };
+
+      // Only add generatedWorkouts if there are workouts
+      if (parsedResponse.workouts && parsedResponse.workouts.length > 0) {
+        assistantMessage.generatedWorkouts = parsedResponse.workouts;
+      }
 
       const finalMessages = [...updatedMessages, assistantMessage];
 
-      // Update session in Firestore
-      await updateDoc(doc(db, "aiProgrammingSessions", activeSession.id), {
+      // Prepare update data - filter out any undefined values
+      const updateData: Record<string, unknown> = {
         messages: finalMessages,
         updatedAt: Timestamp.now(),
-        ...(parsedResponse.workouts.length > 0 && {
-          programWeeks: Math.ceil(parsedResponse.workouts.length / 7)
-        })
-      });
+      };
+
+      if (parsedResponse.workouts && parsedResponse.workouts.length > 0) {
+        updateData.programWeeks = Math.ceil(parsedResponse.workouts.length / 7);
+      }
+
+      // Update session in Firestore
+      await updateDoc(doc(db, "aiProgrammingSessions", activeSession.id), updateData);
 
       setActiveSession(prev => prev ? { ...prev, messages: finalMessages } : null);
     } catch (err) {
