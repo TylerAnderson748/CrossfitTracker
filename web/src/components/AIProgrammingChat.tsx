@@ -274,6 +274,7 @@ export default function AIProgrammingChat({ gymId, userId, groups, onPublish }: 
   };
 
   const publishToCalendar = async () => {
+    alert("V2 CODE RUNNING"); // Remove after testing
     if (!activeSession || selectedGroups.length === 0) return;
 
     const workouts = getAllGeneratedWorkouts();
@@ -352,7 +353,7 @@ export default function AIProgrammingChat({ gymId, userId, groups, onPublish }: 
       onPublish?.();
       alert("Programming published successfully!");
     } catch (err) {
-      console.error("Error publishing:", err);
+      console.error("PUBLISH_ERROR_V2:", err);
       setError("Failed to publish programming");
     } finally {
       setIsPublishing(false);
