@@ -594,7 +594,7 @@ export default function AIProgrammingChat({ gymId, userId, groups, onPublish }: 
                     }
                   }}
                   autoFocus
-                  className="px-3 py-1.5 rounded-lg text-sm border-2 border-purple-500 focus:outline-none min-w-[120px]"
+                  className="px-3 py-1.5 rounded-lg text-sm text-gray-900 bg-white border-2 border-purple-500 focus:outline-none min-w-[120px]"
                 />
               ) : (
                 <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-lg overflow-hidden">
@@ -749,7 +749,7 @@ export default function AIProgrammingChat({ gymId, userId, groups, onPublish }: 
                 onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendMessage()}
                 placeholder="Describe the programming you need..."
                 disabled={isLoading || activeSession.status === "published"}
-                className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
+                className="flex-1 px-4 py-3 border border-gray-300 rounded-lg text-gray-900 bg-white focus:ring-2 focus:ring-purple-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
               />
               <button
                 onClick={sendMessage}

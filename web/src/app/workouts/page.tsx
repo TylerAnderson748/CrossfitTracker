@@ -1359,7 +1359,7 @@ export default function WorkoutsPage() {
                   value={newSourceName}
                   onChange={(e) => setNewSourceName(e.target.value)}
                   placeholder="e.g., CompTrain, HWPO, My PT - John"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
               <div>
@@ -1444,7 +1444,7 @@ export default function WorkoutsPage() {
                   value={newWorkoutName}
                   onChange={(e) => setNewWorkoutName(e.target.value)}
                   placeholder="e.g., Monday WOD, Back Squat Day"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
               <div>
@@ -1454,7 +1454,7 @@ export default function WorkoutsPage() {
                   onChange={(e) => setNewWorkoutDescription(e.target.value)}
                   placeholder="Workout details..."
                   rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
                 />
               </div>
               <div>
