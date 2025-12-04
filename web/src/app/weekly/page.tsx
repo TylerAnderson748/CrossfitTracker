@@ -6,9 +6,11 @@ import Link from "next/link";
 import { collection, query, where, orderBy, getDocs, updateDoc, doc, Timestamp, limit, addDoc, deleteDoc } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
-import { ScheduledWorkout, ScheduledTimeSlot, workoutComponentLabels, workoutComponentColors, formatTimeSlot, LeaderboardEntry, formatResult, normalizeWorkoutName, WorkoutComponent, WorkoutComponentType, WODScoringType, wodScoringTypeLabels, wodScoringTypeColors } from "@/lib/types";
+import { ScheduledWorkout, ScheduledTimeSlot, workoutComponentLabels, workoutComponentColors, formatTimeSlot, LeaderboardEntry, formatResult, normalizeWorkoutName, WorkoutComponent, WorkoutComponentType, WODScoringType, wodScoringTypeLabels, wodScoringTypeColors, AITrainerSubscription } from "@/lib/types";
 import { getAllWods, getAllLifts, Workout } from "@/lib/workoutData";
 import Navigation from "@/components/Navigation";
+import PersonalAITrainer from "@/components/PersonalAITrainer";
+import AITrainerPaywall from "@/components/AITrainerPaywall";
 
 // Combined result type for both WODs and lifts
 interface WorkoutResult {
@@ -645,6 +647,24 @@ export default function WeeklyPlanPage() {
             Add Workout
           </button>
         </div>
+
+        {/* AI Personal Trainer Section */}
+        {user && (
+          <div className="mb-4">
+            {user.aiTrainerSubscription &&
+             (user.aiTrainerSubscription.status === "active" || user.aiTrainerSubscription.status === "trialing") ? (
+              <PersonalAITrainer
+                userId={user.id}
+                todayWorkout={workouts.find(w => {
+                  const workoutDate = w.date instanceof Timestamp ? w.date.toDate() : new Date(w.date);
+                  return workoutDate.toDateString() === new Date().toDateString();
+                }) || null}
+              />
+            ) : (
+              <AITrainerPaywall userEmail={user.email} />
+            )}
+          </div>
+        )}
 
         {/* Time Range Selector */}
         <div className="flex gap-2 mb-4 overflow-x-auto pb-2">

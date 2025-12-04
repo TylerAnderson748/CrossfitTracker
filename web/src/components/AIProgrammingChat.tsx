@@ -1,34 +1,12 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { collection, addDoc, updateDoc, doc, query, where, getDocs, orderBy, Timestamp, serverTimestamp, deleteDoc, limit } from "firebase/firestore";
+import { collection, addDoc, updateDoc, doc, query, where, getDocs, orderBy, Timestamp, serverTimestamp, deleteDoc } from "firebase/firestore";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { db } from "@/lib/firebase";
 import { AIProgrammingSession, AIChatMessage, AIGeneratedDay, WorkoutGroup, WorkoutComponent, AIProgrammingPreferences, AITrainerSubscription } from "@/lib/types";
 import { getAllSkills, getAllLifts, getAllWods } from "@/lib/workoutData";
 import AITrainerPaywall from "./AITrainerPaywall";
-
-// Types for user workout history
-interface LiftHistoryEntry {
-  liftTitle: string;
-  weight: number;
-  reps: number;
-  date: Timestamp;
-}
-
-interface WodHistoryEntry {
-  wodTitle: string;
-  timeInSeconds?: number;
-  rounds?: number;
-  reps?: number;
-  category: string; // Rx, Scaled, Foundations
-  completedDate: Timestamp;
-}
-
-interface UserWorkoutHistory {
-  lifts: LiftHistoryEntry[];
-  wods: WodHistoryEntry[];
-}
 
 // Get preset workout names for the AI prompt
 const getPresetSkillNames = () => getAllSkills().map(s => s.name);
@@ -53,7 +31,7 @@ interface AIProgrammingChatProps {
   subscription?: AITrainerSubscription;
 }
 
-const getSystemPrompt = (preferences?: Omit<AIProgrammingPreferences, "gymId" | "updatedAt">, userHistory?: UserWorkoutHistory) => {
+const getSystemPrompt = (preferences?: Omit<AIProgrammingPreferences, "gymId" | "updatedAt">) => {
   const today = new Date();
   const todayStr = today.toISOString().split('T')[0]; // YYYY-MM-DD format
   const dayOfWeek = today.toLocaleDateString('en-US', { weekday: 'long' });
@@ -70,63 +48,6 @@ const getSystemPrompt = (preferences?: Omit<AIProgrammingPreferences, "gymId" | 
   const skillNames = getPresetSkillNames();
   const liftNames = getPresetLiftNames();
   const wodNames = getPresetWodNames();
-
-  // Build user history section for personalized scaling
-  let userHistorySection = "";
-  if (userHistory && (userHistory.lifts.length > 0 || userHistory.wods.length > 0)) {
-    const historyParts: string[] = [];
-
-    if (userHistory.lifts.length > 0) {
-      // Group lifts by name and get best weight for each
-      const liftBests = new Map<string, { weight: number; reps: number }>();
-      userHistory.lifts.forEach(lift => {
-        const key = `${lift.liftTitle}-${lift.reps}`;
-        const existing = liftBests.get(key);
-        if (!existing || lift.weight > existing.weight) {
-          liftBests.set(key, { weight: lift.weight, reps: lift.reps });
-        }
-      });
-
-      const liftSummary = Array.from(liftBests.entries())
-        .map(([key, val]) => {
-          const liftName = key.split('-')[0];
-          return `${liftName}: ${val.weight}lbs (${val.reps}RM)`;
-        })
-        .join(", ");
-
-      historyParts.push(`Recent Lift PRs: ${liftSummary}`);
-    }
-
-    if (userHistory.wods.length > 0) {
-      // Get recent benchmark WOD performances
-      const wodSummary = userHistory.wods
-        .slice(0, 10)
-        .map(wod => {
-          if (wod.timeInSeconds && !wod.rounds) {
-            const mins = Math.floor(wod.timeInSeconds / 60);
-            const secs = wod.timeInSeconds % 60;
-            return `${wod.wodTitle}: ${mins}:${secs.toString().padStart(2, '0')} (${wod.category})`;
-          } else if (wod.rounds !== undefined) {
-            return `${wod.wodTitle}: ${wod.rounds}+${wod.reps || 0} rounds (${wod.category})`;
-          }
-          return `${wod.wodTitle} (${wod.category})`;
-        })
-        .join(", ");
-
-      historyParts.push(`Recent WOD Performances: ${wodSummary}`);
-    }
-
-    userHistorySection = `
-ATHLETE WORKOUT HISTORY (Use this for personalized scaling recommendations):
-${historyParts.join("\n")}
-
-Based on this history, provide PERSONALIZED weight recommendations in your notes. For example:
-- If they've done 135lb cleans, suggest "Based on your clean PR, try 135lb today" or "Let's scale to 115lb to focus on speed"
-- If they typically do workouts at Scaled, don't push Rx weights right away
-- Reference their actual numbers when making suggestions
-
-`;
-  }
 
   // Build gym preferences section
   let gymPreferencesSection = "";
@@ -174,7 +95,7 @@ ${prefParts.join("\n")}
   }
 
   return `You are a CrossFit programming assistant helping gym owners and coaches create workout programming.
-${gymPreferencesSection}${userHistorySection}IMPORTANT: Today's date is ${todayStr} (${dayOfWeek}). Current month: ${monthName}. Current season: ${season}.
+${gymPreferencesSection}IMPORTANT: Today's date is ${todayStr} (${dayOfWeek}). Current month: ${monthName}. Current season: ${season}.
 When generating workouts, start from today or the next upcoming day. Use real, current dates.
 
 When generating workouts, you MUST respond with valid JSON in this exact format:
@@ -340,60 +261,6 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
   const [showSettings, setShowSettings] = useState(false);
   const [preferencesDocId, setPreferencesDocId] = useState<string | null>(null);
   const [savingPreferences, setSavingPreferences] = useState(false);
-
-  // User workout history for personalized scaling
-  const [userHistory, setUserHistory] = useState<UserWorkoutHistory>({ lifts: [], wods: [] });
-
-  // Load user workout history for personalized scaling
-  useEffect(() => {
-    const loadUserHistory = async () => {
-      if (!userId) return;
-
-      try {
-        // Fetch lift results
-        const liftQuery = query(
-          collection(db, "liftResults"),
-          where("userId", "==", userId),
-          limit(100)
-        );
-        const liftSnapshot = await getDocs(liftQuery);
-        const lifts = liftSnapshot.docs.map(doc => {
-          const data = doc.data();
-          return {
-            liftTitle: data.liftTitle || "",
-            weight: data.weight || 0,
-            reps: data.reps || 1,
-            date: data.date,
-          } as LiftHistoryEntry;
-        }).filter(l => l.liftTitle && l.weight > 0);
-
-        // Fetch WOD logs
-        const wodQuery = query(
-          collection(db, "workoutLogs"),
-          where("userId", "==", userId),
-          limit(100)
-        );
-        const wodSnapshot = await getDocs(wodQuery);
-        const wods = wodSnapshot.docs.map(doc => {
-          const data = doc.data();
-          return {
-            wodTitle: data.wodTitle || "",
-            timeInSeconds: data.timeInSeconds,
-            rounds: data.rounds,
-            reps: data.reps,
-            category: data.notes || data.category || "RX", // notes field stores category
-            completedDate: data.completedDate,
-          } as WodHistoryEntry;
-        }).filter(w => w.wodTitle);
-
-        setUserHistory({ lifts, wods });
-      } catch (err) {
-        console.error("Error loading user history:", err);
-      }
-    };
-
-    loadUserHistory();
-  }, [userId]);
 
   // Load existing sessions
   useEffect(() => {
@@ -699,7 +566,7 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
         `${msg.role === "user" ? "User" : "Assistant"}: ${msg.content}`
       ).join("\n\n");
 
-      const prompt = `${getSystemPrompt(preferences, userHistory)}\n\nConversation so far:\n${conversationHistory}\n\nRespond to the user's latest message. Remember to output valid JSON only.`;
+      const prompt = `${getSystemPrompt(preferences)}\n\nConversation so far:\n${conversationHistory}\n\nRespond to the user's latest message. Remember to output valid JSON only.`;
 
       const result = await model.generateContent(prompt);
       const response = result.response;
@@ -993,51 +860,6 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
               )}
             </div>
           ))}
-        </div>
-      )}
-
-      {/* Athlete History Summary - Shows what data AI uses for personalized scaling */}
-      {(userHistory.lifts.length > 0 || userHistory.wods.length > 0) && (
-        <div className="mx-4 mt-3 p-3 bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg">
-          <div className="flex items-center gap-2 mb-2">
-            <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-            </svg>
-            <span className="text-sm font-medium text-blue-800">Your Workout History</span>
-            <span className="text-xs text-blue-600">(AI uses this for personalized scaling)</span>
-          </div>
-          <div className="text-xs text-gray-700 space-y-1">
-            {userHistory.lifts.length > 0 && (
-              <div>
-                <span className="font-medium text-gray-800">Lift PRs: </span>
-                {(() => {
-                  const liftBests = new Map<string, { weight: number; reps: number }>();
-                  userHistory.lifts.forEach(lift => {
-                    const key = `${lift.liftTitle}-${lift.reps}`;
-                    const existing = liftBests.get(key);
-                    if (!existing || lift.weight > existing.weight) {
-                      liftBests.set(key, { weight: lift.weight, reps: lift.reps });
-                    }
-                  });
-                  return Array.from(liftBests.entries())
-                    .slice(0, 6)
-                    .map(([key, val]) => {
-                      const liftName = key.split('-')[0];
-                      return `${liftName}: ${val.weight}lb`;
-                    })
-                    .join(", ");
-                })()}
-                {userHistory.lifts.length > 6 && " ..."}
-              </div>
-            )}
-            {userHistory.wods.length > 0 && (
-              <div>
-                <span className="font-medium text-gray-800">Recent WODs: </span>
-                {userHistory.wods.slice(0, 5).map(wod => wod.wodTitle).join(", ")}
-                {userHistory.wods.length > 5 && " ..."}
-              </div>
-            )}
-          </div>
         </div>
       )}
 
