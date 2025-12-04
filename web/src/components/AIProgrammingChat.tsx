@@ -298,70 +298,46 @@ export default function AIProgrammingChat({ gymId, userId, groups, onPublish }: 
         if (day.isRestDay) continue;
         if (!day.components || day.components.length === 0) continue;
 
-        // Build components array with explicit field handling
-        const cleanComponents: Array<{
-          id: string;
-          type: string;
-          title: string;
-          description: string;
-          scoringType?: string;
-        }> = [];
+        // Build components array - NO optional fields allowed
+        const cleanComponents: Array<{id: string; type: string; title: string; description: string}> = [];
 
         for (let idx = 0; idx < day.components.length; idx++) {
           const comp = day.components[idx];
           if (!comp || !comp.type || !comp.title) continue;
 
-          const cleanComp: {
-            id: string;
-            type: string;
-            title: string;
-            description: string;
-            scoringType?: string;
-          } = {
-            id: `comp-${idx}`,
-            type: String(comp.type),
-            title: String(comp.title),
+          // Only include required fields - no optional scoringType
+          cleanComponents.push({
+            id: String(`comp-${idx}`),
+            type: String(comp.type || "wod"),
+            title: String(comp.title || "Workout"),
             description: String(comp.description || ""),
-          };
-
-          if (comp.scoringType) {
-            cleanComp.scoringType = String(comp.scoringType);
-          }
-
-          cleanComponents.push(cleanComp);
+          });
         }
 
         // Skip if no valid components
         if (cleanComponents.length === 0) continue;
 
-        // Build the workout document explicitly
+        // Build workout date
         const workoutDate = new Date(day.date);
+        if (isNaN(workoutDate.getTime())) continue; // Skip invalid dates
 
-        // Use JSON parse/stringify to ensure no undefined values
-        const baseData = JSON.parse(JSON.stringify({
+        // Debug logs
+        console.log("Publishing day:", day.dayOfWeek, "with", cleanComponents.length, "components");
+
+        // Create document with NO spread operators and NO optional fields
+        await addDoc(collection(db, "scheduledWorkouts"), {
           gymId: String(gymId),
-          wodTitle: `${day.dayOfWeek || "Day"} Programming`,
-          wodDescription: cleanComponents.map(c => c.title).join(", "),
+          wodTitle: String(`${day.dayOfWeek || "Day"} Programming`),
+          wodDescription: String(cleanComponents.map(c => c.title).join(", ")),
           workoutType: "wod",
-          groupIds: [...selectedGroups],
+          groupIds: selectedGroups.map(g => String(g)),
           createdBy: String(userId),
           recurrenceType: "none",
           components: cleanComponents,
           hideDetails: false,
-        }));
-
-        // Add Firestore timestamps after JSON cleaning
-        const scheduledWorkout = {
-          ...baseData,
           date: Timestamp.fromDate(workoutDate),
           createdAt: serverTimestamp(),
-        };
-
-        // Debug: log the data being sent
-        console.log("Publishing workout:", JSON.stringify(baseData, null, 2));
-        console.log("Full scheduledWorkout keys:", Object.keys(scheduledWorkout));
-
-        await addDoc(collection(db, "scheduledWorkouts"), scheduledWorkout);
+        });
       }
 
       // Update session status
