@@ -164,6 +164,22 @@ service cloud.firestore {
       allow delete: if isAuthenticated();
     }
 
+    // AI Programming Sessions collection
+    match /aiProgrammingSessions/{sessionId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated();
+      allow delete: if isAuthenticated();
+    }
+
+    // AI Programming Preferences collection
+    match /aiProgrammingPreferences/{prefId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated();
+      allow delete: if isAuthenticated();
+    }
+
     // Workout Groups collection
     match /workoutGroups/{groupId} {
       allow read: if isAuthenticated();
