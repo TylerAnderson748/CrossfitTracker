@@ -332,17 +332,24 @@ export default function AIProgrammingChat({ gymId, userId, groups, onPublish }: 
 
         // Build the workout document explicitly
         const workoutDate = new Date(day.date);
-        const scheduledWorkout: Record<string, unknown> = {
+
+        // Use JSON parse/stringify to ensure no undefined values
+        const baseData = JSON.parse(JSON.stringify({
           gymId: String(gymId),
           wodTitle: `${day.dayOfWeek || "Day"} Programming`,
           wodDescription: cleanComponents.map(c => c.title).join(", "),
-          date: Timestamp.fromDate(workoutDate),
           workoutType: "wod",
           groupIds: [...selectedGroups],
           createdBy: String(userId),
           recurrenceType: "none",
           components: cleanComponents,
           hideDetails: false,
+        }));
+
+        // Add Firestore timestamps after JSON cleaning
+        const scheduledWorkout = {
+          ...baseData,
+          date: Timestamp.fromDate(workoutDate),
           createdAt: Timestamp.now(),
         };
 
