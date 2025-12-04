@@ -976,6 +976,51 @@ export default function AIProgrammingChat({ gymId, userId, groups, onPublish }: 
         </div>
       )}
 
+      {/* Athlete History Summary - Shows what data AI uses for personalized scaling */}
+      {(userHistory.lifts.length > 0 || userHistory.wods.length > 0) && (
+        <div className="mx-4 mt-3 p-3 bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg">
+          <div className="flex items-center gap-2 mb-2">
+            <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+            <span className="text-sm font-medium text-blue-800">Your Workout History</span>
+            <span className="text-xs text-blue-600">(AI uses this for personalized scaling)</span>
+          </div>
+          <div className="text-xs text-gray-700 space-y-1">
+            {userHistory.lifts.length > 0 && (
+              <div>
+                <span className="font-medium text-gray-800">Lift PRs: </span>
+                {(() => {
+                  const liftBests = new Map<string, { weight: number; reps: number }>();
+                  userHistory.lifts.forEach(lift => {
+                    const key = `${lift.liftTitle}-${lift.reps}`;
+                    const existing = liftBests.get(key);
+                    if (!existing || lift.weight > existing.weight) {
+                      liftBests.set(key, { weight: lift.weight, reps: lift.reps });
+                    }
+                  });
+                  return Array.from(liftBests.entries())
+                    .slice(0, 6)
+                    .map(([key, val]) => {
+                      const liftName = key.split('-')[0];
+                      return `${liftName}: ${val.weight}lb`;
+                    })
+                    .join(", ");
+                })()}
+                {userHistory.lifts.length > 6 && " ..."}
+              </div>
+            )}
+            {userHistory.wods.length > 0 && (
+              <div>
+                <span className="font-medium text-gray-800">Recent WODs: </span>
+                {userHistory.wods.slice(0, 5).map(wod => wod.wodTitle).join(", ")}
+                {userHistory.wods.length > 5 && " ..."}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Chat Area */}
       {activeSession ? (
         <>
