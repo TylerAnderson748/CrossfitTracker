@@ -39,7 +39,7 @@ export default function GymDetailPage() {
   const [leaderboardEntries, setLeaderboardEntries] = useState<LeaderboardEntry[]>([]);
   const [allScheduledWorkouts, setAllScheduledWorkouts] = useState<ScheduledWorkout[]>([]);
   const [loadingData, setLoadingData] = useState(true);
-  const [activeTab, setActiveTab] = useState<"members" | "coaches" | "groups" | "programming" | "requests" | "pricing">("members");
+  const [activeTab, setActiveTab] = useState<"members" | "coaches" | "groups" | "programming" | "requests" | "pricing">("programming");
   const [showAddGroupModal, setShowAddGroupModal] = useState(false);
   const [showDeleteGymModal, setShowDeleteGymModal] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");

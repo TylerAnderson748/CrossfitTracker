@@ -2,14 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { collection, getDocs } from "firebase/firestore";
+import { collection, getDocs, doc, updateDoc } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
 import { Gym } from "@/lib/types";
 import Navigation from "@/components/Navigation";
 
 export default function ProgrammingPage() {
-  const { user, loading, switching } = useAuth();
+  const { user, loading, switching, refreshUser } = useAuth();
   const router = useRouter();
   const [loadingData, setLoadingData] = useState(true);
 
@@ -18,6 +18,10 @@ export default function ProgrammingPage() {
   const [myGyms, setMyGyms] = useState<Gym[]>([]);
   const [showFindGymModal, setShowFindGymModal] = useState(false);
   const [gymSearchQuery, setGymSearchQuery] = useState("");
+
+  // Cancel subscription state
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [isCanceling, setIsCanceling] = useState(false);
 
   useEffect(() => {
     if (!loading && !switching && !user) {
@@ -79,6 +83,25 @@ export default function ProgrammingPage() {
     ? user?.aiProgrammingSubscription
     : user?.aiTrainerSubscription;
   const hasActiveAI = aiSubscription?.status === "active" || aiSubscription?.status === "trialing";
+
+  const handleCancelSubscription = async () => {
+    if (!user) return;
+
+    setIsCanceling(true);
+    try {
+      const subscriptionField = isCoachOrOwner ? "aiProgrammingSubscription" : "aiTrainerSubscription";
+      await updateDoc(doc(db, "users", user.id), {
+        [`${subscriptionField}.status`]: "canceled",
+      });
+      await refreshUser();
+      setShowCancelModal(false);
+    } catch (error) {
+      console.error("Error canceling subscription:", error);
+      alert("Failed to cancel subscription. Please try again.");
+    } finally {
+      setIsCanceling(false);
+    }
+  };
 
   if (loading || !user) {
     return (
@@ -185,19 +208,21 @@ export default function ProgrammingPage() {
 
                 {/* Subscription info */}
                 {aiSubscription && (
-                  <div className="mt-6 pt-4 border-t border-white/20 flex items-center justify-between text-sm">
-                    <span className="text-purple-200">
-                      {aiSubscription.status === "trialing" ? "Trial ends" : "Renews"}{" "}
-                      {(aiSubscription.status === "trialing"
-                        ? aiSubscription.trialEndsAt?.toDate?.().toLocaleDateString()
-                        : aiSubscription.endDate?.toDate?.().toLocaleDateString()) || "N/A"}
-                    </span>
-                    <button
-                      onClick={() => router.push(isCoachOrOwner ? "/subscribe?variant=coach" : "/subscribe")}
-                      className="text-white hover:underline"
-                    >
-                      Manage Subscription →
-                    </button>
+                  <div className="mt-6 pt-4 border-t border-white/20">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-purple-200">
+                        {aiSubscription.status === "trialing" ? "Trial ends" : "Renews"}{" "}
+                        {(aiSubscription.status === "trialing"
+                          ? aiSubscription.trialEndsAt?.toDate?.().toLocaleDateString()
+                          : aiSubscription.endDate?.toDate?.().toLocaleDateString()) || "N/A"}
+                      </span>
+                      <button
+                        onClick={() => setShowCancelModal(true)}
+                        className="text-red-300 hover:text-red-200 hover:underline"
+                      >
+                        Cancel Subscription
+                      </button>
+                    </div>
                   </div>
                 )}
               </>
@@ -440,6 +465,42 @@ export default function ProgrammingPage() {
             >
               Close
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Cancel Subscription Modal */}
+      {showCancelModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl p-6 w-full max-w-md">
+            <div className="text-center mb-6">
+              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <h2 className="text-xl font-bold text-gray-900 mb-2">Cancel Subscription?</h2>
+              <p className="text-gray-600">
+                Are you sure you want to cancel your {isCoachOrOwner ? "AI Programming" : "AI Coach"} subscription?
+                You&apos;ll lose access to all AI features immediately.
+              </p>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowCancelModal(false)}
+                className="flex-1 py-3 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Keep Subscription
+              </button>
+              <button
+                onClick={handleCancelSubscription}
+                disabled={isCanceling}
+                className="flex-1 py-3 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+              >
+                {isCanceling ? "Canceling..." : "Yes, Cancel"}
+              </button>
+            </div>
           </div>
         </div>
       )}
