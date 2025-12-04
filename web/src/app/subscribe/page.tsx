@@ -77,8 +77,10 @@ export default function SubscribePage() {
         trialEndsAt: Timestamp.fromDate(trialEndsAt),
       };
 
+      // Save to correct subscription field based on variant
+      const subscriptionField = variant === "coach" ? "aiProgrammingSubscription" : "aiTrainerSubscription";
       await updateDoc(doc(db, "users", user.id), {
-        aiTrainerSubscription: subscription,
+        [subscriptionField]: subscription,
       });
 
       // Coaches skip the goals step, go straight to programming
@@ -116,8 +118,10 @@ export default function SubscribePage() {
         endDate: Timestamp.fromDate(endDate),
       };
 
+      // Save to correct subscription field based on variant
+      const subscriptionField = variant === "coach" ? "aiProgrammingSubscription" : "aiTrainerSubscription";
       await updateDoc(doc(db, "users", user.id), {
-        aiTrainerSubscription: subscription,
+        [subscriptionField]: subscription,
       });
 
       // Coaches skip the goals step, go straight to programming
@@ -172,9 +176,12 @@ export default function SubscribePage() {
     router.push("/weekly");
   };
 
-  // Check if user already has an active subscription
-  const hasActiveSubscription = user?.aiTrainerSubscription?.status === "active" ||
-    user?.aiTrainerSubscription?.status === "trialing";
+  // Check if user already has an active subscription for the relevant product
+  const relevantSubscription = variant === "coach"
+    ? user?.aiProgrammingSubscription
+    : user?.aiTrainerSubscription;
+  const hasActiveSubscription = relevantSubscription?.status === "active" ||
+    relevantSubscription?.status === "trialing";
 
   if (loading) {
     return (
@@ -340,20 +347,20 @@ export default function SubscribePage() {
             </div>
             <h2 className="text-2xl font-bold text-gray-900 mb-2">You&apos;re Already Subscribed!</h2>
             <p className="text-gray-600 mb-4">
-              {user?.aiTrainerSubscription?.status === "trialing"
-                ? "You're currently on a free trial. Enjoy your AI Coach!"
-                : "You have an active AI Coach subscription."}
+              {relevantSubscription?.status === "trialing"
+                ? `You're currently on a free trial. Enjoy your ${variant === "coach" ? "AI Programming Assistant" : "AI Coach"}!`
+                : `You have an active ${variant === "coach" ? "AI Programming" : "AI Coach"} subscription.`}
             </p>
-            {user?.aiTrainerSubscription?.trialEndsAt && (
+            {relevantSubscription?.trialEndsAt && (
               <p className="text-sm text-purple-600 mb-4">
-                Trial ends: {user.aiTrainerSubscription.trialEndsAt.toDate().toLocaleDateString()}
+                Trial ends: {relevantSubscription.trialEndsAt.toDate().toLocaleDateString()}
               </p>
             )}
             <button
-              onClick={() => router.push("/weekly")}
+              onClick={() => router.push(variant === "coach" ? "/programming" : "/weekly")}
               className="px-6 py-3 bg-purple-600 text-white font-medium rounded-lg hover:bg-purple-700 transition-colors"
             >
-              Go to My Training
+              {variant === "coach" ? "Go to Programming" : "Go to My Training"}
             </button>
           </div>
         ) : (

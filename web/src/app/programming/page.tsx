@@ -72,10 +72,13 @@ export default function ProgrammingPage() {
       )
     : availableGyms;
 
-  // AI Subscription status - everyone needs subscription for AI features
-  const aiSubscription = user?.aiTrainerSubscription;
-  const hasActiveAI = aiSubscription?.status === "active" || aiSubscription?.status === "trialing";
   const isCoachOrOwner = user?.role === "coach" || user?.role === "owner";
+
+  // AI Subscription status - coaches use aiProgrammingSubscription, athletes use aiTrainerSubscription
+  const aiSubscription = isCoachOrOwner
+    ? user?.aiProgrammingSubscription
+    : user?.aiTrainerSubscription;
+  const hasActiveAI = aiSubscription?.status === "active" || aiSubscription?.status === "trialing";
 
   if (loading || !user) {
     return (
@@ -95,9 +98,11 @@ export default function ProgrammingPage() {
           <p className="text-gray-500">Manage your gym memberships and AI training subscriptions</p>
         </div>
 
-        {/* AI Trainer Subscription */}
+        {/* AI Subscription - different for coaches vs athletes */}
         <div className="mb-8">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">AI Personal Trainer</h2>
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">
+            {isCoachOrOwner ? "AI Programming Assistant" : "AI Personal Trainer"}
+          </h2>
           <div className="bg-gradient-to-br from-purple-600 to-indigo-700 rounded-2xl p-6 text-white shadow-lg">
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-4">
@@ -107,11 +112,17 @@ export default function ProgrammingPage() {
                   </svg>
                 </div>
                 <div>
-                  <h3 className="text-xl font-bold">AI Coach Pro</h3>
+                  <h3 className="text-xl font-bold">
+                    {isCoachOrOwner ? "AI Programming" : "AI Coach Pro"}
+                  </h3>
                   <p className="text-purple-200 text-sm mt-1">
                     {hasActiveAI
-                      ? "Personalized scaling, workout analysis & AI programming"
-                      : "Get personalized coaching powered by AI"}
+                      ? isCoachOrOwner
+                        ? "AI drafts programming, you fine-tune and publish"
+                        : "Personalized scaling, workout analysis & AI coaching"
+                      : isCoachOrOwner
+                        ? "Let AI help create your gym's programming"
+                        : "Get personalized coaching powered by AI"}
                   </p>
                 </div>
               </div>

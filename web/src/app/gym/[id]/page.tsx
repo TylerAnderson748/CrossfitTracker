@@ -1680,7 +1680,7 @@ export default function GymDetailPage() {
                     userId={user.id}
                     userEmail={user.email}
                     groups={groups}
-                    subscription={user.aiTrainerSubscription}
+                    subscription={user.aiProgrammingSubscription}
                     onPublish={() => {
                       // Refresh workouts after publishing
                       fetchGymData();
