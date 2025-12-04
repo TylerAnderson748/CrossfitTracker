@@ -101,6 +101,8 @@ export default function AIProgrammingChat({ gymId, userId, groups, onPublish }: 
   const [error, setError] = useState<string | null>(null);
   const [showPreview, setShowPreview] = useState(false);
   const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
+  const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState("");
   const [isPublishing, setIsPublishing] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [loadingSessions, setLoadingSessions] = useState(true);
@@ -141,10 +143,17 @@ export default function AIProgrammingChat({ gymId, userId, groups, onPublish }: 
   }, [gymId]);
 
   const createNewSession = async () => {
+    // Generate unique name with count
+    const todayStr = new Date().toLocaleDateString();
+    const existingToday = sessions.filter(s => s.title.startsWith(`Program ${todayStr}`)).length;
+    const uniqueTitle = existingToday > 0
+      ? `Program ${todayStr} #${existingToday + 1}`
+      : `Program ${todayStr}`;
+
     const newSession: Omit<AIProgrammingSession, "id"> = {
       gymId,
       createdBy: userId,
-      title: `Program ${new Date().toLocaleDateString()}`,
+      title: uniqueTitle,
       status: "active",
       messages: [],
       createdAt: Timestamp.now(),
@@ -159,6 +168,30 @@ export default function AIProgrammingChat({ gymId, userId, groups, onPublish }: 
     } catch (err) {
       console.error("Error creating session:", err);
       setError("Failed to create new session");
+    }
+  };
+
+  const updateSessionTitle = async (sessionId: string, newTitle: string) => {
+    if (!newTitle.trim()) return;
+
+    try {
+      await updateDoc(doc(db, "aiProgrammingSessions", sessionId), {
+        title: newTitle.trim(),
+        updatedAt: Timestamp.now(),
+      });
+
+      setSessions(prev => prev.map(s =>
+        s.id === sessionId ? { ...s, title: newTitle.trim() } : s
+      ));
+
+      if (activeSession?.id === sessionId) {
+        setActiveSession(prev => prev ? { ...prev, title: newTitle.trim() } : null);
+      }
+
+      setEditingSessionId(null);
+      setEditingTitle("");
+    } catch (err) {
+      console.error("Error updating session title:", err);
     }
   };
 
@@ -391,20 +424,44 @@ export default function AIProgrammingChat({ gymId, userId, groups, onPublish }: 
       {sessions.length > 0 && (
         <div className="flex gap-2 p-3 border-b border-gray-200 overflow-x-auto bg-gray-50">
           {sessions.slice(0, 5).map(session => (
-            <button
-              key={session.id}
-              onClick={() => setActiveSession(session)}
-              className={`px-3 py-1.5 rounded-lg text-sm whitespace-nowrap transition-colors ${
-                activeSession?.id === session.id
-                  ? "bg-purple-600 text-white"
-                  : "bg-white text-gray-700 hover:bg-gray-100 border border-gray-200"
-              }`}
-            >
-              {session.title}
-              {session.status === "published" && (
-                <span className="ml-2 text-xs opacity-70">Published</span>
+            <div key={session.id} className="relative group">
+              {editingSessionId === session.id ? (
+                <input
+                  type="text"
+                  value={editingTitle}
+                  onChange={(e) => setEditingTitle(e.target.value)}
+                  onBlur={() => updateSessionTitle(session.id, editingTitle)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") updateSessionTitle(session.id, editingTitle);
+                    if (e.key === "Escape") {
+                      setEditingSessionId(null);
+                      setEditingTitle("");
+                    }
+                  }}
+                  autoFocus
+                  className="px-3 py-1.5 rounded-lg text-sm border-2 border-purple-500 focus:outline-none min-w-[120px]"
+                />
+              ) : (
+                <button
+                  onClick={() => setActiveSession(session)}
+                  onDoubleClick={() => {
+                    setEditingSessionId(session.id);
+                    setEditingTitle(session.title);
+                  }}
+                  className={`px-3 py-1.5 rounded-lg text-sm whitespace-nowrap transition-colors ${
+                    activeSession?.id === session.id
+                      ? "bg-purple-600 text-white"
+                      : "bg-white text-gray-700 hover:bg-gray-100 border border-gray-200"
+                  }`}
+                  title="Double-click to rename"
+                >
+                  {session.title}
+                  {session.status === "published" && (
+                    <span className="ml-2 text-xs opacity-70">Published</span>
+                  )}
+                </button>
               )}
-            </button>
+            </div>
           ))}
         </div>
       )}
