@@ -753,7 +753,7 @@ export default function WeeklyPlanPage() {
                                 {shouldShowDetails(workout) ? (
                                   // Show full workout details
                                   workout.components && workout.components.length > 0 ? (
-                                    <div className="space-y-2">
+                                    <div className="space-y-3">
                                       {workout.components.map((comp) => (
                                         <div key={comp.id} className="border-l-2 border-gray-200 pl-2">
                                           <div className="flex items-center gap-2">
@@ -762,14 +762,16 @@ export default function WeeklyPlanPage() {
                                             </span>
                                             <span className="font-medium text-gray-900 text-sm">{comp.title}</span>
                                           </div>
-                                          {comp.description && (
-                                            <p className="text-gray-600 text-xs mt-1 whitespace-pre-wrap line-clamp-2 ml-1">{comp.description}</p>
-                                          )}
-                                          {comp.notes && (
-                                            <div className="mt-1 ml-1 p-1.5 bg-amber-50 rounded border-l-2 border-amber-300">
-                                              <p className="text-amber-700 text-xs whitespace-pre-line italic">{comp.notes}</p>
-                                            </div>
-                                          )}
+                                          <div className="mt-1 ml-1 grid grid-cols-1 md:grid-cols-2 gap-2">
+                                            {comp.description && (
+                                              <div className="text-gray-700 text-xs whitespace-pre-wrap">{comp.description}</div>
+                                            )}
+                                            {comp.notes && (
+                                              <div className="p-2 bg-amber-50 rounded border-l-2 border-amber-300">
+                                                <p className="text-amber-800 text-xs whitespace-pre-line">{comp.notes}</p>
+                                              </div>
+                                            )}
+                                          </div>
                                         </div>
                                       ))}
                                     </div>
@@ -1073,14 +1075,16 @@ export default function WeeklyPlanPage() {
                                         </span>
                                         <span className="font-medium text-gray-900 text-sm">{comp.title}</span>
                                       </div>
-                                      {comp.description && (
-                                        <p className="text-gray-600 text-xs mt-1 whitespace-pre-wrap line-clamp-2 ml-1">{comp.description}</p>
-                                      )}
-                                      {comp.notes && (
-                                        <div className="mt-1 ml-1 p-1.5 bg-amber-50 rounded border-l-2 border-amber-300">
-                                          <p className="text-amber-700 text-xs whitespace-pre-line italic">{comp.notes}</p>
-                                        </div>
-                                      )}
+                                      <div className="mt-1 ml-1 grid grid-cols-1 md:grid-cols-2 gap-2">
+                                        {comp.description && (
+                                          <div className="text-gray-700 text-xs whitespace-pre-wrap">{comp.description}</div>
+                                        )}
+                                        {comp.notes && (
+                                          <div className="p-2 bg-amber-50 rounded border-l-2 border-amber-300">
+                                            <p className="text-amber-800 text-xs whitespace-pre-line">{comp.notes}</p>
+                                          </div>
+                                        )}
+                                      </div>
                                     </div>
                                   ))}
                                 </div>
