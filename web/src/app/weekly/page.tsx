@@ -665,6 +665,7 @@ export default function WeeklyPlanPage() {
                 const workoutDate = w.date instanceof Timestamp ? w.date.toDate() : new Date(w.date);
                 return workoutDate.toDateString() === new Date().toDateString();
               }) || null}
+              todayPersonalWorkouts={getPersonalWorkoutsForDate(new Date())}
             />
           </div>
         )}

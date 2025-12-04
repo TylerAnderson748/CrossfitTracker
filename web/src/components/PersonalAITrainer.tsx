@@ -5,7 +5,7 @@ import Link from "next/link";
 import { collection, query, where, getDocs, Timestamp, limit } from "firebase/firestore";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { db } from "@/lib/firebase";
-import { ScheduledWorkout, AICoachPreferences } from "@/lib/types";
+import { ScheduledWorkout, AICoachPreferences, WorkoutComponent } from "@/lib/types";
 
 // Types for user workout history
 interface LiftHistoryEntry {
@@ -30,9 +30,17 @@ interface UserWorkoutHistory {
   wods: WodHistoryEntry[];
 }
 
+// Personal workout type (from scan or manual entry)
+interface PersonalWorkout {
+  id: string;
+  components: WorkoutComponent[];
+  notes?: string;
+}
+
 interface PersonalAITrainerProps {
   userId: string;
   todayWorkout?: ScheduledWorkout | null;
+  todayPersonalWorkouts?: PersonalWorkout[];
   gymId?: string;
   userPreferences?: AICoachPreferences;
 }
@@ -42,7 +50,9 @@ interface GymMemberStats {
   count: number;
 }
 
-export default function PersonalAITrainer({ userId, todayWorkout, gymId, userPreferences }: PersonalAITrainerProps) {
+export default function PersonalAITrainer({ userId, todayWorkout, todayPersonalWorkouts, gymId, userPreferences }: PersonalAITrainerProps) {
+  // Check if there's any workout to analyze (gym or personal)
+  const hasWorkoutToAnalyze = todayWorkout || (todayPersonalWorkouts && todayPersonalWorkouts.length > 0);
   const [userHistory, setUserHistory] = useState<UserWorkoutHistory>({ lifts: [], wods: [] });
   const [gymMemberStats, setGymMemberStats] = useState<GymMemberStats | null>(null);
   const [aiAdvice, setAiAdvice] = useState<string | null>(null);
@@ -163,7 +173,7 @@ export default function PersonalAITrainer({ userId, todayWorkout, gymId, userPre
   }, [gymId, userId]);
 
   const getPersonalizedAdvice = async () => {
-    if (!todayWorkout || isLoading) return;
+    if (!hasWorkoutToAnalyze || isLoading) return;
 
     setIsLoading(true);
     setAiAdvice(null);
@@ -176,21 +186,48 @@ export default function PersonalAITrainer({ userId, todayWorkout, gymId, userPre
         return;
       }
 
-      // Build workout description and extract scaling options from notes
+      // Build workout description from gym workout and/or personal workouts
       let prescribedScalingOptions = "";
-      const workoutDescription = todayWorkout.components?.map(comp => {
-        let desc = `${comp.type.toUpperCase()}: ${comp.title}\n${comp.description || ""}`;
-        if (comp.notes) {
-          desc += `\nCoach Notes: ${comp.notes}`;
-          // Check if notes contain scaling info
-          const notesLower = comp.notes.toLowerCase();
-          if (notesLower.includes("scale") || notesLower.includes("rx") || notesLower.includes("modify") ||
-              notesLower.includes("option") || notesLower.includes("substitute") || notesLower.includes("foundation")) {
-            prescribedScalingOptions += `\n${comp.type}: ${comp.notes}`;
+      let workoutDescriptionParts: string[] = [];
+
+      // Add gym workout if present
+      if (todayWorkout && todayWorkout.components) {
+        workoutDescriptionParts.push("GYM PROGRAMMING:");
+        todayWorkout.components.forEach(comp => {
+          let desc = `${comp.type.toUpperCase()}: ${comp.title}\n${comp.description || ""}`;
+          if (comp.notes) {
+            desc += `\nCoach Notes: ${comp.notes}`;
+            // Check if notes contain scaling info
+            const notesLower = comp.notes.toLowerCase();
+            if (notesLower.includes("scale") || notesLower.includes("rx") || notesLower.includes("modify") ||
+                notesLower.includes("option") || notesLower.includes("substitute") || notesLower.includes("foundation")) {
+              prescribedScalingOptions += `\n${comp.type}: ${comp.notes}`;
+            }
           }
-        }
-        return desc;
-      }).join("\n\n") || todayWorkout.wodDescription || "No workout details";
+          workoutDescriptionParts.push(desc);
+        });
+      } else if (todayWorkout?.wodDescription) {
+        workoutDescriptionParts.push("GYM PROGRAMMING:");
+        workoutDescriptionParts.push(todayWorkout.wodDescription);
+      }
+
+      // Add personal workouts if present
+      if (todayPersonalWorkouts && todayPersonalWorkouts.length > 0) {
+        workoutDescriptionParts.push("\nPERSONAL WORKOUTS:");
+        todayPersonalWorkouts.forEach((pw, idx) => {
+          if (pw.components && pw.components.length > 0) {
+            pw.components.forEach(comp => {
+              let desc = `${comp.type.toUpperCase()}: ${comp.title}\n${comp.description || ""}`;
+              if (comp.notes) {
+                desc += `\nNotes: ${comp.notes}`;
+              }
+              workoutDescriptionParts.push(desc);
+            });
+          }
+        });
+      }
+
+      const workoutDescription = workoutDescriptionParts.join("\n\n") || "No workout details";
 
       // Build user history summary
       let historySummary = "";
@@ -421,7 +458,7 @@ Respond in a friendly, coach-like tone. Use their actual numbers when giving rec
           )}
 
           {/* Get Advice Button or AI Advice Display */}
-          {todayWorkout ? (
+          {hasWorkoutToAnalyze ? (
             <>
               {/* Only show button if no advice yet */}
               {!aiAdvice && (
