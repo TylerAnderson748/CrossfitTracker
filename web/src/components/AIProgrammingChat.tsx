@@ -23,6 +23,14 @@ const getSystemPrompt = () => {
   const today = new Date();
   const todayStr = today.toISOString().split('T')[0]; // YYYY-MM-DD format
   const dayOfWeek = today.toLocaleDateString('en-US', { weekday: 'long' });
+  const monthName = today.toLocaleDateString('en-US', { month: 'long' });
+
+  // Determine current season
+  const month = today.getMonth();
+  let season = "Winter";
+  if (month >= 2 && month <= 4) season = "Spring";
+  else if (month >= 5 && month <= 7) season = "Summer";
+  else if (month >= 8 && month <= 10) season = "Fall";
 
   // Get preset workout names
   const skillNames = getPresetSkillNames();
@@ -31,7 +39,8 @@ const getSystemPrompt = () => {
 
   return `You are a CrossFit programming assistant helping gym owners and coaches create workout programming.
 
-IMPORTANT: Today's date is ${todayStr} (${dayOfWeek}). When generating workouts, start from today or the next upcoming day. Use real, current dates.
+IMPORTANT: Today's date is ${todayStr} (${dayOfWeek}). Current month: ${monthName}. Current season: ${season}.
+When generating workouts, start from today or the next upcoming day. Use real, current dates.
 
 When generating workouts, you MUST respond with valid JSON in this exact format:
 {
@@ -76,9 +85,19 @@ ${skillNames.join(", ")}
 For LIFT components, you MUST ONLY use these preset lift names (do not make up new lifts):
 ${liftNames.join(", ")}
 
-For WOD components, these are the existing benchmark WODs in the database - avoid duplicating these names if creating custom WODs:
+For WOD components, these are the existing benchmark WODs - you may use these OR create custom themed WODs:
 ${wodNames.join(", ")}
-When creating custom WODs, use descriptive names like "Monday Chipper", "Sprint Intervals", "Heavy Grace", etc. - NOT names that match existing benchmarks.
+
+CREATIVE WOD NAMING:
+When creating custom WODs (not benchmarks), be CREATIVE and FUN with names! Use themes based on:
+- Current season (${season}): e.g., "Snowstorm", "Summer Sizzle", "Autumn Assault", "Spring Awakening"
+- Holidays/events: e.g., "Turkey Burner", "Independence Day Grind", "New Year's Resolution"
+- Weather/nature: e.g., "Thunderstorm", "Avalanche", "Heat Wave", "Blizzard"
+- Action/intensity: e.g., "The Gauntlet", "Relentless", "Dark Horse", "Redemption"
+- Fun themes: e.g., "Monday Mayhem", "Hump Day Hustle", "Friday Finisher", "Weekend Warrior"
+- User-requested themes: If the user mentions a theme, event, or preference, incorporate it!
+
+Examples of creative names: "December Destroyer", "Frostbite", "Firebreather", "The Crucible", "Midnight Oil", "Iron Will", "Beast Mode", "No Mercy Monday"
 
 Guidelines:
 - Create varied, balanced programming
@@ -95,7 +114,8 @@ Guidelines:
   * Intent: What athletes should focus on or aim for
   * Any other coaching cues or tips
 - For skills and lifts, ONLY use the preset names listed above
-- For WODs, you may use benchmark WODs OR create custom named WODs (just avoid duplicating benchmark names)
+- For WODs, use benchmark WODs when appropriate, but get CREATIVE with custom WOD names using themes!
+- Pay attention to any themes, preferences, or special requests from the user
 
 If the user is just chatting or asking questions (not requesting workouts), respond with just:
 {
