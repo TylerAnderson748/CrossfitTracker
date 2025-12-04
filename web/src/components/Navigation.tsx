@@ -52,12 +52,17 @@ export default function Navigation() {
   const myWifeAllowedEmails = ["tyguy4201@gmail.com"];
   const canSeeMyWifeTab = (user?.id && myWifeAllowedUIDs.includes(user.id)) || (user?.email && myWifeAllowedEmails.includes(user.email));
 
+  // Check if user needs to subscribe to AI Coach
+  const hasAISubscription = user?.aiTrainerSubscription?.status === "active" ||
+    user?.aiTrainerSubscription?.status === "trialing";
+
   const navItems = [
     { href: "/weekly", label: "Home", icon: "🏠" },
     ...(isGymOwner ? [{ href: "/gym", label: "Gym", icon: "🏢" }] : []),
     { href: "/programming", label: "Programming", icon: "📅" },
     { href: "/workouts", label: "Workouts", icon: "📋" },
     { href: "/profile", label: "Profile", icon: "👤" },
+    ...(!hasAISubscription ? [{ href: "/subscribe", label: "AI Coach", icon: "⚡" }] : []),
     ...(canSeeSpecialTabs ? [{ href: "/hi-devin", label: "Hi Devin!", icon: "🎉" }] : []),
     ...(canSeeSpecialTabs ? [{ href: "/hi-blake", label: "Hi Blake...", icon: "💀" }] : []),
     ...(canSeeCrystalRenoTabs ? [{ href: "/hi-crystal", label: "Hi Crystal!", icon: "☕" }] : []),

@@ -1,13 +1,15 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 
 interface AITrainerPaywallProps {
   onClose?: () => void;
   userEmail?: string;
 }
 
-export default function AITrainerPaywall({ onClose, userEmail }: AITrainerPaywallProps) {
+export default function AITrainerPaywall({ onClose }: AITrainerPaywallProps) {
+  const router = useRouter();
   const [selectedPlan, setSelectedPlan] = useState<"monthly" | "yearly">("monthly");
   const [isLoading, setIsLoading] = useState(false);
 
@@ -34,10 +36,8 @@ export default function AITrainerPaywall({ onClose, userEmail }: AITrainerPaywal
 
   const handleSubscribe = async () => {
     setIsLoading(true);
-    // TODO: Integrate with Stripe checkout
-    // This would redirect to Stripe Checkout or open a payment modal
-    alert(`Stripe integration coming soon! Selected plan: ${selectedPlan}`);
-    setIsLoading(false);
+    // Navigate to the subscription page
+    router.push("/subscribe");
   };
 
   return (
