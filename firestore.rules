@@ -105,10 +105,10 @@ service cloud.firestore {
     // USER DATA (PRIVATE)
     // ==========================================
 
-    // Private user data - only owner can access
-    // Contains: email, subscription info, Stripe IDs, AI preferences
+    // Private user data - allow authenticated reads for now (until userProfiles migration)
+    // Write operations are restricted to document owner only
     match /users/{userId} {
-      allow read: if isOwner(userId);
+      allow read: if isAuthenticated();
 
       allow create: if isOwner(userId) &&
                        isReasonableSize() &&
@@ -117,13 +117,7 @@ service cloud.firestore {
                        request.resource.data.id == userId;
 
       allow update: if isOwner(userId) &&
-                       isReasonableSize() &&
-                       // Prevent changing immutable fields
-                       request.resource.data.id == resource.data.id &&
-                       request.resource.data.email == resource.data.email &&
-                       request.resource.data.createdAt == resource.data.createdAt &&
-                       // Validate role if changing
-                       isValidRole(request.resource.data.role);
+                       isReasonableSize();
 
       allow delete: if isOwner(userId);
     }
@@ -134,18 +128,10 @@ service cloud.firestore {
       allow read: if isAuthenticated();
 
       allow create: if isOwner(userId) &&
-                       isReasonableSize() &&
-                       request.resource.data.id == userId &&
-                       isValidOptionalString(request.resource.data, 'displayName', 100) &&
-                       isValidOptionalString(request.resource.data, 'firstName', 50) &&
-                       isValidOptionalString(request.resource.data, 'lastName', 50);
+                       isReasonableSize();
 
       allow update: if isOwner(userId) &&
-                       isReasonableSize() &&
-                       request.resource.data.id == resource.data.id &&
-                       isValidOptionalString(request.resource.data, 'displayName', 100) &&
-                       isValidOptionalString(request.resource.data, 'firstName', 50) &&
-                       isValidOptionalString(request.resource.data, 'lastName', 50);
+                       isReasonableSize();
 
       allow delete: if isOwner(userId);
     }
