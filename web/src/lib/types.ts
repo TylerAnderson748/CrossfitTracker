@@ -16,6 +16,21 @@ export interface AppUser {
   gymId?: string;
   createdAt: Timestamp;
   hideFromLeaderboards: boolean;
+  // AI Trainer subscription
+  aiTrainerSubscription?: AITrainerSubscription;
+}
+
+// AI Trainer Subscription types
+export type AISubscriptionTier = "free" | "pro" | "elite";
+
+export interface AITrainerSubscription {
+  tier: AISubscriptionTier;
+  status: "active" | "canceled" | "past_due" | "trialing";
+  startDate?: Timestamp;
+  endDate?: Timestamp;
+  trialEndsAt?: Timestamp;
+  stripeCustomerId?: string;
+  stripeSubscriptionId?: string;
 }
 
 // Stored account for multi-account switching

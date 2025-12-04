@@ -1667,7 +1667,9 @@ export default function GymDetailPage() {
                   <AIProgrammingChat
                     gymId={gymId}
                     userId={user.id}
+                    userEmail={user.email}
                     groups={groups}
+                    subscription={user.aiTrainerSubscription}
                     onPublish={() => {
                       // Refresh workouts after publishing
                       fetchGymData();

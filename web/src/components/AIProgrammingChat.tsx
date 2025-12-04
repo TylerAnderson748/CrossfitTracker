@@ -4,8 +4,9 @@ import { useState, useEffect } from "react";
 import { collection, addDoc, updateDoc, doc, query, where, getDocs, orderBy, Timestamp, serverTimestamp, deleteDoc, limit } from "firebase/firestore";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { db } from "@/lib/firebase";
-import { AIProgrammingSession, AIChatMessage, AIGeneratedDay, WorkoutGroup, WorkoutComponent, AIProgrammingPreferences } from "@/lib/types";
+import { AIProgrammingSession, AIChatMessage, AIGeneratedDay, WorkoutGroup, WorkoutComponent, AIProgrammingPreferences, AITrainerSubscription } from "@/lib/types";
 import { getAllSkills, getAllLifts, getAllWods } from "@/lib/workoutData";
+import AITrainerPaywall from "./AITrainerPaywall";
 
 // Types for user workout history
 interface LiftHistoryEntry {
@@ -46,8 +47,10 @@ const defaultPreferences: Omit<AIProgrammingPreferences, "gymId" | "updatedAt"> 
 interface AIProgrammingChatProps {
   gymId: string;
   userId: string;
+  userEmail?: string;
   groups: WorkoutGroup[];
   onPublish?: () => void;
+  subscription?: AITrainerSubscription;
 }
 
 const getSystemPrompt = (preferences?: Omit<AIProgrammingPreferences, "gymId" | "updatedAt">, userHistory?: UserWorkoutHistory) => {
@@ -315,7 +318,10 @@ function removeUndefined<T>(obj: T): T {
   return obj;
 }
 
-export default function AIProgrammingChat({ gymId, userId, groups, onPublish }: AIProgrammingChatProps) {
+export default function AIProgrammingChat({ gymId, userId, userEmail, groups, onPublish, subscription }: AIProgrammingChatProps) {
+  // Check if user has an active AI subscription
+  const hasActiveSubscription = subscription &&
+    (subscription.status === "active" || subscription.status === "trialing");
   const [sessions, setSessions] = useState<AIProgrammingSession[]>([]);
   const [activeSession, setActiveSession] = useState<AIProgrammingSession | null>(null);
   const [input, setInput] = useState("");
@@ -869,6 +875,15 @@ export default function AIProgrammingChat({ gymId, userId, groups, onPublish }: 
     return (
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
         <p className="text-gray-500">Loading AI Programming...</p>
+      </div>
+    );
+  }
+
+  // Show paywall if user doesn't have an active subscription
+  if (!hasActiveSubscription) {
+    return (
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <AITrainerPaywall userEmail={userEmail} />
       </div>
     );
   }
