@@ -656,6 +656,7 @@ export default function WeeklyPlanPage() {
               <PersonalAITrainer
                 userId={user.id}
                 gymId={user.gymId}
+                userPreferences={user.aiCoachPreferences}
                 todayWorkout={workouts.find(w => {
                   const workoutDate = w.date instanceof Timestamp ? w.date.toDate() : new Date(w.date);
                   return workoutDate.toDateString() === new Date().toDateString();

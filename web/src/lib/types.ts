@@ -18,6 +18,17 @@ export interface AppUser {
   hideFromLeaderboards: boolean;
   // AI Trainer subscription
   aiTrainerSubscription?: AITrainerSubscription;
+  // AI Coach preferences and goals
+  aiCoachPreferences?: AICoachPreferences;
+}
+
+// AI Coach user preferences
+export interface AICoachPreferences {
+  goals?: string; // User's fitness goals (free text)
+  injuries?: string; // Current injuries or limitations
+  experienceLevel?: "beginner" | "intermediate" | "advanced" | "competitor";
+  focusAreas?: string[]; // e.g., ["strength", "cardio", "gymnastics", "olympic lifting"]
+  updatedAt?: Timestamp;
 }
 
 // AI Trainer Subscription types

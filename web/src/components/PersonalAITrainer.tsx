@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { collection, query, where, getDocs, Timestamp, limit } from "firebase/firestore";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { db } from "@/lib/firebase";
-import { ScheduledWorkout } from "@/lib/types";
+import { ScheduledWorkout, AICoachPreferences } from "@/lib/types";
 
 // Types for user workout history
 interface LiftHistoryEntry {
@@ -21,6 +21,7 @@ interface WodHistoryEntry {
   reps?: number;
   category: string;
   completedDate: Timestamp;
+  aiCoachFeedback?: string;
 }
 
 interface UserWorkoutHistory {
@@ -32,6 +33,7 @@ interface PersonalAITrainerProps {
   userId: string;
   todayWorkout?: ScheduledWorkout | null;
   gymId?: string;
+  userPreferences?: AICoachPreferences;
 }
 
 interface GymMemberStats {
@@ -39,7 +41,7 @@ interface GymMemberStats {
   count: number;
 }
 
-export default function PersonalAITrainer({ userId, todayWorkout, gymId }: PersonalAITrainerProps) {
+export default function PersonalAITrainer({ userId, todayWorkout, gymId, userPreferences }: PersonalAITrainerProps) {
   const [userHistory, setUserHistory] = useState<UserWorkoutHistory>({ lifts: [], wods: [] });
   const [gymMemberStats, setGymMemberStats] = useState<GymMemberStats | null>(null);
   const [aiAdvice, setAiAdvice] = useState<string | null>(null);
@@ -86,6 +88,7 @@ export default function PersonalAITrainer({ userId, todayWorkout, gymId }: Perso
             reps: data.reps,
             category: data.notes || data.category || "RX",
             completedDate: data.completedDate,
+            aiCoachFeedback: data.aiCoachFeedback,
           } as WodHistoryEntry;
         }).filter(w => w.wodTitle);
 
@@ -212,16 +215,46 @@ export default function PersonalAITrainer({ userId, todayWorkout, gymId }: Perso
         historySummary += "\n\nRecent WOD Performances:\n" + userHistory.wods
           .slice(0, 10)
           .map(wod => {
+            let result = "";
             if (wod.timeInSeconds && !wod.rounds) {
               const mins = Math.floor(wod.timeInSeconds / 60);
               const secs = wod.timeInSeconds % 60;
-              return `- ${wod.wodTitle}: ${mins}:${secs.toString().padStart(2, '0')} (${wod.category})`;
+              result = `- ${wod.wodTitle}: ${mins}:${secs.toString().padStart(2, '0')} (${wod.category})`;
             } else if (wod.rounds !== undefined) {
-              return `- ${wod.wodTitle}: ${wod.rounds}+${wod.reps || 0} rounds (${wod.category})`;
+              result = `- ${wod.wodTitle}: ${wod.rounds}+${wod.reps || 0} rounds (${wod.category})`;
+            } else {
+              result = `- ${wod.wodTitle} (${wod.category})`;
             }
-            return `- ${wod.wodTitle} (${wod.category})`;
+            return result;
           })
           .join("\n");
+
+        // Include recent feedback from the athlete
+        const recentFeedback = userHistory.wods
+          .filter(wod => wod.aiCoachFeedback)
+          .slice(0, 5);
+        if (recentFeedback.length > 0) {
+          historySummary += "\n\nATHLETE'S RECENT FEEDBACK ON WORKOUTS:\n" + recentFeedback
+            .map(wod => `- ${wod.wodTitle}: "${wod.aiCoachFeedback}"`)
+            .join("\n");
+        }
+      }
+
+      // Build user preferences/goals section
+      let userGoalsInfo = "";
+      if (userPreferences) {
+        if (userPreferences.goals) {
+          userGoalsInfo += `\nATHLETE'S GOALS: ${userPreferences.goals}`;
+        }
+        if (userPreferences.injuries) {
+          userGoalsInfo += `\nINJURIES/LIMITATIONS: ${userPreferences.injuries}`;
+        }
+        if (userPreferences.experienceLevel) {
+          userGoalsInfo += `\nEXPERIENCE LEVEL: ${userPreferences.experienceLevel}`;
+        }
+        if (userPreferences.focusAreas && userPreferences.focusAreas.length > 0) {
+          userGoalsInfo += `\nFOCUS AREAS: ${userPreferences.focusAreas.join(", ")}`;
+        }
       }
 
       // Build gym comparison data
@@ -258,14 +291,16 @@ ${scalingInstructions}
 
 ATHLETE'S WORKOUT HISTORY:
 ${historySummary || "No workout history available yet."}
+${userGoalsInfo ? `\nATHLETE'S PROFILE & GOALS:${userGoalsInfo}` : ""}
 ${gymComparisonInfo}
 
-Based on this athlete's history and today's workout, provide SPECIFIC and PERSONALIZED recommendations:
+Based on this athlete's history, goals, and today's workout, provide SPECIFIC and PERSONALIZED recommendations:
 
 1. Suggest specific weights they should use based on their lift PRs
 2. ${prescribedScalingOptions.trim() ? "Help them choose the RIGHT prescribed scaling option for their ability level" : "Recommend a scaling option (Rx, Scaled, or Foundations) based on their typical performance level"}
 3. Give them a goal pace or target to aim for
 4. One mental cue or focus point for the workout
+${userPreferences?.goals ? "5. Briefly mention how today's workout connects to their stated goals" : ""}
 
 CRITICAL RULES:
 - ${prescribedScalingOptions.trim() ? "ONLY suggest scaling options from the coach's prescribed options above - never invent your own scaling" : "You may suggest appropriate scaling since none was prescribed"}
@@ -273,6 +308,7 @@ CRITICAL RULES:
 - Be encouraging but realistic. Reference their actual numbers
 - Keep it concise (3-4 short paragraphs max)
 - If they don't have relevant lift data, help them choose based on the prescribed options and note they should track their lifts
+${userPreferences?.injuries ? "- IMPORTANT: Consider their injuries/limitations when giving advice - suggest modifications if needed" : ""}
 
 Respond in a friendly, coach-like tone. Use their actual numbers when giving recommendations.`;
 

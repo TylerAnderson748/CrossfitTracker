@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { doc, updateDoc, collection, query, where, getDocs, arrayRemove } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
-import { Gym, Gender, WorkoutGroup } from "@/lib/types";
+import { Gym, Gender, WorkoutGroup, AICoachPreferences } from "@/lib/types";
+import { Timestamp } from "firebase/firestore";
 import Navigation from "@/components/Navigation";
 
 // Subscription type for member's gym memberships
@@ -45,6 +46,14 @@ export default function ProfilePage() {
   const [showLeaveGroupModal, setShowLeaveGroupModal] = useState<GroupAddOn | null>(null);
   const [leavingGym, setLeavingGym] = useState(false);
   const [leavingGroup, setLeavingGroup] = useState(false);
+  const [editingAIPrefs, setEditingAIPrefs] = useState(false);
+  const [savingAIPrefs, setSavingAIPrefs] = useState(false);
+  const [aiPrefsForm, setAiPrefsForm] = useState<AICoachPreferences>({
+    goals: "",
+    injuries: "",
+    experienceLevel: "intermediate",
+    focusAreas: [],
+  });
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
@@ -68,6 +77,15 @@ export default function ProfilePage() {
         gender: user.gender || "Male",
         hideFromLeaderboards: user.hideFromLeaderboards || false,
       });
+      // Load AI Coach preferences
+      if (user.aiCoachPreferences) {
+        setAiPrefsForm({
+          goals: user.aiCoachPreferences.goals || "",
+          injuries: user.aiCoachPreferences.injuries || "",
+          experienceLevel: user.aiCoachPreferences.experienceLevel || "intermediate",
+          focusAreas: user.aiCoachPreferences.focusAreas || [],
+        });
+      }
       fetchGyms();
     }
   }, [user]);
@@ -163,6 +181,34 @@ export default function ProfilePage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleSaveAIPrefs = async () => {
+    if (!user) return;
+
+    setSavingAIPrefs(true);
+    try {
+      await updateDoc(doc(db, "users", user.id), {
+        aiCoachPreferences: {
+          ...aiPrefsForm,
+          updatedAt: Timestamp.now(),
+        },
+      });
+      setEditingAIPrefs(false);
+    } catch (error) {
+      console.error("Error updating AI preferences:", error);
+    } finally {
+      setSavingAIPrefs(false);
+    }
+  };
+
+  const toggleFocusArea = (area: string) => {
+    setAiPrefsForm(prev => ({
+      ...prev,
+      focusAreas: prev.focusAreas?.includes(area)
+        ? prev.focusAreas.filter(a => a !== area)
+        : [...(prev.focusAreas || []), area],
+    }));
   };
 
   const handleSignOut = async () => {
@@ -681,6 +727,160 @@ export default function ProfilePage() {
             </div>
           )}
         </div>
+
+        {/* AI Coach Goals & Preferences - Only show if subscribed */}
+        {(user.aiTrainerSubscription?.status === "active" || user.aiTrainerSubscription?.status === "trialing") && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">🎯</span>
+                <h3 className="text-lg font-semibold text-gray-900">AI Coach Goals</h3>
+              </div>
+              {!editingAIPrefs && (
+                <button
+                  onClick={() => setEditingAIPrefs(true)}
+                  className="text-sm text-blue-600 hover:text-blue-700"
+                >
+                  Edit
+                </button>
+              )}
+            </div>
+            <p className="text-sm text-gray-500 mb-4">
+              Tell your AI Coach about your goals so it can give you better personalized advice.
+            </p>
+
+            {editingAIPrefs ? (
+              <div className="space-y-4">
+                {/* Goals */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    What are your fitness goals?
+                  </label>
+                  <textarea
+                    value={aiPrefsForm.goals || ""}
+                    onChange={(e) => setAiPrefsForm({ ...aiPrefsForm, goals: e.target.value })}
+                    placeholder="e.g., Get my first muscle-up, improve my 5K time, increase my back squat to 300lbs..."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    rows={3}
+                  />
+                </div>
+
+                {/* Injuries/Limitations */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Any injuries or limitations?
+                  </label>
+                  <textarea
+                    value={aiPrefsForm.injuries || ""}
+                    onChange={(e) => setAiPrefsForm({ ...aiPrefsForm, injuries: e.target.value })}
+                    placeholder="e.g., Recovering from shoulder surgery, bad knees, avoid overhead movements..."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    rows={2}
+                  />
+                </div>
+
+                {/* Experience Level */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Experience Level
+                  </label>
+                  <select
+                    value={aiPrefsForm.experienceLevel || "intermediate"}
+                    onChange={(e) => setAiPrefsForm({ ...aiPrefsForm, experienceLevel: e.target.value as AICoachPreferences["experienceLevel"] })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  >
+                    <option value="beginner">Beginner (0-1 years)</option>
+                    <option value="intermediate">Intermediate (1-3 years)</option>
+                    <option value="advanced">Advanced (3-5 years)</option>
+                    <option value="competitor">Competitor (5+ years)</option>
+                  </select>
+                </div>
+
+                {/* Focus Areas */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Focus Areas (select all that apply)
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {["Strength", "Cardio/Endurance", "Gymnastics", "Olympic Lifting", "Mobility", "Weight Loss", "Competition Prep"].map((area) => (
+                      <button
+                        key={area}
+                        onClick={() => toggleFocusArea(area)}
+                        className={`px-3 py-1.5 text-sm rounded-full transition-colors ${
+                          aiPrefsForm.focusAreas?.includes(area)
+                            ? "bg-purple-600 text-white"
+                            : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                        }`}
+                      >
+                        {area}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Save/Cancel Buttons */}
+                <div className="flex gap-3 pt-2">
+                  <button
+                    onClick={() => {
+                      setEditingAIPrefs(false);
+                      // Reset form to current values
+                      if (user.aiCoachPreferences) {
+                        setAiPrefsForm(user.aiCoachPreferences);
+                      }
+                    }}
+                    className="flex-1 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSaveAIPrefs}
+                    disabled={savingAIPrefs}
+                    className="flex-1 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:bg-purple-300 transition-colors"
+                  >
+                    {savingAIPrefs ? "Saving..." : "Save Goals"}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {aiPrefsForm.goals ? (
+                  <>
+                    <div>
+                      <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Goals</div>
+                      <p className="text-gray-900 text-sm">{aiPrefsForm.goals}</p>
+                    </div>
+                    {aiPrefsForm.injuries && (
+                      <div>
+                        <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Injuries/Limitations</div>
+                        <p className="text-gray-900 text-sm">{aiPrefsForm.injuries}</p>
+                      </div>
+                    )}
+                    <div className="flex flex-wrap gap-2 pt-2">
+                      <span className="px-2 py-1 bg-purple-100 text-purple-700 text-xs rounded-full">
+                        {aiPrefsForm.experienceLevel || "Intermediate"}
+                      </span>
+                      {aiPrefsForm.focusAreas?.map((area) => (
+                        <span key={area} className="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded-full">
+                          {area}
+                        </span>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-center py-4">
+                    <p className="text-gray-500 text-sm mb-3">No goals set yet</p>
+                    <button
+                      onClick={() => setEditingAIPrefs(true)}
+                      className="px-4 py-2 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700 transition-colors"
+                    >
+                      Set Your Goals
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Account Info */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
