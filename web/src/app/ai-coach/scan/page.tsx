@@ -6,7 +6,7 @@ import { collection, query, where, getDocs, addDoc, Timestamp } from "firebase/f
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
-import { Gym, WorkoutGroup } from "@/lib/types";
+import { Gym, WorkoutGroup, ScheduledTimeSlot } from "@/lib/types";
 import Navigation from "@/components/Navigation";
 
 interface GeneratedWorkout {
@@ -273,6 +273,37 @@ IMPORTANT: Only respond with valid JSON. No additional text before or after the 
         order: idx,
       }));
 
+      // Generate time slots from selected groups' default time slots
+      const groupsToUse = selectedGroupIds.length > 0
+        ? gymGroups.filter(g => selectedGroupIds.includes(g.id))
+        : gymGroups;
+
+      const timeSlots: ScheduledTimeSlot[] = [];
+      const seenTimes = new Set<string>();
+
+      groupsToUse.forEach((group) => {
+        if (group.defaultTimeSlots?.length > 0) {
+          group.defaultTimeSlots.forEach((slot: { hour: number; minute: number; capacity?: number }) => {
+            const hour = typeof slot.hour === 'number' ? slot.hour : parseInt(slot.hour as unknown as string) || 0;
+            const minute = typeof slot.minute === 'number' ? slot.minute : parseInt(slot.minute as unknown as string) || 0;
+            const timeKey = `${hour}:${minute}`;
+            if (!seenTimes.has(timeKey)) {
+              seenTimes.add(timeKey);
+              timeSlots.push({
+                id: `slot_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                hour: hour,
+                minute: minute,
+                capacity: slot.capacity || 20,
+                signups: [],
+              });
+            }
+          });
+        }
+      });
+
+      // Sort time slots by time
+      timeSlots.sort((a, b) => a.hour * 60 + a.minute - (b.hour * 60 + b.minute));
+
       // Create the scheduled workout
       const scheduledWorkout = {
         gymId: userGym.id,
@@ -281,7 +312,7 @@ IMPORTANT: Only respond with valid JSON. No additional text before or after the 
         components,
         createdAt: Timestamp.now(),
         createdBy: user.id,
-        timeSlots: [],
+        timeSlots,
       };
 
       await addDoc(collection(db, "scheduledWorkouts"), scheduledWorkout);

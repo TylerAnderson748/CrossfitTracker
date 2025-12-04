@@ -397,11 +397,49 @@ export default function WeeklyPlanPage() {
         return false;
       });
 
-      setWorkouts(filteredWorkouts);
+      // For workouts with empty/missing time slots, generate them from groups' default time slots
+      const workoutsWithTimeSlots = filteredWorkouts.map((workout) => {
+        // If workout already has time slots, keep them
+        if (workout.timeSlots && workout.timeSlots.length > 0) {
+          return workout;
+        }
+
+        // Generate time slots from the workout's groups' default time slots
+        const timeSlots: ScheduledTimeSlot[] = [];
+        const seenTimes = new Set<string>();
+
+        workout.groupIds?.forEach((groupId) => {
+          const group = groups[groupId];
+          if (group && group.defaultTimeSlots && group.defaultTimeSlots.length > 0) {
+            group.defaultTimeSlots.forEach((slot: { hour: number; minute: number; capacity?: number }) => {
+              const hour = typeof slot.hour === 'number' ? slot.hour : parseInt(slot.hour as unknown as string) || 0;
+              const minute = typeof slot.minute === 'number' ? slot.minute : parseInt(slot.minute as unknown as string) || 0;
+              const timeKey = `${hour}:${minute}`;
+              if (!seenTimes.has(timeKey)) {
+                seenTimes.add(timeKey);
+                timeSlots.push({
+                  id: `slot_gen_${groupId}_${hour}_${minute}`,
+                  hour,
+                  minute,
+                  capacity: slot.capacity || 20,
+                  signups: [],
+                });
+              }
+            });
+          }
+        });
+
+        // Sort time slots by time
+        timeSlots.sort((a, b) => a.hour * 60 + a.minute - (b.hour * 60 + b.minute));
+
+        return { ...workout, timeSlots };
+      });
+
+      setWorkouts(workoutsWithTimeSlots);
 
       // Fetch user names for all signed up users
       const allSignupUserIds = new Set<string>();
-      filteredWorkouts.forEach((workout) => {
+      workoutsWithTimeSlots.forEach((workout) => {
         workout.timeSlots?.forEach((slot: ScheduledTimeSlot) => {
           const signups = slot.signups || [];
           signups.forEach((userId: string) => allSignupUserIds.add(userId));
