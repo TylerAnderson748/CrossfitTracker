@@ -118,6 +118,12 @@ When generating workouts, you MUST respond with valid JSON in this exact format:
           "notes": "Stimulus: Build strength with moderate load. Focus on depth and control.\\nScaling: Reduce weight if form breaks down. Beginners use goblet squats."
         },
         {
+          "type": "skill",
+          "title": "Toes-to-Bar",
+          "description": "3 sets of 8-10 reps (or max effort)\\nRest 90 sec between sets\\n\\nDrill Work:\\n- 10 kip swings (focus on hollow/arch)\\n- 10 knees-to-chest\\n- 5 slow toes-to-bar with pause at top",
+          "notes": "Stimulus: Skill development, focus on rhythm and efficiency.\\nScaling: Knees-to-Elbow if can't reach toes. Hanging Knee Raises if still developing kip. V-ups on floor if grip is limiting.\\nIntent: Quality over quantity - stop if form breaks down.\\nProgression: Master kip swing first, then knees-to-chest, then full TTB."
+        },
+        {
           "type": "wod",
           "title": "Fran",
           "description": "21-15-9\\nThrusters (95/65)\\nPull-ups",
@@ -162,6 +168,19 @@ Guidelines:
 - Keep descriptions clear and concise
 - Use newlines (\\n) for formatting within descriptions
 - ALWAYS use real dates starting from ${todayStr} and going forward
+
+IMPORTANT - SKILL WORK REQUIREMENTS:
+For SKILL components, NEVER just say "10 minutes of practice" or generic time domains. Instead, ALWAYS include:
+1. Specific sets/reps (e.g., "3 sets of 8-10 reps")
+2. Drill work with clear exercises (e.g., "10 kip swings, 10 knees-to-chest")
+3. Rest periods between sets
+4. The description should teach HOW to develop the skill, not just tell them to practice
+
+The notes field for skills MUST include:
+- Scaling: 2-3 progressions for different ability levels
+- Progression: The path from beginner to mastery
+- Intent: What athletes should focus on (quality, rhythm, efficiency, etc.)
+
 - ALWAYS include a "notes" field for each component with:
   * Stimulus: The intended feel/intensity (e.g., "fast and light", "heavy grind")
   * Scaling: Options for different fitness levels
