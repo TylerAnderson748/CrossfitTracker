@@ -279,6 +279,12 @@ export default function AIProgrammingChat({ gymId, userId, groups, onPublish }: 
     const workouts = getAllGeneratedWorkouts();
     if (workouts.length === 0) return;
 
+    // Validate required fields
+    if (!gymId || !userId) {
+      setError("Missing gym or user information");
+      return;
+    }
+
     setIsPublishing(true);
     setError(null);
 
@@ -286,39 +292,59 @@ export default function AIProgrammingChat({ gymId, userId, groups, onPublish }: 
       // Create scheduled workouts for each day
       for (const day of workouts) {
         if (day.isRestDay) continue;
+        if (!day.components || day.components.length === 0) continue;
 
-        const components: WorkoutComponent[] = day.components
-          .filter(comp => comp.type && comp.title) // Filter out invalid components
-          .map((comp, idx) => {
-            const component: WorkoutComponent = {
-              id: `comp-${idx}`,
-              type: comp.type || "wod",
-              title: comp.title || "Workout",
-              description: comp.description || "",
-            };
-            // Only add scoringType if it exists (typically for WODs)
-            if (comp.scoringType) {
-              component.scoringType = comp.scoringType;
-            }
-            return component;
-          });
+        // Build components array with explicit field handling
+        const cleanComponents: Array<{
+          id: string;
+          type: string;
+          title: string;
+          description: string;
+          scoringType?: string;
+        }> = [];
+
+        for (let idx = 0; idx < day.components.length; idx++) {
+          const comp = day.components[idx];
+          if (!comp || !comp.type || !comp.title) continue;
+
+          const cleanComp: {
+            id: string;
+            type: string;
+            title: string;
+            description: string;
+            scoringType?: string;
+          } = {
+            id: `comp-${idx}`,
+            type: String(comp.type),
+            title: String(comp.title),
+            description: String(comp.description || ""),
+          };
+
+          if (comp.scoringType) {
+            cleanComp.scoringType = String(comp.scoringType);
+          }
+
+          cleanComponents.push(cleanComp);
+        }
 
         // Skip if no valid components
-        if (components.length === 0) continue;
+        if (cleanComponents.length === 0) continue;
 
-        const scheduledWorkout = removeUndefined({
-          gymId,
-          wodTitle: `${day.dayOfWeek} Programming`,
-          wodDescription: components.map(c => c.title).join(", "),
-          date: Timestamp.fromDate(new Date(day.date)),
-          workoutType: "wod" as const,
-          groupIds: selectedGroups,
-          createdBy: userId,
-          recurrenceType: "none" as const,
-          components: removeUndefined(components),
+        // Build the workout document explicitly
+        const workoutDate = new Date(day.date);
+        const scheduledWorkout: Record<string, unknown> = {
+          gymId: String(gymId),
+          wodTitle: `${day.dayOfWeek || "Day"} Programming`,
+          wodDescription: cleanComponents.map(c => c.title).join(", "),
+          date: Timestamp.fromDate(workoutDate),
+          workoutType: "wod",
+          groupIds: [...selectedGroups],
+          createdBy: String(userId),
+          recurrenceType: "none",
+          components: cleanComponents,
           hideDetails: false,
           createdAt: Timestamp.now(),
-        });
+        };
 
         await addDoc(collection(db, "scheduledWorkouts"), scheduledWorkout);
       }
