@@ -78,6 +78,10 @@ function removeUndefined<T>(obj: T): T {
     return obj.map(item => removeUndefined(item)) as T;
   }
   if (typeof obj === 'object') {
+    // Don't modify Firestore Timestamps or other special objects
+    if (obj instanceof Timestamp || (obj as Record<string, unknown>).toDate !== undefined) {
+      return obj;
+    }
     const cleaned: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
       if (value !== undefined) {
