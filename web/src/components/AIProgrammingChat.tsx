@@ -265,31 +265,37 @@ export default function AIProgrammingChat({ gymId, userId, groups, onPublish }: 
       for (const day of workouts) {
         if (day.isRestDay) continue;
 
-        const components: WorkoutComponent[] = day.components.map((comp, idx) => {
-          const component: WorkoutComponent = {
-            id: `comp-${idx}`,
-            type: comp.type,
-            title: comp.title,
-            description: comp.description,
-          };
-          // Only add scoringType if it exists (typically for WODs)
-          if (comp.scoringType) {
-            component.scoringType = comp.scoringType;
-          }
-          return component;
-        });
+        const components: WorkoutComponent[] = day.components
+          .filter(comp => comp.type && comp.title) // Filter out invalid components
+          .map((comp, idx) => {
+            const component: WorkoutComponent = {
+              id: `comp-${idx}`,
+              type: comp.type || "wod",
+              title: comp.title || "Workout",
+              description: comp.description || "",
+            };
+            // Only add scoringType if it exists (typically for WODs)
+            if (comp.scoringType) {
+              component.scoringType = comp.scoringType;
+            }
+            return component;
+          });
+
+        // Skip if no valid components
+        if (components.length === 0) continue;
 
         const scheduledWorkout = {
           gymId,
           wodTitle: `${day.dayOfWeek} Programming`,
           wodDescription: components.map(c => c.title).join(", "),
           date: Timestamp.fromDate(new Date(day.date)),
-          workoutType: "wod",
+          workoutType: "wod" as const,
           groupIds: selectedGroups,
           createdBy: userId,
-          recurrenceType: "none",
+          recurrenceType: "none" as const,
           components,
           hideDetails: false,
+          createdAt: Timestamp.now(),
         };
 
         await addDoc(collection(db, "scheduledWorkouts"), scheduledWorkout);
