@@ -677,7 +677,34 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
         }
         cleanedText = cleanedText.trim();
 
-        parsedResponse = JSON.parse(cleanedText);
+        const parsed = JSON.parse(cleanedText);
+
+        // Handle different response formats from AI
+        if (Array.isArray(parsed)) {
+          // AI returned just an array of workouts
+          parsedResponse = {
+            message: `I've generated ${parsed.length} days of programming for you. Click "Preview & Publish" to review and add them to your calendar.`,
+            workouts: parsed
+          };
+        } else if (parsed.workouts && Array.isArray(parsed.workouts)) {
+          // Expected format with message and workouts
+          parsedResponse = {
+            message: parsed.message || `Here's your ${parsed.workouts.length}-day program! Review the workouts below and click "Preview & Publish" when ready.`,
+            workouts: parsed.workouts
+          };
+        } else if (parsed.message) {
+          // Just a message, no workouts
+          parsedResponse = {
+            message: parsed.message,
+            workouts: []
+          };
+        } else {
+          // Unknown format, show as message
+          parsedResponse = {
+            message: text,
+            workouts: []
+          };
+        }
       } catch {
         // If JSON parsing fails, treat as plain message
         parsedResponse = {
