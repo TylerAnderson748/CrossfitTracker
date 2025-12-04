@@ -303,6 +303,7 @@ export function formatTime(seconds: number): string {
 }
 
 export function normalizeWorkoutName(name: string): string {
+  if (!name) return "";
   return name.toLowerCase().replace(/\s+/g, "").replace(/[^a-z0-9]/g, "");
 }
 
