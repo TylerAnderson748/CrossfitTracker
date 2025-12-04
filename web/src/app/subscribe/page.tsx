@@ -6,14 +6,21 @@ import { doc, updateDoc, Timestamp } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
 import Navigation from "@/components/Navigation";
-import { AITrainerSubscription } from "@/lib/types";
+import { AITrainerSubscription, AICoachPreferences } from "@/lib/types";
 
 export default function SubscribePage() {
   const { user, loading } = useAuth();
   const router = useRouter();
   const [selectedPlan, setSelectedPlan] = useState<"monthly" | "yearly">("monthly");
   const [isProcessing, setIsProcessing] = useState(false);
-  const [showSuccess, setShowSuccess] = useState(false);
+  const [showGoalsStep, setShowGoalsStep] = useState(false);
+  const [savingGoals, setSavingGoals] = useState(false);
+  const [goalsForm, setGoalsForm] = useState<AICoachPreferences>({
+    goals: "",
+    injuries: "",
+    experienceLevel: "intermediate",
+    focusAreas: [],
+  });
 
   const plans = {
     monthly: {
@@ -62,10 +69,7 @@ export default function SubscribePage() {
         aiTrainerSubscription: subscription,
       });
 
-      setShowSuccess(true);
-      setTimeout(() => {
-        router.push("/weekly");
-      }, 2000);
+      setShowGoalsStep(true);
     } catch (error) {
       console.error("Error starting trial:", error);
       alert("Failed to start trial. Please try again.");
@@ -98,16 +102,46 @@ export default function SubscribePage() {
         aiTrainerSubscription: subscription,
       });
 
-      setShowSuccess(true);
-      setTimeout(() => {
-        router.push("/weekly");
-      }, 2000);
+      setShowGoalsStep(true);
     } catch (error) {
       console.error("Error subscribing:", error);
       alert("Failed to subscribe. Please try again.");
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  const toggleFocusArea = (area: string) => {
+    setGoalsForm(prev => ({
+      ...prev,
+      focusAreas: prev.focusAreas?.includes(area)
+        ? prev.focusAreas.filter(a => a !== area)
+        : [...(prev.focusAreas || []), area],
+    }));
+  };
+
+  const handleSaveGoals = async () => {
+    if (!user) return;
+
+    setSavingGoals(true);
+    try {
+      await updateDoc(doc(db, "users", user.id), {
+        aiCoachPreferences: {
+          ...goalsForm,
+          updatedAt: Timestamp.now(),
+        },
+      });
+      router.push("/weekly");
+    } catch (error) {
+      console.error("Error saving goals:", error);
+      alert("Failed to save goals. Please try again.");
+    } finally {
+      setSavingGoals(false);
+    }
+  };
+
+  const handleSkipGoals = () => {
+    router.push("/weekly");
   };
 
   // Check if user already has an active subscription
@@ -122,17 +156,118 @@ export default function SubscribePage() {
     );
   }
 
-  if (showSuccess) {
+  if (showGoalsStep) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-900 via-purple-800 to-indigo-900 flex items-center justify-center">
-        <div className="text-center text-white">
-          <div className="w-24 h-24 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-6 animate-pulse">
-            <svg className="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-            </svg>
+      <div className="min-h-screen bg-gradient-to-br from-purple-900 via-purple-800 to-indigo-900">
+        <div className="max-w-xl mx-auto px-4 py-12">
+          {/* Success Header */}
+          <div className="text-center mb-8">
+            <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <h1 className="text-3xl font-bold text-white mb-2">Welcome to AI Coach!</h1>
+            <p className="text-purple-200">Let&apos;s personalize your experience</p>
           </div>
-          <h1 className="text-3xl font-bold mb-2">Welcome to AI Coach!</h1>
-          <p className="text-purple-200">Redirecting you to your personalized training...</p>
+
+          {/* Goals Form */}
+          <div className="bg-white rounded-xl p-6 shadow-xl">
+            <div className="flex items-center gap-2 mb-4">
+              <span className="text-2xl">🎯</span>
+              <h2 className="text-xl font-bold text-gray-900">Tell us about your goals</h2>
+            </div>
+            <p className="text-sm text-gray-500 mb-6">
+              This helps your AI Coach give you better personalized advice. You can always update this later in your profile.
+            </p>
+
+            <div className="space-y-5">
+              {/* Goals */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  What are your fitness goals?
+                </label>
+                <textarea
+                  value={goalsForm.goals || ""}
+                  onChange={(e) => setGoalsForm({ ...goalsForm, goals: e.target.value })}
+                  placeholder="e.g., Get my first muscle-up, improve my 5K time, increase my back squat to 300lbs..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  rows={3}
+                />
+              </div>
+
+              {/* Injuries/Limitations */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Any injuries or limitations?
+                </label>
+                <textarea
+                  value={goalsForm.injuries || ""}
+                  onChange={(e) => setGoalsForm({ ...goalsForm, injuries: e.target.value })}
+                  placeholder="e.g., Recovering from shoulder surgery, bad knees, avoid overhead movements..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  rows={2}
+                />
+              </div>
+
+              {/* Experience Level */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Experience Level
+                </label>
+                <select
+                  value={goalsForm.experienceLevel || "intermediate"}
+                  onChange={(e) => setGoalsForm({ ...goalsForm, experienceLevel: e.target.value as AICoachPreferences["experienceLevel"] })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                >
+                  <option value="beginner">Beginner (0-1 years)</option>
+                  <option value="intermediate">Intermediate (1-3 years)</option>
+                  <option value="advanced">Advanced (3-5 years)</option>
+                  <option value="competitor">Competitor (5+ years)</option>
+                </select>
+              </div>
+
+              {/* Focus Areas */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Focus Areas (select all that apply)
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {["Strength", "Cardio/Endurance", "Gymnastics", "Olympic Lifting", "Mobility", "Weight Loss", "Competition Prep"].map((area) => (
+                    <button
+                      key={area}
+                      type="button"
+                      onClick={() => toggleFocusArea(area)}
+                      className={`px-3 py-1.5 text-sm rounded-full transition-colors ${
+                        goalsForm.focusAreas?.includes(area)
+                          ? "bg-purple-600 text-white"
+                          : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                      }`}
+                    >
+                      {area}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Buttons */}
+              <div className="flex gap-3 pt-4">
+                <button
+                  onClick={handleSkipGoals}
+                  className="flex-1 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+                >
+                  Skip for now
+                </button>
+                <button
+                  onClick={handleSaveGoals}
+                  disabled={savingGoals}
+                  className="flex-1 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg hover:from-purple-700 hover:to-indigo-700 disabled:opacity-50 transition-colors font-bold"
+                >
+                  {savingGoals ? "Saving..." : "Save & Continue"}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     );
