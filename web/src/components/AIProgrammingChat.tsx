@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { collection, addDoc, updateDoc, doc, query, where, getDocs, orderBy, Timestamp, serverTimestamp, deleteDoc } from "firebase/firestore";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { db } from "@/lib/firebase";
-import { AIProgrammingSession, AIChatMessage, AIGeneratedDay, WorkoutGroup, WorkoutComponent, AIProgrammingPreferences, AITrainerSubscription } from "@/lib/types";
+import { AIProgrammingSession, AIChatMessage, AIGeneratedDay, WorkoutGroup, WorkoutComponent, AIProgrammingPreferences, AITrainerSubscription, ScheduledTimeSlot } from "@/lib/types";
 import { getAllSkills, getAllLifts, getAllWods } from "@/lib/workoutData";
 import AITrainerPaywall from "./AITrainerPaywall";
 
@@ -768,6 +768,34 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
         const workoutDate = new Date(day.date);
         if (isNaN(workoutDate.getTime())) continue; // Skip invalid dates
 
+        // Generate time slots from selected groups' default time slots
+        const groupsToUse = groups.filter(g => selectedGroups.includes(g.id));
+        const timeSlots: ScheduledTimeSlot[] = [];
+        const seenTimes = new Set<string>();
+
+        groupsToUse.forEach((group) => {
+          if (group.defaultTimeSlots?.length > 0) {
+            group.defaultTimeSlots.forEach((slot: { hour: number; minute: number; capacity?: number }) => {
+              const hour = typeof slot.hour === 'number' ? slot.hour : parseInt(slot.hour as unknown as string) || 0;
+              const minute = typeof slot.minute === 'number' ? slot.minute : parseInt(slot.minute as unknown as string) || 0;
+              const timeKey = `${hour}:${minute}`;
+              if (!seenTimes.has(timeKey)) {
+                seenTimes.add(timeKey);
+                timeSlots.push({
+                  id: `slot_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                  hour: hour,
+                  minute: minute,
+                  capacity: slot.capacity || 20,
+                  signups: [],
+                });
+              }
+            });
+          }
+        });
+
+        // Sort time slots by time
+        timeSlots.sort((a, b) => a.hour * 60 + a.minute - (b.hour * 60 + b.minute));
+
         // Create document
         await addDoc(collection(db, "scheduledWorkouts"), {
           gymId: String(gymId),
@@ -781,6 +809,7 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
           hideDetails: false,
           date: Timestamp.fromDate(workoutDate),
           createdAt: serverTimestamp(),
+          timeSlots,
         });
       }
 
