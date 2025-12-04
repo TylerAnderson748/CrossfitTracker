@@ -45,7 +45,7 @@ export default function AITrainerPaywall({ onClose, variant = "athlete" }: AITra
 
   const handleSubscribe = async () => {
     setIsLoading(true);
-    router.push("/subscribe");
+    router.push(variant === "coach" ? "/subscribe?variant=coach" : "/subscribe");
   };
 
   return (

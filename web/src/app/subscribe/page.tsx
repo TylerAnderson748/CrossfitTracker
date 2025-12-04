@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { doc, updateDoc, Timestamp } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
@@ -11,6 +11,8 @@ import { AITrainerSubscription, AICoachPreferences } from "@/lib/types";
 export default function SubscribePage() {
   const { user, loading, refreshUser } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const variant = searchParams.get("variant") === "coach" ? "coach" : "athlete";
   const [selectedPlan, setSelectedPlan] = useState<"monthly" | "yearly">("monthly");
   const [isProcessing, setIsProcessing] = useState(false);
   const [showGoalsStep, setShowGoalsStep] = useState(false);
@@ -38,7 +40,7 @@ export default function SubscribePage() {
     },
   };
 
-  const features = [
+  const athleteFeatures = [
     { icon: "🎯", text: "Personalized weight recommendations based on YOUR lift history" },
     { icon: "📊", text: "AI analyzes your past WOD performances for smart scaling" },
     { icon: "🏋️", text: "Custom workout suggestions tailored to your fitness level" },
@@ -46,6 +48,16 @@ export default function SubscribePage() {
     { icon: "🤖", text: "Unlimited AI programming conversations" },
     { icon: "📈", text: "Track your progress with intelligent insights" },
   ];
+
+  const coachFeatures = [
+    { icon: "💡", text: "AI drafts programming - you fine-tune and publish" },
+    { icon: "📸", text: "Scan whiteboard photos to instantly digitize workouts" },
+    { icon: "📝", text: "Paste your workouts, AI formats them for the app" },
+    { icon: "✏️", text: "Edit, adjust, or rewrite anything before publishing" },
+    { icon: "🎛️", text: "You stay in control - AI handles the busy work" },
+  ];
+
+  const features = variant === "coach" ? coachFeatures : athleteFeatures;
 
   const handleStartTrial = async () => {
     if (!user) {
@@ -69,7 +81,13 @@ export default function SubscribePage() {
         aiTrainerSubscription: subscription,
       });
 
-      setShowGoalsStep(true);
+      // Coaches skip the goals step, go straight to programming
+      if (variant === "coach") {
+        await refreshUser();
+        router.push("/ai-coach/programming");
+      } else {
+        setShowGoalsStep(true);
+      }
     } catch (error) {
       console.error("Error starting trial:", error);
       alert("Failed to start trial. Please try again.");
@@ -102,7 +120,13 @@ export default function SubscribePage() {
         aiTrainerSubscription: subscription,
       });
 
-      setShowGoalsStep(true);
+      // Coaches skip the goals step, go straight to programming
+      if (variant === "coach") {
+        await refreshUser();
+        router.push("/ai-coach/programming");
+      } else {
+        setShowGoalsStep(true);
+      }
     } catch (error) {
       console.error("Error subscribing:", error);
       alert("Failed to subscribe. Please try again.");
@@ -171,8 +195,12 @@ export default function SubscribePage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <h1 className="text-3xl font-bold text-white mb-2">Welcome to AI Coach!</h1>
-            <p className="text-purple-200">Let&apos;s personalize your experience</p>
+            <h1 className="text-3xl font-bold text-white mb-2">
+              {variant === "coach" ? "AI Assistant Activated!" : "Welcome to AI Coach!"}
+            </h1>
+            <p className="text-purple-200">
+              {variant === "coach" ? "You're ready to start creating programming" : "Let's personalize your experience"}
+            </p>
           </div>
 
           {/* Goals Form */}
@@ -285,12 +313,20 @@ export default function SubscribePage() {
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-purple-600 to-indigo-600 rounded-full mb-4">
             <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              {variant === "coach" ? (
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+              ) : (
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              )}
             </svg>
           </div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">AI Coach Subscription</h1>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+            {variant === "coach" ? "AI Programming Assistant" : "AI Coach Subscription"}
+          </h1>
           <p className="text-gray-600 max-w-xl mx-auto">
-            Get personalized scaling and weight recommendations powered by AI that learns from your workout history
+            {variant === "coach"
+              ? "Let AI handle the busy work while you stay in control of your gym's programming"
+              : "Get personalized scaling and weight recommendations powered by AI that learns from your workout history"}
           </p>
         </div>
 
@@ -338,12 +374,14 @@ export default function SubscribePage() {
               <div className="mt-6 bg-gradient-to-br from-purple-50 to-indigo-50 rounded-lg p-4 border border-purple-100">
                 <div className="flex items-center gap-2 mb-2">
                   <span className="text-yellow-500">⭐</span>
-                  <span className="font-semibold text-purple-900">Sample AI Insight</span>
+                  <span className="font-semibold text-purple-900">
+                    {variant === "coach" ? "Example AI Output" : "Sample AI Insight"}
+                  </span>
                 </div>
                 <p className="text-sm text-purple-800 italic">
-                  &ldquo;Based on your Back Squat PR of 225lb and recent Clean work at 155lb,
-                  I recommend trying 135lb thrusters today. This should let you maintain
-                  consistent sets while pushing your conditioning.&rdquo;
+                  {variant === "coach"
+                    ? "\"Give me a strength-focused week\" → AI generates 5 days of programming with lifts, skills, and metcons - complete with scaling options and coaching notes."
+                    : "\"Based on your Back Squat PR of 225lb and recent Clean work at 155lb, I recommend trying 135lb thrusters today. This should let you maintain consistent sets while pushing your conditioning.\""}
                 </p>
               </div>
             </div>
@@ -453,30 +491,61 @@ export default function SubscribePage() {
         <div className="mt-12 bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <h2 className="text-xl font-bold text-gray-900 mb-6">Frequently Asked Questions</h2>
           <div className="space-y-4">
-            <div>
-              <h3 className="font-semibold text-gray-900 mb-1">How does the AI Coach work?</h3>
-              <p className="text-gray-600 text-sm">
-                The AI Coach analyzes your workout history, lift PRs, and WOD performances to provide personalized recommendations. It considers your strength levels, recent performance trends, and the specific demands of each workout.
-              </p>
-            </div>
-            <div>
-              <h3 className="font-semibold text-gray-900 mb-1">Can I cancel anytime?</h3>
-              <p className="text-gray-600 text-sm">
-                Yes! You can cancel your subscription at any time. Your access will continue until the end of your billing period.
-              </p>
-            </div>
-            <div>
-              <h3 className="font-semibold text-gray-900 mb-1">What happens after my free trial?</h3>
-              <p className="text-gray-600 text-sm">
-                After your 7-day free trial, you&apos;ll be asked to subscribe to continue using the AI Coach features. You won&apos;t be charged automatically.
-              </p>
-            </div>
-            <div>
-              <h3 className="font-semibold text-gray-900 mb-1">Is my data secure?</h3>
-              <p className="text-gray-600 text-sm">
-                Absolutely. Your workout data is securely stored and only used to provide you with personalized recommendations. We never share your data with third parties.
-              </p>
-            </div>
+            {variant === "coach" ? (
+              <>
+                <div>
+                  <h3 className="font-semibold text-gray-900 mb-1">How does AI Programming work?</h3>
+                  <p className="text-gray-600 text-sm">
+                    Tell the AI what kind of programming you want (strength focus, conditioning, skills work, etc.) and it generates complete workouts with warm-ups, lifts, skills, WODs, and cooldowns. You review, edit, and publish.
+                  </p>
+                </div>
+                <div>
+                  <h3 className="font-semibold text-gray-900 mb-1">Do I lose control of my programming?</h3>
+                  <p className="text-gray-600 text-sm">
+                    Never. The AI is your assistant, not your replacement. Every workout goes through you before it&apos;s published. Edit anything, rewrite sections, or reject entirely.
+                  </p>
+                </div>
+                <div>
+                  <h3 className="font-semibold text-gray-900 mb-1">Can I scan my existing whiteboard?</h3>
+                  <p className="text-gray-600 text-sm">
+                    Yes! Take a photo of your whiteboard and the AI will digitize it into the app format - complete with sections, scaling options, and notes.
+                  </p>
+                </div>
+                <div>
+                  <h3 className="font-semibold text-gray-900 mb-1">Can I cancel anytime?</h3>
+                  <p className="text-gray-600 text-sm">
+                    Yes! You can cancel your subscription at any time. Your access will continue until the end of your billing period.
+                  </p>
+                </div>
+              </>
+            ) : (
+              <>
+                <div>
+                  <h3 className="font-semibold text-gray-900 mb-1">How does the AI Coach work?</h3>
+                  <p className="text-gray-600 text-sm">
+                    The AI Coach analyzes your workout history, lift PRs, and WOD performances to provide personalized recommendations. It considers your strength levels, recent performance trends, and the specific demands of each workout.
+                  </p>
+                </div>
+                <div>
+                  <h3 className="font-semibold text-gray-900 mb-1">Can I cancel anytime?</h3>
+                  <p className="text-gray-600 text-sm">
+                    Yes! You can cancel your subscription at any time. Your access will continue until the end of your billing period.
+                  </p>
+                </div>
+                <div>
+                  <h3 className="font-semibold text-gray-900 mb-1">What happens after my free trial?</h3>
+                  <p className="text-gray-600 text-sm">
+                    After your 7-day free trial, you&apos;ll be asked to subscribe to continue using the AI Coach features. You won&apos;t be charged automatically.
+                  </p>
+                </div>
+                <div>
+                  <h3 className="font-semibold text-gray-900 mb-1">Is my data secure?</h3>
+                  <p className="text-gray-600 text-sm">
+                    Absolutely. Your workout data is securely stored and only used to provide you with personalized recommendations. We never share your data with third parties.
+                  </p>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </main>
