@@ -370,20 +370,112 @@ export default function SubscribePage() {
                 ))}
               </div>
 
-              {/* Sample insight */}
-              <div className="mt-6 bg-gradient-to-br from-purple-50 to-indigo-50 rounded-lg p-4 border border-purple-100">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-yellow-500">⭐</span>
-                  <span className="font-semibold text-purple-900">
-                    {variant === "coach" ? "Example AI Output" : "Sample AI Insight"}
-                  </span>
+              {/* Sample insight / Visual example */}
+              {variant === "coach" ? (
+                <div className="mt-6 space-y-4">
+                  {/* Prompt example */}
+                  <div className="bg-gray-100 rounded-lg p-3 border border-gray-200">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-purple-600 font-medium text-sm">You type:</span>
+                    </div>
+                    <p className="text-gray-800 font-medium">&quot;Give me 3 days of strength-focused programming&quot;</p>
+                  </div>
+
+                  {/* AI generates arrow */}
+                  <div className="flex justify-center">
+                    <div className="flex items-center gap-2 text-purple-600">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                      </svg>
+                      <span className="font-semibold text-sm">AI Generates</span>
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                      </svg>
+                    </div>
+                  </div>
+
+                  {/* 3-day preview */}
+                  <div className="bg-gradient-to-br from-purple-900 to-indigo-900 rounded-xl p-4">
+                    <div className="grid grid-cols-3 gap-3">
+                      {/* Monday */}
+                      <div className="bg-white/10 backdrop-blur rounded-lg p-3">
+                        <p className="font-bold text-white text-sm mb-2">Monday</p>
+                        <div className="space-y-2 text-xs">
+                          <div>
+                            <span className="inline-block px-1.5 py-0.5 bg-orange-500/40 text-orange-200 rounded text-[10px] font-medium">WARMUP</span>
+                            <p className="text-purple-100 mt-0.5">3 Rounds: Row, Lunges, PVC Pass-throughs</p>
+                          </div>
+                          <div>
+                            <span className="inline-block px-1.5 py-0.5 bg-yellow-500/40 text-yellow-200 rounded text-[10px] font-medium">STRENGTH</span>
+                            <p className="text-purple-100 mt-0.5">Back Squat 5x5 @ 75%</p>
+                          </div>
+                          <div>
+                            <span className="inline-block px-1.5 py-0.5 bg-red-500/40 text-red-200 rounded text-[10px] font-medium">WOD</span>
+                            <p className="text-purple-100 mt-0.5">12min AMRAP: Wall Balls, Box Jumps</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Tuesday */}
+                      <div className="bg-white/10 backdrop-blur rounded-lg p-3">
+                        <p className="font-bold text-white text-sm mb-2">Tuesday</p>
+                        <div className="space-y-2 text-xs">
+                          <div>
+                            <span className="inline-block px-1.5 py-0.5 bg-orange-500/40 text-orange-200 rounded text-[10px] font-medium">WARMUP</span>
+                            <p className="text-purple-100 mt-0.5">EMOM 6: Burpees, Air Squats</p>
+                          </div>
+                          <div>
+                            <span className="inline-block px-1.5 py-0.5 bg-green-500/40 text-green-200 rounded text-[10px] font-medium">SKILL</span>
+                            <p className="text-purple-100 mt-0.5">Muscle-up progressions</p>
+                          </div>
+                          <div>
+                            <span className="inline-block px-1.5 py-0.5 bg-yellow-500/40 text-yellow-200 rounded text-[10px] font-medium">STRENGTH</span>
+                            <p className="text-purple-100 mt-0.5">Deadlift 5-3-1+</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Wednesday */}
+                      <div className="bg-white/10 backdrop-blur rounded-lg p-3">
+                        <p className="font-bold text-white text-sm mb-2">Wednesday</p>
+                        <div className="space-y-2 text-xs">
+                          <div>
+                            <span className="inline-block px-1.5 py-0.5 bg-orange-500/40 text-orange-200 rounded text-[10px] font-medium">WARMUP</span>
+                            <p className="text-purple-100 mt-0.5">2 Rounds: Jump Rope, Inch Worms</p>
+                          </div>
+                          <div>
+                            <span className="inline-block px-1.5 py-0.5 bg-yellow-500/40 text-yellow-200 rounded text-[10px] font-medium">STRENGTH</span>
+                            <p className="text-purple-100 mt-0.5">Bench Press 5x5 @ 70%</p>
+                          </div>
+                          <div>
+                            <span className="inline-block px-1.5 py-0.5 bg-red-500/40 text-red-200 rounded text-[10px] font-medium">WOD</span>
+                            <p className="text-purple-100 mt-0.5">&quot;Cindy&quot; - 20min AMRAP</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <p className="text-center text-purple-300 text-xs mt-3">+ Scaling options, coaching notes, and stimulus for each workout</p>
+                  </div>
+
+                  {/* Edit callout */}
+                  <div className="flex items-center justify-center gap-2 text-sm text-gray-600">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                    </svg>
+                    <span>Review, edit, then publish with one click</span>
+                  </div>
                 </div>
-                <p className="text-sm text-purple-800 italic">
-                  {variant === "coach"
-                    ? "\"Give me a strength-focused week\" → AI generates 5 days of programming with lifts, skills, and metcons - complete with scaling options and coaching notes."
-                    : "\"Based on your Back Squat PR of 225lb and recent Clean work at 155lb, I recommend trying 135lb thrusters today. This should let you maintain consistent sets while pushing your conditioning.\""}
-                </p>
-              </div>
+              ) : (
+                <div className="mt-6 bg-gradient-to-br from-purple-50 to-indigo-50 rounded-lg p-4 border border-purple-100">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-yellow-500">⭐</span>
+                    <span className="font-semibold text-purple-900">Sample AI Insight</span>
+                  </div>
+                  <p className="text-sm text-purple-800 italic">
+                    &quot;Based on your Back Squat PR of 225lb and recent Clean work at 155lb, I recommend trying 135lb thrusters today. This should let you maintain consistent sets while pushing your conditioning.&quot;
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Pricing Section */}
