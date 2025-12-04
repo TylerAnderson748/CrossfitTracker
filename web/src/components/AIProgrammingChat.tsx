@@ -846,7 +846,7 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
   if (!hasActiveSubscription) {
     return (
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <AITrainerPaywall userEmail={userEmail} />
+        <AITrainerPaywall userEmail={userEmail} variant="coach" />
       </div>
     );
   }

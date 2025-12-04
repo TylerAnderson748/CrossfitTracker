@@ -6,9 +6,10 @@ import { useRouter } from "next/navigation";
 interface AITrainerPaywallProps {
   onClose?: () => void;
   userEmail?: string;
+  variant?: "athlete" | "coach";
 }
 
-export default function AITrainerPaywall({ onClose }: AITrainerPaywallProps) {
+export default function AITrainerPaywall({ onClose, variant = "athlete" }: AITrainerPaywallProps) {
   const router = useRouter();
   const [selectedPlan, setSelectedPlan] = useState<"monthly" | "yearly">("monthly");
   const [isLoading, setIsLoading] = useState(false);
@@ -26,13 +27,23 @@ export default function AITrainerPaywall({ onClose }: AITrainerPaywallProps) {
     },
   };
 
-  const features = [
+  const athleteFeatures = [
     "Personalized weight recommendations based on YOUR lift history",
     "AI analyzes your past WOD performances for smart scaling",
     "Custom workout suggestions tailored to your fitness level",
     "Progress-aware coaching cues and advice",
     "Unlimited AI programming conversations",
   ];
+
+  const coachFeatures = [
+    "Generate weeks of programming in seconds with AI",
+    "Describe what you want and let AI create the workouts",
+    "Scan whiteboard photos to instantly digitize workouts",
+    "AI-powered scaling suggestions for your athletes",
+    "Smart workout variety - avoids repeating recent WODs",
+  ];
+
+  const features = variant === "coach" ? coachFeatures : athleteFeatures;
 
   const handleSubscribe = async () => {
     setIsLoading(true);
@@ -44,14 +55,31 @@ export default function AITrainerPaywall({ onClose }: AITrainerPaywallProps) {
       {/* Header */}
       <div className="text-center mb-6">
         <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full mb-4">
-          <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-          </svg>
+          {variant === "coach" ? (
+            <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+            </svg>
+          ) : (
+            <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+          )}
         </div>
-        <h2 className="text-2xl font-bold mb-2">Unlock Your Personal AI Coach</h2>
-        <p className="text-purple-200 text-sm">
-          Get personalized scaling and weight recommendations based on your actual workout history
-        </p>
+        {variant === "coach" ? (
+          <>
+            <h2 className="text-2xl font-bold mb-2">Your AI Programming Assistant</h2>
+            <p className="text-purple-200 text-sm">
+              Let AI help you create professional programming for your athletes in seconds
+            </p>
+          </>
+        ) : (
+          <>
+            <h2 className="text-2xl font-bold mb-2">Unlock Your Personal AI Coach</h2>
+            <p className="text-purple-200 text-sm">
+              Get personalized scaling and weight recommendations based on your actual workout history
+            </p>
+          </>
+        )}
       </div>
 
       {/* Preview of what they're missing */}
@@ -60,13 +88,23 @@ export default function AITrainerPaywall({ onClose }: AITrainerPaywallProps) {
           <svg className="w-5 h-5 text-yellow-400" fill="currentColor" viewBox="0 0 24 24">
             <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
           </svg>
-          <span className="font-semibold text-yellow-400">Sample AI Insight</span>
+          <span className="font-semibold text-yellow-400">
+            {variant === "coach" ? "Example AI Response" : "Sample AI Insight"}
+          </span>
         </div>
-        <p className="text-sm text-purple-100 italic">
-          &ldquo;Based on your Back Squat PR of 225lb and recent Clean work at 155lb,
-          I recommend trying 135lb thrusters today. This should let you maintain
-          consistent sets while pushing your conditioning.&rdquo;
-        </p>
+        {variant === "coach" ? (
+          <p className="text-sm text-purple-100 italic">
+            &ldquo;Here&apos;s a strength-focused week with progressive loading. Monday: Back Squat 5x5 @ 75%,
+            Wednesday: Deadlift 3x3 @ 80%, Friday: Front Squat 4x6 @ 70%. I&apos;ve paired each with
+            complementary conditioning that won&apos;t interfere with recovery...&rdquo;
+          </p>
+        ) : (
+          <p className="text-sm text-purple-100 italic">
+            &ldquo;Based on your Back Squat PR of 225lb and recent Clean work at 155lb,
+            I recommend trying 135lb thrusters today. This should let you maintain
+            consistent sets while pushing your conditioning.&rdquo;
+          </p>
+        )}
       </div>
 
       {/* Features list */}
@@ -142,6 +180,8 @@ export default function AITrainerPaywall({ onClose }: AITrainerPaywallProps) {
             </svg>
             Processing...
           </span>
+        ) : variant === "coach" ? (
+          "Unlock AI Programming"
         ) : (
           "Start Your AI Coaching"
         )}
