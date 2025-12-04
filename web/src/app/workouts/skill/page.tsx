@@ -6,7 +6,7 @@ import { collection, addDoc, query, where, getDocs, Timestamp, limit, doc, updat
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
 import Navigation from "@/components/Navigation";
-import { getAllSkills } from "@/lib/workoutData";
+import { getAllSkills, Workout } from "@/lib/workoutData";
 
 // Generate straight line path
 function getLinePath(points: { x: number; y: number }[]): string {
@@ -47,6 +47,10 @@ function SkillPageContent() {
   const [loadingLeaderboard, setLoadingLeaderboard] = useState(false);
   const [leaderboardScope, setLeaderboardScope] = useState<"gym" | "everyone">("everyone");
   const [chartTimeRange, setChartTimeRange] = useState<"1m" | "6m" | "1y" | "2y" | "5y">("1y");
+
+  // Autocomplete suggestions state
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const allSkills = getAllSkills();
 
   // Edit history state
   const [editingLogId, setEditingLogId] = useState<string | null>(null);
@@ -102,6 +106,11 @@ function SkillPageContent() {
     if (!skillName) return;
     setLoadingLeaderboard(true);
     try {
+      // Check if this is a preset skill (standard benchmark)
+      const allSkills = getAllSkills();
+      const skillNameLower = skillName.toLowerCase().trim();
+      const isPresetSkill = allSkills.some(s => s.name.toLowerCase().trim() === skillNameLower);
+
       const q = query(
         collection(db, "skillResults"),
         limit(500)
@@ -113,8 +122,12 @@ function SkillPageContent() {
       })) as SkillResult[];
 
       // Case-insensitive match for skill name
-      const skillNameLower = skillName.toLowerCase().trim();
       results = results.filter((r) => r.skillTitle?.toLowerCase().trim() === skillNameLower);
+
+      // For custom (non-preset) skills, only show current user's entries
+      if (!isPresetSkill && user) {
+        results = results.filter((r) => r.userId === user.id);
+      }
 
       // Filter by gym if scope is gym
       if (leaderboardScope === "gym" && user?.gymId) {
@@ -333,18 +346,23 @@ function SkillPageContent() {
   };
   const xAxisLabels = getXAxisLabels();
 
-  // Common skills for quick selection
-  const allSkills = getAllSkills();
-  const commonSkills = [
-    "Double-Under",
-    "Muscle-up",
-    "Handstand Push-up",
-    "Pistol Squat",
-    "Toes-to-Bar",
-    "Strict Pull-up",
-    "Kipping Pull-up",
-    "Ring Dip",
-  ];
+  // Filtered suggestions based on input
+  const getFilteredSuggestions = (): Workout[] => {
+    if (!skillName.trim()) return allSkills.slice(0, 10);
+    const searchLower = skillName.toLowerCase();
+    return allSkills
+      .filter(skill =>
+        skill.name.toLowerCase().includes(searchLower) ||
+        skill.description.toLowerCase().includes(searchLower)
+      )
+      .slice(0, 10);
+  };
+  const filteredSuggestions = getFilteredSuggestions();
+
+  const handleSelectSuggestion = (skill: Workout) => {
+    setSkillName(skill.name);
+    setShowSuggestions(false);
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -366,29 +384,48 @@ function SkillPageContent() {
           </div>
         ) : (
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-4">
-            <input
-              type="text"
-              value={skillName}
-              onChange={(e) => setSkillName(e.target.value)}
-              placeholder="Skill Name"
-              className="w-full text-xl font-bold text-gray-900 border-none focus:ring-0 p-0 mb-3 placeholder-gray-400"
-            />
-            <div className="flex flex-wrap gap-2">
-              {commonSkills.map((skill) => (
-                <button
-                  key={skill}
-                  type="button"
-                  onClick={() => setSkillName(skill)}
-                  className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
-                    skillName === skill
-                      ? "bg-green-600 text-white"
-                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                  }`}
-                >
-                  {skill}
-                </button>
-              ))}
+            <div className="relative">
+              <input
+                type="text"
+                value={skillName}
+                onChange={(e) => {
+                  setSkillName(e.target.value);
+                  setShowSuggestions(true);
+                }}
+                onFocus={() => setShowSuggestions(true)}
+                placeholder="Search skills..."
+                className="w-full text-xl font-bold text-gray-900 border border-gray-300 rounded-lg px-3 py-2 placeholder-gray-400 focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              />
+              {/* Autocomplete dropdown */}
+              {showSuggestions && filteredSuggestions.length > 0 && (
+                <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-64 overflow-y-auto">
+                  {filteredSuggestions.map((skill, idx) => (
+                    <button
+                      key={`${skill.name}-${idx}`}
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => handleSelectSuggestion(skill)}
+                      className="w-full px-4 py-3 text-left hover:bg-green-50 transition-colors flex items-center justify-between border-b border-gray-100 last:border-b-0"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-gray-900">{skill.name}</p>
+                        <p className="text-sm text-gray-500 truncate">{skill.description}</p>
+                      </div>
+                      <span className="ml-2 px-2 py-1 text-xs font-medium rounded bg-green-100 text-green-700 shrink-0">
+                        Skill
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
+            {/* Click outside to close */}
+            {showSuggestions && (
+              <div
+                className="fixed inset-0 z-40"
+                onClick={() => setShowSuggestions(false)}
+              />
+            )}
           </div>
         )}
 

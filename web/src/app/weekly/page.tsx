@@ -6,9 +6,10 @@ import Link from "next/link";
 import { collection, query, where, orderBy, getDocs, updateDoc, doc, Timestamp, limit, addDoc, deleteDoc } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
-import { ScheduledWorkout, ScheduledTimeSlot, workoutComponentLabels, workoutComponentColors, formatTimeSlot, LeaderboardEntry, formatResult, normalizeWorkoutName, WorkoutComponent, WorkoutComponentType } from "@/lib/types";
+import { ScheduledWorkout, ScheduledTimeSlot, workoutComponentLabels, workoutComponentColors, formatTimeSlot, LeaderboardEntry, formatResult, normalizeWorkoutName, WorkoutComponent, WorkoutComponentType, WODScoringType, wodScoringTypeLabels, wodScoringTypeColors, AITrainerSubscription } from "@/lib/types";
 import { getAllWods, getAllLifts, Workout } from "@/lib/workoutData";
 import Navigation from "@/components/Navigation";
+import PersonalAITrainer from "@/components/PersonalAITrainer";
 
 // Combined result type for both WODs and lifts
 interface WorkoutResult {
@@ -86,6 +87,7 @@ export default function WeeklyPlanPage() {
       type,
       title: "",
       description: "",
+      ...(type === "wod" && { scoringType: "fortime" as WODScoringType }),
     };
     setWorkoutComponents([...workoutComponents, newComponent]);
   };
@@ -94,9 +96,9 @@ export default function WeeklyPlanPage() {
     setWorkoutComponents(workoutComponents.filter((c) => c.id !== id));
   };
 
-  const updateComponent = (id: string, field: "title" | "description", value: string) => {
-    setWorkoutComponents(
-      workoutComponents.map((c) =>
+  const updateComponent = (id: string, field: "title" | "description" | "scoringType" | "isPreset", value: string | boolean) => {
+    setWorkoutComponents(prev =>
+      prev.map((c) =>
         c.id === id ? { ...c, [field]: value } : c
       )
     );
@@ -424,6 +426,12 @@ export default function WeeklyPlanPage() {
       // Fetch recent results for each workout
       const logsMap: { [key: string]: WorkoutResult[] } = {};
       for (const workout of filteredWorkouts) {
+        // Skip personal workouts (from scan) that don't have wodTitle
+        if (!workout.wodTitle) {
+          logsMap[workout.id] = [];
+          continue;
+        }
+
         const isLift = workout.workoutType?.toLowerCase().includes("lift");
 
         if (isLift) {
@@ -645,6 +653,23 @@ export default function WeeklyPlanPage() {
           </button>
         </div>
 
+        {/* AI Personal Trainer Section - Only show for subscribers */}
+        {user && user.aiTrainerSubscription &&
+         (user.aiTrainerSubscription.status === "active" || user.aiTrainerSubscription.status === "trialing") && (
+          <div className="mb-4">
+            <PersonalAITrainer
+              userId={user.id}
+              gymId={user.gymId}
+              userPreferences={user.aiCoachPreferences}
+              todayWorkout={workouts.find(w => {
+                const workoutDate = w.date instanceof Timestamp ? w.date.toDate() : new Date(w.date);
+                return workoutDate.toDateString() === new Date().toDateString();
+              }) || null}
+              todayPersonalWorkouts={getPersonalWorkoutsForDate(new Date())}
+            />
+          </div>
+        )}
+
         {/* Time Range Selector */}
         <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
           {[
@@ -733,11 +758,12 @@ export default function WeeklyPlanPage() {
                             key={workout.id}
                             className="p-3 bg-gray-50 rounded-lg border border-gray-100"
                           >
-                            <div className="flex items-start justify-between">
-                              <div className="flex-1">
-                                {/* Group badges - only show groups user is a member of */}
+                            {/* Header row: Group badges + action buttons */}
+                            <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+                              {/* Group badges - only show groups user is a member of */}
+                              <div className="flex items-center gap-2 flex-wrap">
                                 {workout.groupIds && workout.groupIds.length > 0 && (
-                                  <div className="flex items-center gap-2 mb-2 flex-wrap">
+                                  <>
                                     {workout.groupIds
                                       .filter((gId) => userGroupIds.includes(gId))
                                       .map((gId) => (
@@ -745,14 +771,109 @@ export default function WeeklyPlanPage() {
                                           {getGroupName(gId)}
                                         </span>
                                       ))}
-                                  </div>
+                                  </>
                                 )}
+                              </div>
+
+                              {/* Action buttons */}
+                              <div className="flex items-center gap-1 flex-wrap">
+                                {/* Individual log buttons for each component type */}
+                                {(() => {
+                                  const wodComponent = workout.components?.find(c => c.type === "wod");
+                                  const liftComponent = workout.components?.find(c => c.type === "lift");
+                                  const skillComponent = workout.components?.find(c => c.type === "skill");
+                                  const buttons = [];
+
+                                  // WOD Log button
+                                  if (wodComponent) {
+                                    const scoringType = wodComponent.scoringType || "fortime";
+                                    buttons.push(
+                                      <Link
+                                        key="wod-log"
+                                        href={`/workouts/new?name=${encodeURIComponent(wodComponent.title)}&description=${encodeURIComponent(wodComponent.description || "")}&scoringType=${scoringType}`}
+                                        className="px-2 py-1 bg-orange-500 hover:bg-orange-600 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1"
+                                        title={`Log WOD: ${wodComponent.title}`}
+                                      >
+                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                        </svg>
+                                        WOD
+                                      </Link>
+                                    );
+                                  }
+
+                                  // Lift Log button
+                                  if (liftComponent) {
+                                    buttons.push(
+                                      <Link
+                                        key="lift-log"
+                                        href={`/workouts/lift?name=${encodeURIComponent(liftComponent.title)}&description=${encodeURIComponent(liftComponent.description || "")}`}
+                                        className="px-2 py-1 bg-purple-500 hover:bg-purple-600 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1"
+                                        title={`Log Lift: ${liftComponent.title}`}
+                                      >
+                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                        </svg>
+                                        Lift
+                                      </Link>
+                                    );
+                                  }
+
+                                  // Skill Log button
+                                  if (skillComponent) {
+                                    buttons.push(
+                                      <Link
+                                        key="skill-log"
+                                        href={`/workouts/skill?name=${encodeURIComponent(skillComponent.title)}&description=${encodeURIComponent(skillComponent.description || "")}`}
+                                        className="px-2 py-1 bg-green-500 hover:bg-green-600 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1"
+                                        title={`Log Skill: ${skillComponent.title}`}
+                                      >
+                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                        </svg>
+                                        Skill
+                                      </Link>
+                                    );
+                                  }
+
+                                  // Fallback: single Log button if no specific components found
+                                  if (buttons.length === 0) {
+                                    buttons.push(
+                                      <Link
+                                        key="general-log"
+                                        href={`/workouts/new?name=${encodeURIComponent(workout.wodTitle)}&description=${encodeURIComponent(workout.wodDescription || "")}&scoringType=fortime`}
+                                        className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1"
+                                      >
+                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                        </svg>
+                                        Log
+                                      </Link>
+                                    );
+                                  }
+
+                                  return buttons;
+                                })()}
+                                <Link
+                                  href={`/leaderboard?workout=${encodeURIComponent(workout.wodTitle)}`}
+                                  className="px-2 py-1 border border-gray-300 text-gray-600 text-xs font-semibold rounded-lg hover:bg-gray-50 transition-colors"
+                                  title="Leaderboard"
+                                >
+                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                                  </svg>
+                                </Link>
+                              </div>
+                            </div>
+
+                            {/* Full width workout content */}
+                            <div>
 
                                 {/* Show workout content - check visibility first */}
                                 {shouldShowDetails(workout) ? (
                                   // Show full workout details
                                   workout.components && workout.components.length > 0 ? (
-                                    <div className="space-y-2">
+                                    <div className="space-y-3">
                                       {workout.components.map((comp) => (
                                         <div key={comp.id} className="border-l-2 border-gray-200 pl-2">
                                           <div className="flex items-center gap-2">
@@ -762,7 +883,12 @@ export default function WeeklyPlanPage() {
                                             <span className="font-medium text-gray-900 text-sm">{comp.title}</span>
                                           </div>
                                           {comp.description && (
-                                            <p className="text-gray-600 text-xs mt-1 whitespace-pre-wrap line-clamp-2 ml-1">{comp.description}</p>
+                                            <p className="text-gray-700 text-xs whitespace-pre-wrap mt-1 ml-1">{comp.description}</p>
+                                          )}
+                                          {comp.notes && (
+                                            <div className="mt-2 ml-1 p-2 bg-amber-50 rounded border-l-2 border-amber-300">
+                                              <p className="text-amber-800 text-xs whitespace-pre-line">{comp.notes}</p>
+                                            </div>
                                           )}
                                         </div>
                                       ))}
@@ -906,35 +1032,6 @@ export default function WeeklyPlanPage() {
                                   </div>
                                   );
                                 })()}
-                              </div>
-
-                              {/* Action buttons */}
-                              <div className="flex items-center gap-1 ml-2">
-                                <Link
-                                  href={workout.workoutType?.toLowerCase().includes("lift")
-                                    ? `/workouts/lift?name=${encodeURIComponent(workout.wodTitle)}&description=${encodeURIComponent(workout.wodDescription || "")}`
-                                    : `/workouts/new?name=${encodeURIComponent(workout.wodTitle)}&description=${encodeURIComponent(workout.wodDescription || "")}`}
-                                  className={`px-2 py-1.5 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1 ${
-                                    workout.workoutType?.toLowerCase().includes("lift")
-                                      ? "bg-purple-600 hover:bg-purple-700"
-                                      : "bg-blue-600 hover:bg-blue-700"
-                                  }`}
-                                >
-                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                  </svg>
-                                  Log
-                                </Link>
-                                <Link
-                                  href={`/leaderboard?workout=${encodeURIComponent(workout.wodTitle)}`}
-                                  className="px-2 py-1.5 border border-gray-300 text-gray-600 text-xs font-semibold rounded-lg hover:bg-gray-50 transition-colors"
-                                  title="Leaderboard"
-                                >
-                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                                  </svg>
-                                </Link>
-                              </div>
                             </div>
 
                             {/* Recent Results */}
@@ -988,36 +1085,49 @@ export default function WeeklyPlanPage() {
                             key={personalWorkout.id}
                             className="p-3 bg-green-50 rounded-lg border border-green-200"
                           >
-                            <div className="flex items-start justify-between">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-2">
-                                  <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full font-medium">
-                                    Personal
-                                  </span>
-                                </div>
-                                {/* Show workout components */}
-                                <div className="space-y-2">
-                                  {personalWorkout.components.map((comp) => (
-                                    <div key={comp.id} className="border-l-2 border-gray-200 pl-2">
-                                      <div className="flex items-center gap-2">
-                                        <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${workoutComponentColors[comp.type]?.bg || "bg-gray-100"} ${workoutComponentColors[comp.type]?.text || "text-gray-700"}`}>
-                                          {workoutComponentLabels[comp.type] || comp.type}
-                                        </span>
-                                        <span className="font-medium text-gray-900 text-sm">{comp.title}</span>
-                                      </div>
-                                      {comp.description && (
-                                        <p className="text-gray-600 text-xs mt-1 whitespace-pre-wrap line-clamp-2 ml-1">{comp.description}</p>
-                                      )}
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
+                            {/* Header row: Personal badge + action buttons */}
+                            <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+                              <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full font-medium">
+                                Personal
+                              </span>
 
-                              {/* Edit/Delete buttons */}
-                              <div className="flex items-center gap-1 ml-2">
+                              {/* Action buttons */}
+                              <div className="flex items-center gap-1">
+                                {/* Log button - find first WOD component */}
+                                {(() => {
+                                  const wodComponent = personalWorkout.components.find(c => c.type === "wod");
+                                  const liftComponent = personalWorkout.components.find(c => c.type === "lift");
+                                  if (wodComponent) {
+                                    const scoringType = wodComponent.scoringType || "fortime";
+                                    return (
+                                      <Link
+                                        href={`/workouts/new?name=${encodeURIComponent(wodComponent.title)}&description=${encodeURIComponent(wodComponent.description || "")}&scoringType=${scoringType}`}
+                                        className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1"
+                                      >
+                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                        </svg>
+                                        Log
+                                      </Link>
+                                    );
+                                  } else if (liftComponent) {
+                                    return (
+                                      <Link
+                                        href={`/workouts/lift?name=${encodeURIComponent(liftComponent.title)}&description=${encodeURIComponent(liftComponent.description || "")}`}
+                                        className="px-2 py-1 bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1"
+                                      >
+                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                        </svg>
+                                        Log
+                                      </Link>
+                                    );
+                                  }
+                                  return null;
+                                })()}
                                 <button
                                   onClick={() => openEditWorkoutModal(personalWorkout)}
-                                  className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                  className="p-1 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                                   title="Edit"
                                 >
                                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1026,7 +1136,7 @@ export default function WeeklyPlanPage() {
                                 </button>
                                 <button
                                   onClick={() => handleDeletePersonalWorkout(personalWorkout.id)}
-                                  className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                  className="p-1 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                                   title="Delete"
                                 >
                                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1034,6 +1144,28 @@ export default function WeeklyPlanPage() {
                                   </svg>
                                 </button>
                               </div>
+                            </div>
+
+                            {/* Full width workout content */}
+                            <div className="space-y-2">
+                              {personalWorkout.components.map((comp) => (
+                                <div key={comp.id} className="border-l-2 border-gray-200 pl-2">
+                                  <div className="flex items-center gap-2">
+                                    <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${workoutComponentColors[comp.type]?.bg || "bg-gray-100"} ${workoutComponentColors[comp.type]?.text || "text-gray-700"}`}>
+                                      {workoutComponentLabels[comp.type] || comp.type}
+                                    </span>
+                                    <span className="font-medium text-gray-900 text-sm">{comp.title}</span>
+                                  </div>
+                                  {comp.description && (
+                                    <p className="text-gray-700 text-xs whitespace-pre-wrap mt-1 ml-1">{comp.description}</p>
+                                  )}
+                                  {comp.notes && (
+                                    <div className="mt-2 ml-1 p-2 bg-amber-50 rounded border-l-2 border-amber-300">
+                                      <p className="text-amber-800 text-xs whitespace-pre-line">{comp.notes}</p>
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
                             </div>
                           </div>
                         ))}
@@ -1135,16 +1267,43 @@ export default function WeeklyPlanPage() {
 
                         {/* Always show editable fields */}
                         <div className="space-y-2">
+                          {/* Preset indicator and unlock button */}
+                          {comp.isPreset && (
+                            <div className="flex items-center justify-between bg-blue-50 px-2 py-1 rounded-lg border border-blue-200">
+                              <div className="flex items-center gap-2">
+                                <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                                </svg>
+                                <span className="text-xs font-medium text-blue-700">Preset Workout - Fields locked</span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => updateComponent(comp.id, "isPreset", false)}
+                                className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                              >
+                                Unlock
+                              </button>
+                            </div>
+                          )}
                           <div className="relative">
                             <input
                               type="text"
                               value={comp.title}
-                              onChange={(e) => updateComponent(comp.id, "title", e.target.value)}
-                              onFocus={() => setActiveComponentId(comp.id)}
+                              onChange={(e) => {
+                                if (!comp.isPreset) {
+                                  updateComponent(comp.id, "title", e.target.value);
+                                }
+                              }}
+                              onFocus={() => !comp.isPreset && setActiveComponentId(comp.id)}
                               onBlur={() => setTimeout(() => setActiveComponentId(null), 200)}
                               placeholder="Title (e.g., Fran, Back Squat)"
-                              className="w-full px-3 py-1.5 border border-gray-300 rounded text-sm text-gray-900 bg-white"
+                              className={`w-full px-3 py-1.5 border rounded text-sm text-gray-900 ${
+                                comp.isPreset
+                                  ? "bg-gray-100 border-gray-200 cursor-not-allowed"
+                                  : "bg-white border-gray-300"
+                              }`}
                               autoComplete="off"
+                              readOnly={comp.isPreset}
                             />
                             {activeComponentId === comp.id && comp.title && (
                               <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto">
@@ -1157,11 +1316,18 @@ export default function WeeklyPlanPage() {
                                         e.preventDefault();
                                         updateComponent(comp.id, "title", workout.name);
                                         updateComponent(comp.id, "description", workout.description || "");
+                                        updateComponent(comp.id, "isPreset", true);
+                                        if (workout.scoringType) {
+                                          updateComponent(comp.id, "scoringType", workout.scoringType);
+                                        }
                                         setActiveComponentId(null);
                                       }}
                                       className="w-full px-3 py-2 text-left hover:bg-blue-50 border-b border-gray-100 last:border-b-0 text-sm"
                                     >
-                                      <span className="font-medium text-gray-900">{workout.name}</span>
+                                      <div className="flex items-center gap-2">
+                                        <span className="font-medium text-gray-900">{workout.name}</span>
+                                        <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 text-[10px] rounded font-medium">Preset</span>
+                                      </div>
                                       {workout.description && (
                                         <p className="text-gray-500 text-xs truncate">{workout.description}</p>
                                       )}
@@ -1177,11 +1343,44 @@ export default function WeeklyPlanPage() {
                           </div>
                           <textarea
                             value={comp.description}
-                            onChange={(e) => updateComponent(comp.id, "description", e.target.value)}
+                            onChange={(e) => {
+                              if (!comp.isPreset) {
+                                updateComponent(comp.id, "description", e.target.value);
+                              }
+                            }}
                             placeholder="Description (optional)"
                             rows={2}
-                            className="w-full px-3 py-1.5 border border-gray-300 rounded text-sm text-gray-900 bg-white"
+                            className={`w-full px-3 py-1.5 border rounded text-sm text-gray-900 ${
+                              comp.isPreset
+                                ? "bg-gray-100 border-gray-200 cursor-not-allowed"
+                                : "bg-white border-gray-300"
+                            }`}
+                            readOnly={comp.isPreset}
                           />
+
+                          {/* Scoring Type selector for WOD components */}
+                          {comp.type === "wod" && (
+                            <div className="flex items-center gap-2 mt-2">
+                              <span className="text-xs text-gray-500">Scoring:</span>
+                              <div className={`flex rounded-lg overflow-hidden border ${comp.isPreset ? "border-gray-200 opacity-75" : "border-gray-200"}`}>
+                                {(["fortime", "emom", "amrap"] as WODScoringType[]).map((type) => (
+                                  <button
+                                    key={type}
+                                    type="button"
+                                    onClick={() => !comp.isPreset && updateComponent(comp.id, "scoringType", type)}
+                                    disabled={comp.isPreset}
+                                    className={`px-2 py-1 text-xs font-medium transition-colors ${
+                                      comp.scoringType === type || (!comp.scoringType && type === "fortime")
+                                        ? `${wodScoringTypeColors[type].bg} ${wodScoringTypeColors[type].text}`
+                                        : "bg-white text-gray-600 hover:bg-gray-50"
+                                    } ${comp.isPreset ? "cursor-not-allowed" : ""}`}
+                                  >
+                                    {wodScoringTypeLabels[type]}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
                     ))}

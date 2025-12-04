@@ -6,6 +6,7 @@ import { collection, addDoc, query, where, getDocs, Timestamp, limit, doc, updat
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
 import Navigation from "@/components/Navigation";
+import { getAllLifts, Workout } from "@/lib/workoutData";
 
 // Generate straight line path
 function getLinePath(points: { x: number; y: number }[]): string {
@@ -44,6 +45,10 @@ function LiftPageContent() {
   const [loadingLeaderboard, setLoadingLeaderboard] = useState(false);
   const [leaderboardScope, setLeaderboardScope] = useState<"gym" | "everyone">("everyone");
   const [chartTimeRange, setChartTimeRange] = useState<"1m" | "6m" | "1y" | "2y" | "5y">("1y");
+
+  // Autocomplete suggestions state
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const allLifts = getAllLifts();
 
   // Edit history state
   const [editingLogId, setEditingLogId] = useState<string | null>(null);
@@ -99,6 +104,11 @@ function LiftPageContent() {
     if (!liftName) return;
     setLoadingLeaderboard(true);
     try {
+      // Check if this is a preset lift (standard benchmark)
+      const allLifts = getAllLifts();
+      const liftNameLower = liftName.toLowerCase().trim();
+      const isPresetLift = allLifts.some(l => l.name.toLowerCase().trim() === liftNameLower);
+
       // Fetch all lift results and filter client-side for case-insensitive matching
       const q = query(
         collection(db, "liftResults"),
@@ -111,8 +121,12 @@ function LiftPageContent() {
       })) as LiftResult[];
 
       // Case-insensitive match for lift name (iOS uses liftTitle field)
-      const liftNameLower = liftName.toLowerCase().trim();
       results = results.filter((r) => r.liftTitle?.toLowerCase().trim() === liftNameLower);
+
+      // For custom (non-preset) lifts, only show current user's entries
+      if (!isPresetLift && user) {
+        results = results.filter((r) => r.userId === user.id);
+      }
 
       // Filter by reps
       results = results.filter((r) => r.reps === selectedReps);
@@ -371,20 +385,23 @@ function LiftPageContent() {
     return 10 + (dateMs / timeRangeMs) * 280;
   };
 
-  // Common lifts for selector (only shown when not from schedule)
-  const commonLifts = [
-    "Back Squat",
-    "Front Squat",
-    "Deadlift",
-    "Bench Press",
-    "Overhead Press",
-    "Clean",
-    "Clean & Jerk",
-    "Snatch",
-    "Power Clean",
-    "Push Press",
-    "Thruster",
-  ];
+  // Filtered suggestions based on input
+  const getFilteredSuggestions = (): Workout[] => {
+    if (!liftName.trim()) return allLifts.slice(0, 10);
+    const searchLower = liftName.toLowerCase();
+    return allLifts
+      .filter(lift =>
+        lift.name.toLowerCase().includes(searchLower) ||
+        lift.description.toLowerCase().includes(searchLower)
+      )
+      .slice(0, 10);
+  };
+  const filteredSuggestions = getFilteredSuggestions();
+
+  const handleSelectSuggestion = (lift: Workout) => {
+    setLiftName(lift.name);
+    setShowSuggestions(false);
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -401,29 +418,48 @@ function LiftPageContent() {
           <h1 className="text-2xl font-bold text-gray-900 text-center mb-6">{liftName}</h1>
         ) : (
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-4">
-            <input
-              type="text"
-              value={liftName}
-              onChange={(e) => setLiftName(e.target.value)}
-              placeholder="Lift Name"
-              className="w-full text-xl font-bold text-gray-900 border-none focus:ring-0 p-0 mb-3 placeholder-gray-400"
-            />
-            <div className="flex flex-wrap gap-2">
-              {commonLifts.map((lift) => (
-                <button
-                  key={lift}
-                  type="button"
-                  onClick={() => setLiftName(lift)}
-                  className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
-                    liftName === lift
-                      ? "bg-purple-600 text-white"
-                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                  }`}
-                >
-                  {lift}
-                </button>
-              ))}
+            <div className="relative">
+              <input
+                type="text"
+                value={liftName}
+                onChange={(e) => {
+                  setLiftName(e.target.value);
+                  setShowSuggestions(true);
+                }}
+                onFocus={() => setShowSuggestions(true)}
+                placeholder="Search lifts..."
+                className="w-full text-xl font-bold text-gray-900 border border-gray-300 rounded-lg px-3 py-2 placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              />
+              {/* Autocomplete dropdown */}
+              {showSuggestions && filteredSuggestions.length > 0 && (
+                <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-64 overflow-y-auto">
+                  {filteredSuggestions.map((lift, idx) => (
+                    <button
+                      key={`${lift.name}-${idx}`}
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => handleSelectSuggestion(lift)}
+                      className="w-full px-4 py-3 text-left hover:bg-purple-50 transition-colors flex items-center justify-between border-b border-gray-100 last:border-b-0"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-gray-900">{lift.name}</p>
+                        <p className="text-sm text-gray-500 truncate">{lift.description}</p>
+                      </div>
+                      <span className="ml-2 px-2 py-1 text-xs font-medium rounded bg-purple-100 text-purple-700 shrink-0">
+                        Lift
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
+            {/* Click outside to close */}
+            {showSuggestions && (
+              <div
+                className="fixed inset-0 z-40"
+                onClick={() => setShowSuggestions(false)}
+              />
+            )}
           </div>
         )}
 

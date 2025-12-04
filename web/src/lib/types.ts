@@ -16,6 +16,32 @@ export interface AppUser {
   gymId?: string;
   createdAt: Timestamp;
   hideFromLeaderboards: boolean;
+  // AI Trainer subscription
+  aiTrainerSubscription?: AITrainerSubscription;
+  // AI Coach preferences and goals
+  aiCoachPreferences?: AICoachPreferences;
+}
+
+// AI Coach user preferences
+export interface AICoachPreferences {
+  goals?: string; // User's fitness goals (free text)
+  injuries?: string; // Current injuries or limitations
+  experienceLevel?: "beginner" | "intermediate" | "advanced" | "competitor";
+  focusAreas?: string[]; // e.g., ["strength", "cardio", "gymnastics", "olympic lifting"]
+  updatedAt?: Timestamp;
+}
+
+// AI Trainer Subscription types
+export type AISubscriptionTier = "free" | "pro" | "elite";
+
+export interface AITrainerSubscription {
+  tier: AISubscriptionTier;
+  status: "active" | "canceled" | "past_due" | "trialing";
+  startDate?: Timestamp;
+  endDate?: Timestamp;
+  trialEndsAt?: Timestamp;
+  stripeCustomerId?: string;
+  stripeSubscriptionId?: string;
 }
 
 // Stored account for multi-account switching
@@ -31,6 +57,21 @@ export type WorkoutType = "lift" | "wod";
 export type WorkoutResultType = "time" | "rounds" | "weight" | "reps" | "other";
 export type RecurrenceType = "none" | "daily" | "weekly" | "monthly";
 
+// WOD Scoring Types
+export type WODScoringType = "fortime" | "emom" | "amrap";
+
+export const wodScoringTypeLabels: Record<WODScoringType, string> = {
+  fortime: "For Time",
+  emom: "EMOM",
+  amrap: "AMRAP",
+};
+
+export const wodScoringTypeColors: Record<WODScoringType, { bg: string; text: string }> = {
+  fortime: { bg: "bg-blue-500", text: "text-white" },
+  emom: { bg: "bg-orange-500", text: "text-white" },
+  amrap: { bg: "bg-green-500", text: "text-white" },
+};
+
 // Workout component types for programming
 export type WorkoutComponentType = "warmup" | "wod" | "lift" | "skill" | "cooldown";
 
@@ -39,6 +80,9 @@ export interface WorkoutComponent {
   type: WorkoutComponentType;
   title: string;
   description: string;
+  scoringType?: WODScoringType; // For WOD components: fortime, emom, amrap
+  isPreset?: boolean; // True if this is a preset workout (locked fields)
+  notes?: string; // Coach notes: stimulus, scaling options, intent, etc.
 }
 
 export const workoutComponentLabels: Record<WorkoutComponentType, string> = {
@@ -259,6 +303,7 @@ export function formatTime(seconds: number): string {
 }
 
 export function normalizeWorkoutName(name: string): string {
+  if (!name) return "";
   return name.toLowerCase().replace(/\s+/g, "").replace(/[^a-z0-9]/g, "");
 }
 
@@ -300,3 +345,58 @@ export function formatTimeSlot(hour: number, minute: number): string {
   const displayMinute = safeMinute.toString().padStart(2, "0");
   return `${displayHour}:${displayMinute} ${period}`;
 }
+
+// =====================
+// AI PROGRAMMING TYPES
+// =====================
+
+export interface AIChatMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  timestamp: Timestamp;
+  // If assistant message contains generated workouts
+  generatedWorkouts?: AIGeneratedDay[];
+}
+
+export interface AIProgrammingSession {
+  id: string;
+  gymId: string;
+  createdBy: string;
+  title: string;
+  status: "active" | "published" | "archived";
+  messages: AIChatMessage[];
+  // Generated program details
+  programWeeks?: number;
+  programStartDate?: Timestamp;
+  targetGroupIds?: string[];
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+export interface AIGeneratedWorkout {
+  type: WorkoutComponentType;
+  title: string;
+  description: string;
+  scoringType?: WODScoringType;
+  notes?: string; // Coach notes: stimulus, scaling options, intent, etc.
+}
+
+export interface AIGeneratedDay {
+  date: string; // ISO date string
+  dayOfWeek: string;
+  isRestDay: boolean;
+  components: AIGeneratedWorkout[];
+}
+
+export interface AIProgrammingPreferences {
+  gymId: string;
+  philosophy: string; // Free-form text describing gym's programming philosophy
+  workoutDuration: "short" | "medium" | "long" | "varied"; // Preferred workout length
+  benchmarkFrequency: "often" | "sometimes" | "rarely"; // How often to program benchmarks
+  programmingStyle: string; // e.g., "Mayhem", "CompTrain", "HWPO", "Custom"
+  additionalRules: string; // Any other rules or preferences
+  updatedAt: Timestamp;
+}
+
+

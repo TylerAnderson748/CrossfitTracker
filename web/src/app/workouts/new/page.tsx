@@ -2,16 +2,21 @@
 
 import { useState, useEffect, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { collection, addDoc, query, where, orderBy, getDocs, Timestamp, limit, doc, updateDoc, deleteDoc } from "firebase/firestore";
+import { collection, addDoc, query, where, orderBy, getDocs, getDoc, Timestamp, limit, doc, updateDoc, deleteDoc } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
-import { WODCategory, normalizeWorkoutName, LeaderboardEntry, categoryOrder, categoryColors } from "@/lib/types";
+import { WODCategory, normalizeWorkoutName, LeaderboardEntry, categoryOrder, categoryColors, WODScoringType, wodScoringTypeLabels, wodScoringTypeColors } from "@/lib/types";
 import Navigation from "@/components/Navigation";
+import { getAllWods } from "@/lib/workoutData";
 
 interface WorkoutLog {
   id: string;
   wodTitle?: string;
   timeInSeconds: number;
+  rounds?: number;
+  reps?: number;
+  resultType?: string;
+  scoringType?: WODScoringType;
   completedDate: { toDate: () => Date };
   notes: string;
   category?: string;
@@ -21,6 +26,30 @@ function formatTime(seconds: number): string {
   const mins = Math.floor(seconds / 60);
   const secs = seconds % 60;
   return `${mins}:${secs.toString().padStart(2, "0")}`;
+}
+
+function formatScore(log: WorkoutLog): string {
+  if (log.resultType === "rounds" || log.scoringType === "amrap") {
+    const rounds = log.rounds || 0;
+    const reps = log.reps || 0;
+    if (reps > 0) {
+      return `${rounds} + ${reps}`;
+    }
+    return `${rounds} rounds`;
+  }
+  return formatTime(log.timeInSeconds);
+}
+
+function formatLeaderboardScore(entry: LeaderboardEntry): string {
+  if (entry.resultType === "rounds") {
+    const rounds = entry.rounds || 0;
+    const reps = entry.reps || 0;
+    if (reps > 0) {
+      return `${rounds} + ${reps}`;
+    }
+    return `${rounds} rds`;
+  }
+  return formatTime(entry.timeInSeconds || 0);
 }
 
 // Get hex color for category
@@ -56,9 +85,44 @@ function NewWorkoutContent() {
 
   const [wodTitle, setWodTitle] = useState(searchParams.get("name") || "");
   const [wodDescription, setWodDescription] = useState(searchParams.get("description") || "");
+  const [isPreset, setIsPreset] = useState(!!searchParams.get("name")); // Lock fields if loaded from URL
   const [category, setCategory] = useState<WODCategory>("RX");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [aiCoachFeedback, setAiCoachFeedback] = useState("");
+  const [showAiFeedback, setShowAiFeedback] = useState(false);
+
+  // Get all WODs for suggestions
+  const allWods = getAllWods();
+  const getFilteredSuggestions = (searchText: string) => {
+    if (!searchText || searchText.length < 2) return [];
+    return allWods.filter((w) =>
+      w.name.toLowerCase().includes(searchText.toLowerCase())
+    ).slice(0, 8);
+  };
+
+  // Scoring type from URL params (fortime, emom, amrap)
+  const urlScoringType = searchParams.get("scoringType") as WODScoringType | null;
+  const [scoringType, setScoringType] = useState<WODScoringType>(urlScoringType || "fortime");
+  // Track if scoring type is locked (from URL or suggestion selection) - separate from isPreset
+  const [scoringTypeLocked, setScoringTypeLocked] = useState(!!urlScoringType);
+
+  // Type mismatch modal state
+  const [showTypeMismatchModal, setShowTypeMismatchModal] = useState(false);
+  const [existingWorkoutType, setExistingWorkoutType] = useState<WODScoringType | null>(null);
+  const [pendingScoringType, setPendingScoringType] = useState<WODScoringType | null>(null);
+
+  // Check if workout name matches a preset workout
+  const getPresetWorkout = (name: string) => {
+    if (!name) return null;
+    const normalizedName = name.toLowerCase().trim();
+    return allWods.find(w => w.name.toLowerCase() === normalizedName);
+  };
+
+  // AMRAP scoring state (rounds + reps)
+  const [amrapRounds, setAmrapRounds] = useState("");
+  const [amrapReps, setAmrapReps] = useState("");
 
   // Timer state
   const [timerRunning, setTimerRunning] = useState(false);
@@ -67,6 +131,17 @@ function NewWorkoutContent() {
   const [manualSeconds, setManualSeconds] = useState("");
   const [entryDate, setEntryDate] = useState(new Date().toISOString().split("T")[0]);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Timer type state - initialized based on scoring type
+  const [timerType, setTimerType] = useState<"standard" | "emom" | "amrap">(
+    urlScoringType === "emom" ? "emom" : urlScoringType === "amrap" ? "amrap" : "standard"
+  );
+  const [emomRounds, setEmomRounds] = useState(10);
+  const [emomCurrentRound, setEmomCurrentRound] = useState(1);
+  const [emomSecondsInRound, setEmomSecondsInRound] = useState(60);
+  const [amrapMinutes, setAmrapMinutes] = useState(12);
+  const [amrapRemainingSeconds, setAmrapRemainingSeconds] = useState(0);
+  const audioContextRef = useRef<AudioContext | null>(null);
 
   // History and leaderboard
   const [history, setHistory] = useState<WorkoutLog[]>([]);
@@ -104,10 +179,142 @@ function NewWorkoutContent() {
     }
   }, [searchParams, router]);
 
+  // Auto-select timer type based on scoring type
+  useEffect(() => {
+    if (scoringType === "fortime") {
+      setTimerType("standard");
+    } else if (scoringType === "emom") {
+      setTimerType("emom");
+    } else if (scoringType === "amrap") {
+      setTimerType("amrap");
+    }
+  }, [scoringType]);
+
+  // Check for existing workout type in user's logs
+  const checkExistingWorkoutType = async (workoutName: string): Promise<WODScoringType | null> => {
+    if (!user || !workoutName.trim()) return null;
+
+    // First check if it's a preset workout
+    const preset = getPresetWorkout(workoutName);
+    if (preset && preset.scoringType) {
+      return preset.scoringType;
+    }
+
+    // Check user's existing logs for this workout
+    try {
+      const normalized = normalizeWorkoutName(workoutName.trim());
+      const logsQuery = query(
+        collection(db, "workoutLogs"),
+        where("userId", "==", user.id),
+        limit(100)
+      );
+      const logsSnapshot = await getDocs(logsQuery);
+      const logs = logsSnapshot.docs.map(doc => doc.data());
+
+      // Find logs for this workout
+      const matchingLog = logs.find(log =>
+        normalizeWorkoutName((log.wodTitle || "").trim()) === normalized && log.scoringType
+      );
+
+      return matchingLog?.scoringType as WODScoringType || null;
+    } catch (e) {
+      console.error("Error checking existing workout type:", e);
+      return null;
+    }
+  };
+
+  // Handle scoring type change with conflict check
+  const handleScoringTypeChange = async (newType: WODScoringType) => {
+    if (!wodTitle.trim()) {
+      setScoringType(newType);
+      return;
+    }
+
+    // Check if it's a preset workout - don't allow changing preset types
+    const preset = getPresetWorkout(wodTitle);
+    if (preset && preset.scoringType && preset.scoringType !== newType) {
+      // Don't allow changing preset workout types
+      return;
+    }
+
+    // Check for existing logs with different type
+    const existingType = await checkExistingWorkoutType(wodTitle);
+    if (existingType && existingType !== newType) {
+      setExistingWorkoutType(existingType);
+      setPendingScoringType(newType);
+      setShowTypeMismatchModal(true);
+      return;
+    }
+
+    setScoringType(newType);
+  };
+
+  // Sound functions for timer beeps
+  const playBeep = (frequency: number = 800, duration: number = 150, type: OscillatorType = "sine") => {
+    if (!audioContextRef.current) {
+      audioContextRef.current = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+    }
+    const ctx = audioContextRef.current;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.frequency.value = frequency;
+    osc.type = type;
+    gain.gain.setValueAtTime(0.3, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + duration / 1000);
+    osc.start();
+    osc.stop(ctx.currentTime + duration / 1000);
+  };
+
+  const playCountdownBeep = () => playBeep(600, 100, "sine");
+  const playRoundStartBeep = () => {
+    playBeep(1000, 200, "sine");
+    setTimeout(() => playBeep(1200, 300, "sine"), 100);
+  };
+  const playFinishBeep = () => {
+    playBeep(800, 150, "sine");
+    setTimeout(() => playBeep(1000, 150, "sine"), 150);
+    setTimeout(() => playBeep(1200, 300, "sine"), 300);
+  };
+
   useEffect(() => {
     if (timerRunning) {
       timerRef.current = setInterval(() => {
-        setElapsedSeconds((prev) => prev + 1);
+        if (timerType === "standard") {
+          setElapsedSeconds((prev) => prev + 1);
+        } else if (timerType === "emom") {
+          setEmomSecondsInRound((prev) => {
+            if (prev <= 1) {
+              // End of round
+              setEmomCurrentRound((round) => {
+                if (round >= emomRounds) {
+                  // Workout complete
+                  setTimerRunning(false);
+                  playFinishBeep();
+                  return round;
+                }
+                playRoundStartBeep();
+                return round + 1;
+              });
+              return 60;
+            }
+            if (prev <= 4 && prev > 1) playCountdownBeep();
+            return prev - 1;
+          });
+          setElapsedSeconds((prev) => prev + 1);
+        } else if (timerType === "amrap") {
+          setAmrapRemainingSeconds((prev) => {
+            if (prev <= 1) {
+              setTimerRunning(false);
+              playFinishBeep();
+              return 0;
+            }
+            if (prev <= 4 && prev > 1) playCountdownBeep();
+            return prev - 1;
+          });
+          setElapsedSeconds((prev) => prev + 1);
+        }
       }, 1000);
     } else if (timerRef.current) {
       clearInterval(timerRef.current);
@@ -115,7 +322,7 @@ function NewWorkoutContent() {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [timerRunning]);
+  }, [timerRunning, timerType, emomRounds]);
 
   useEffect(() => {
     if (user) {
@@ -173,11 +380,24 @@ function NewWorkoutContent() {
   };
 
   const loadLeaderboard = async () => {
+    // Don't load leaderboard if no workout name is entered
+    if (!wodTitle || !wodTitle.trim()) {
+      setLeaderboard([]);
+      setLoadingLeaderboard(false);
+      return;
+    }
+
     setLoadingLeaderboard(true);
     try {
       let entries: LeaderboardEntry[] = [];
+      const normalized = normalizeWorkoutName(wodTitle.trim());
 
-      // Always load all entries first (simpler, avoids index issues)
+      // Check if this is a preset workout (standard benchmark)
+      const isPresetWorkout = allWods.some(w =>
+        normalizeWorkoutName(w.name) === normalized
+      );
+
+      // First try leaderboardEntries collection
       const allQuery = query(
         collection(db, "leaderboardEntries"),
         limit(200)
@@ -188,15 +408,88 @@ function NewWorkoutContent() {
         ...doc.data(),
       })) as LeaderboardEntry[];
 
-      // Filter for this workout if we have a title
-      if (wodTitle) {
-        const normalized = normalizeWorkoutName(wodTitle.trim());
-        entries = entries.filter(
-          (e) => e.normalizedWorkoutName === normalized
-        );
+      // Filter for this workout
+      entries = entries.filter(
+        (e) => e.normalizedWorkoutName === normalized
+      );
+
+      // For custom (non-preset) workouts, only show current user's entries
+      if (!isPresetWorkout && user) {
+        entries = entries.filter((e) => e.userId === user.id);
       }
 
-      // Filter for entries with time data
+      // If no leaderboard entries, build from workoutLogs
+      if (entries.length === 0) {
+        const logsQuery = query(
+          collection(db, "workoutLogs"),
+          limit(500)
+        );
+        const logsSnapshot = await getDocs(logsQuery);
+        const allLogs = logsSnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        })) as any[];
+
+        // Filter for this workout
+        let filteredLogs = allLogs.filter((log) => {
+          const logNormalized = normalizeWorkoutName((log.wodTitle || "").trim());
+          return logNormalized === normalized;
+        });
+
+        // For custom (non-preset) workouts, only show current user's logs
+        if (!isPresetWorkout && user) {
+          filteredLogs = filteredLogs.filter((log) => log.userId === user.id);
+        }
+
+        // Get unique user IDs and fetch their names
+        const userIds = [...new Set(filteredLogs.map((log) => log.userId))];
+        const userNames: Record<string, string> = {};
+
+        for (const oderId of userIds) {
+          if (!oderId) continue;
+          try {
+            // Try fetching by document ID first
+            const userDocRef = doc(db, "users", oderId);
+            const userDoc = await getDoc(userDocRef);
+            if (userDoc.exists()) {
+              const userData = userDoc.data();
+              userNames[oderId] = userData.displayName || `${userData.firstName || ""} ${userData.lastName || ""}`.trim() || "Unknown";
+            } else {
+              // Fallback: try querying by id field
+              const userQuery = query(collection(db, "users"), where("id", "==", oderId), limit(1));
+              const userSnapshot = await getDocs(userQuery);
+              if (!userSnapshot.empty) {
+                const userData = userSnapshot.docs[0].data();
+                userNames[oderId] = userData.displayName || `${userData.firstName || ""} ${userData.lastName || ""}`.trim() || "Unknown";
+              }
+            }
+          } catch (e) {
+            // Ignore errors fetching user names
+          }
+        }
+
+        // Convert to leaderboard format
+        entries = filteredLogs.map((log) => ({
+            id: log.id,
+            oderId: log.userId,
+            userId: log.userId,
+            userName: userNames[log.userId] || log.userName || "Unknown",
+            userGender: log.userGender,
+            workoutLogId: log.id,
+            normalizedWorkoutName: normalized,
+            originalWorkoutName: log.wodTitle,
+            timeInSeconds: log.timeInSeconds || 0,
+            rounds: log.rounds,
+            reps: log.reps,
+            resultType: log.resultType || "time",
+            scoringType: log.scoringType || "fortime",
+            category: log.notes || log.category || "RX",
+            completedDate: log.completedDate,
+            createdAt: log.completedDate,
+          })) as LeaderboardEntry[];
+      }
+
+      // Filter for entries with time data (for time-based workouts)
       entries = entries.filter((e) => e.timeInSeconds && e.timeInSeconds > 0);
 
       // Apply gender filter
@@ -257,13 +550,20 @@ function NewWorkoutContent() {
       // Sort the filtered entries
       const sortedEntries = filteredEntries.sort((a, b) => {
         if (categoryFilter === "all") {
-          // Sort by category priority first, then by time
+          // Sort by category priority first, then by score
           const aPriority = getCategoryPriority((a.category || "").toString());
           const bPriority = getCategoryPriority((b.category || "").toString());
           if (aPriority !== bPriority) {
             return aPriority - bPriority;
           }
         }
+        // For AMRAP (rounds), higher is better
+        if (a.resultType === "rounds" || b.resultType === "rounds") {
+          const aScore = ((a.rounds || 0) * 1000) + (a.reps || 0);
+          const bScore = ((b.rounds || 0) * 1000) + (b.reps || 0);
+          return bScore - aScore; // Higher score first
+        }
+        // For time-based, lower is better
         return (a.timeInSeconds || 0) - (b.timeInSeconds || 0);
       });
 
@@ -281,8 +581,26 @@ function NewWorkoutContent() {
     return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
 
-  const handleStartStop = () => setTimerRunning(!timerRunning);
-  const handleReset = () => { setTimerRunning(false); setElapsedSeconds(0); };
+  const handleStartStop = () => {
+    if (!timerRunning) {
+      // Starting the timer
+      if (timerType === "emom" && emomCurrentRound === 1 && emomSecondsInRound === 60) {
+        playRoundStartBeep();
+      }
+      if (timerType === "amrap" && amrapRemainingSeconds === 0) {
+        setAmrapRemainingSeconds(amrapMinutes * 60);
+      }
+    }
+    setTimerRunning(!timerRunning);
+  };
+
+  const handleReset = () => {
+    setTimerRunning(false);
+    setElapsedSeconds(0);
+    setEmomCurrentRound(1);
+    setEmomSecondsInRound(60);
+    setAmrapRemainingSeconds(amrapMinutes * 60);
+  };
 
   const getTimeFromManual = (): number => {
     const mins = parseInt(manualMinutes) || 0;
@@ -306,44 +624,80 @@ function NewWorkoutContent() {
     await saveWorkout(getTimeFromManual());
   };
 
-  const saveWorkout = async (timeInSeconds: number) => {
+  const handleSaveEmomCompletion = async () => {
+    if (!user || !wodTitle.trim()) return;
+    // EMOM workouts are logged as completed without a specific score
+    await saveWorkout(0);
+  };
+
+  const saveWorkout = async (timeInSeconds: number, rounds?: number, reps?: number) => {
     setError("");
     setSubmitting(true);
     try {
       const now = Timestamp.now();
       const workoutDate = Timestamp.fromDate(new Date(entryDate));
 
-      const workoutLogRef = await addDoc(collection(db, "workoutLogs"), {
+      // Determine result type based on scoring type
+      const resultType = scoringType === "amrap" ? "rounds" : "time";
+
+      const workoutLogData: Record<string, unknown> = {
         userId: user!.id,
         wodTitle: wodTitle.trim(),
         wodDescription: wodDescription.trim(),
-        resultType: "time",
-        timeInSeconds,
+        resultType,
+        scoringType,
         notes: category,
         isPersonalRecord: false,
         workoutDate,
         completedDate: now,
-      });
+        ...(aiCoachFeedback.trim() && { aiCoachFeedback: aiCoachFeedback.trim() }),
+      };
 
-      await addDoc(collection(db, "leaderboardEntries"), {
+      // Add appropriate scoring data
+      if (scoringType === "amrap") {
+        workoutLogData.rounds = rounds || 0;
+        workoutLogData.reps = reps || 0;
+        workoutLogData.timeInSeconds = timeInSeconds; // Time cap used
+      } else {
+        workoutLogData.timeInSeconds = timeInSeconds;
+      }
+
+      const workoutLogRef = await addDoc(collection(db, "workoutLogs"), workoutLogData);
+
+      const leaderboardData: Record<string, unknown> = {
         userId: user!.id,
         userName: user!.displayName || `${user!.firstName} ${user!.lastName}`,
         userGender: user!.gender,
         workoutLogId: workoutLogRef.id,
         normalizedWorkoutName: normalizeWorkoutName(wodTitle.trim()),
         originalWorkoutName: wodTitle.trim(),
-        resultType: "time",
-        timeInSeconds,
+        resultType,
+        scoringType,
         category,
         completedDate: workoutDate,
         createdAt: now,
-      });
+      };
+
+      // Add appropriate scoring data to leaderboard
+      if (scoringType === "amrap") {
+        leaderboardData.rounds = rounds || 0;
+        leaderboardData.reps = reps || 0;
+        leaderboardData.timeInSeconds = timeInSeconds;
+      } else {
+        leaderboardData.timeInSeconds = timeInSeconds;
+      }
+
+      await addDoc(collection(db, "leaderboardEntries"), leaderboardData);
 
       // Stay on page - reset inputs and refresh data
       setManualMinutes("");
       setManualSeconds("");
+      setAmrapRounds("");
+      setAmrapReps("");
       setElapsedSeconds(0);
       setTimerRunning(false);
+      setAiCoachFeedback("");
+      setShowAiFeedback(false);
       loadHistory();
       loadLeaderboard();
     } catch (err) {
@@ -352,6 +706,15 @@ function NewWorkoutContent() {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  // Save AMRAP result with rounds and reps
+  const handleSaveAmrap = async () => {
+    if (!user || !wodTitle.trim()) return;
+    const rounds = parseInt(amrapRounds) || 0;
+    const reps = parseInt(amrapReps) || 0;
+    if (rounds === 0 && reps === 0) return;
+    await saveWorkout(amrapMinutes * 60, rounds, reps);
   };
 
   const startEditLog = (log: WorkoutLog) => {
@@ -710,7 +1073,7 @@ function NewWorkoutContent() {
                           </p>
                         </div>
                         <span className="font-mono text-sm font-semibold text-gray-900">
-                          {formatTime(entry.timeInSeconds || 0)}
+                          {formatLeaderboardScore(entry)}
                         </span>
                       </div>
                     );
@@ -757,7 +1120,16 @@ function NewWorkoutContent() {
                           <div>
                             <p className="text-xs text-gray-500">{log.completedDate?.toDate().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</p>
                             <div className="flex items-center gap-2">
-                              <p className="text-lg font-semibold text-gray-900">{formatTime(log.timeInSeconds)}</p>
+                              <p className="text-lg font-semibold text-gray-900">{formatScore(log)}</p>
+                              {log.scoringType && (
+                                <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${
+                                  log.scoringType === "amrap" ? "bg-green-100 text-green-700" :
+                                  log.scoringType === "emom" ? "bg-orange-100 text-orange-700" :
+                                  "bg-blue-100 text-blue-700"
+                                }`}>
+                                  {log.scoringType === "fortime" ? "For Time" : log.scoringType.toUpperCase()}
+                                </span>
+                              )}
                               <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${categoryColors[log.notes as WODCategory]?.badge || "bg-gray-100 text-gray-600"}`}>
                                 {log.notes || "RX"}
                               </span>
@@ -780,19 +1152,88 @@ function NewWorkoutContent() {
           <div className="space-y-4 order-1 lg:order-2">
             {/* Workout Info */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-              <input
-                type="text"
-                value={wodTitle}
-                onChange={(e) => setWodTitle(e.target.value)}
-                placeholder="Workout Name"
-                className="w-full text-xl font-bold text-gray-900 border-none focus:ring-0 p-0 mb-2 placeholder-gray-400"
-              />
+              {/* Preset indicator */}
+              {isPreset && (
+                <div className="flex items-center justify-between bg-blue-50 px-3 py-2 rounded-lg border border-blue-200 mb-3">
+                  <div className="flex items-center gap-2">
+                    <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
+                    <span className="text-xs font-medium text-blue-700">Preset Workout</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsPreset(false)}
+                    className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                  >
+                    Unlock
+                  </button>
+                </div>
+              )}
+              <div className="relative">
+                <input
+                  type="text"
+                  value={wodTitle}
+                  onChange={(e) => {
+                    if (!isPreset) {
+                      setWodTitle(e.target.value);
+                      setShowSuggestions(true);
+                      // Unlock scoring type when manually typing a workout name
+                      setScoringTypeLocked(false);
+                    }
+                  }}
+                  onFocus={() => !isPreset && setShowSuggestions(true)}
+                  onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                  placeholder="Workout Name"
+                  className={`w-full text-xl font-bold text-gray-900 border-none focus:ring-0 p-0 mb-2 placeholder-gray-400 ${isPreset ? "bg-transparent cursor-default" : ""}`}
+                  readOnly={isPreset}
+                  autoComplete="off"
+                />
+                {/* Suggestions dropdown */}
+                {showSuggestions && !isPreset && getFilteredSuggestions(wodTitle).length > 0 && (
+                  <div className="absolute z-50 w-full bg-white border border-gray-300 rounded-lg shadow-lg max-h-64 overflow-y-auto">
+                    {getFilteredSuggestions(wodTitle).map((workout, index) => (
+                      <button
+                        key={index}
+                        type="button"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          setWodTitle(workout.name);
+                          setWodDescription(workout.description);
+                          setIsPreset(true);
+                          if (workout.scoringType) {
+                            setScoringType(workout.scoringType);
+                            setScoringTypeLocked(true);
+                          }
+                          setShowSuggestions(false);
+                        }}
+                        className="w-full px-3 py-2 text-left hover:bg-blue-50 border-b border-gray-100 last:border-b-0"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium text-gray-900">{workout.name}</span>
+                          {workout.scoringType && (
+                            <span className={`px-2 py-0.5 text-xs rounded font-medium ${
+                              workout.scoringType === "fortime" ? "bg-blue-100 text-blue-700" :
+                              workout.scoringType === "emom" ? "bg-orange-100 text-orange-700" :
+                              "bg-green-100 text-green-700"
+                            }`}>
+                              {workout.scoringType === "fortime" ? "For Time" : workout.scoringType.toUpperCase()}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-gray-500 text-sm truncate">{workout.description}</p>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
               <textarea
                 value={wodDescription}
-                onChange={(e) => setWodDescription(e.target.value)}
+                onChange={(e) => !isPreset && setWodDescription(e.target.value)}
                 placeholder="21-15-9 Thrusters & Pull-ups"
                 rows={2}
-                className="w-full text-gray-900 text-sm border-none focus:ring-0 p-0 resize-none placeholder-gray-400"
+                className={`w-full text-gray-900 text-sm border-none focus:ring-0 p-0 resize-none placeholder-gray-400 ${isPreset ? "bg-transparent cursor-default" : ""}`}
+                readOnly={isPreset}
               />
             </div>
 
@@ -814,16 +1255,136 @@ function NewWorkoutContent() {
                 </div>
               </div>
 
+              {/* Scoring Type - only show if not locked (from URL or suggestion selection) */}
+              {!scoringTypeLocked && (
+                <div className="mb-4">
+                  <p className="text-xs text-gray-500 mb-2 font-semibold">Workout Type</p>
+                  <div className="flex rounded-xl overflow-hidden border border-gray-200">
+                    <button
+                      onClick={() => { handleScoringTypeChange("fortime"); handleReset(); }}
+                      className={`flex-1 py-2.5 text-xs font-semibold transition-colors ${scoringType === "fortime" ? "bg-blue-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
+                    >
+                      For Time
+                    </button>
+                    <button
+                      onClick={() => { handleScoringTypeChange("emom"); handleReset(); }}
+                      className={`flex-1 py-2.5 text-xs font-semibold transition-colors ${scoringType === "emom" ? "bg-orange-500 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
+                    >
+                      EMOM
+                    </button>
+                    <button
+                      onClick={() => { handleScoringTypeChange("amrap"); handleReset(); }}
+                      className={`flex-1 py-2.5 text-xs font-semibold transition-colors ${scoringType === "amrap" ? "bg-green-500 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
+                    >
+                      AMRAP
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* Timer */}
               <div className="mb-4">
                 <p className="text-xs text-gray-500 mb-2 font-semibold">Timer</p>
-                <div className="text-center mb-3">
-                  <div className="text-5xl font-mono font-semibold text-gray-900">
-                    {formatTimerDisplay(elapsedSeconds)}
+
+                {/* EMOM Settings */}
+                {timerType === "emom" && (
+                  <div className="mb-4 p-3 bg-orange-50 rounded-xl border border-orange-200">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-orange-800 font-medium">Rounds:</span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setEmomRounds(Math.max(1, emomRounds - 1))}
+                          className="w-8 h-8 rounded-lg bg-orange-200 text-orange-800 font-bold hover:bg-orange-300"
+                          disabled={timerRunning}
+                        >
+                          -
+                        </button>
+                        <span className="text-xl font-bold text-orange-800 w-8 text-center">{emomRounds}</span>
+                        <button
+                          onClick={() => setEmomRounds(emomRounds + 1)}
+                          className="w-8 h-8 rounded-lg bg-orange-200 text-orange-800 font-bold hover:bg-orange-300"
+                          disabled={timerRunning}
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
                   </div>
+                )}
+
+                {/* AMRAP Settings */}
+                {timerType === "amrap" && (
+                  <div className="mb-4 p-3 bg-green-50 rounded-xl border border-green-200">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-green-800 font-medium">Time Cap (min):</span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => { setAmrapMinutes(Math.max(1, amrapMinutes - 1)); setAmrapRemainingSeconds(Math.max(60, (amrapMinutes - 1) * 60)); }}
+                          className="w-8 h-8 rounded-lg bg-green-200 text-green-800 font-bold hover:bg-green-300"
+                          disabled={timerRunning}
+                        >
+                          -
+                        </button>
+                        <span className="text-xl font-bold text-green-800 w-8 text-center">{amrapMinutes}</span>
+                        <button
+                          onClick={() => { setAmrapMinutes(amrapMinutes + 1); setAmrapRemainingSeconds((amrapMinutes + 1) * 60); }}
+                          className="w-8 h-8 rounded-lg bg-green-200 text-green-800 font-bold hover:bg-green-300"
+                          disabled={timerRunning}
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Timer Display */}
+                <div className="text-center mb-3">
+                  {timerType === "standard" && (
+                    <div className="text-5xl font-mono font-semibold text-gray-900">
+                      {formatTimerDisplay(elapsedSeconds)}
+                    </div>
+                  )}
+
+                  {timerType === "emom" && (
+                    <div>
+                      <div className="text-sm text-orange-600 font-semibold mb-1">
+                        Round {emomCurrentRound} of {emomRounds}
+                      </div>
+                      <div className={`text-5xl font-mono font-semibold ${emomSecondsInRound <= 5 ? "text-red-500" : "text-orange-600"}`}>
+                        {formatTimerDisplay(emomSecondsInRound)}
+                      </div>
+                      <div className="text-sm text-gray-500 mt-1">
+                        Total: {formatTimerDisplay(elapsedSeconds)}
+                      </div>
+                    </div>
+                  )}
+
+                  {timerType === "amrap" && (
+                    <div>
+                      <div className={`text-5xl font-mono font-semibold ${amrapRemainingSeconds <= 10 ? "text-red-500" : "text-green-600"}`}>
+                        {formatTimerDisplay(amrapRemainingSeconds || amrapMinutes * 60)}
+                      </div>
+                      <div className="text-sm text-gray-500 mt-1">
+                        Elapsed: {formatTimerDisplay(elapsedSeconds)}
+                      </div>
+                    </div>
+                  )}
                 </div>
+
                 <div className="flex flex-col gap-2">
-                  <button onClick={handleStartStop} className={`w-full py-2.5 rounded-xl font-semibold ${timerRunning ? "bg-red-500 text-white" : "bg-blue-600 text-white"}`}>
+                  <button
+                    onClick={handleStartStop}
+                    className={`w-full py-2.5 rounded-xl font-semibold ${
+                      timerRunning
+                        ? "bg-red-500 text-white"
+                        : timerType === "emom"
+                          ? "bg-orange-500 text-white"
+                          : timerType === "amrap"
+                            ? "bg-green-500 text-white"
+                            : "bg-blue-600 text-white"
+                    }`}
+                  >
                     {timerRunning ? "Stop" : "Start"}
                   </button>
                   <div className="flex gap-2">
@@ -835,29 +1396,205 @@ function NewWorkoutContent() {
 
               <div className="border-t border-gray-200 my-4"></div>
 
-              {/* Manual Entry */}
+              {/* Manual Entry - Different inputs based on scoring type */}
               <div>
-                <p className="text-xs text-gray-500 mb-2 font-semibold">Manual Entry</p>
-                <div className="flex gap-2 mb-2">
-                  <div className="flex-1">
-                    <p className="text-xs text-gray-400 mb-1">Min</p>
-                    <input type="number" value={manualMinutes} onChange={(e) => setManualMinutes(e.target.value)} placeholder="0" className="w-full px-2 py-2 border border-gray-300 rounded-lg text-center text-gray-900" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-xs text-gray-400 mb-1">Sec</p>
-                    <input type="number" value={manualSeconds} onChange={(e) => setManualSeconds(e.target.value)} placeholder="0" className="w-full px-2 py-2 border border-gray-300 rounded-lg text-center text-gray-900" />
-                  </div>
-                </div>
-                <div className="mb-2">
-                  <p className="text-xs text-gray-400 mb-1">Date</p>
-                  <input type="date" value={entryDate} onChange={(e) => setEntryDate(e.target.value)} className="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm text-gray-900" />
-                </div>
-                <button onClick={handleSaveManual} disabled={submitting || !isManualEntryValid()} className="w-full py-2.5 bg-blue-600 text-white rounded-xl font-semibold disabled:bg-gray-300">Save</button>
+                <p className="text-xs text-gray-500 mb-2 font-semibold">
+                  {scoringType === "amrap" ? "Score Entry" : scoringType === "emom" ? "Log Completion" : "Manual Entry"}
+                </p>
+
+                {/* AMRAP: Rounds + Reps */}
+                {scoringType === "amrap" && (
+                  <>
+                    <div className="flex gap-2 mb-2">
+                      <div className="flex-1">
+                        <p className="text-xs text-gray-400 mb-1">Rounds</p>
+                        <input
+                          type="number"
+                          value={amrapRounds}
+                          onChange={(e) => setAmrapRounds(e.target.value)}
+                          placeholder="0"
+                          className="w-full px-2 py-2 border border-gray-300 rounded-lg text-center text-gray-900"
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-xs text-gray-400 mb-1">+ Reps</p>
+                        <input
+                          type="number"
+                          value={amrapReps}
+                          onChange={(e) => setAmrapReps(e.target.value)}
+                          placeholder="0"
+                          className="w-full px-2 py-2 border border-gray-300 rounded-lg text-center text-gray-900"
+                        />
+                      </div>
+                    </div>
+                    <div className="mb-2">
+                      <p className="text-xs text-gray-400 mb-1">Date</p>
+                      <input type="date" value={entryDate} onChange={(e) => setEntryDate(e.target.value)} className="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm text-gray-900" />
+                    </div>
+                    <button
+                      onClick={handleSaveAmrap}
+                      disabled={submitting || (!amrapRounds && !amrapReps)}
+                      className="w-full py-2.5 bg-green-500 text-white rounded-xl font-semibold disabled:bg-gray-300"
+                    >
+                      Save Score
+                    </button>
+                  </>
+                )}
+
+                {/* For Time: Time Entry */}
+                {scoringType === "fortime" && (
+                  <>
+                    <div className="flex gap-2 mb-2">
+                      <div className="flex-1">
+                        <p className="text-xs text-gray-400 mb-1">Min</p>
+                        <input type="number" value={manualMinutes} onChange={(e) => setManualMinutes(e.target.value)} placeholder="0" className="w-full px-2 py-2 border border-gray-300 rounded-lg text-center text-gray-900" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-xs text-gray-400 mb-1">Sec</p>
+                        <input type="number" value={manualSeconds} onChange={(e) => setManualSeconds(e.target.value)} placeholder="0" className="w-full px-2 py-2 border border-gray-300 rounded-lg text-center text-gray-900" />
+                      </div>
+                    </div>
+                    <div className="mb-2">
+                      <p className="text-xs text-gray-400 mb-1">Date</p>
+                      <input type="date" value={entryDate} onChange={(e) => setEntryDate(e.target.value)} className="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm text-gray-900" />
+                    </div>
+                    <button
+                      onClick={handleSaveManual}
+                      disabled={submitting || !isManualEntryValid()}
+                      className="w-full py-2.5 rounded-xl font-semibold disabled:bg-gray-300 bg-blue-600 text-white"
+                    >
+                      Save Time
+                    </button>
+                  </>
+                )}
+
+                {/* EMOM: Just log completion with date */}
+                {scoringType === "emom" && (
+                  <>
+                    <div className="mb-3 p-3 bg-orange-50 rounded-lg border border-orange-200">
+                      <p className="text-sm text-orange-800">
+                        EMOM workouts are logged as completed. Use the timer above if needed during your workout.
+                      </p>
+                    </div>
+                    <div className="mb-2">
+                      <p className="text-xs text-gray-400 mb-1">Date</p>
+                      <input type="date" value={entryDate} onChange={(e) => setEntryDate(e.target.value)} className="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm text-gray-900" />
+                    </div>
+                    <button
+                      onClick={handleSaveEmomCompletion}
+                      disabled={submitting || !wodTitle.trim()}
+                      className="w-full py-2.5 rounded-xl font-semibold disabled:bg-gray-300 bg-orange-500 text-white"
+                    >
+                      Log Completed
+                    </button>
+                  </>
+                )}
               </div>
+
+              {/* AI Coach Feedback - Only show for premium users */}
+              {user?.aiTrainerSubscription?.status === "active" || user?.aiTrainerSubscription?.status === "trialing" ? (
+                <div className="mt-4 pt-4 border-t border-gray-200">
+                  <button
+                    onClick={() => setShowAiFeedback(!showAiFeedback)}
+                    className="flex items-center gap-2 text-sm text-purple-600 hover:text-purple-700"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                    {showAiFeedback ? "Hide AI Coach Feedback" : "Add Feedback for AI Coach"}
+                    <svg className={`w-4 h-4 transition-transform ${showAiFeedback ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+
+                  {showAiFeedback && (
+                    <div className="mt-3">
+                      <p className="text-xs text-gray-500 mb-2">
+                        Tell your AI Coach how the workout went - this helps improve future recommendations.
+                      </p>
+                      <textarea
+                        value={aiCoachFeedback}
+                        onChange={(e) => setAiCoachFeedback(e.target.value)}
+                        placeholder="e.g., Weights felt heavy today, should have scaled. Need to work on pacing for longer AMRAPs. That new PR felt great!"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
+                        rows={3}
+                      />
+                      <div className="flex items-center gap-2 mt-2 text-xs text-gray-400">
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        This feedback is saved with your workout and helps personalize your AI coaching.
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : null}
             </div>
           </div>
         </div>
       </main>
+
+      {/* Type Mismatch Modal */}
+      {showTypeMismatchModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
+            <h3 className="text-lg font-bold text-gray-900 mb-2">Workout Type Conflict</h3>
+            <p className="text-gray-600 mb-4">
+              You have existing logs for "<strong>{wodTitle}</strong>" as a{" "}
+              <span className={`font-semibold ${
+                existingWorkoutType === "fortime" ? "text-blue-600" :
+                existingWorkoutType === "emom" ? "text-orange-500" : "text-green-600"
+              }`}>
+                {existingWorkoutType === "fortime" ? "For Time" : existingWorkoutType?.toUpperCase()}
+              </span>{" "}
+              workout.
+            </p>
+            <p className="text-gray-600 mb-6">
+              You're trying to log it as{" "}
+              <span className={`font-semibold ${
+                pendingScoringType === "fortime" ? "text-blue-600" :
+                pendingScoringType === "emom" ? "text-orange-500" : "text-green-600"
+              }`}>
+                {pendingScoringType === "fortime" ? "For Time" : pendingScoringType?.toUpperCase()}
+              </span>.
+              What would you like to do?
+            </p>
+            <div className="space-y-3">
+              <button
+                onClick={() => {
+                  // Use existing type
+                  if (existingWorkoutType) {
+                    setScoringType(existingWorkoutType);
+                  }
+                  setShowTypeMismatchModal(false);
+                }}
+                className="w-full py-2.5 px-4 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700"
+              >
+                Keep as {existingWorkoutType === "fortime" ? "For Time" : existingWorkoutType?.toUpperCase()}
+              </button>
+              <button
+                onClick={() => {
+                  // Create new workout with different name
+                  setWodTitle(`${wodTitle} (${pendingScoringType === "fortime" ? "For Time" : pendingScoringType?.toUpperCase()})`);
+                  if (pendingScoringType) {
+                    setScoringType(pendingScoringType);
+                  }
+                  setShowTypeMismatchModal(false);
+                }}
+                className="w-full py-2.5 px-4 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200"
+              >
+                Create New Workout "{wodTitle} ({pendingScoringType === "fortime" ? "For Time" : pendingScoringType?.toUpperCase()})"
+              </button>
+              <button
+                onClick={() => setShowTypeMismatchModal(false)}
+                className="w-full py-2 text-gray-500 text-sm hover:text-gray-700"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
