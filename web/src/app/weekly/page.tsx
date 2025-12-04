@@ -762,16 +762,14 @@ export default function WeeklyPlanPage() {
                                             </span>
                                             <span className="font-medium text-gray-900 text-sm">{comp.title}</span>
                                           </div>
-                                          <div className="mt-1 ml-1 flex flex-col md:flex-row gap-2">
-                                            {comp.description && (
-                                              <div className="text-gray-700 text-xs whitespace-pre-wrap md:w-40 flex-shrink-0">{comp.description}</div>
-                                            )}
-                                            {comp.notes && (
-                                              <div className="p-2 bg-amber-50 rounded border-l-2 border-amber-300 flex-1">
-                                                <p className="text-amber-800 text-xs whitespace-pre-line">{comp.notes}</p>
-                                              </div>
-                                            )}
-                                          </div>
+                                          {comp.description && (
+                                            <p className="text-gray-700 text-xs whitespace-pre-wrap mt-1 ml-1">{comp.description}</p>
+                                          )}
+                                          {comp.notes && (
+                                            <div className="mt-2 ml-1 p-2 bg-amber-50 rounded border-l-2 border-amber-300">
+                                              <p className="text-amber-800 text-xs whitespace-pre-line">{comp.notes}</p>
+                                            </div>
+                                          )}
                                         </div>
                                       ))}
                                     </div>
@@ -1007,26 +1005,6 @@ export default function WeeklyPlanPage() {
                                   </svg>
                                 </Link>
                                 </div>
-
-                                {/* Workout summary under buttons */}
-                                {workout.components && workout.components.length > 0 && (
-                                  <div className="text-xs space-y-1.5 bg-gray-100 rounded-lg p-2">
-                                    {workout.components.map((comp) => (
-                                      <div key={comp.id} className="flex items-start gap-1.5">
-                                        <span className={`px-1 py-0.5 rounded text-[10px] font-medium flex-shrink-0 ${
-                                          comp.type === "wod" ? "bg-orange-100 text-orange-700" :
-                                          comp.type === "lift" ? "bg-purple-100 text-purple-700" :
-                                          comp.type === "skill" ? "bg-green-100 text-green-700" :
-                                          comp.type === "warmup" ? "bg-yellow-100 text-yellow-700" :
-                                          "bg-gray-200 text-gray-700"
-                                        }`}>
-                                          {comp.type === "warmup" ? "WU" : comp.type === "cooldown" ? "CD" : comp.type.toUpperCase()}
-                                        </span>
-                                        <span className="text-gray-700 font-medium">{comp.title}</span>
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
                               </div>
                             </div>
 
@@ -1098,16 +1076,14 @@ export default function WeeklyPlanPage() {
                                         </span>
                                         <span className="font-medium text-gray-900 text-sm">{comp.title}</span>
                                       </div>
-                                      <div className="mt-1 ml-1 flex flex-col md:flex-row gap-2">
-                                        {comp.description && (
-                                          <div className="text-gray-700 text-xs whitespace-pre-wrap md:w-40 flex-shrink-0">{comp.description}</div>
-                                        )}
-                                        {comp.notes && (
-                                          <div className="p-2 bg-amber-50 rounded border-l-2 border-amber-300 flex-1">
-                                            <p className="text-amber-800 text-xs whitespace-pre-line">{comp.notes}</p>
-                                          </div>
-                                        )}
-                                      </div>
+                                      {comp.description && (
+                                        <p className="text-gray-700 text-xs whitespace-pre-wrap mt-1 ml-1">{comp.description}</p>
+                                      )}
+                                      {comp.notes && (
+                                        <div className="mt-2 ml-1 p-2 bg-amber-50 rounded border-l-2 border-amber-300">
+                                          <p className="text-amber-800 text-xs whitespace-pre-line">{comp.notes}</p>
+                                        </div>
+                                      )}
                                     </div>
                                   ))}
                                 </div>
