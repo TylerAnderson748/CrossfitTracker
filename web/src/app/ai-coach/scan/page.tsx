@@ -674,7 +674,7 @@ IMPORTANT: Only respond with valid JSON. No additional text before or after the 
                         Cancel
                       </button>
                       <button
-                        onClick={handleSaveToPersonal}
+                        onClick={() => handleSaveToPersonal()}
                         disabled={isSaving}
                         className="flex-1 py-2 bg-purple-600 text-white font-medium rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-colors"
                       >
