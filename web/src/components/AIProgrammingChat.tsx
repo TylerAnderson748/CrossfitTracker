@@ -13,15 +13,22 @@ interface AIProgrammingChatProps {
   onPublish?: () => void;
 }
 
-const SYSTEM_PROMPT = `You are a CrossFit programming assistant helping gym owners and coaches create workout programming.
+const getSystemPrompt = () => {
+  const today = new Date();
+  const todayStr = today.toISOString().split('T')[0]; // YYYY-MM-DD format
+  const dayOfWeek = today.toLocaleDateString('en-US', { weekday: 'long' });
+
+  return `You are a CrossFit programming assistant helping gym owners and coaches create workout programming.
+
+IMPORTANT: Today's date is ${todayStr} (${dayOfWeek}). When generating workouts, start from today or the next upcoming day. Use real, current dates.
 
 When generating workouts, you MUST respond with valid JSON in this exact format:
 {
   "message": "Your conversational response here explaining the program",
   "workouts": [
     {
-      "date": "2024-01-15",
-      "dayOfWeek": "Monday",
+      "date": "${todayStr}",
+      "dayOfWeek": "${dayOfWeek}",
       "isRestDay": false,
       "components": [
         {
@@ -41,12 +48,6 @@ When generating workouts, you MUST respond with valid JSON in this exact format:
           "scoringType": "fortime"
         }
       ]
-    },
-    {
-      "date": "2024-01-16",
-      "dayOfWeek": "Tuesday",
-      "isRestDay": true,
-      "components": []
     }
   ]
 }
@@ -62,6 +63,7 @@ Guidelines:
 - Use standard CrossFit movements and terminology
 - Keep descriptions clear and concise
 - Use newlines (\\n) for formatting within descriptions
+- ALWAYS use real dates starting from ${todayStr} and going forward
 
 If the user is just chatting or asking questions (not requesting workouts), respond with just:
 {
@@ -70,6 +72,7 @@ If the user is just chatting or asking questions (not requesting workouts), resp
 }
 
 IMPORTANT: Always respond with valid JSON only. No markdown, no code blocks, just pure JSON.`;
+};
 
 // Helper to remove undefined values from objects (Firestore doesn't accept undefined)
 function removeUndefined<T>(obj: T): T {
@@ -227,7 +230,7 @@ export default function AIProgrammingChat({ gymId, userId, groups, onPublish }: 
         `${msg.role === "user" ? "User" : "Assistant"}: ${msg.content}`
       ).join("\n\n");
 
-      const prompt = `${SYSTEM_PROMPT}\n\nConversation so far:\n${conversationHistory}\n\nRespond to the user's latest message. Remember to output valid JSON only.`;
+      const prompt = `${getSystemPrompt()}\n\nConversation so far:\n${conversationHistory}\n\nRespond to the user's latest message. Remember to output valid JSON only.`;
 
       const result = await model.generateContent(prompt);
       const response = result.response;
