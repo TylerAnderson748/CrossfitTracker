@@ -793,15 +793,15 @@ export default function AIProgrammingChat({ gymId, userId, groups, onPublish }: 
         if (day.isRestDay) continue;
         if (!day.components || day.components.length === 0) continue;
 
-        // Build components array - include notes if present
-        const cleanComponents: Array<{id: string; type: string; title: string; description: string; notes?: string}> = [];
+        // Build components array - include notes and scoringType if present
+        const cleanComponents: Array<{id: string; type: string; title: string; description: string; notes?: string; scoringType?: string}> = [];
 
         for (let idx = 0; idx < day.components.length; idx++) {
           const comp = day.components[idx];
           if (!comp || !comp.type || !comp.title) continue;
 
           // Build component with required fields
-          const component: {id: string; type: string; title: string; description: string; notes?: string} = {
+          const component: {id: string; type: string; title: string; description: string; notes?: string; scoringType?: string} = {
             id: String(`comp-${idx}`),
             type: String(comp.type || "wod"),
             title: String(comp.title || "Workout"),
@@ -811,6 +811,11 @@ export default function AIProgrammingChat({ gymId, userId, groups, onPublish }: 
           // Add notes if present
           if (comp.notes) {
             component.notes = String(comp.notes);
+          }
+
+          // Add scoringType for WOD components (fortime, amrap, emom)
+          if (comp.type === "wod" && comp.scoringType) {
+            component.scoringType = String(comp.scoringType);
           }
 
           cleanComponents.push(component);
@@ -1206,15 +1211,27 @@ export default function AIProgrammingChat({ gymId, userId, groups, onPublish }: 
                       <div className="space-y-2">
                         {day.components.map((comp, compIdx) => (
                           <div key={compIdx} className="text-sm">
-                            <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium mb-1 ${
-                              comp.type === "warmup" ? "bg-yellow-100 text-yellow-700" :
-                              comp.type === "wod" ? "bg-orange-100 text-orange-700" :
-                              comp.type === "lift" ? "bg-purple-100 text-purple-700" :
-                              comp.type === "skill" ? "bg-green-100 text-green-700" :
-                              "bg-blue-100 text-blue-700"
-                            }`}>
-                              {comp.type.toUpperCase()}
-                            </span>
+                            <div className="flex items-center gap-1 mb-1">
+                              <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${
+                                comp.type === "warmup" ? "bg-yellow-100 text-yellow-700" :
+                                comp.type === "wod" ? "bg-orange-100 text-orange-700" :
+                                comp.type === "lift" ? "bg-purple-100 text-purple-700" :
+                                comp.type === "skill" ? "bg-green-100 text-green-700" :
+                                "bg-blue-100 text-blue-700"
+                              }`}>
+                                {comp.type.toUpperCase()}
+                              </span>
+                              {comp.type === "wod" && comp.scoringType && (
+                                <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${
+                                  comp.scoringType === "fortime" ? "bg-blue-100 text-blue-700" :
+                                  comp.scoringType === "amrap" ? "bg-green-100 text-green-700" :
+                                  comp.scoringType === "emom" ? "bg-orange-100 text-orange-700" :
+                                  "bg-gray-100 text-gray-700"
+                                }`}>
+                                  {comp.scoringType === "fortime" ? "For Time" : comp.scoringType.toUpperCase()}
+                                </span>
+                              )}
+                            </div>
                             <p className="font-medium text-gray-900">{comp.title}</p>
                             <p className="text-gray-600 text-xs whitespace-pre-line">{comp.description}</p>
                             {comp.notes && (
