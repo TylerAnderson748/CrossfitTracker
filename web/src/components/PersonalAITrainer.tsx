@@ -399,35 +399,31 @@ Respond in a friendly, coach-like tone. Use their actual numbers when giving rec
             </div>
           )}
 
-          {/* Get Advice Button */}
+          {/* Get Advice Button or AI Advice Display */}
           {todayWorkout ? (
             <>
-              <button
-                onClick={getPersonalizedAdvice}
-                disabled={isLoading}
-                className="w-full py-2.5 bg-white/20 hover:bg-white/30 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
-              >
-                {isLoading ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    Analyzing your workout...
-                  </>
-                ) : aiAdvice ? (
-                  <>
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                    </svg>
-                    Get New Advice
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                    </svg>
-                    Get Personalized Advice for Today
-                  </>
-                )}
-              </button>
+              {/* Only show button if no advice yet */}
+              {!aiAdvice && (
+                <button
+                  onClick={getPersonalizedAdvice}
+                  disabled={isLoading}
+                  className="w-full py-2.5 bg-white/20 hover:bg-white/30 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {isLoading ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      Analyzing your workout...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                      </svg>
+                      Get Personalized Advice for Today
+                    </>
+                  )}
+                </button>
+              )}
 
               {/* AI Advice Display */}
               {aiAdvice && (
