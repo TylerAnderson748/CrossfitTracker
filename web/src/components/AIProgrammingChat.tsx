@@ -5,6 +5,12 @@ import { collection, addDoc, updateDoc, doc, query, where, getDocs, orderBy, Tim
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { db } from "@/lib/firebase";
 import { AIProgrammingSession, AIChatMessage, AIGeneratedDay, WorkoutGroup, WorkoutComponent } from "@/lib/types";
+import { getAllSkills, getAllLifts, getAllWods } from "@/lib/workoutData";
+
+// Get preset workout names for the AI prompt
+const getPresetSkillNames = () => getAllSkills().map(s => s.name);
+const getPresetLiftNames = () => getAllLifts().map(l => l.name);
+const getPresetWodNames = () => getAllWods().map(w => w.name);
 
 interface AIProgrammingChatProps {
   gymId: string;
@@ -17,6 +23,11 @@ const getSystemPrompt = () => {
   const today = new Date();
   const todayStr = today.toISOString().split('T')[0]; // YYYY-MM-DD format
   const dayOfWeek = today.toLocaleDateString('en-US', { weekday: 'long' });
+
+  // Get preset workout names
+  const skillNames = getPresetSkillNames();
+  const liftNames = getPresetLiftNames();
+  const wodNames = getPresetWodNames();
 
   return `You are a CrossFit programming assistant helping gym owners and coaches create workout programming.
 
@@ -58,6 +69,17 @@ When generating workouts, you MUST respond with valid JSON in this exact format:
 Component types: "warmup", "lift", "wod", "skill", "cooldown"
 Scoring types for WODs: "fortime", "amrap", "emom"
 
+IMPORTANT - PRESET WORKOUTS:
+For SKILL components, you MUST ONLY use these preset skill names (do not make up new skills):
+${skillNames.join(", ")}
+
+For LIFT components, you MUST ONLY use these preset lift names (do not make up new lifts):
+${liftNames.join(", ")}
+
+For WOD components, these are the existing benchmark WODs in the database - avoid duplicating these names if creating custom WODs:
+${wodNames.join(", ")}
+When creating custom WODs, use descriptive names like "Monday Chipper", "Sprint Intervals", "Heavy Grace", etc. - NOT names that match existing benchmarks.
+
 Guidelines:
 - Create varied, balanced programming
 - Include proper warm-ups and skill work
@@ -72,6 +94,8 @@ Guidelines:
   * Scaling: Options for different fitness levels
   * Intent: What athletes should focus on or aim for
   * Any other coaching cues or tips
+- For skills and lifts, ONLY use the preset names listed above
+- For WODs, you may use benchmark WODs OR create custom named WODs (just avoid duplicating benchmark names)
 
 If the user is just chatting or asking questions (not requesting workouts), respond with just:
 {
