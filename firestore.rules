@@ -115,7 +115,7 @@ service cloud.firestore {
     }
 
     match /aiProgrammingSessions/{sessionId} {
-      allow read: if isAuthenticated() && resource.data.createdBy == request.auth.uid;
+      allow read: if isAuthenticated();
       allow create: if isAuthenticated() && request.resource.data.createdBy == request.auth.uid;
       allow update: if isAuthenticated() && resource.data.createdBy == request.auth.uid;
       allow delete: if isAuthenticated() && resource.data.createdBy == request.auth.uid;
@@ -136,7 +136,7 @@ service cloud.firestore {
     }
 
     match /personalWorkouts/{docId} {
-      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow read: if isAuthenticated();
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
       allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
       allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
@@ -147,14 +147,14 @@ service cloud.firestore {
     // ==========================================
 
     match /programmingSources/{sourceId} {
-      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow read: if isAuthenticated();
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
       allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
       allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
     }
 
     match /programmedWorkouts/{workoutId} {
-      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow read: if isAuthenticated();
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
       allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
       allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
