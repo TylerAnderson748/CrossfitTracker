@@ -182,7 +182,7 @@ export default function ProgrammingPage() {
                         : aiSubscription.endDate?.toDate?.().toLocaleDateString()) || "N/A"}
                     </span>
                     <button
-                      onClick={() => router.push("/subscribe")}
+                      onClick={() => router.push(isCoachOrOwner ? "/subscribe?variant=coach" : "/subscribe")}
                       className="text-white hover:underline"
                     >
                       Manage Subscription →
@@ -211,7 +211,7 @@ export default function ProgrammingPage() {
                 </div>
                 <div className="mt-6 flex items-center gap-4">
                   <button
-                    onClick={() => router.push("/subscribe")}
+                    onClick={() => router.push(isCoachOrOwner ? "/subscribe?variant=coach" : "/subscribe")}
                     className="px-6 py-3 bg-white text-purple-700 font-bold rounded-lg hover:bg-purple-50 transition-colors"
                   >
                     Start Free Trial
