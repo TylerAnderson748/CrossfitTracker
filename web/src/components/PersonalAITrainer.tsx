@@ -31,10 +31,17 @@ interface UserWorkoutHistory {
 interface PersonalAITrainerProps {
   userId: string;
   todayWorkout?: ScheduledWorkout | null;
+  gymId?: string;
 }
 
-export default function PersonalAITrainer({ userId, todayWorkout }: PersonalAITrainerProps) {
+interface GymMemberStats {
+  lifts: Map<string, number>; // liftName -> average 1RM
+  count: number;
+}
+
+export default function PersonalAITrainer({ userId, todayWorkout, gymId }: PersonalAITrainerProps) {
   const [userHistory, setUserHistory] = useState<UserWorkoutHistory>({ lifts: [], wods: [] });
+  const [gymMemberStats, setGymMemberStats] = useState<GymMemberStats | null>(null);
   const [aiAdvice, setAiAdvice] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -93,6 +100,64 @@ export default function PersonalAITrainer({ userId, todayWorkout }: PersonalAITr
     loadUserHistory();
   }, [userId]);
 
+  // Load gym member stats for consistency
+  useEffect(() => {
+    const loadGymMemberStats = async () => {
+      if (!gymId) return;
+
+      try {
+        // Get all gym members' lift data for comparison
+        const gymDoc = await getDocs(query(collection(db, "gyms"), where("__name__", "==", gymId)));
+        if (gymDoc.empty) return;
+
+        const gymData = gymDoc.docs[0].data();
+        const memberIds = [...(gymData.memberIds || []), ...(gymData.coachIds || [])];
+
+        if (memberIds.length === 0) return;
+
+        // Get lift results from gym members
+        const liftTotals = new Map<string, { total: number; count: number }>();
+
+        for (const memberId of memberIds.slice(0, 20)) { // Limit to 20 members for performance
+          if (memberId === userId) continue; // Skip current user
+
+          const memberLifts = await getDocs(query(
+            collection(db, "liftResults"),
+            where("userId", "==", memberId),
+            limit(50)
+          ));
+
+          memberLifts.docs.forEach(doc => {
+            const data = doc.data();
+            const liftName = data.liftTitle;
+            if (liftName && data.weight && data.reps === 1) { // Only 1RM for comparison
+              const existing = liftTotals.get(liftName) || { total: 0, count: 0 };
+              liftTotals.set(liftName, {
+                total: existing.total + data.weight,
+                count: existing.count + 1
+              });
+            }
+          });
+        }
+
+        // Calculate averages
+        const avgLifts = new Map<string, number>();
+        liftTotals.forEach((val, key) => {
+          avgLifts.set(key, Math.round(val.total / val.count));
+        });
+
+        setGymMemberStats({
+          lifts: avgLifts,
+          count: memberIds.length
+        });
+      } catch (err) {
+        console.error("Error loading gym member stats:", err);
+      }
+    };
+
+    loadGymMemberStats();
+  }, [gymId, userId]);
+
   const getPersonalizedAdvice = async () => {
     if (!todayWorkout || isLoading) return;
 
@@ -107,9 +172,20 @@ export default function PersonalAITrainer({ userId, todayWorkout }: PersonalAITr
         return;
       }
 
-      // Build workout description
+      // Build workout description and extract scaling options from notes
+      let prescribedScalingOptions = "";
       const workoutDescription = todayWorkout.components?.map(comp => {
-        return `${comp.type.toUpperCase()}: ${comp.title}\n${comp.description || ""}`;
+        let desc = `${comp.type.toUpperCase()}: ${comp.title}\n${comp.description || ""}`;
+        if (comp.notes) {
+          desc += `\nCoach Notes: ${comp.notes}`;
+          // Check if notes contain scaling info
+          const notesLower = comp.notes.toLowerCase();
+          if (notesLower.includes("scale") || notesLower.includes("rx") || notesLower.includes("modify") ||
+              notesLower.includes("option") || notesLower.includes("substitute") || notesLower.includes("foundation")) {
+            prescribedScalingOptions += `\n${comp.type}: ${comp.notes}`;
+          }
+        }
+        return desc;
       }).join("\n\n") || todayWorkout.wodDescription || "No workout details";
 
       // Build user history summary
@@ -148,26 +224,55 @@ export default function PersonalAITrainer({ userId, todayWorkout }: PersonalAITr
           .join("\n");
       }
 
+      // Build gym comparison data
+      let gymComparisonInfo = "";
+      if (gymMemberStats && gymMemberStats.lifts.size > 0) {
+        gymComparisonInfo = "\nGYM AVERAGES (for context - ensure consistency with other members):\n";
+        gymMemberStats.lifts.forEach((avg, lift) => {
+          gymComparisonInfo += `- ${lift}: ${avg}lb avg across ${gymMemberStats.count} members\n`;
+        });
+      }
+
       const genAI = new GoogleGenerativeAI(apiKey);
       const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
-      const prompt = `You are a personal CrossFit trainer providing personalized advice.
+      // Build prompt based on whether scaling options are prescribed
+      let scalingInstructions = "";
+      if (prescribedScalingOptions.trim()) {
+        scalingInstructions = `
+IMPORTANT - PRESCRIBED SCALING OPTIONS:
+The coach has provided specific scaling options for this workout. You MUST ONLY recommend from these options:
+${prescribedScalingOptions}
+
+Do NOT suggest any scaling modifications outside of what the coach has prescribed above. Help the athlete choose the RIGHT prescribed option for their level.`;
+      } else {
+        scalingInstructions = `
+No specific scaling options were prescribed by the coach, so you may suggest appropriate scaling based on the athlete's ability level (Rx, Scaled, or Foundations).`;
+      }
+
+      const prompt = `You are a personal CrossFit coach providing personalized advice.
 
 TODAY'S WORKOUT:
 ${workoutDescription}
+${scalingInstructions}
 
 ATHLETE'S WORKOUT HISTORY:
 ${historySummary || "No workout history available yet."}
+${gymComparisonInfo}
 
 Based on this athlete's history and today's workout, provide SPECIFIC and PERSONALIZED recommendations:
 
 1. Suggest specific weights they should use based on their lift PRs
-2. Recommend a scaling option (Rx, Scaled, or Foundations) based on their typical performance level
+2. ${prescribedScalingOptions.trim() ? "Help them choose the RIGHT prescribed scaling option for their ability level" : "Recommend a scaling option (Rx, Scaled, or Foundations) based on their typical performance level"}
 3. Give them a goal pace or target to aim for
 4. One mental cue or focus point for the workout
 
-Be encouraging but realistic. Reference their actual numbers. Keep it concise (3-4 short paragraphs max).
-If they don't have relevant lift data, give general scaling advice but note they should track their lifts.
+CRITICAL RULES:
+- ${prescribedScalingOptions.trim() ? "ONLY suggest scaling options from the coach's prescribed options above - never invent your own scaling" : "You may suggest appropriate scaling since none was prescribed"}
+- Keep recommendations consistent with what similar athletes in the gym would do
+- Be encouraging but realistic. Reference their actual numbers
+- Keep it concise (3-4 short paragraphs max)
+- If they don't have relevant lift data, help them choose based on the prescribed options and note they should track their lifts
 
 Respond in a friendly, coach-like tone. Use their actual numbers when giving recommendations.`;
 
