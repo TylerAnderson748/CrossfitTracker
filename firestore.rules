@@ -2,6 +2,10 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // ==========================================
+    // HELPER FUNCTIONS
+    // ==========================================
+
     function isAuthenticated() {
       return request.auth != null;
     }
@@ -10,19 +14,58 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
-    function isGymOwner(gymId) {
-      return isAuthenticated() &&
-             gymId != null &&
-             exists(/databases/$(database)/documents/gyms/$(gymId)) &&
-             get(/databases/$(database)/documents/gyms/$(gymId)).data.ownerId == request.auth.uid;
+    // Get gym document safely
+    function getGym(gymId) {
+      return get(/databases/$(database)/documents/gyms/$(gymId));
     }
 
-    function isGymStaff(gymId) {
+    function gymExists(gymId) {
+      return gymId != null && exists(/databases/$(database)/documents/gyms/$(gymId));
+    }
+
+    function isGymOwner(gymId) {
       return isAuthenticated() &&
-             gymId != null &&
-             exists(/databases/$(database)/documents/gyms/$(gymId)) &&
-             (get(/databases/$(database)/documents/gyms/$(gymId)).data.ownerId == request.auth.uid ||
-              get(/databases/$(database)/documents/gyms/$(gymId)).data.coachIds.hasAny([request.auth.uid]));
+             gymExists(gymId) &&
+             getGym(gymId).data.ownerId == request.auth.uid;
+    }
+
+    function isGymCoach(gymId) {
+      return isAuthenticated() &&
+             gymExists(gymId) &&
+             ('coachIds' in getGym(gymId).data) &&
+             request.auth.uid in getGym(gymId).data.coachIds;
+    }
+
+    function isGymMember(gymId) {
+      return isAuthenticated() &&
+             gymExists(gymId) &&
+             ('memberIds' in getGym(gymId).data) &&
+             request.auth.uid in getGym(gymId).data.memberIds;
+    }
+
+    // Gym staff = owner OR coach (can write programming)
+    function isGymStaff(gymId) {
+      return isGymOwner(gymId) || isGymCoach(gymId);
+    }
+
+    // Gym affiliated = owner, coach, or member (can read gym content)
+    function isGymAffiliated(gymId) {
+      return isGymOwner(gymId) || isGymCoach(gymId) || isGymMember(gymId);
+    }
+
+    // Field validation helpers
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function isValidString(field) {
+      return request.resource.data[field] is string &&
+             request.resource.data[field].size() > 0 &&
+             request.resource.data[field].size() < 10000;
+    }
+
+    function isValidTimestamp(field) {
+      return request.resource.data[field] is timestamp;
     }
 
     // ==========================================
@@ -30,12 +73,14 @@ service cloud.firestore {
     // ==========================================
 
     match /users/{userId} {
+      // Authenticated users can read profiles (for member lookups)
       allow read: if isAuthenticated();
       allow create: if isOwner(userId);
       allow update: if isOwner(userId);
       allow delete: if isOwner(userId);
     }
 
+    // Public profiles - readable by authenticated users
     match /userProfiles/{userId} {
       allow read: if isAuthenticated();
       allow create: if isOwner(userId);
@@ -49,94 +94,178 @@ service cloud.firestore {
 
     match /gyms/{gymId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && request.resource.data.ownerId == request.auth.uid;
+
+      // VULNERABILITY #3 FIX: Validate all fields on creation
+      allow create: if isAuthenticated() &&
+                       request.resource.data.ownerId == request.auth.uid &&
+                       hasRequiredFields(['name', 'ownerId', 'createdAt']) &&
+                       isValidString('name') &&
+                       request.resource.data.ownerId is string &&
+                       // Ensure creator can't set themselves as member/coach on creation
+                       (!('memberIds' in request.resource.data) || request.resource.data.memberIds == []) &&
+                       (!('coachIds' in request.resource.data) || request.resource.data.coachIds == []);
+
+      // Only owner can update gym settings
       allow update: if isGymOwner(gymId);
       allow delete: if isGymOwner(gymId);
     }
 
     match /gymMembershipRequests/{requestId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
-      allow update: if isAuthenticated();
-      allow delete: if isAuthenticated();
+      // Only the requesting user can create their own request
+      allow create: if isAuthenticated() &&
+                       request.resource.data.userId == request.auth.uid &&
+                       hasRequiredFields(['userId', 'gymId', 'status']);
+      // Gym owner can approve/deny, requester can withdraw
+      allow update: if isAuthenticated() &&
+                       (resource.data.userId == request.auth.uid ||
+                        isGymOwner(resource.data.gymId));
+      allow delete: if isAuthenticated() &&
+                       (resource.data.userId == request.auth.uid ||
+                        isGymOwner(resource.data.gymId));
     }
 
     match /groupMembershipRequests/{requestId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
-      allow update: if isAuthenticated();
-      allow delete: if isAuthenticated();
+      allow create: if isAuthenticated() &&
+                       request.resource.data.userId == request.auth.uid;
+      allow update: if isAuthenticated() &&
+                       (resource.data.userId == request.auth.uid ||
+                        isGymStaff(resource.data.gymId));
+      allow delete: if isAuthenticated() &&
+                       (resource.data.userId == request.auth.uid ||
+                        isGymStaff(resource.data.gymId));
     }
 
     match /groups/{groupId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated();
-      allow delete: if isAuthenticated();
+      // Must specify gymId and be gym staff to create groups
+      allow create: if isAuthenticated() &&
+                       hasRequiredFields(['gymId', 'name']) &&
+                       isGymStaff(request.resource.data.gymId);
+      allow update: if isAuthenticated() && isGymStaff(resource.data.gymId);
+      allow delete: if isAuthenticated() && isGymStaff(resource.data.gymId);
     }
 
     // ==========================================
-    // WORKOUTS & PROGRAMMING
+    // WORKOUTS & PROGRAMMING (Gym-scoped)
+    // VULNERABILITY #1 FIX: Only gym staff can write
     // ==========================================
 
     match /workouts/{workoutId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
-      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+      // Personal workouts: user owns it
+      // Gym workouts: must be gym staff
+      allow create: if isAuthenticated() &&
+                       (request.resource.data.userId == request.auth.uid ||
+                        ('gymId' in request.resource.data && isGymStaff(request.resource.data.gymId)));
+
+      allow update: if isAuthenticated() &&
+                       (resource.data.userId == request.auth.uid ||
+                        ('gymId' in resource.data && isGymStaff(resource.data.gymId)));
+
+      allow delete: if isAuthenticated() &&
+                       (resource.data.userId == request.auth.uid ||
+                        ('gymId' in resource.data && isGymStaff(resource.data.gymId)));
     }
 
+    // VULNERABILITY #7 FIX: Validate workout logs
     match /workoutLogs/{logId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+
+      // Must be the user logging their own workout
+      allow create: if isAuthenticated() &&
+                       request.resource.data.userId == request.auth.uid &&
+                       hasRequiredFields(['userId', 'date']);
+
       allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
       allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
     }
 
     match /weeklyPlans/{planId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated();
-      allow delete: if isAuthenticated();
+
+      // VULNERABILITY #1 FIX: Only gym staff can write gym plans
+      allow create: if isAuthenticated() &&
+                       hasRequiredFields(['gymId']) &&
+                       isGymStaff(request.resource.data.gymId);
+      allow update: if isAuthenticated() && isGymStaff(resource.data.gymId);
+      allow delete: if isAuthenticated() && isGymStaff(resource.data.gymId);
     }
 
     match /workoutTemplates/{templateId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated();
-      allow delete: if isAuthenticated();
+
+      // Personal templates or gym templates
+      allow create: if isAuthenticated() &&
+                       (request.resource.data.createdBy == request.auth.uid ||
+                        ('gymId' in request.resource.data && isGymStaff(request.resource.data.gymId)));
+      allow update: if isAuthenticated() &&
+                       (resource.data.createdBy == request.auth.uid ||
+                        ('gymId' in resource.data && isGymStaff(resource.data.gymId)));
+      allow delete: if isAuthenticated() &&
+                       (resource.data.createdBy == request.auth.uid ||
+                        ('gymId' in resource.data && isGymStaff(resource.data.gymId)));
     }
 
     match /scheduledWorkouts/{workoutId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated();
-      allow delete: if isAuthenticated();
+
+      // VULNERABILITY #1 FIX: Only gym staff can schedule workouts
+      allow create: if isAuthenticated() &&
+                       hasRequiredFields(['gymId']) &&
+                       isGymStaff(request.resource.data.gymId);
+      allow update: if isAuthenticated() && isGymStaff(resource.data.gymId);
+      allow delete: if isAuthenticated() && isGymStaff(resource.data.gymId);
     }
+
+    // ==========================================
+    // AI PROGRAMMING (VULNERABILITY #2 FIX)
+    // ==========================================
 
     match /aiProgrammingSessions/{sessionId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && request.resource.data.createdBy == request.auth.uid;
-      allow update: if isAuthenticated() && resource.data.createdBy == request.auth.uid;
-      allow delete: if isAuthenticated() && resource.data.createdBy == request.auth.uid;
+
+      // Must be gym staff to create AI sessions for a gym
+      allow create: if isAuthenticated() &&
+                       request.resource.data.createdBy == request.auth.uid &&
+                       hasRequiredFields(['gymId', 'createdBy']) &&
+                       isGymStaff(request.resource.data.gymId);
+
+      // Only creator (who is gym staff) can modify
+      allow update: if isAuthenticated() &&
+                       resource.data.createdBy == request.auth.uid &&
+                       isGymStaff(resource.data.gymId);
+      allow delete: if isAuthenticated() &&
+                       resource.data.createdBy == request.auth.uid &&
+                       isGymStaff(resource.data.gymId);
     }
 
     match /aiProgrammingPreferences/{prefId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated();
-      allow delete: if isAuthenticated();
+
+      // VULNERABILITY #2 FIX: Only gym staff can modify AI preferences
+      allow create: if isAuthenticated() &&
+                       hasRequiredFields(['gymId']) &&
+                       isGymStaff(request.resource.data.gymId);
+      allow update: if isAuthenticated() && isGymStaff(resource.data.gymId);
+      allow delete: if isAuthenticated() && isGymStaff(resource.data.gymId);
     }
 
     match /workoutGroups/{groupId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated();
-      allow delete: if isAuthenticated();
+
+      allow create: if isAuthenticated() &&
+                       hasRequiredFields(['gymId']) &&
+                       isGymStaff(request.resource.data.gymId);
+      allow update: if isAuthenticated() && isGymStaff(resource.data.gymId);
+      allow delete: if isAuthenticated() && isGymStaff(resource.data.gymId);
     }
 
     match /personalWorkouts/{docId} {
       allow read: if isAuthenticated();
+      // Only owner can write personal workouts
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
       allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
       allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
@@ -162,9 +291,9 @@ service cloud.firestore {
 
     match /connectedPrograms/{docId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated();
-      allow delete: if isAuthenticated();
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
     }
 
     // ==========================================
@@ -173,23 +302,57 @@ service cloud.firestore {
 
     match /liftResults/{resultId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      // Only owner can write their results
+      allow create: if isAuthenticated() &&
+                       request.resource.data.userId == request.auth.uid &&
+                       hasRequiredFields(['userId', 'liftName', 'weight']);
       allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
       allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
     }
 
     match /skillResults/{resultId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated() &&
+                       request.resource.data.userId == request.auth.uid &&
+                       hasRequiredFields(['userId', 'skillName']);
       allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
       allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
     }
 
+    // VULNERABILITY #4 FIX: Leaderboard with validation
     match /leaderboardEntries/{entryId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
-      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+      // Must be own entry, must have required fields, score must be reasonable
+      allow create: if isAuthenticated() &&
+                       request.resource.data.userId == request.auth.uid &&
+                       hasRequiredFields(['userId', 'workoutId', 'score', 'submittedAt']) &&
+                       request.resource.data.score is number &&
+                       request.resource.data.score >= 0 &&
+                       request.resource.data.score < 100000;
+
+      // Can only update own entries, can't change score after creation
+      allow update: if isAuthenticated() &&
+                       resource.data.userId == request.auth.uid &&
+                       request.resource.data.score == resource.data.score;
+
       allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    // ==========================================
+    // SUBSCRIPTIONS (Read-only from client)
+    // ==========================================
+
+    match /subscriptions/{subId} {
+      // Users can read their own subscriptions
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      // No client-side writes - subscriptions managed by Stripe webhooks
+      allow create, update, delete: if false;
+    }
+
+    match /customers/{customerId} {
+      allow read: if isOwner(customerId);
+      allow create, update, delete: if false;
     }
 
     // ==========================================
