@@ -34,18 +34,21 @@ When generating workouts, you MUST respond with valid JSON in this exact format:
         {
           "type": "warmup",
           "title": "General Warm-up",
-          "description": "3 rounds:\\n10 air squats\\n10 push-ups\\n200m run"
+          "description": "3 rounds:\\n10 air squats\\n10 push-ups\\n200m run",
+          "notes": "Focus on mobility and increasing heart rate gradually"
         },
         {
           "type": "lift",
           "title": "Back Squat",
-          "description": "5x5 @ 75% 1RM\\nRest 2-3 min between sets"
+          "description": "5x5 @ 75% 1RM\\nRest 2-3 min between sets",
+          "notes": "Stimulus: Build strength with moderate load. Focus on depth and control.\\nScaling: Reduce weight if form breaks down. Beginners use goblet squats."
         },
         {
           "type": "wod",
           "title": "Fran",
           "description": "21-15-9\\nThrusters (95/65)\\nPull-ups",
-          "scoringType": "fortime"
+          "scoringType": "fortime",
+          "notes": "Stimulus: Fast and intense, aim for sub-10 minutes.\\nScaling: 65/45 thrusters, ring rows or jumping pull-ups.\\nIntent: Sprint effort, unbroken if possible."
         }
       ]
     }
@@ -64,6 +67,11 @@ Guidelines:
 - Keep descriptions clear and concise
 - Use newlines (\\n) for formatting within descriptions
 - ALWAYS use real dates starting from ${todayStr} and going forward
+- ALWAYS include a "notes" field for each component with:
+  * Stimulus: The intended feel/intensity (e.g., "fast and light", "heavy grind")
+  * Scaling: Options for different fitness levels
+  * Intent: What athletes should focus on or aim for
+  * Any other coaching cues or tips
 
 If the user is just chatting or asking questions (not requesting workouts), respond with just:
 {
@@ -467,20 +475,27 @@ export default function AIProgrammingChat({ gymId, userId, groups, onPublish }: 
         if (day.isRestDay) continue;
         if (!day.components || day.components.length === 0) continue;
 
-        // Build components array - NO optional fields allowed
-        const cleanComponents: Array<{id: string; type: string; title: string; description: string}> = [];
+        // Build components array - include notes if present
+        const cleanComponents: Array<{id: string; type: string; title: string; description: string; notes?: string}> = [];
 
         for (let idx = 0; idx < day.components.length; idx++) {
           const comp = day.components[idx];
           if (!comp || !comp.type || !comp.title) continue;
 
-          // Only include required fields - no optional scoringType
-          cleanComponents.push({
+          // Build component with required fields
+          const component: {id: string; type: string; title: string; description: string; notes?: string} = {
             id: String(`comp-${idx}`),
             type: String(comp.type || "wod"),
             title: String(comp.title || "Workout"),
             description: String(comp.description || ""),
-          });
+          };
+
+          // Add notes if present
+          if (comp.notes) {
+            component.notes = String(comp.notes);
+          }
+
+          cleanComponents.push(component);
         }
 
         // Skip if no valid components
@@ -828,6 +843,11 @@ export default function AIProgrammingChat({ gymId, userId, groups, onPublish }: 
                             </span>
                             <p className="font-medium text-gray-900">{comp.title}</p>
                             <p className="text-gray-600 text-xs whitespace-pre-line">{comp.description}</p>
+                            {comp.notes && (
+                              <div className="mt-1 p-1.5 bg-gray-50 rounded border-l-2 border-gray-300">
+                                <p className="text-gray-500 text-xs whitespace-pre-line italic">{comp.notes}</p>
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>

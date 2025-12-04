@@ -765,6 +765,11 @@ export default function WeeklyPlanPage() {
                                           {comp.description && (
                                             <p className="text-gray-600 text-xs mt-1 whitespace-pre-wrap line-clamp-2 ml-1">{comp.description}</p>
                                           )}
+                                          {comp.notes && (
+                                            <div className="mt-1 ml-1 p-1.5 bg-amber-50 rounded border-l-2 border-amber-300">
+                                              <p className="text-amber-700 text-xs whitespace-pre-line italic">{comp.notes}</p>
+                                            </div>
+                                          )}
                                         </div>
                                       ))}
                                     </div>
@@ -1070,6 +1075,11 @@ export default function WeeklyPlanPage() {
                                       </div>
                                       {comp.description && (
                                         <p className="text-gray-600 text-xs mt-1 whitespace-pre-wrap line-clamp-2 ml-1">{comp.description}</p>
+                                      )}
+                                      {comp.notes && (
+                                        <div className="mt-1 ml-1 p-1.5 bg-amber-50 rounded border-l-2 border-amber-300">
+                                          <p className="text-amber-700 text-xs whitespace-pre-line italic">{comp.notes}</p>
+                                        </div>
                                       )}
                                     </div>
                                   ))}

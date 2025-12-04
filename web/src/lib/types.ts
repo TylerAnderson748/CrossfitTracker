@@ -56,6 +56,7 @@ export interface WorkoutComponent {
   description: string;
   scoringType?: WODScoringType; // For WOD components: fortime, emom, amrap
   isPreset?: boolean; // True if this is a preset workout (locked fields)
+  notes?: string; // Coach notes: stimulus, scaling options, intent, etc.
 }
 
 export const workoutComponentLabels: Record<WorkoutComponentType, string> = {
@@ -351,6 +352,7 @@ export interface AIGeneratedWorkout {
   title: string;
   description: string;
   scoringType?: WODScoringType;
+  notes?: string; // Coach notes: stimulus, scaling options, intent, etc.
 }
 
 export interface AIGeneratedDay {
