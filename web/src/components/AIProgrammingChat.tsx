@@ -165,7 +165,7 @@ export default function AIProgrammingChat({ gymId, userId, groups, onPublish }: 
       }
 
       const genAI = new GoogleGenerativeAI(apiKey);
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
       // Build conversation history for context
       const conversationHistory = updatedMessages.map(msg =>
