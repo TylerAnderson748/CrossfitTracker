@@ -762,12 +762,12 @@ export default function WeeklyPlanPage() {
                                             </span>
                                             <span className="font-medium text-gray-900 text-sm">{comp.title}</span>
                                           </div>
-                                          <div className="mt-1 ml-1 grid grid-cols-1 md:grid-cols-2 gap-2">
+                                          <div className="mt-1 ml-1 flex flex-col md:flex-row gap-2">
                                             {comp.description && (
-                                              <div className="text-gray-700 text-xs whitespace-pre-wrap">{comp.description}</div>
+                                              <div className="text-gray-700 text-xs whitespace-pre-wrap md:w-40 flex-shrink-0">{comp.description}</div>
                                             )}
                                             {comp.notes && (
-                                              <div className="p-2 bg-amber-50 rounded border-l-2 border-amber-300">
+                                              <div className="p-2 bg-amber-50 rounded border-l-2 border-amber-300 flex-1">
                                                 <p className="text-amber-800 text-xs whitespace-pre-line">{comp.notes}</p>
                                               </div>
                                             )}
@@ -1075,12 +1075,12 @@ export default function WeeklyPlanPage() {
                                         </span>
                                         <span className="font-medium text-gray-900 text-sm">{comp.title}</span>
                                       </div>
-                                      <div className="mt-1 ml-1 grid grid-cols-1 md:grid-cols-2 gap-2">
+                                      <div className="mt-1 ml-1 flex flex-col md:flex-row gap-2">
                                         {comp.description && (
-                                          <div className="text-gray-700 text-xs whitespace-pre-wrap">{comp.description}</div>
+                                          <div className="text-gray-700 text-xs whitespace-pre-wrap md:w-40 flex-shrink-0">{comp.description}</div>
                                         )}
                                         {comp.notes && (
-                                          <div className="p-2 bg-amber-50 rounded border-l-2 border-amber-300">
+                                          <div className="p-2 bg-amber-50 rounded border-l-2 border-amber-300 flex-1">
                                             <p className="text-amber-800 text-xs whitespace-pre-line">{comp.notes}</p>
                                           </div>
                                         )}
