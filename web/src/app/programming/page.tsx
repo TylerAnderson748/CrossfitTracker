@@ -509,15 +509,21 @@ export default function ProgrammingPage() {
 
         {selectedPath === "own-gym" && (
           <div className="mb-8 bg-gradient-to-r from-gray-800 to-gray-900 rounded-2xl p-6 text-white animate-in slide-in-from-top-2 duration-300">
-            <div className="flex items-center gap-4 mb-6">
-              <div className="w-14 h-14 bg-white/10 rounded-xl flex items-center justify-center">
-                <span className="text-3xl">🏢</span>
+            <div className="flex items-start justify-between mb-6">
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 bg-white/10 rounded-xl flex items-center justify-center">
+                  <span className="text-3xl">🏢</span>
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold">Own a Gym</h3>
+                  <p className="text-gray-300 text-sm mt-1">
+                    Create and manage your own gym with programming tools
+                  </p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-xl font-bold">Own a Gym</h3>
-                <p className="text-gray-300 text-sm mt-1">
-                  Create and manage your own gym with AI-powered programming
-                </p>
+              <div className="text-right">
+                <div className="text-2xl font-bold">$50</div>
+                <div className="text-gray-400 text-xs">/month base</div>
               </div>
             </div>
 
@@ -533,14 +539,33 @@ export default function ProgrammingPage() {
                 <p className="text-gray-400 text-xs mt-1">Create and schedule WODs</p>
               </div>
               <div className="bg-white/10 rounded-xl p-4">
-                <div className="text-2xl mb-2">🤖</div>
-                <h4 className="font-semibold text-sm">AI Assistance</h4>
-                <p className="text-gray-400 text-xs mt-1">Let AI help draft programming</p>
+                <div className="text-2xl mb-2">📋</div>
+                <h4 className="font-semibold text-sm">Import Programming</h4>
+                <p className="text-gray-400 text-xs mt-1">Use any external source</p>
               </div>
               <div className="bg-white/10 rounded-xl p-4">
                 <div className="text-2xl mb-2">📊</div>
                 <h4 className="font-semibold text-sm">Analytics</h4>
                 <p className="text-gray-400 text-xs mt-1">Gym-wide performance data</p>
+              </div>
+            </div>
+
+            {/* Pricing Options */}
+            <div className="bg-white/5 rounded-xl p-4 mb-6 border border-white/10">
+              <h4 className="font-semibold text-sm mb-3">Gym Pricing</h4>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-300">Base gym subscription</span>
+                  <span className="font-semibold">$50/mo</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-300">+ AI Programmer add-on</span>
+                  <span className="font-semibold">+$100/mo</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-300">+ AI Coach for members</span>
+                  <span className="font-semibold">+$1/member/mo</span>
+                </div>
               </div>
             </div>
 
@@ -570,18 +595,18 @@ export default function ProgrammingPage() {
                   </div>
                 ))}
                 <button
-                  onClick={() => router.push("/gym")}
+                  onClick={() => router.push("/subscribe?variant=gym")}
                   className="w-full mt-4 px-6 py-3 bg-white/20 text-white font-semibold rounded-lg hover:bg-white/30 transition-colors"
                 >
-                  + Create Another Gym
+                  + Create Another Gym - $50/mo
                 </button>
               </div>
             ) : (
               <button
-                onClick={() => router.push("/gym")}
+                onClick={() => router.push("/subscribe?variant=gym")}
                 className="w-full px-6 py-3 bg-white text-gray-900 font-bold rounded-lg hover:bg-gray-100 transition-colors"
               >
-                Create Your Gym
+                Create Your Gym - $50/mo
               </button>
             )}
           </div>
