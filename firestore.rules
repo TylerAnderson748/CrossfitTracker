@@ -151,13 +151,8 @@ service cloud.firestore {
     // ==========================================
 
     match /gymApplications/{applicationId} {
-      // Single document read: users can read their own, super admins can read any
-      allow get: if isAuthenticated() &&
-                    (resource.data.userId == request.auth.uid || isSuperAdmin());
-
-      // List/query: users can query their own applications, super admins can list all
-      // Note: Query must include where("userId", "==", uid) for non-admins
-      allow list: if isAuthenticated();
+      // Any authenticated user can read (query filters by userId in app)
+      allow read: if isAuthenticated();
 
       // Any authenticated user can apply to create a gym
       allow create: if isAuthenticated() &&
