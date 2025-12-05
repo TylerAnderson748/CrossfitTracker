@@ -56,6 +56,10 @@ export default function Navigation() {
   const danAllowedEmails = ["indi@user.com", "tyguy4201@gmail.com"];
   const canSeeDanTab = user?.email && danAllowedEmails.some(e => e.toLowerCase() === user.email?.toLowerCase());
 
+  // Hi Claire tab - outdoors & anti-cat themed
+  const claireAllowedEmails = ["tyguy4201@gmail.com"];
+  const canSeeClairTab = user?.email && claireAllowedEmails.some(e => e.toLowerCase() === user.email?.toLowerCase());
+
   // Check if user needs to subscribe - coaches check aiProgrammingSubscription, athletes check aiTrainerSubscription
   const relevantSubscription = isGymOwner
     ? user?.aiProgrammingSubscription
@@ -76,6 +80,7 @@ export default function Navigation() {
     ...(canSeeCrystalRenoTabs ? [{ href: "/hi-reno", label: "Hi Reno...", icon: "🤘" }] : []),
     ...(canSeeMyWifeTab ? [{ href: "/my-wife", label: "My Wife!", icon: "👍" }] : []),
     ...(canSeeDanTab ? [{ href: "/hi-dan", label: "Hi Dan!", icon: "🏍️" }] : []),
+    ...(canSeeClairTab ? [{ href: "/hi-claire", label: "Hi Claire!", icon: "🌲" }] : []),
   ];
 
   return (
