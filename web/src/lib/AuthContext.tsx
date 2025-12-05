@@ -11,8 +11,13 @@ import {
 import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs, Timestamp } from "firebase/firestore";
 import { auth, db } from "./firebase";
 import { AppUser, StoredAccount } from "./types";
+import { sanitizeString, isValidEmail } from "./security";
 
 const STORED_ACCOUNTS_KEY = "crossfit_tracker_accounts";
+
+// WARNING: Storing passwords in localStorage is not recommended for production.
+// Consider using Firebase session persistence or a more secure token-based approach.
+// This is kept for multi-account quick-switching functionality.
 
 interface AuthContextType {
   firebaseUser: FirebaseUser | null;
@@ -210,15 +215,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signUp = async (email: string, password: string, userData: Partial<AppUser>) => {
+    // Validate email
+    if (!isValidEmail(email)) {
+      throw new Error("Invalid email format");
+    }
+
+    // Validate password strength
+    if (password.length < 8) {
+      throw new Error("Password must be at least 8 characters");
+    }
+
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
     const { uid } = userCredential.user;
 
+    // Sanitize user input
+    const sanitizedFirstName = userData.firstName ? sanitizeString(userData.firstName, 50) : undefined;
+    const sanitizedLastName = userData.lastName ? sanitizeString(userData.lastName, 50) : undefined;
+    const sanitizedDisplayName = userData.displayName ? sanitizeString(userData.displayName, 100) : undefined;
+
+    // Create private user document (contains sensitive data)
     await setDoc(doc(db, "users", uid), {
-      ...userData,
+      id: uid,
       email,
+      firstName: sanitizedFirstName,
+      lastName: sanitizedLastName,
+      displayName: sanitizedDisplayName,
       role: "athlete",
       hideFromLeaderboards: false,
       createdAt: Timestamp.now(),
+    });
+
+    // Create public profile document (for leaderboards, member lists)
+    await setDoc(doc(db, "userProfiles", uid), {
+      id: uid,
+      firstName: sanitizedFirstName,
+      lastName: sanitizedLastName,
+      displayName: sanitizedDisplayName,
+      role: "athlete",
+      hideFromLeaderboards: false,
     });
 
     // Save the new account
@@ -226,7 +260,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const newAccount: StoredAccount = {
       id: uid,
       email,
-      displayName: userData.displayName || userData.firstName || email,
+      displayName: sanitizedDisplayName || sanitizedFirstName || email,
       password,
     };
     accounts.push(newAccount);

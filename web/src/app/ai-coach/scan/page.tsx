@@ -38,11 +38,14 @@ export default function AIScanPage() {
   );
   const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
 
-  // Check subscription or if user is a coach/owner
-  const hasSubscription = user?.aiTrainerSubscription?.status === "active" ||
-    user?.aiTrainerSubscription?.status === "trialing";
   const isCoach = user?.role === "coach" || user?.role === "owner";
-  const hasAccess = hasSubscription || isCoach;
+
+  // Check subscription - coaches use aiProgrammingSubscription, athletes use aiTrainerSubscription
+  const relevantSubscription = isCoach
+    ? user?.aiProgrammingSubscription
+    : user?.aiTrainerSubscription;
+  const hasSubscription = relevantSubscription?.status === "active" ||
+    relevantSubscription?.status === "trialing";
 
   // Fetch user's gym if they're a coach
   useEffect(() => {
@@ -411,7 +414,7 @@ IMPORTANT: Only respond with valid JSON. No additional text before or after the 
     return null;
   }
 
-  if (!hasAccess) {
+  if (!hasSubscription) {
     return (
       <div className="min-h-screen bg-gray-50">
         <Navigation />
@@ -422,15 +425,19 @@ IMPORTANT: Only respond with valid JSON. No additional text before or after the 
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
               </svg>
             </div>
-            <h2 className="text-xl font-bold text-gray-900 mb-2">AI Coach Feature</h2>
+            <h2 className="text-xl font-bold text-gray-900 mb-2">
+              {isCoach ? "AI Programming Feature" : "AI Coach Feature"}
+            </h2>
             <p className="text-gray-600 mb-4">
-              Photo scanning is available for AI Coach subscribers and gym coaches/owners.
+              {isCoach
+                ? "Photo scanning is available for AI Programming subscribers."
+                : "Photo scanning is available for AI Coach subscribers."}
             </p>
             <button
-              onClick={() => router.push("/subscribe")}
+              onClick={() => router.push(isCoach ? "/subscribe?variant=coach" : "/subscribe")}
               className="px-6 py-3 bg-purple-600 text-white font-medium rounded-lg hover:bg-purple-700 transition-colors"
             >
-              Subscribe to AI Coach
+              {isCoach ? "Subscribe to AI Programming" : "Subscribe to AI Coach"}
             </button>
           </div>
         </main>

@@ -52,9 +52,12 @@ export default function Navigation() {
   const myWifeAllowedEmails = ["tyguy4201@gmail.com"];
   const canSeeMyWifeTab = (user?.id && myWifeAllowedUIDs.includes(user.id)) || (user?.email && myWifeAllowedEmails.includes(user.email));
 
-  // Check if user needs to subscribe to AI Coach
-  const hasAISubscription = user?.aiTrainerSubscription?.status === "active" ||
-    user?.aiTrainerSubscription?.status === "trialing";
+  // Check if user needs to subscribe - coaches check aiProgrammingSubscription, athletes check aiTrainerSubscription
+  const relevantSubscription = isGymOwner
+    ? user?.aiProgrammingSubscription
+    : user?.aiTrainerSubscription;
+  const hasAISubscription = relevantSubscription?.status === "active" ||
+    relevantSubscription?.status === "trialing";
 
   const navItems = [
     { href: "/weekly", label: "Home", icon: "🏠" },
@@ -62,7 +65,7 @@ export default function Navigation() {
     { href: "/programming", label: "Programming", icon: "📅" },
     { href: "/workouts", label: "Workouts", icon: "📋" },
     { href: "/profile", label: "Profile", icon: "👤" },
-    ...(!hasAISubscription ? [{ href: "/subscribe", label: "AI Coach", icon: "⚡" }] : []),
+    ...(!hasAISubscription ? [{ href: isGymOwner ? "/subscribe?variant=coach" : "/subscribe", label: isGymOwner ? "AI Programming" : "AI Coach", icon: "⚡" }] : []),
     ...(canSeeSpecialTabs ? [{ href: "/hi-devin", label: "Hi Devin!", icon: "🎉" }] : []),
     ...(canSeeSpecialTabs ? [{ href: "/hi-blake", label: "Hi Blake...", icon: "💀" }] : []),
     ...(canSeeCrystalRenoTabs ? [{ href: "/hi-crystal", label: "Hi Crystal!", icon: "☕" }] : []),

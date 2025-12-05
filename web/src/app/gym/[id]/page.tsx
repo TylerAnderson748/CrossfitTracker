@@ -39,7 +39,7 @@ export default function GymDetailPage() {
   const [leaderboardEntries, setLeaderboardEntries] = useState<LeaderboardEntry[]>([]);
   const [allScheduledWorkouts, setAllScheduledWorkouts] = useState<ScheduledWorkout[]>([]);
   const [loadingData, setLoadingData] = useState(true);
-  const [activeTab, setActiveTab] = useState<"members" | "coaches" | "groups" | "programming" | "requests" | "pricing">("members");
+  const [activeTab, setActiveTab] = useState<"members" | "coaches" | "groups" | "programming" | "requests" | "pricing">("programming");
   const [showAddGroupModal, setShowAddGroupModal] = useState(false);
   const [showDeleteGymModal, setShowDeleteGymModal] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
@@ -188,9 +188,10 @@ export default function GymDetailPage() {
       const gymData = { id: gymDoc.id, ...gymDoc.data() } as Gym;
       setGym(gymData);
 
-      // Fetch members
+      // Fetch members from public profiles (for display purposes)
       const memberPromises = (gymData.memberIds || []).map(async (id) => {
-        const userDoc = await getDoc(doc(db, "users", id));
+        // Read from userProfiles (public) instead of users (private)
+        const userDoc = await getDoc(doc(db, "userProfiles", id));
         if (userDoc.exists()) {
           return { id: userDoc.id, ...userDoc.data() } as AppUser;
         }
@@ -199,9 +200,10 @@ export default function GymDetailPage() {
       const memberResults = await Promise.all(memberPromises);
       setMembers(memberResults.filter(Boolean) as AppUser[]);
 
-      // Fetch coaches
+      // Fetch coaches from public profiles (for display purposes)
       const coachPromises = (gymData.coachIds || []).map(async (id) => {
-        const userDoc = await getDoc(doc(db, "users", id));
+        // Read from userProfiles (public) instead of users (private)
+        const userDoc = await getDoc(doc(db, "userProfiles", id));
         if (userDoc.exists()) {
           return { id: userDoc.id, ...userDoc.data() } as AppUser;
         }
@@ -317,11 +319,12 @@ export default function GymDetailPage() {
           // Fetch users in batches of 10 (Firestore limit for 'in' queries)
           for (let i = 0; i < userIds.length; i += 10) {
             const batch = userIds.slice(i, i + 10);
-            const usersQuery = query(collection(db, "users"), where("__name__", "in", batch));
+            // Read from userProfiles (public data) instead of users (private data)
+            const usersQuery = query(collection(db, "userProfiles"), where("__name__", "in", batch));
             const usersSnapshot = await getDocs(usersQuery);
             usersSnapshot.docs.forEach((doc) => {
               const userData = doc.data();
-              userCacheMap[doc.id] = userData.displayName || userData.name || userData.email || 'Unknown User';
+              userCacheMap[doc.id] = userData.displayName || userData.firstName || 'Unknown User';
             });
           }
           setUserCache(userCacheMap);
@@ -1680,7 +1683,7 @@ export default function GymDetailPage() {
                     userId={user.id}
                     userEmail={user.email}
                     groups={groups}
-                    subscription={user.aiTrainerSubscription}
+                    subscription={user.aiProgrammingSubscription}
                     onPublish={() => {
                       // Refresh workouts after publishing
                       fetchGymData();

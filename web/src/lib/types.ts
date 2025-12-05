@@ -16,8 +16,10 @@ export interface AppUser {
   gymId?: string;
   createdAt: Timestamp;
   hideFromLeaderboards: boolean;
-  // AI Trainer subscription
+  // AI Trainer subscription (for athletes - personalized scaling/recommendations)
   aiTrainerSubscription?: AITrainerSubscription;
+  // AI Programming subscription (for coaches - programming assistant)
+  aiProgrammingSubscription?: AITrainerSubscription;
   // AI Coach preferences and goals
   aiCoachPreferences?: AICoachPreferences;
 }

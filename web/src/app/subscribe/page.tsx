@@ -1,16 +1,18 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { doc, updateDoc, Timestamp } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
 import Navigation from "@/components/Navigation";
 import { AITrainerSubscription, AICoachPreferences } from "@/lib/types";
 
-export default function SubscribePage() {
+function SubscribeContent() {
   const { user, loading, refreshUser } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const variant = searchParams.get("variant") === "coach" ? "coach" : "athlete";
   const [selectedPlan, setSelectedPlan] = useState<"monthly" | "yearly">("monthly");
   const [isProcessing, setIsProcessing] = useState(false);
   const [showGoalsStep, setShowGoalsStep] = useState(false);
@@ -38,7 +40,7 @@ export default function SubscribePage() {
     },
   };
 
-  const features = [
+  const athleteFeatures = [
     { icon: "🎯", text: "Personalized weight recommendations based on YOUR lift history" },
     { icon: "📊", text: "AI analyzes your past WOD performances for smart scaling" },
     { icon: "🏋️", text: "Custom workout suggestions tailored to your fitness level" },
@@ -46,6 +48,16 @@ export default function SubscribePage() {
     { icon: "🤖", text: "Unlimited AI programming conversations" },
     { icon: "📈", text: "Track your progress with intelligent insights" },
   ];
+
+  const coachFeatures = [
+    { icon: "💡", text: "AI drafts programming - you fine-tune and publish" },
+    { icon: "📸", text: "Scan whiteboard photos to instantly digitize workouts" },
+    { icon: "📝", text: "Paste your workouts, AI formats them for the app" },
+    { icon: "✏️", text: "Edit, adjust, or rewrite anything before publishing" },
+    { icon: "🎛️", text: "You stay in control - AI handles the busy work" },
+  ];
+
+  const features = variant === "coach" ? coachFeatures : athleteFeatures;
 
   const handleStartTrial = async () => {
     if (!user) {
@@ -65,11 +77,19 @@ export default function SubscribePage() {
         trialEndsAt: Timestamp.fromDate(trialEndsAt),
       };
 
+      // Save to correct subscription field based on variant
+      const subscriptionField = variant === "coach" ? "aiProgrammingSubscription" : "aiTrainerSubscription";
       await updateDoc(doc(db, "users", user.id), {
-        aiTrainerSubscription: subscription,
+        [subscriptionField]: subscription,
       });
 
-      setShowGoalsStep(true);
+      // Coaches skip the goals step, go straight to programming
+      if (variant === "coach") {
+        await refreshUser();
+        router.push("/programming");
+      } else {
+        setShowGoalsStep(true);
+      }
     } catch (error) {
       console.error("Error starting trial:", error);
       alert("Failed to start trial. Please try again.");
@@ -98,11 +118,19 @@ export default function SubscribePage() {
         endDate: Timestamp.fromDate(endDate),
       };
 
+      // Save to correct subscription field based on variant
+      const subscriptionField = variant === "coach" ? "aiProgrammingSubscription" : "aiTrainerSubscription";
       await updateDoc(doc(db, "users", user.id), {
-        aiTrainerSubscription: subscription,
+        [subscriptionField]: subscription,
       });
 
-      setShowGoalsStep(true);
+      // Coaches skip the goals step, go straight to programming
+      if (variant === "coach") {
+        await refreshUser();
+        router.push("/programming");
+      } else {
+        setShowGoalsStep(true);
+      }
     } catch (error) {
       console.error("Error subscribing:", error);
       alert("Failed to subscribe. Please try again.");
@@ -148,9 +176,12 @@ export default function SubscribePage() {
     router.push("/weekly");
   };
 
-  // Check if user already has an active subscription
-  const hasActiveSubscription = user?.aiTrainerSubscription?.status === "active" ||
-    user?.aiTrainerSubscription?.status === "trialing";
+  // Check if user already has an active subscription for the relevant product
+  const relevantSubscription = variant === "coach"
+    ? user?.aiProgrammingSubscription
+    : user?.aiTrainerSubscription;
+  const hasActiveSubscription = relevantSubscription?.status === "active" ||
+    relevantSubscription?.status === "trialing";
 
   if (loading) {
     return (
@@ -171,8 +202,12 @@ export default function SubscribePage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <h1 className="text-3xl font-bold text-white mb-2">Welcome to AI Coach!</h1>
-            <p className="text-purple-200">Let&apos;s personalize your experience</p>
+            <h1 className="text-3xl font-bold text-white mb-2">
+              {variant === "coach" ? "AI Assistant Activated!" : "Welcome to AI Coach!"}
+            </h1>
+            <p className="text-purple-200">
+              {variant === "coach" ? "You're ready to start creating programming" : "Let's personalize your experience"}
+            </p>
           </div>
 
           {/* Goals Form */}
@@ -285,12 +320,20 @@ export default function SubscribePage() {
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-purple-600 to-indigo-600 rounded-full mb-4">
             <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              {variant === "coach" ? (
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+              ) : (
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              )}
             </svg>
           </div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">AI Coach Subscription</h1>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+            {variant === "coach" ? "AI Programming Assistant" : "AI Coach Subscription"}
+          </h1>
           <p className="text-gray-600 max-w-xl mx-auto">
-            Get personalized scaling and weight recommendations powered by AI that learns from your workout history
+            {variant === "coach"
+              ? "Let AI handle the busy work while you stay in control of your gym's programming"
+              : "Get personalized scaling and weight recommendations powered by AI that learns from your workout history"}
           </p>
         </div>
 
@@ -304,20 +347,20 @@ export default function SubscribePage() {
             </div>
             <h2 className="text-2xl font-bold text-gray-900 mb-2">You&apos;re Already Subscribed!</h2>
             <p className="text-gray-600 mb-4">
-              {user?.aiTrainerSubscription?.status === "trialing"
-                ? "You're currently on a free trial. Enjoy your AI Coach!"
-                : "You have an active AI Coach subscription."}
+              {relevantSubscription?.status === "trialing"
+                ? `You're currently on a free trial. Enjoy your ${variant === "coach" ? "AI Programming Assistant" : "AI Coach"}!`
+                : `You have an active ${variant === "coach" ? "AI Programming" : "AI Coach"} subscription.`}
             </p>
-            {user?.aiTrainerSubscription?.trialEndsAt && (
+            {relevantSubscription?.trialEndsAt && (
               <p className="text-sm text-purple-600 mb-4">
-                Trial ends: {user.aiTrainerSubscription.trialEndsAt.toDate().toLocaleDateString()}
+                Trial ends: {relevantSubscription.trialEndsAt.toDate().toLocaleDateString()}
               </p>
             )}
             <button
-              onClick={() => router.push("/weekly")}
+              onClick={() => router.push(variant === "coach" ? "/programming" : "/weekly")}
               className="px-6 py-3 bg-purple-600 text-white font-medium rounded-lg hover:bg-purple-700 transition-colors"
             >
-              Go to My Training
+              {variant === "coach" ? "Go to Programming" : "Go to My Training"}
             </button>
           </div>
         ) : (
@@ -334,18 +377,112 @@ export default function SubscribePage() {
                 ))}
               </div>
 
-              {/* Sample insight */}
-              <div className="mt-6 bg-gradient-to-br from-purple-50 to-indigo-50 rounded-lg p-4 border border-purple-100">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-yellow-500">⭐</span>
-                  <span className="font-semibold text-purple-900">Sample AI Insight</span>
+              {/* Sample insight / Visual example */}
+              {variant === "coach" ? (
+                <div className="mt-6 space-y-4">
+                  {/* Prompt example */}
+                  <div className="bg-gray-100 rounded-lg p-3 border border-gray-200">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-purple-600 font-medium text-sm">You type:</span>
+                    </div>
+                    <p className="text-gray-800 font-medium">&quot;Give me 3 days of strength-focused programming&quot;</p>
+                  </div>
+
+                  {/* AI generates arrow */}
+                  <div className="flex justify-center">
+                    <div className="flex items-center gap-2 text-purple-600">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                      </svg>
+                      <span className="font-semibold text-sm">AI Generates</span>
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                      </svg>
+                    </div>
+                  </div>
+
+                  {/* 3-day preview */}
+                  <div className="bg-gradient-to-br from-purple-900 to-indigo-900 rounded-xl p-4">
+                    <div className="grid grid-cols-3 gap-3">
+                      {/* Monday */}
+                      <div className="bg-white/10 backdrop-blur rounded-lg p-3">
+                        <p className="font-bold text-white text-sm mb-2">Monday</p>
+                        <div className="space-y-2 text-xs">
+                          <div>
+                            <span className="inline-block px-1.5 py-0.5 bg-orange-500/40 text-orange-200 rounded text-[10px] font-medium">WARMUP</span>
+                            <p className="text-purple-100 mt-0.5">3 Rounds: Row, Lunges, PVC Pass-throughs</p>
+                          </div>
+                          <div>
+                            <span className="inline-block px-1.5 py-0.5 bg-yellow-500/40 text-yellow-200 rounded text-[10px] font-medium">STRENGTH</span>
+                            <p className="text-purple-100 mt-0.5">Back Squat 5x5 @ 75%</p>
+                          </div>
+                          <div>
+                            <span className="inline-block px-1.5 py-0.5 bg-red-500/40 text-red-200 rounded text-[10px] font-medium">WOD</span>
+                            <p className="text-purple-100 mt-0.5">12min AMRAP: Wall Balls, Box Jumps</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Tuesday */}
+                      <div className="bg-white/10 backdrop-blur rounded-lg p-3">
+                        <p className="font-bold text-white text-sm mb-2">Tuesday</p>
+                        <div className="space-y-2 text-xs">
+                          <div>
+                            <span className="inline-block px-1.5 py-0.5 bg-orange-500/40 text-orange-200 rounded text-[10px] font-medium">WARMUP</span>
+                            <p className="text-purple-100 mt-0.5">EMOM 6: Burpees, Air Squats</p>
+                          </div>
+                          <div>
+                            <span className="inline-block px-1.5 py-0.5 bg-green-500/40 text-green-200 rounded text-[10px] font-medium">SKILL</span>
+                            <p className="text-purple-100 mt-0.5">Muscle-up progressions</p>
+                          </div>
+                          <div>
+                            <span className="inline-block px-1.5 py-0.5 bg-yellow-500/40 text-yellow-200 rounded text-[10px] font-medium">STRENGTH</span>
+                            <p className="text-purple-100 mt-0.5">Deadlift 5-3-1+</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Wednesday */}
+                      <div className="bg-white/10 backdrop-blur rounded-lg p-3">
+                        <p className="font-bold text-white text-sm mb-2">Wednesday</p>
+                        <div className="space-y-2 text-xs">
+                          <div>
+                            <span className="inline-block px-1.5 py-0.5 bg-orange-500/40 text-orange-200 rounded text-[10px] font-medium">WARMUP</span>
+                            <p className="text-purple-100 mt-0.5">2 Rounds: Jump Rope, Inch Worms</p>
+                          </div>
+                          <div>
+                            <span className="inline-block px-1.5 py-0.5 bg-yellow-500/40 text-yellow-200 rounded text-[10px] font-medium">STRENGTH</span>
+                            <p className="text-purple-100 mt-0.5">Bench Press 5x5 @ 70%</p>
+                          </div>
+                          <div>
+                            <span className="inline-block px-1.5 py-0.5 bg-red-500/40 text-red-200 rounded text-[10px] font-medium">WOD</span>
+                            <p className="text-purple-100 mt-0.5">&quot;Cindy&quot; - 20min AMRAP</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <p className="text-center text-purple-300 text-xs mt-3">+ Scaling options, coaching notes, and stimulus for each workout</p>
+                  </div>
+
+                  {/* Edit callout */}
+                  <div className="flex items-center justify-center gap-2 text-sm text-gray-600">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                    </svg>
+                    <span>Review, edit, then publish with one click</span>
+                  </div>
                 </div>
-                <p className="text-sm text-purple-800 italic">
-                  &ldquo;Based on your Back Squat PR of 225lb and recent Clean work at 155lb,
-                  I recommend trying 135lb thrusters today. This should let you maintain
-                  consistent sets while pushing your conditioning.&rdquo;
-                </p>
-              </div>
+              ) : (
+                <div className="mt-6 bg-gradient-to-br from-purple-50 to-indigo-50 rounded-lg p-4 border border-purple-100">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-yellow-500">⭐</span>
+                    <span className="font-semibold text-purple-900">Sample AI Insight</span>
+                  </div>
+                  <p className="text-sm text-purple-800 italic">
+                    &quot;Based on your Back Squat PR of 225lb and recent Clean work at 155lb, I recommend trying 135lb thrusters today. This should let you maintain consistent sets while pushing your conditioning.&quot;
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Pricing Section */}
@@ -453,33 +590,76 @@ export default function SubscribePage() {
         <div className="mt-12 bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <h2 className="text-xl font-bold text-gray-900 mb-6">Frequently Asked Questions</h2>
           <div className="space-y-4">
-            <div>
-              <h3 className="font-semibold text-gray-900 mb-1">How does the AI Coach work?</h3>
-              <p className="text-gray-600 text-sm">
-                The AI Coach analyzes your workout history, lift PRs, and WOD performances to provide personalized recommendations. It considers your strength levels, recent performance trends, and the specific demands of each workout.
-              </p>
-            </div>
-            <div>
-              <h3 className="font-semibold text-gray-900 mb-1">Can I cancel anytime?</h3>
-              <p className="text-gray-600 text-sm">
-                Yes! You can cancel your subscription at any time. Your access will continue until the end of your billing period.
-              </p>
-            </div>
-            <div>
-              <h3 className="font-semibold text-gray-900 mb-1">What happens after my free trial?</h3>
-              <p className="text-gray-600 text-sm">
-                After your 7-day free trial, you&apos;ll be asked to subscribe to continue using the AI Coach features. You won&apos;t be charged automatically.
-              </p>
-            </div>
-            <div>
-              <h3 className="font-semibold text-gray-900 mb-1">Is my data secure?</h3>
-              <p className="text-gray-600 text-sm">
-                Absolutely. Your workout data is securely stored and only used to provide you with personalized recommendations. We never share your data with third parties.
-              </p>
-            </div>
+            {variant === "coach" ? (
+              <>
+                <div>
+                  <h3 className="font-semibold text-gray-900 mb-1">How does AI Programming work?</h3>
+                  <p className="text-gray-600 text-sm">
+                    Tell the AI what kind of programming you want (strength focus, conditioning, skills work, etc.) and it generates complete workouts with warm-ups, lifts, skills, WODs, and cooldowns. You review, edit, and publish.
+                  </p>
+                </div>
+                <div>
+                  <h3 className="font-semibold text-gray-900 mb-1">Do I lose control of my programming?</h3>
+                  <p className="text-gray-600 text-sm">
+                    Never. The AI is your assistant, not your replacement. Every workout goes through you before it&apos;s published. Edit anything, rewrite sections, or reject entirely.
+                  </p>
+                </div>
+                <div>
+                  <h3 className="font-semibold text-gray-900 mb-1">Can I scan my existing whiteboard?</h3>
+                  <p className="text-gray-600 text-sm">
+                    Yes! Take a photo of your whiteboard and the AI will digitize it into the app format - complete with sections, scaling options, and notes.
+                  </p>
+                </div>
+                <div>
+                  <h3 className="font-semibold text-gray-900 mb-1">Can I cancel anytime?</h3>
+                  <p className="text-gray-600 text-sm">
+                    Yes! You can cancel your subscription at any time. Your access will continue until the end of your billing period.
+                  </p>
+                </div>
+              </>
+            ) : (
+              <>
+                <div>
+                  <h3 className="font-semibold text-gray-900 mb-1">How does the AI Coach work?</h3>
+                  <p className="text-gray-600 text-sm">
+                    The AI Coach analyzes your workout history, lift PRs, and WOD performances to provide personalized recommendations. It considers your strength levels, recent performance trends, and the specific demands of each workout.
+                  </p>
+                </div>
+                <div>
+                  <h3 className="font-semibold text-gray-900 mb-1">Can I cancel anytime?</h3>
+                  <p className="text-gray-600 text-sm">
+                    Yes! You can cancel your subscription at any time. Your access will continue until the end of your billing period.
+                  </p>
+                </div>
+                <div>
+                  <h3 className="font-semibold text-gray-900 mb-1">What happens after my free trial?</h3>
+                  <p className="text-gray-600 text-sm">
+                    After your 7-day free trial, you&apos;ll be asked to subscribe to continue using the AI Coach features. You won&apos;t be charged automatically.
+                  </p>
+                </div>
+                <div>
+                  <h3 className="font-semibold text-gray-900 mb-1">Is my data secure?</h3>
+                  <p className="text-gray-600 text-sm">
+                    Absolutely. Your workout data is securely stored and only used to provide you with personalized recommendations. We never share your data with third parties.
+                  </p>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </main>
     </div>
+  );
+}
+
+export default function SubscribePage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-blue-50 flex items-center justify-center">
+        <div className="animate-pulse text-purple-600">Loading...</div>
+      </div>
+    }>
+      <SubscribeContent />
+    </Suspense>
   );
 }
