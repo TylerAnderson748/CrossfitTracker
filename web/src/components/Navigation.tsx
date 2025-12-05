@@ -54,7 +54,7 @@ export default function Navigation() {
 
   // Hi Dan tab - supercross & jiu-jitsu themed
   const danAllowedEmails = ["indi@user.com", "tyguy4201@gmail.com"];
-  const canSeeDanTab = user?.email && danAllowedEmails.includes(user.email);
+  const canSeeDanTab = user?.email && danAllowedEmails.some(e => e.toLowerCase() === user.email?.toLowerCase());
 
   // Check if user needs to subscribe - coaches check aiProgrammingSubscription, athletes check aiTrainerSubscription
   const relevantSubscription = isGymOwner
