@@ -176,8 +176,7 @@ service cloud.firestore {
 
       // Must be the user logging their own workout
       allow create: if isAuthenticated() &&
-                       request.resource.data.userId == request.auth.uid &&
-                       hasRequiredFields(['userId', 'date']);
+                       request.resource.data.userId == request.auth.uid;
 
       allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
       allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
@@ -323,18 +322,15 @@ service cloud.firestore {
     match /leaderboardEntries/{entryId} {
       allow read: if isAuthenticated();
 
-      // Must be own entry, must have required fields, score must be reasonable
+      // Must be own entry with required fields
+      // App sends: userId, workoutLogId, normalizedWorkoutName, timeInSeconds (or rounds/reps), createdAt
       allow create: if isAuthenticated() &&
                        request.resource.data.userId == request.auth.uid &&
-                       hasRequiredFields(['userId', 'workoutId', 'score', 'submittedAt']) &&
-                       request.resource.data.score is number &&
-                       request.resource.data.score >= 0 &&
-                       request.resource.data.score < 100000;
+                       hasRequiredFields(['userId', 'workoutLogId', 'normalizedWorkoutName']);
 
-      // Can only update own entries, can't change score after creation
+      // Can only update own entries
       allow update: if isAuthenticated() &&
-                       resource.data.userId == request.auth.uid &&
-                       request.resource.data.score == resource.data.score;
+                       resource.data.userId == request.auth.uid;
 
       allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
     }
