@@ -22,6 +22,10 @@ export interface AppUser {
   aiProgrammingSubscription?: AITrainerSubscription;
   // AI Coach preferences and goals
   aiCoachPreferences?: AICoachPreferences;
+  // Individual subscription (for users not in a gym)
+  individualSubscription?: IndividualSubscription;
+  // Flag to indicate if user has AI Coach via their gym
+  gymAICoachEnabled?: boolean;
 }
 
 // AI Coach user preferences
@@ -243,6 +247,8 @@ export interface Gym {
   // Pricing settings (mockup)
   pricingEnabled?: boolean;
   defaultPricingTierId?: string;
+  // Gym subscription (platform fees)
+  subscription?: GymSubscription;
 }
 
 // Group types
@@ -399,6 +405,60 @@ export interface AIProgrammingPreferences {
   programmingStyle: string; // e.g., "Mayhem", "CompTrain", "HWPO", "Custom"
   additionalRules: string; // Any other rules or preferences
   updatedAt: Timestamp;
+}
+
+// =========================
+// SUBSCRIPTION & PRICING TYPES
+// =========================
+
+// Gym Plan Types
+export type GymPlanType = "base" | "ai_programmer";
+
+export interface GymSubscription {
+  plan: GymPlanType;
+  status: "active" | "canceled" | "past_due" | "trialing";
+  aiProgrammerEnabled: boolean;  // +$100/mo add-on
+  aiCoachEnabled: boolean;       // Enables $1/member/mo AI Coach for all members
+  aiCoachMemberCount?: number;   // Number of members with AI Coach enabled
+  startDate?: Timestamp;
+  currentPeriodEnd?: Timestamp;
+  stripeCustomerId?: string;
+  stripeSubscriptionId?: string;
+}
+
+// Individual User Subscription Flags
+export interface IndividualSubscription {
+  isIndividual: boolean;           // true if user is not affiliated with a gym
+  aiCoachEnabled: boolean;         // $9.99/mo personal AI Coach subscription
+  externalProgrammingEnabled: boolean; // $50/mo for external programming import
+  aiProgrammerEnabled: boolean;    // $100/mo for AI-generated workouts
+  status: "active" | "canceled" | "past_due" | "trialing";
+  startDate?: Timestamp;
+  currentPeriodEnd?: Timestamp;
+  stripeCustomerId?: string;
+  stripeSubscriptionId?: string;
+}
+
+// Pricing Constants
+export const PRICING = {
+  // Gym pricing
+  GYM_BASE: 50,           // $50/mo base gym subscription
+  GYM_AI_PROGRAMMER: 100, // +$100/mo AI Programmer add-on for gyms
+  GYM_AI_COACH_PER_MEMBER: 1, // $1/member/mo for AI Coach
+
+  // Individual pricing
+  INDIVIDUAL_AI_COACH: 9.99,      // $9.99/mo personal AI Coach
+  INDIVIDUAL_EXTERNAL_PROGRAMMING: 50, // $50/mo external programming import
+  INDIVIDUAL_AI_PROGRAMMER: 100,  // $100/mo AI-generated workouts
+} as const;
+
+// Feature Access Helpers
+export interface FeatureAccess {
+  canUseAIProgrammer: boolean;
+  canUseAICoach: boolean;
+  canImportExternalProgramming: boolean;
+  isGymOwner: boolean;
+  isGymMember: boolean;
 }
 
 

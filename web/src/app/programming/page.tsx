@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { collection, getDocs, doc, updateDoc } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
-import { Gym } from "@/lib/types";
+import { Gym, PRICING } from "@/lib/types";
 import Navigation from "@/components/Navigation";
 
 type ProgrammingPath = "join-gym" | "ai-programmer" | "external-programming" | "own-gym" | null;
@@ -430,7 +430,7 @@ export default function ProgrammingPage() {
                     onClick={() => router.push("/subscribe?variant=programmer")}
                     className="px-6 py-3 bg-white text-purple-700 font-bold rounded-lg hover:bg-purple-50 transition-colors"
                   >
-                    Subscribe - $100/mo
+                    Subscribe - ${PRICING.INDIVIDUAL_AI_PROGRAMMER}/mo
                   </button>
                   <span className="text-purple-200 text-sm">Full AI-powered programming</span>
                 </div>
@@ -452,7 +452,7 @@ export default function ProgrammingPage() {
                 </div>
               </div>
               <div className="text-right">
-                <div className="text-2xl font-bold">$50</div>
+                <div className="text-2xl font-bold">${PRICING.INDIVIDUAL_EXTERNAL_PROGRAMMING}</div>
                 <div className="text-orange-200 text-xs">/month</div>
               </div>
             </div>
@@ -497,7 +497,7 @@ export default function ProgrammingPage() {
               onClick={() => router.push("/subscribe?variant=external")}
               className="w-full px-6 py-3 bg-white text-orange-600 font-bold rounded-lg hover:bg-orange-50 transition-colors"
             >
-              Subscribe - $50/mo
+              Subscribe - ${PRICING.INDIVIDUAL_EXTERNAL_PROGRAMMING}/mo
             </button>
 
             {/* Future Integrations Note */}
@@ -522,7 +522,7 @@ export default function ProgrammingPage() {
                 </div>
               </div>
               <div className="text-right">
-                <div className="text-2xl font-bold">$50</div>
+                <div className="text-2xl font-bold">${PRICING.GYM_BASE}</div>
                 <div className="text-gray-400 text-xs">/month base</div>
               </div>
             </div>
@@ -556,15 +556,15 @@ export default function ProgrammingPage() {
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between items-center">
                   <span className="text-gray-300">Base gym subscription</span>
-                  <span className="font-semibold">$50/mo</span>
+                  <span className="font-semibold">${PRICING.GYM_BASE}/mo</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-gray-300">+ AI Programmer add-on</span>
-                  <span className="font-semibold">+$100/mo</span>
+                  <span className="font-semibold">+${PRICING.GYM_AI_PROGRAMMER}/mo</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-gray-300">+ AI Coach for members</span>
-                  <span className="font-semibold">+$1/member/mo</span>
+                  <span className="font-semibold">+${PRICING.GYM_AI_COACH_PER_MEMBER}/member/mo</span>
                 </div>
               </div>
             </div>
@@ -598,7 +598,7 @@ export default function ProgrammingPage() {
                   onClick={() => router.push("/subscribe?variant=gym")}
                   className="w-full mt-4 px-6 py-3 bg-white/20 text-white font-semibold rounded-lg hover:bg-white/30 transition-colors"
                 >
-                  + Create Another Gym - $50/mo
+                  + Create Another Gym - ${PRICING.GYM_BASE}/mo
                 </button>
               </div>
             ) : (
@@ -606,7 +606,7 @@ export default function ProgrammingPage() {
                 onClick={() => router.push("/subscribe?variant=gym")}
                 className="w-full px-6 py-3 bg-white text-gray-900 font-bold rounded-lg hover:bg-gray-100 transition-colors"
               >
-                Create Your Gym - $50/mo
+                Create Your Gym - ${PRICING.GYM_BASE}/mo
               </button>
             )}
           </div>
@@ -726,7 +726,7 @@ export default function ProgrammingPage() {
                   {/* Individual Pricing */}
                   <div className="bg-white/10 rounded-xl p-4 border border-white/20">
                     <div className="text-xs text-green-200 uppercase tracking-wide mb-1">Individual</div>
-                    <div className="text-2xl font-bold mb-2">$9.99<span className="text-sm font-normal text-green-200">/mo</span></div>
+                    <div className="text-2xl font-bold mb-2">${PRICING.INDIVIDUAL_AI_COACH}<span className="text-sm font-normal text-green-200">/mo</span></div>
                     <button
                       onClick={() => router.push("/subscribe?variant=coach")}
                       className="w-full px-4 py-2 bg-white text-green-700 font-semibold rounded-lg hover:bg-green-50 transition-colors text-sm"
@@ -738,7 +738,7 @@ export default function ProgrammingPage() {
                   {/* Gym Pricing */}
                   <div className="bg-white/10 rounded-xl p-4 border border-white/20">
                     <div className="text-xs text-green-200 uppercase tracking-wide mb-1">For Gyms</div>
-                    <div className="text-2xl font-bold mb-2">$1<span className="text-sm font-normal text-green-200">/member/mo</span></div>
+                    <div className="text-2xl font-bold mb-2">${PRICING.GYM_AI_COACH_PER_MEMBER}<span className="text-sm font-normal text-green-200">/member/mo</span></div>
                     <button
                       onClick={() => router.push("/gym")}
                       className="w-full px-4 py-2 bg-white/20 text-white font-semibold rounded-lg hover:bg-white/30 transition-colors text-sm"
