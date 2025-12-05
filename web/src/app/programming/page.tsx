@@ -8,7 +8,7 @@ import { db } from "@/lib/firebase";
 import { Gym } from "@/lib/types";
 import Navigation from "@/components/Navigation";
 
-type ProgrammingPath = "join-gym" | "ai-programmer" | "external-programming" | "own-gym" | null;
+type ProgrammingPath = "join-gym" | "ai-coach" | "ai-programmer" | "external-programming" | "own-gym" | null;
 
 export default function ProgrammingPage() {
   const { user, loading, switching, refreshUser } = useAuth();
@@ -30,6 +30,7 @@ export default function ProgrammingPage() {
   // Cancel subscription state
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [isCanceling, setIsCanceling] = useState(false);
+  const [cancelType, setCancelType] = useState<"coach" | "programmer">("coach");
 
   useEffect(() => {
     if (!loading && !switching && !user) {
@@ -86,18 +87,23 @@ export default function ProgrammingPage() {
 
   const isCoachOrOwner = user?.role === "coach" || user?.role === "owner";
 
-  // AI Subscription status - coaches use aiProgrammingSubscription, athletes use aiTrainerSubscription
-  const aiSubscription = isCoachOrOwner
-    ? user?.aiProgrammingSubscription
-    : user?.aiTrainerSubscription;
-  const hasActiveAI = aiSubscription?.status === "active" || aiSubscription?.status === "trialing";
+  // AI Coach subscription (for athletes - personal scaling, analysis)
+  const aiCoachSubscription = user?.aiTrainerSubscription;
+  const hasActiveAICoach = aiCoachSubscription?.status === "active" || aiCoachSubscription?.status === "trialing";
+
+  // AI Programmer subscription (for generating workouts)
+  const aiProgrammerSubscription = user?.aiProgrammingSubscription;
+  const hasActiveAIProgrammer = aiProgrammerSubscription?.status === "active" || aiProgrammerSubscription?.status === "trialing";
+
+  // Combined check for active sources summary
+  const hasActiveAI = hasActiveAICoach || hasActiveAIProgrammer;
 
   const handleCancelSubscription = async () => {
     if (!user) return;
 
     setIsCanceling(true);
     try {
-      const subscriptionField = isCoachOrOwner ? "aiProgrammingSubscription" : "aiTrainerSubscription";
+      const subscriptionField = cancelType === "coach" ? "aiTrainerSubscription" : "aiProgrammingSubscription";
       await updateDoc(doc(db, "users", user.id), {
         [`${subscriptionField}.status`]: "canceled",
       });
@@ -109,6 +115,11 @@ export default function ProgrammingPage() {
     } finally {
       setIsCanceling(false);
     }
+  };
+
+  const openCancelModal = (type: "coach" | "programmer") => {
+    setCancelType(type);
+    setShowCancelModal(true);
   };
 
   // Programming path options
@@ -123,10 +134,19 @@ export default function ProgrammingPage() {
       borderColor: "border-blue-200",
     },
     {
+      id: "ai-coach" as ProgrammingPath,
+      icon: "🎯",
+      title: "AI Coach",
+      description: "Personal scaling, workout analysis, and coaching tips",
+      color: "from-green-500 to-emerald-600",
+      bgColor: "bg-green-50",
+      borderColor: "border-green-200",
+    },
+    {
       id: "ai-programmer" as ProgrammingPath,
       icon: "🤖",
-      title: "Use AI Programmer",
-      description: "Get personalized AI-generated workouts tailored to your goals",
+      title: "AI Programmer",
+      description: "Generate custom workouts tailored to your equipment and goals",
       color: "from-purple-500 to-indigo-600",
       bgColor: "bg-purple-50",
       borderColor: "border-purple-200",
@@ -277,6 +297,118 @@ export default function ProgrammingPage() {
           </div>
         )}
 
+        {/* AI Coach Section */}
+        {selectedPath === "ai-coach" && (
+          <div className="mb-8 bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl p-6 text-white shadow-lg animate-in slide-in-from-top-2 duration-300">
+            <div className="flex items-start justify-between mb-6">
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 bg-white/20 rounded-xl flex items-center justify-center">
+                  <span className="text-3xl">🎯</span>
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold">AI Coach</h3>
+                  <p className="text-green-100 text-sm mt-1">
+                    Personal coaching to help you perform your best
+                  </p>
+                </div>
+              </div>
+              {hasActiveAICoach && (
+                <span className="px-3 py-1 bg-white/20 text-white text-sm font-medium rounded-full border border-white/30">
+                  Active
+                </span>
+              )}
+            </div>
+
+            {hasActiveAICoach ? (
+              <>
+                <div className="grid grid-cols-2 gap-3 mb-6">
+                  <div className="bg-white/10 rounded-xl p-4">
+                    <div className="text-2xl mb-2">🎯</div>
+                    <h4 className="font-semibold text-sm">Personal Scaling</h4>
+                    <p className="text-green-100 text-xs mt-1">Workouts adjusted to your level</p>
+                  </div>
+                  <div className="bg-white/10 rounded-xl p-4">
+                    <div className="text-2xl mb-2">📊</div>
+                    <h4 className="font-semibold text-sm">Performance Analysis</h4>
+                    <p className="text-green-100 text-xs mt-1">Track progress & get insights</p>
+                  </div>
+                  <div className="bg-white/10 rounded-xl p-4">
+                    <div className="text-2xl mb-2">💡</div>
+                    <h4 className="font-semibold text-sm">Coaching Tips</h4>
+                    <p className="text-green-100 text-xs mt-1">Movement cues & strategy</p>
+                  </div>
+                  <div className="bg-white/10 rounded-xl p-4">
+                    <div className="text-2xl mb-2">📸</div>
+                    <h4 className="font-semibold text-sm">Scan Workouts</h4>
+                    <p className="text-green-100 text-xs mt-1">Photo-to-workout conversion</p>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    onClick={() => router.push("/ai-coach/scan")}
+                    className="px-4 py-2 bg-white text-green-700 font-semibold rounded-lg hover:bg-green-50 transition-colors flex items-center gap-2"
+                  >
+                    <span>📸</span> Scan Workout
+                  </button>
+                  <button
+                    onClick={() => router.push("/weekly")}
+                    className="px-4 py-2 bg-white/20 text-white font-semibold rounded-lg hover:bg-white/30 transition-colors flex items-center gap-2"
+                  >
+                    <span>📅</span> View Workouts
+                  </button>
+                </div>
+
+                {aiCoachSubscription && (
+                  <div className="mt-6 pt-4 border-t border-white/20">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-green-100">
+                        {aiCoachSubscription.status === "trialing" ? "Trial ends" : "Renews"}{" "}
+                        {(aiCoachSubscription.status === "trialing"
+                          ? aiCoachSubscription.trialEndsAt?.toDate?.().toLocaleDateString()
+                          : aiCoachSubscription.endDate?.toDate?.().toLocaleDateString()) || "N/A"}
+                      </span>
+                      <button
+                        onClick={() => openCancelModal("coach")}
+                        className="text-red-200 hover:text-red-100 hover:underline"
+                      >
+                        Cancel Subscription
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <ul className="space-y-2 text-sm mb-6">
+                  <li className="flex items-center gap-2">
+                    <span className="text-white">✓</span> Personalized workout scaling based on your abilities
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <span className="text-white">✓</span> AI-powered performance analysis and insights
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <span className="text-white">✓</span> Movement tips and strategy recommendations
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <span className="text-white">✓</span> Scan photos of workouts to add them instantly
+                  </li>
+                </ul>
+                <div className="flex items-center gap-4">
+                  <button
+                    onClick={() => router.push("/subscribe")}
+                    className="px-6 py-3 bg-white text-green-700 font-bold rounded-lg hover:bg-green-50 transition-colors"
+                  >
+                    Start Free Trial
+                  </button>
+                  <span className="text-green-100 text-sm">7 days free, then $9.99/month</span>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* AI Programmer Section */}
         {selectedPath === "ai-programmer" && (
           <div className="mb-8 bg-gradient-to-br from-purple-600 to-indigo-700 rounded-2xl p-6 text-white shadow-lg animate-in slide-in-from-top-2 duration-300">
             <div className="flex items-start justify-between mb-6">
@@ -287,11 +419,11 @@ export default function ProgrammingPage() {
                 <div>
                   <h3 className="text-xl font-bold">AI Programmer</h3>
                   <p className="text-purple-200 text-sm mt-1">
-                    Personalized workouts powered by artificial intelligence
+                    Generate custom workouts tailored to you
                   </p>
                 </div>
               </div>
-              {hasActiveAI && (
+              {hasActiveAIProgrammer && (
                 <span className="px-3 py-1 bg-green-400/20 text-green-100 text-sm font-medium rounded-full border border-green-400/30">
                   Active
                 </span>
@@ -321,23 +453,23 @@ export default function ProgrammingPage() {
               </label>
             </div>
 
-            {hasActiveAI ? (
+            {hasActiveAIProgrammer ? (
               <>
                 <div className="grid grid-cols-2 gap-3 mb-6">
                   <div className="bg-white/10 rounded-xl p-4">
+                    <div className="text-2xl mb-2">🏋️</div>
+                    <h4 className="font-semibold text-sm">Custom WODs</h4>
+                    <p className="text-purple-200 text-xs mt-1">AI-generated daily workouts</p>
+                  </div>
+                  <div className="bg-white/10 rounded-xl p-4">
+                    <div className="text-2xl mb-2">📅</div>
+                    <h4 className="font-semibold text-sm">Weekly Programming</h4>
+                    <p className="text-purple-200 text-xs mt-1">Balanced training cycles</p>
+                  </div>
+                  <div className="bg-white/10 rounded-xl p-4">
                     <div className="text-2xl mb-2">🎯</div>
-                    <h4 className="font-semibold text-sm">Personal Scaling</h4>
-                    <p className="text-purple-200 text-xs mt-1">AI-powered workout modifications</p>
-                  </div>
-                  <div className="bg-white/10 rounded-xl p-4">
-                    <div className="text-2xl mb-2">📸</div>
-                    <h4 className="font-semibold text-sm">Scan Workouts</h4>
-                    <p className="text-purple-200 text-xs mt-1">Photo-to-workout conversion</p>
-                  </div>
-                  <div className="bg-white/10 rounded-xl p-4">
-                    <div className="text-2xl mb-2">📊</div>
-                    <h4 className="font-semibold text-sm">Smart Analysis</h4>
-                    <p className="text-purple-200 text-xs mt-1">Performance insights & tips</p>
+                    <h4 className="font-semibold text-sm">Goal-Focused</h4>
+                    <p className="text-purple-200 text-xs mt-1">Workouts for your objectives</p>
                   </div>
                   <div className="bg-white/10 rounded-xl p-4">
                     <div className="text-2xl mb-2">🏠</div>
@@ -348,30 +480,24 @@ export default function ProgrammingPage() {
 
                 <div className="flex flex-wrap gap-3">
                   <button
-                    onClick={() => router.push("/ai-coach/scan")}
+                    onClick={() => router.push("/weekly")}
                     className="px-4 py-2 bg-white text-purple-700 font-semibold rounded-lg hover:bg-purple-50 transition-colors flex items-center gap-2"
                   >
-                    <span>📸</span> Scan Workout
-                  </button>
-                  <button
-                    onClick={() => router.push("/weekly")}
-                    className="px-4 py-2 bg-white/20 text-white font-semibold rounded-lg hover:bg-white/30 transition-colors flex items-center gap-2"
-                  >
-                    <span>🏠</span> View Workouts
+                    <span>📅</span> View Workouts
                   </button>
                 </div>
 
-                {aiSubscription && (
+                {aiProgrammerSubscription && (
                   <div className="mt-6 pt-4 border-t border-white/20">
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-purple-200">
-                        {aiSubscription.status === "trialing" ? "Trial ends" : "Renews"}{" "}
-                        {(aiSubscription.status === "trialing"
-                          ? aiSubscription.trialEndsAt?.toDate?.().toLocaleDateString()
-                          : aiSubscription.endDate?.toDate?.().toLocaleDateString()) || "N/A"}
+                        {aiProgrammerSubscription.status === "trialing" ? "Trial ends" : "Renews"}{" "}
+                        {(aiProgrammerSubscription.status === "trialing"
+                          ? aiProgrammerSubscription.trialEndsAt?.toDate?.().toLocaleDateString()
+                          : aiProgrammerSubscription.endDate?.toDate?.().toLocaleDateString()) || "N/A"}
                       </span>
                       <button
-                        onClick={() => setShowCancelModal(true)}
+                        onClick={() => openCancelModal("programmer")}
                         className="text-red-300 hover:text-red-200 hover:underline"
                       >
                         Cancel Subscription
@@ -384,21 +510,21 @@ export default function ProgrammingPage() {
               <>
                 <ul className="space-y-2 text-sm mb-6">
                   <li className="flex items-center gap-2">
-                    <span className="text-green-300">✓</span> Personalized workout scaling based on your abilities
+                    <span className="text-green-300">✓</span> AI-generated custom workouts daily or weekly
                   </li>
                   <li className="flex items-center gap-2">
-                    <span className="text-green-300">✓</span> Scan photos of workouts to add them instantly
+                    <span className="text-green-300">✓</span> Balanced programming across all fitness domains
                   </li>
                   <li className="flex items-center gap-2">
-                    <span className="text-green-300">✓</span> AI-powered performance analysis and tips
+                    <span className="text-green-300">✓</span> Goal-focused training (strength, endurance, competition)
                   </li>
                   <li className="flex items-center gap-2">
-                    <span className="text-green-300">✓</span> {hasHomeGym ? "Workouts customized to your home gym equipment" : "Generate custom programming with AI"}
+                    <span className="text-green-300">✓</span> {hasHomeGym ? "Workouts customized to your home gym equipment" : "Works with any gym setup"}
                   </li>
                 </ul>
                 <div className="flex items-center gap-4">
                   <button
-                    onClick={() => router.push(isCoachOrOwner ? "/subscribe?variant=coach" : "/subscribe")}
+                    onClick={() => router.push("/subscribe?variant=programmer")}
                     className="px-6 py-3 bg-white text-purple-700 font-bold rounded-lg hover:bg-purple-50 transition-colors"
                   >
                     Start Free Trial
@@ -554,7 +680,16 @@ export default function ProgrammingPage() {
                   <span className="px-2 py-1 bg-green-100 text-green-700 text-xs font-medium rounded-full">Active</span>
                 </div>
               ))}
-              {hasActiveAI && (
+              {hasActiveAICoach && (
+                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl">🎯</span>
+                    <span className="font-medium text-gray-900">AI Coach</span>
+                  </div>
+                  <span className="px-2 py-1 bg-green-100 text-green-700 text-xs font-medium rounded-full">Active</span>
+                </div>
+              )}
+              {hasActiveAIProgrammer && (
                 <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
                   <div className="flex items-center gap-3">
                     <span className="text-xl">🤖</span>
@@ -661,8 +796,8 @@ export default function ProgrammingPage() {
               </div>
               <h2 className="text-xl font-bold text-gray-900 mb-2">Cancel Subscription?</h2>
               <p className="text-gray-600">
-                Are you sure you want to cancel your AI Programmer subscription?
-                You&apos;ll lose access to all AI features immediately.
+                Are you sure you want to cancel your {cancelType === "coach" ? "AI Coach" : "AI Programmer"} subscription?
+                You&apos;ll lose access to {cancelType === "coach" ? "personal scaling and coaching" : "AI-generated workouts"} immediately.
               </p>
             </div>
 
