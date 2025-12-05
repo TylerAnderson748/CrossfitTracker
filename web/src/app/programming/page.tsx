@@ -8,7 +8,7 @@ import { db } from "@/lib/firebase";
 import { Gym } from "@/lib/types";
 import Navigation from "@/components/Navigation";
 
-type ProgrammingPath = "join-gym" | "ai-coach" | "ai-programmer" | "external-programming" | "own-gym" | null;
+type ProgrammingPath = "join-gym" | "ai-programmer" | "external-programming" | "own-gym" | null;
 
 export default function ProgrammingPage() {
   const { user, loading, switching, refreshUser } = useAuth();
@@ -85,8 +85,6 @@ export default function ProgrammingPage() {
       )
     : availableGyms;
 
-  const isCoachOrOwner = user?.role === "coach" || user?.role === "owner";
-
   // AI Coach subscription (for athletes - personal scaling, analysis)
   const aiCoachSubscription = user?.aiTrainerSubscription;
   const hasActiveAICoach = aiCoachSubscription?.status === "active" || aiCoachSubscription?.status === "trialing";
@@ -94,9 +92,6 @@ export default function ProgrammingPage() {
   // AI Programmer subscription (for generating workouts)
   const aiProgrammerSubscription = user?.aiProgrammingSubscription;
   const hasActiveAIProgrammer = aiProgrammerSubscription?.status === "active" || aiProgrammerSubscription?.status === "trialing";
-
-  // Combined check for active sources summary
-  const hasActiveAI = hasActiveAICoach || hasActiveAIProgrammer;
 
   const handleCancelSubscription = async () => {
     if (!user) return;
@@ -122,8 +117,8 @@ export default function ProgrammingPage() {
     setShowCancelModal(true);
   };
 
-  // Programming path options
-  const pathOptions = [
+  // Workout source options (where you get your programming from)
+  const workoutSourceOptions = [
     {
       id: "join-gym" as ProgrammingPath,
       icon: "🏋️",
@@ -132,15 +127,6 @@ export default function ProgrammingPage() {
       color: "from-blue-500 to-blue-600",
       bgColor: "bg-blue-50",
       borderColor: "border-blue-200",
-    },
-    {
-      id: "ai-coach" as ProgrammingPath,
-      icon: "🎯",
-      title: "AI Coach",
-      description: "Personal scaling, workout analysis, and coaching tips",
-      color: "from-green-500 to-emerald-600",
-      bgColor: "bg-green-50",
-      borderColor: "border-green-200",
     },
     {
       id: "ai-programmer" as ProgrammingPath,
@@ -189,11 +175,11 @@ export default function ProgrammingPage() {
           <p className="text-gray-500">Choose how you want to get your workouts</p>
         </div>
 
-        {/* Programming Path Selection */}
+        {/* Workout Source Selection */}
         <div className="mb-8">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Select Your Workout Source</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {pathOptions.map((option) => (
+            {workoutSourceOptions.map((option) => (
               <button
                 key={option.id}
                 onClick={() => setSelectedPath(selectedPath === option.id ? null : option.id)}
@@ -297,116 +283,6 @@ export default function ProgrammingPage() {
           </div>
         )}
 
-        {/* AI Coach Section */}
-        {selectedPath === "ai-coach" && (
-          <div className="mb-8 bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl p-6 text-white shadow-lg animate-in slide-in-from-top-2 duration-300">
-            <div className="flex items-start justify-between mb-6">
-              <div className="flex items-center gap-4">
-                <div className="w-14 h-14 bg-white/20 rounded-xl flex items-center justify-center">
-                  <span className="text-3xl">🎯</span>
-                </div>
-                <div>
-                  <h3 className="text-xl font-bold">AI Coach</h3>
-                  <p className="text-green-100 text-sm mt-1">
-                    Personal coaching to help you perform your best
-                  </p>
-                </div>
-              </div>
-              {hasActiveAICoach && (
-                <span className="px-3 py-1 bg-white/20 text-white text-sm font-medium rounded-full border border-white/30">
-                  Active
-                </span>
-              )}
-            </div>
-
-            {hasActiveAICoach ? (
-              <>
-                <div className="grid grid-cols-2 gap-3 mb-6">
-                  <div className="bg-white/10 rounded-xl p-4">
-                    <div className="text-2xl mb-2">🎯</div>
-                    <h4 className="font-semibold text-sm">Personal Scaling</h4>
-                    <p className="text-green-100 text-xs mt-1">Workouts adjusted to your level</p>
-                  </div>
-                  <div className="bg-white/10 rounded-xl p-4">
-                    <div className="text-2xl mb-2">📊</div>
-                    <h4 className="font-semibold text-sm">Performance Analysis</h4>
-                    <p className="text-green-100 text-xs mt-1">Track progress & get insights</p>
-                  </div>
-                  <div className="bg-white/10 rounded-xl p-4">
-                    <div className="text-2xl mb-2">💡</div>
-                    <h4 className="font-semibold text-sm">Coaching Tips</h4>
-                    <p className="text-green-100 text-xs mt-1">Movement cues & strategy</p>
-                  </div>
-                  <div className="bg-white/10 rounded-xl p-4">
-                    <div className="text-2xl mb-2">📸</div>
-                    <h4 className="font-semibold text-sm">Scan Workouts</h4>
-                    <p className="text-green-100 text-xs mt-1">Photo-to-workout conversion</p>
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap gap-3">
-                  <button
-                    onClick={() => router.push("/ai-coach/scan")}
-                    className="px-4 py-2 bg-white text-green-700 font-semibold rounded-lg hover:bg-green-50 transition-colors flex items-center gap-2"
-                  >
-                    <span>📸</span> Scan Workout
-                  </button>
-                  <button
-                    onClick={() => router.push("/weekly")}
-                    className="px-4 py-2 bg-white/20 text-white font-semibold rounded-lg hover:bg-white/30 transition-colors flex items-center gap-2"
-                  >
-                    <span>📅</span> View Workouts
-                  </button>
-                </div>
-
-                {aiCoachSubscription && (
-                  <div className="mt-6 pt-4 border-t border-white/20">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-green-100">
-                        {aiCoachSubscription.status === "trialing" ? "Trial ends" : "Renews"}{" "}
-                        {(aiCoachSubscription.status === "trialing"
-                          ? aiCoachSubscription.trialEndsAt?.toDate?.().toLocaleDateString()
-                          : aiCoachSubscription.endDate?.toDate?.().toLocaleDateString()) || "N/A"}
-                      </span>
-                      <button
-                        onClick={() => openCancelModal("coach")}
-                        className="text-red-200 hover:text-red-100 hover:underline"
-                      >
-                        Cancel Subscription
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </>
-            ) : (
-              <>
-                <ul className="space-y-2 text-sm mb-6">
-                  <li className="flex items-center gap-2">
-                    <span className="text-white">✓</span> Personalized workout scaling based on your abilities
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <span className="text-white">✓</span> AI-powered performance analysis and insights
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <span className="text-white">✓</span> Movement tips and strategy recommendations
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <span className="text-white">✓</span> Scan photos of workouts to add them instantly
-                  </li>
-                </ul>
-                <div className="flex items-center gap-4">
-                  <button
-                    onClick={() => router.push("/subscribe")}
-                    className="px-6 py-3 bg-white text-green-700 font-bold rounded-lg hover:bg-green-50 transition-colors"
-                  >
-                    Start Free Trial
-                  </button>
-                  <span className="text-green-100 text-sm">7 days free, then $9.99/month</span>
-                </div>
-              </>
-            )}
-          </div>
-        )}
 
         {/* AI Programmer Section */}
         {selectedPath === "ai-programmer" && (
@@ -666,8 +542,111 @@ export default function ProgrammingPage() {
           </div>
         )}
 
-        {/* Active Sources Summary */}
-        {(myGyms.length > 0 || hasActiveAI) && (
+        {/* AI Coach - Enhance Your Workouts (Add-on, not a workout source) */}
+        <div className="mb-8">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">Enhance Your Workouts</h2>
+          <div className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl p-6 text-white shadow-lg">
+            <div className="flex items-start justify-between mb-4">
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 bg-white/20 rounded-xl flex items-center justify-center">
+                  <span className="text-3xl">🎯</span>
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold">AI Coach</h3>
+                  <p className="text-green-100 text-sm mt-1">
+                    Personal scaling and coaching for any workout source
+                  </p>
+                </div>
+              </div>
+              {hasActiveAICoach && (
+                <span className="px-3 py-1 bg-white/20 text-white text-sm font-medium rounded-full border border-white/30">
+                  Active
+                </span>
+              )}
+            </div>
+
+            {hasActiveAICoach ? (
+              <>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                  <div className="bg-white/10 rounded-xl p-3 text-center">
+                    <div className="text-xl mb-1">🎯</div>
+                    <h4 className="font-semibold text-xs">Scaling</h4>
+                  </div>
+                  <div className="bg-white/10 rounded-xl p-3 text-center">
+                    <div className="text-xl mb-1">📊</div>
+                    <h4 className="font-semibold text-xs">Analysis</h4>
+                  </div>
+                  <div className="bg-white/10 rounded-xl p-3 text-center">
+                    <div className="text-xl mb-1">💡</div>
+                    <h4 className="font-semibold text-xs">Tips</h4>
+                  </div>
+                  <div className="bg-white/10 rounded-xl p-3 text-center">
+                    <div className="text-xl mb-1">📸</div>
+                    <h4 className="font-semibold text-xs">Scan</h4>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    onClick={() => router.push("/ai-coach/scan")}
+                    className="px-4 py-2 bg-white text-green-700 font-semibold rounded-lg hover:bg-green-50 transition-colors flex items-center gap-2"
+                  >
+                    <span>📸</span> Scan Workout
+                  </button>
+                  <button
+                    onClick={() => router.push("/weekly")}
+                    className="px-4 py-2 bg-white/20 text-white font-semibold rounded-lg hover:bg-white/30 transition-colors flex items-center gap-2"
+                  >
+                    <span>📅</span> View Workouts
+                  </button>
+                </div>
+                {aiCoachSubscription && (
+                  <div className="mt-4 pt-4 border-t border-white/20">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-green-100">
+                        {aiCoachSubscription.status === "trialing" ? "Trial ends" : "Renews"}{" "}
+                        {(aiCoachSubscription.status === "trialing"
+                          ? aiCoachSubscription.trialEndsAt?.toDate?.().toLocaleDateString()
+                          : aiCoachSubscription.endDate?.toDate?.().toLocaleDateString()) || "N/A"}
+                      </span>
+                      <button
+                        onClick={() => openCancelModal("coach")}
+                        className="text-red-200 hover:text-red-100 hover:underline"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="flex items-center justify-between">
+                <ul className="space-y-1 text-sm">
+                  <li className="flex items-center gap-2">
+                    <span className="text-white">✓</span> Personalized workout scaling
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <span className="text-white">✓</span> Performance analysis & tips
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <span className="text-white">✓</span> Scan workouts from photos
+                  </li>
+                </ul>
+                <div className="text-right">
+                  <button
+                    onClick={() => router.push("/subscribe")}
+                    className="px-5 py-2.5 bg-white text-green-700 font-bold rounded-lg hover:bg-green-50 transition-colors"
+                  >
+                    Start Free Trial
+                  </button>
+                  <p className="text-green-100 text-xs mt-2">7 days free, then $9.99/mo</p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Active Workout Sources Summary */}
+        {(myGyms.length > 0 || hasActiveAIProgrammer) && (
           <div className="mb-8 bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Your Active Workout Sources</h2>
             <div className="space-y-3">
@@ -680,15 +659,6 @@ export default function ProgrammingPage() {
                   <span className="px-2 py-1 bg-green-100 text-green-700 text-xs font-medium rounded-full">Active</span>
                 </div>
               ))}
-              {hasActiveAICoach && (
-                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
-                  <div className="flex items-center gap-3">
-                    <span className="text-xl">🎯</span>
-                    <span className="font-medium text-gray-900">AI Coach</span>
-                  </div>
-                  <span className="px-2 py-1 bg-green-100 text-green-700 text-xs font-medium rounded-full">Active</span>
-                </div>
-              )}
               {hasActiveAIProgrammer && (
                 <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
                   <div className="flex items-center gap-3">
