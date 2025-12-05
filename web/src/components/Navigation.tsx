@@ -57,8 +57,20 @@ export default function Navigation() {
   const canSeeDanTab = user?.email && danAllowedEmails.some(e => e.toLowerCase() === user.email?.toLowerCase());
 
   // Hi Claire tab - outdoors & anti-cat themed
-  const claireAllowedEmails = ["tyguy4201@gmail.com"];
+  const claireAllowedEmails = ["tyguy4201@gmail.com", "chap@mans.com"];
   const canSeeClairTab = user?.email && claireAllowedEmails.some(e => e.toLowerCase() === user.email?.toLowerCase());
+
+  // Chappy tab - outdoors & beer themed
+  const chappyAllowedEmails = ["tyguy4201@gmail.com", "chap@mans.com"];
+  const canSeeChappyTab = user?.email && chappyAllowedEmails.some(e => e.toLowerCase() === user.email?.toLowerCase());
+
+  // Hazel tab - birthday & meatball quesadilla themed
+  const hazelAllowedEmails = ["tyguy4201@gmail.com", "chap@mans.com"];
+  const canSeeHazelTab = user?.email && hazelAllowedEmails.some(e => e.toLowerCase() === user.email?.toLowerCase());
+
+  // Aspen tab - princess & SpongeBob themed
+  const aspenAllowedEmails = ["tyguy4201@gmail.com", "chap@mans.com"];
+  const canSeeAspenTab = user?.email && aspenAllowedEmails.some(e => e.toLowerCase() === user.email?.toLowerCase());
 
   // Check if user needs to subscribe - coaches check aiProgrammingSubscription, athletes check aiTrainerSubscription
   const relevantSubscription = isGymOwner
@@ -81,6 +93,9 @@ export default function Navigation() {
     ...(canSeeMyWifeTab ? [{ href: "/my-wife", label: "My Wife!", icon: "👍" }] : []),
     ...(canSeeDanTab ? [{ href: "/hi-dan", label: "Hi Dan!", icon: "🏍️" }] : []),
     ...(canSeeClairTab ? [{ href: "/hi-claire", label: "Hi Claire!", icon: "🌲" }] : []),
+    ...(canSeeChappyTab ? [{ href: "/hi-chappy", label: "Hi Chappy!", icon: "🍺" }] : []),
+    ...(canSeeHazelTab ? [{ href: "/hi-hazel", label: "Hi Hazel!", icon: "🎂" }] : []),
+    ...(canSeeAspenTab ? [{ href: "/hi-aspen", label: "Hi Aspen!", icon: "👑" }] : []),
   ];
 
   return (
