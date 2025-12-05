@@ -249,6 +249,16 @@ export interface Gym {
   defaultPricingTierId?: string;
   // Gym subscription (platform fees)
   subscription?: GymSubscription;
+  // Gym details (from application)
+  address?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  phone?: string;
+  website?: string;
+  // Application tracking
+  applicationId?: string; // Reference to original application
+  isApproved: boolean; // Whether the gym has been approved by admin
 }
 
 // Group types
@@ -459,6 +469,43 @@ export interface FeatureAccess {
   canImportExternalProgramming: boolean;
   isGymOwner: boolean;
   isGymMember: boolean;
+}
+
+// =========================
+// GYM APPLICATION TYPES
+// =========================
+
+export type GymApplicationStatus = "pending" | "approved" | "rejected";
+
+export interface GymApplication {
+  id: string;
+  // Applicant info
+  userId: string;
+  userEmail: string;
+  userName: string;
+
+  // Gym details
+  gymName: string;
+  gymAddress: string;
+  gymCity: string;
+  gymState: string;
+  gymZip: string;
+  gymPhone?: string;
+  gymWebsite?: string;
+
+  // Verification
+  ownershipProof?: string; // Description of how they can prove ownership
+  additionalNotes?: string;
+
+  // Status
+  status: GymApplicationStatus;
+  submittedAt: Timestamp;
+  reviewedAt?: Timestamp;
+  reviewedBy?: string; // Super admin user ID
+  rejectionReason?: string;
+
+  // If approved, the created gym ID
+  approvedGymId?: string;
 }
 
 

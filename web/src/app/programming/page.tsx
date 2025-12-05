@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { collection, getDocs, doc, updateDoc } from "firebase/firestore";
+import { collection, getDocs, doc, updateDoc, addDoc, query, where, Timestamp } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
-import { Gym, PRICING } from "@/lib/types";
+import { Gym, PRICING, GymApplication } from "@/lib/types";
 import Navigation from "@/components/Navigation";
 
 type ProgrammingPath = "join-gym" | "ai-programmer" | "external-programming" | "own-gym" | null;
@@ -32,6 +32,22 @@ export default function ProgrammingPage() {
   const [isCanceling, setIsCanceling] = useState(false);
   const [cancelType, setCancelType] = useState<"coach" | "programmer">("coach");
 
+  // Gym application state
+  const [showGymApplicationModal, setShowGymApplicationModal] = useState(false);
+  const [gymApplications, setGymApplications] = useState<GymApplication[]>([]);
+  const [isSubmittingApplication, setIsSubmittingApplication] = useState(false);
+  const [gymApplicationForm, setGymApplicationForm] = useState({
+    gymName: "",
+    gymAddress: "",
+    gymCity: "",
+    gymState: "",
+    gymZip: "",
+    gymPhone: "",
+    gymWebsite: "",
+    ownershipProof: "",
+    additionalNotes: "",
+  });
+
   useEffect(() => {
     if (!loading && !switching && !user) {
       router.push("/login");
@@ -41,6 +57,7 @@ export default function ProgrammingPage() {
   useEffect(() => {
     if (user) {
       fetchGyms();
+      fetchGymApplications();
     }
   }, [user]);
 
@@ -67,6 +84,79 @@ export default function ProgrammingPage() {
       console.error("Error fetching gyms:", error);
     } finally {
       setLoadingData(false);
+    }
+  };
+
+  const fetchGymApplications = async () => {
+    if (!user) return;
+
+    try {
+      const applicationsQuery = query(
+        collection(db, "gymApplications"),
+        where("userId", "==", user.id)
+      );
+      const applicationsSnapshot = await getDocs(applicationsQuery);
+      const applications = applicationsSnapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as GymApplication[];
+      setGymApplications(applications);
+    } catch (error) {
+      console.error("Error fetching gym applications:", error);
+    }
+  };
+
+  const handleSubmitGymApplication = async () => {
+    if (!user) return;
+    if (!gymApplicationForm.gymName || !gymApplicationForm.gymAddress || !gymApplicationForm.gymCity || !gymApplicationForm.gymState || !gymApplicationForm.gymZip) {
+      alert("Please fill in all required fields");
+      return;
+    }
+
+    setIsSubmittingApplication(true);
+    try {
+      const applicationData = {
+        userId: user.id,
+        userEmail: user.email,
+        userName: user.displayName || user.firstName || user.email,
+        gymName: gymApplicationForm.gymName,
+        gymAddress: gymApplicationForm.gymAddress,
+        gymCity: gymApplicationForm.gymCity,
+        gymState: gymApplicationForm.gymState,
+        gymZip: gymApplicationForm.gymZip,
+        gymPhone: gymApplicationForm.gymPhone || null,
+        gymWebsite: gymApplicationForm.gymWebsite || null,
+        ownershipProof: gymApplicationForm.ownershipProof || null,
+        additionalNotes: gymApplicationForm.additionalNotes || null,
+        status: "pending",
+        submittedAt: Timestamp.now(),
+      };
+
+      await addDoc(collection(db, "gymApplications"), applicationData);
+
+      // Reset form and close modal
+      setGymApplicationForm({
+        gymName: "",
+        gymAddress: "",
+        gymCity: "",
+        gymState: "",
+        gymZip: "",
+        gymPhone: "",
+        gymWebsite: "",
+        ownershipProof: "",
+        additionalNotes: "",
+      });
+      setShowGymApplicationModal(false);
+
+      // Refresh applications
+      await fetchGymApplications();
+
+      alert("Your gym application has been submitted! We'll review it and get back to you soon.");
+    } catch (error) {
+      console.error("Error submitting gym application:", error);
+      alert("Failed to submit application. Please try again.");
+    } finally {
+      setIsSubmittingApplication(false);
     }
   };
 
@@ -517,13 +607,9 @@ export default function ProgrammingPage() {
                 <div>
                   <h3 className="text-xl font-bold">Own a Gym</h3>
                   <p className="text-gray-300 text-sm mt-1">
-                    Create and manage your own gym with programming tools
+                    Apply to register your gym and manage your athletes
                   </p>
                 </div>
-              </div>
-              <div className="text-right">
-                <div className="text-2xl font-bold">${PRICING.GYM_BASE}</div>
-                <div className="text-gray-400 text-xs">/month base</div>
               </div>
             </div>
 
@@ -550,71 +636,142 @@ export default function ProgrammingPage() {
               </div>
             </div>
 
-            {/* Pricing Options */}
+            {/* How it works */}
             <div className="bg-white/5 rounded-xl p-4 mb-6 border border-white/10">
-              <h4 className="font-semibold text-sm mb-3">Gym Pricing</h4>
+              <h4 className="font-semibold text-sm mb-3">How It Works</h4>
               <div className="space-y-3 text-sm">
-                <div className="flex justify-between items-center py-2 border-b border-white/10">
-                  <span className="text-white font-medium">Base gym subscription</span>
-                  <span className="font-bold text-lg">${PRICING.GYM_BASE}/mo</span>
-                </div>
-                <div className="flex justify-between items-center py-2">
-                  <div className="flex items-center gap-2">
-                    <span className="px-2 py-0.5 bg-purple-500/30 text-purple-200 text-xs font-bold rounded uppercase">Add-on</span>
-                    <span className="text-gray-300">AI Programmer</span>
+                <div className="flex items-start gap-3">
+                  <div className="w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center text-xs font-bold flex-shrink-0">1</div>
+                  <div>
+                    <span className="font-medium">Submit Application</span>
+                    <p className="text-gray-400 text-xs mt-0.5">Provide your gym details for verification</p>
                   </div>
-                  <span className="font-semibold text-purple-300">+${PRICING.GYM_AI_PROGRAMMER}/mo</span>
                 </div>
-                <div className="flex justify-between items-center py-2">
-                  <div className="flex items-center gap-2">
-                    <span className="px-2 py-0.5 bg-green-500/30 text-green-200 text-xs font-bold rounded uppercase">Add-on</span>
-                    <span className="text-gray-300">AI Coach for members</span>
+                <div className="flex items-start gap-3">
+                  <div className="w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center text-xs font-bold flex-shrink-0">2</div>
+                  <div>
+                    <span className="font-medium">We Verify Your Gym</span>
+                    <p className="text-gray-400 text-xs mt-0.5">Our team reviews and approves your application</p>
                   </div>
-                  <span className="font-semibold text-green-300">+${PRICING.GYM_AI_COACH_PER_MEMBER}/member/mo</span>
+                </div>
+                <div className="flex items-start gap-3">
+                  <div className="w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center text-xs font-bold flex-shrink-0">3</div>
+                  <div>
+                    <span className="font-medium">Choose Your Plan</span>
+                    <p className="text-gray-400 text-xs mt-0.5">Once approved, subscribe to unlock gym features</p>
+                  </div>
                 </div>
               </div>
             </div>
 
-            {user?.role === "owner" || user?.role === "coach" ? (
-              <div className="space-y-3">
-                <p className="text-sm text-gray-300 mb-2">Your gyms:</p>
-                {myGyms.filter(gym => gym.ownerId === user?.id || gym.coachIds?.includes(user?.id || "")).map((gym) => (
-                  <div
-                    key={gym.id}
-                    className="flex items-center justify-between p-4 bg-white/10 rounded-xl"
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="text-2xl">🏋️</span>
+            {/* Pending Applications */}
+            {gymApplications.filter(app => app.status === "pending").length > 0 && (
+              <div className="mb-6">
+                <h4 className="font-semibold text-sm mb-3 text-yellow-300">Pending Applications</h4>
+                {gymApplications.filter(app => app.status === "pending").map((app) => (
+                  <div key={app.id} className="p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-xl">
+                    <div className="flex items-center justify-between">
                       <div>
-                        <h4 className="font-medium">{gym.name}</h4>
-                        <p className="text-gray-400 text-sm">
-                          {(gym.memberIds?.length || 0) + (gym.coachIds?.length || 0) + 1} members
-                        </p>
+                        <h5 className="font-medium">{app.gymName}</h5>
+                        <p className="text-gray-400 text-xs">{app.gymCity}, {app.gymState}</p>
                       </div>
+                      <span className="px-3 py-1 bg-yellow-500/20 text-yellow-300 text-xs font-medium rounded-full">
+                        Under Review
+                      </span>
                     </div>
-                    <button
-                      onClick={() => router.push(`/gym/${gym.id}`)}
-                      className="px-4 py-2 bg-white text-gray-900 text-sm font-medium rounded-lg hover:bg-gray-100"
-                    >
-                      Manage
-                    </button>
+                    <p className="text-gray-400 text-xs mt-2">
+                      Submitted {app.submittedAt?.toDate?.().toLocaleDateString() || "recently"}
+                    </p>
                   </div>
                 ))}
-                <button
-                  onClick={() => router.push("/subscribe?variant=gym")}
-                  className="w-full mt-4 px-6 py-3 bg-white/20 text-white font-semibold rounded-lg hover:bg-white/30 transition-colors"
-                >
-                  + Create Another Gym - ${PRICING.GYM_BASE}/mo
-                </button>
               </div>
-            ) : (
-              <button
-                onClick={() => router.push("/subscribe?variant=gym")}
-                className="w-full px-6 py-3 bg-white text-gray-900 font-bold rounded-lg hover:bg-gray-100 transition-colors"
-              >
-                Create Your Gym - ${PRICING.GYM_BASE}/mo
-              </button>
             )}
+
+            {/* Rejected Applications */}
+            {gymApplications.filter(app => app.status === "rejected").length > 0 && (
+              <div className="mb-6">
+                <h4 className="font-semibold text-sm mb-3 text-red-300">Rejected Applications</h4>
+                {gymApplications.filter(app => app.status === "rejected").map((app) => (
+                  <div key={app.id} className="p-4 bg-red-500/10 border border-red-500/30 rounded-xl">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h5 className="font-medium">{app.gymName}</h5>
+                        <p className="text-gray-400 text-xs">{app.gymCity}, {app.gymState}</p>
+                      </div>
+                      <span className="px-3 py-1 bg-red-500/20 text-red-300 text-xs font-medium rounded-full">
+                        Rejected
+                      </span>
+                    </div>
+                    {app.rejectionReason && (
+                      <p className="text-red-300 text-xs mt-2">Reason: {app.rejectionReason}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Your Approved Gyms */}
+            {myGyms.filter(gym => gym.ownerId === user?.id).length > 0 && (
+              <div className="mb-6">
+                <h4 className="font-semibold text-sm mb-3 text-green-300">Your Gyms</h4>
+                <div className="space-y-3">
+                  {myGyms.filter(gym => gym.ownerId === user?.id).map((gym) => {
+                    const hasActiveSubscription = gym.subscription?.status === "active";
+                    return (
+                      <div
+                        key={gym.id}
+                        className="flex items-center justify-between p-4 bg-white/10 rounded-xl"
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="text-2xl">🏋️</span>
+                          <div>
+                            <h5 className="font-medium">{gym.name}</h5>
+                            <p className="text-gray-400 text-sm">
+                              {(gym.memberIds?.length || 0) + (gym.coachIds?.length || 0) + 1} members
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {hasActiveSubscription ? (
+                            <span className="px-2 py-1 bg-green-500/20 text-green-300 text-xs font-medium rounded-full">
+                              Subscribed
+                            </span>
+                          ) : (
+                            <span className="px-2 py-1 bg-orange-500/20 text-orange-300 text-xs font-medium rounded-full">
+                              No Subscription
+                            </span>
+                          )}
+                          <button
+                            onClick={() => router.push(`/gym/${gym.id}/subscription`)}
+                            className="px-3 py-1.5 bg-white/20 text-white text-xs font-medium rounded-lg hover:bg-white/30"
+                          >
+                            {hasActiveSubscription ? "Manage" : "Subscribe"}
+                          </button>
+                          <button
+                            onClick={() => router.push(`/gym/${gym.id}`)}
+                            className="px-3 py-1.5 bg-white text-gray-900 text-xs font-medium rounded-lg hover:bg-gray-100"
+                          >
+                            View
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Apply Button */}
+            <button
+              onClick={() => setShowGymApplicationModal(true)}
+              className="w-full px-6 py-3 bg-white text-gray-900 font-bold rounded-lg hover:bg-gray-100 transition-colors"
+            >
+              Apply to Register Your Gym
+            </button>
+
+            <p className="text-gray-400 text-xs text-center mt-4">
+              Applications are typically reviewed within 1-2 business days
+            </p>
           </div>
         )}
 
@@ -881,6 +1038,168 @@ export default function ProgrammingPage() {
                 className="flex-1 py-3 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
               >
                 {isCanceling ? "Canceling..." : "Yes, Cancel"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Gym Application Modal */}
+      {showGymApplicationModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">Apply to Register Your Gym</h2>
+                <p className="text-gray-500 text-sm mt-1">We&apos;ll verify your gym and get back to you within 1-2 business days</p>
+              </div>
+              <button
+                onClick={() => setShowGymApplicationModal(false)}
+                className="text-gray-400 hover:text-gray-600 text-2xl"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Gym Name */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Gym Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={gymApplicationForm.gymName}
+                  onChange={(e) => setGymApplicationForm({ ...gymApplicationForm, gymName: e.target.value })}
+                  placeholder="e.g., CrossFit Downtown"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+
+              {/* Address */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Street Address <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={gymApplicationForm.gymAddress}
+                  onChange={(e) => setGymApplicationForm({ ...gymApplicationForm, gymAddress: e.target.value })}
+                  placeholder="123 Main Street"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+
+              {/* City, State, Zip */}
+              <div className="grid grid-cols-3 gap-3">
+                <div className="col-span-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    City <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={gymApplicationForm.gymCity}
+                    onChange={(e) => setGymApplicationForm({ ...gymApplicationForm, gymCity: e.target.value })}
+                    placeholder="City"
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    State <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={gymApplicationForm.gymState}
+                    onChange={(e) => setGymApplicationForm({ ...gymApplicationForm, gymState: e.target.value })}
+                    placeholder="CA"
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    ZIP <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={gymApplicationForm.gymZip}
+                    onChange={(e) => setGymApplicationForm({ ...gymApplicationForm, gymZip: e.target.value })}
+                    placeholder="90210"
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+
+              {/* Phone */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Phone Number
+                </label>
+                <input
+                  type="tel"
+                  value={gymApplicationForm.gymPhone}
+                  onChange={(e) => setGymApplicationForm({ ...gymApplicationForm, gymPhone: e.target.value })}
+                  placeholder="(555) 123-4567"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+
+              {/* Website */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Website
+                </label>
+                <input
+                  type="url"
+                  value={gymApplicationForm.gymWebsite}
+                  onChange={(e) => setGymApplicationForm({ ...gymApplicationForm, gymWebsite: e.target.value })}
+                  placeholder="https://www.yourgym.com"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+
+              {/* Ownership Proof */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  How can we verify you own/manage this gym?
+                </label>
+                <textarea
+                  value={gymApplicationForm.ownershipProof}
+                  onChange={(e) => setGymApplicationForm({ ...gymApplicationForm, ownershipProof: e.target.value })}
+                  placeholder="e.g., I'm listed as owner on the gym's website, I can provide business registration documents, etc."
+                  rows={2}
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                />
+              </div>
+
+              {/* Additional Notes */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Additional Notes
+                </label>
+                <textarea
+                  value={gymApplicationForm.additionalNotes}
+                  onChange={(e) => setGymApplicationForm({ ...gymApplicationForm, additionalNotes: e.target.value })}
+                  placeholder="Anything else you'd like us to know..."
+                  rows={2}
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setShowGymApplicationModal(false)}
+                className="flex-1 py-3 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSubmitGymApplication}
+                disabled={isSubmittingApplication}
+                className="flex-1 py-3 bg-gray-900 text-white font-medium rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50"
+              >
+                {isSubmittingApplication ? "Submitting..." : "Submit Application"}
               </button>
             </div>
           </div>
