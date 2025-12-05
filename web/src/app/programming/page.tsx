@@ -8,16 +8,24 @@ import { db } from "@/lib/firebase";
 import { Gym } from "@/lib/types";
 import Navigation from "@/components/Navigation";
 
+type ProgrammingPath = "join-gym" | "ai-programmer" | "external-programming" | "own-gym" | null;
+
 export default function ProgrammingPage() {
   const { user, loading, switching, refreshUser } = useAuth();
   const router = useRouter();
   const [loadingData, setLoadingData] = useState(true);
+
+  // Selected path state
+  const [selectedPath, setSelectedPath] = useState<ProgrammingPath>(null);
 
   // Gym state
   const [allGyms, setAllGyms] = useState<Gym[]>([]);
   const [myGyms, setMyGyms] = useState<Gym[]>([]);
   const [showFindGymModal, setShowFindGymModal] = useState(false);
   const [gymSearchQuery, setGymSearchQuery] = useState("");
+
+  // AI options
+  const [hasHomeGym, setHasHomeGym] = useState(false);
 
   // Cancel subscription state
   const [showCancelModal, setShowCancelModal] = useState(false);
@@ -103,6 +111,46 @@ export default function ProgrammingPage() {
     }
   };
 
+  // Programming path options
+  const pathOptions = [
+    {
+      id: "join-gym" as ProgrammingPath,
+      icon: "🏋️",
+      title: "Join a Gym",
+      description: "Find and join a local CrossFit gym to follow their programming",
+      color: "from-blue-500 to-blue-600",
+      bgColor: "bg-blue-50",
+      borderColor: "border-blue-200",
+    },
+    {
+      id: "ai-programmer" as ProgrammingPath,
+      icon: "🤖",
+      title: "Use AI Programmer",
+      description: "Get personalized AI-generated workouts tailored to your goals",
+      color: "from-purple-500 to-indigo-600",
+      bgColor: "bg-purple-50",
+      borderColor: "border-purple-200",
+    },
+    {
+      id: "external-programming" as ProgrammingPath,
+      icon: "📋",
+      title: "External Programming",
+      description: "Follow programs like Comptrain, HWPO, Mayhem, and more",
+      color: "from-orange-500 to-amber-600",
+      bgColor: "bg-orange-50",
+      borderColor: "border-orange-200",
+    },
+    {
+      id: "own-gym" as ProgrammingPath,
+      icon: "🏢",
+      title: "Own a Gym",
+      description: "Create your gym, manage athletes, and program workouts",
+      color: "from-gray-700 to-gray-900",
+      bgColor: "bg-gray-50",
+      borderColor: "border-gray-200",
+    },
+  ];
+
   if (loading || !user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -117,35 +165,129 @@ export default function ProgrammingPage() {
       <main className="max-w-4xl mx-auto px-4 py-8">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-2xl font-bold text-gray-900">Subscriptions & Memberships</h1>
-          <p className="text-gray-500">Manage your gym memberships and AI training subscriptions</p>
+          <h1 className="text-2xl font-bold text-gray-900">Programming</h1>
+          <p className="text-gray-500">Choose how you want to get your workouts</p>
         </div>
 
-        {/* AI Subscription - different for coaches vs athletes */}
+        {/* Programming Path Selection */}
         <div className="mb-8">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">
-            {isCoachOrOwner ? "AI Programming Assistant" : "AI Personal Trainer"}
-          </h2>
-          <div className="bg-gradient-to-br from-purple-600 to-indigo-700 rounded-2xl p-6 text-white shadow-lg">
-            <div className="flex items-start justify-between">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">Select Your Workout Source</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {pathOptions.map((option) => (
+              <button
+                key={option.id}
+                onClick={() => setSelectedPath(selectedPath === option.id ? null : option.id)}
+                className={`relative p-6 rounded-2xl border-2 transition-all text-left ${
+                  selectedPath === option.id
+                    ? `${option.borderColor} ${option.bgColor} shadow-lg`
+                    : "border-gray-200 bg-white hover:border-gray-300 hover:shadow-md"
+                }`}
+              >
+                {selectedPath === option.id && (
+                  <div className="absolute top-3 right-3">
+                    <div className={`w-6 h-6 rounded-full bg-gradient-to-br ${option.color} flex items-center justify-center`}>
+                      <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                  </div>
+                )}
+                <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${option.color} flex items-center justify-center text-2xl mb-4 shadow-md`}>
+                  {option.icon}
+                </div>
+                <h3 className="font-bold text-gray-900 text-lg">{option.title}</h3>
+                <p className="text-gray-500 text-sm mt-1">{option.description}</p>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Expanded Section Based on Selection */}
+        {selectedPath === "join-gym" && (
+          <div className="mb-8 bg-white rounded-2xl shadow-sm border border-gray-200 p-6 animate-in slide-in-from-top-2 duration-300">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-gray-900">Join a Gym</h2>
+              <button
+                onClick={() => setShowFindGymModal(true)}
+                className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 flex items-center gap-2"
+              >
+                <span>🔍</span> Find Gyms
+              </button>
+            </div>
+
+            {myGyms.length === 0 ? (
+              <div className="text-center py-8">
+                <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <span className="text-3xl">🏋️</span>
+                </div>
+                <h3 className="font-semibold text-gray-900 mb-2">No Gym Memberships Yet</h3>
+                <p className="text-gray-500 text-sm mb-4">Search for gyms in your area and join to see their programming</p>
+                <button
+                  onClick={() => setShowFindGymModal(true)}
+                  className="px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700"
+                >
+                  Find a Gym
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-sm text-gray-600 mb-4">Your current gym memberships:</p>
+                {myGyms.map((gym) => {
+                  const role = gym.ownerId === user?.id
+                    ? "Owner"
+                    : gym.coachIds?.includes(user?.id || "")
+                    ? "Coach"
+                    : "Member";
+                  const roleColor = role === "Owner"
+                    ? "bg-purple-100 text-purple-700"
+                    : role === "Coach"
+                    ? "bg-blue-100 text-blue-700"
+                    : "bg-green-100 text-green-700";
+                  const memberCount = (gym.memberIds?.length || 0) + (gym.coachIds?.length || 0) + 1;
+                  return (
+                    <div
+                      key={gym.id}
+                      className="flex items-center justify-between p-4 bg-gray-50 rounded-xl"
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center text-white text-xl shadow-md">
+                          🏋️
+                        </div>
+                        <div>
+                          <h3 className="font-semibold text-gray-900">{gym.name}</h3>
+                          <p className="text-sm text-gray-500">{memberCount} members</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className={`px-3 py-1 text-sm font-medium rounded-full ${roleColor}`}>
+                          {role}
+                        </span>
+                        <button
+                          onClick={() => router.push(`/gym/${gym.id}`)}
+                          className="px-4 py-2 bg-gray-200 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-300"
+                        >
+                          View
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {selectedPath === "ai-programmer" && (
+          <div className="mb-8 bg-gradient-to-br from-purple-600 to-indigo-700 rounded-2xl p-6 text-white shadow-lg animate-in slide-in-from-top-2 duration-300">
+            <div className="flex items-start justify-between mb-6">
               <div className="flex items-center gap-4">
                 <div className="w-14 h-14 bg-white/20 rounded-xl flex items-center justify-center">
-                  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                  </svg>
+                  <span className="text-3xl">🤖</span>
                 </div>
                 <div>
-                  <h3 className="text-xl font-bold">
-                    {isCoachOrOwner ? "AI Programming" : "AI Coach Pro"}
-                  </h3>
+                  <h3 className="text-xl font-bold">AI Programmer</h3>
                   <p className="text-purple-200 text-sm mt-1">
-                    {hasActiveAI
-                      ? isCoachOrOwner
-                        ? "AI drafts programming, you fine-tune and publish"
-                        : "Personalized scaling, workout analysis & AI coaching"
-                      : isCoachOrOwner
-                        ? "Let AI help create your gym's programming"
-                        : "Get personalized coaching powered by AI"}
+                    Personalized workouts powered by artificial intelligence
                   </p>
                 </div>
               </div>
@@ -156,10 +298,32 @@ export default function ProgrammingPage() {
               )}
             </div>
 
+            {/* Home Gym Toggle */}
+            <div className="bg-white/10 rounded-xl p-4 mb-6">
+              <label className="flex items-center justify-between cursor-pointer">
+                <div>
+                  <h4 className="font-semibold">I have a home gym</h4>
+                  <p className="text-purple-200 text-sm mt-1">
+                    AI will customize workouts based on your available equipment
+                  </p>
+                </div>
+                <div className="relative">
+                  <input
+                    type="checkbox"
+                    checked={hasHomeGym}
+                    onChange={(e) => setHasHomeGym(e.target.checked)}
+                    className="sr-only"
+                  />
+                  <div className={`w-14 h-8 rounded-full transition-colors ${hasHomeGym ? 'bg-green-400' : 'bg-white/30'}`}>
+                    <div className={`w-6 h-6 rounded-full bg-white shadow-md transform transition-transform mt-1 ${hasHomeGym ? 'translate-x-7' : 'translate-x-1'}`} />
+                  </div>
+                </div>
+              </label>
+            </div>
+
             {hasActiveAI ? (
               <>
-                {/* Active subscription features */}
-                <div className="mt-6 grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 gap-3 mb-6">
                   <div className="bg-white/10 rounded-xl p-4">
                     <div className="text-2xl mb-2">🎯</div>
                     <h4 className="font-semibold text-sm">Personal Scaling</h4>
@@ -176,28 +340,19 @@ export default function ProgrammingPage() {
                     <p className="text-purple-200 text-xs mt-1">Performance insights & tips</p>
                   </div>
                   <div className="bg-white/10 rounded-xl p-4">
-                    <div className="text-2xl mb-2">🤖</div>
-                    <h4 className="font-semibold text-sm">AI Programming</h4>
-                    <p className="text-purple-200 text-xs mt-1">Generate custom workouts</p>
+                    <div className="text-2xl mb-2">🏠</div>
+                    <h4 className="font-semibold text-sm">{hasHomeGym ? "Home Gym Mode" : "Any Gym"}</h4>
+                    <p className="text-purple-200 text-xs mt-1">{hasHomeGym ? "Equipment-aware workouts" : "Standard equipment assumed"}</p>
                   </div>
                 </div>
 
-                {/* Quick Actions */}
-                <div className="mt-6 flex flex-wrap gap-3">
+                <div className="flex flex-wrap gap-3">
                   <button
                     onClick={() => router.push("/ai-coach/scan")}
                     className="px-4 py-2 bg-white text-purple-700 font-semibold rounded-lg hover:bg-purple-50 transition-colors flex items-center gap-2"
                   >
                     <span>📸</span> Scan Workout
                   </button>
-                  {isCoachOrOwner && myGyms.length > 0 && (
-                    <button
-                      onClick={() => router.push(`/gym/${myGyms[0].id}`)}
-                      className="px-4 py-2 bg-white/20 text-white font-semibold rounded-lg hover:bg-white/30 transition-colors flex items-center gap-2"
-                    >
-                      <span>🤖</span> AI Programming
-                    </button>
-                  )}
                   <button
                     onClick={() => router.push("/weekly")}
                     className="px-4 py-2 bg-white/20 text-white font-semibold rounded-lg hover:bg-white/30 transition-colors flex items-center gap-2"
@@ -206,7 +361,6 @@ export default function ProgrammingPage() {
                   </button>
                 </div>
 
-                {/* Subscription info */}
                 {aiSubscription && (
                   <div className="mt-6 pt-4 border-t border-white/20">
                     <div className="flex items-center justify-between text-sm">
@@ -228,24 +382,21 @@ export default function ProgrammingPage() {
               </>
             ) : (
               <>
-                {/* Not subscribed - show benefits */}
-                <div className="mt-6">
-                  <ul className="space-y-2 text-sm">
-                    <li className="flex items-center gap-2">
-                      <span className="text-green-300">✓</span> Personalized workout scaling based on your abilities
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <span className="text-green-300">✓</span> Scan photos of workouts to add them instantly
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <span className="text-green-300">✓</span> AI-powered performance analysis and tips
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <span className="text-green-300">✓</span> Generate custom programming with AI
-                    </li>
-                  </ul>
-                </div>
-                <div className="mt-6 flex items-center gap-4">
+                <ul className="space-y-2 text-sm mb-6">
+                  <li className="flex items-center gap-2">
+                    <span className="text-green-300">✓</span> Personalized workout scaling based on your abilities
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <span className="text-green-300">✓</span> Scan photos of workouts to add them instantly
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <span className="text-green-300">✓</span> AI-powered performance analysis and tips
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <span className="text-green-300">✓</span> {hasHomeGym ? "Workouts customized to your home gym equipment" : "Generate custom programming with AI"}
+                  </li>
+                </ul>
+                <div className="flex items-center gap-4">
                   <button
                     onClick={() => router.push(isCoachOrOwner ? "/subscribe?variant=coach" : "/subscribe")}
                     className="px-6 py-3 bg-white text-purple-700 font-bold rounded-lg hover:bg-purple-50 transition-colors"
@@ -257,132 +408,161 @@ export default function ProgrammingPage() {
               </>
             )}
           </div>
-        </div>
+        )}
 
-        {/* My Gyms */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900">Gym Memberships</h2>
-            <button
-              onClick={() => setShowFindGymModal(true)}
-              className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 flex items-center gap-2"
-            >
-              <span>🔍</span> Find Gyms
-            </button>
-          </div>
-          {myGyms.length === 0 ? (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
-              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <span className="text-3xl">🏢</span>
+        {selectedPath === "external-programming" && (
+          <div className="mb-8 bg-white rounded-2xl shadow-sm border border-gray-200 p-6 animate-in slide-in-from-top-2 duration-300">
+            <div className="flex items-center gap-4 mb-6">
+              <div className="w-14 h-14 bg-gradient-to-br from-orange-500 to-amber-600 rounded-xl flex items-center justify-center text-2xl shadow-md">
+                📋
               </div>
-              <h3 className="font-semibold text-gray-900 mb-2">No Gym Memberships</h3>
-              <p className="text-gray-500 text-sm mb-4">Join a gym to see their programming and sign up for classes</p>
-              <button
-                onClick={() => setShowFindGymModal(true)}
-                className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700"
-              >
-                Find a Gym
-              </button>
+              <div>
+                <h3 className="text-xl font-bold text-gray-900">External Programming</h3>
+                <p className="text-gray-500 text-sm mt-1">Follow popular programming from industry leaders</p>
+              </div>
             </div>
-          ) : (
+
+            <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-xl p-6 mb-6">
+              <div className="text-center">
+                <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm">
+                  <span className="text-3xl">🚀</span>
+                </div>
+                <h4 className="font-semibold text-gray-900 mb-2">Coming Soon</h4>
+                <p className="text-gray-600 text-sm max-w-md mx-auto">
+                  We&apos;re working on partnerships with popular programming providers.
+                  Soon you&apos;ll be able to subscribe to programs directly through the app.
+                </p>
+              </div>
+            </div>
+
             <div className="space-y-3">
-              {myGyms.map((gym) => {
-                const role = gym.ownerId === user?.id
-                  ? "Owner"
-                  : gym.coachIds?.includes(user?.id || "")
-                  ? "Coach"
-                  : "Member";
-                const roleColor = role === "Owner"
-                  ? "bg-purple-100 text-purple-700"
-                  : role === "Coach"
-                  ? "bg-blue-100 text-blue-700"
-                  : "bg-green-100 text-green-700";
-                const memberCount = (gym.memberIds?.length || 0) + (gym.coachIds?.length || 0) + 1;
-                return (
-                  <div
-                    key={gym.id}
-                    className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 hover:shadow-md transition-shadow"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-4">
-                        <div className="w-14 h-14 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center text-white text-2xl shadow-md">
-                          🏋️
-                        </div>
-                        <div>
-                          <h3 className="font-semibold text-gray-900">{gym.name}</h3>
-                          <p className="text-sm text-gray-500">{memberCount} members</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className={`px-3 py-1 text-sm font-medium rounded-full ${roleColor}`}>
-                          {role}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="mt-4 pt-4 border-t border-gray-100 flex gap-2">
-                      <button
-                        onClick={() => router.push(`/gym/${gym.id}`)}
-                        className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition-colors"
-                      >
-                        View Gym
-                      </button>
-                      <button
-                        onClick={() => router.push("/weekly")}
-                        className="flex-1 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
-                      >
-                        See Programming
-                      </button>
-                    </div>
+              {[
+                { name: "Comptrain", desc: "Competition-focused CrossFit programming" },
+                { name: "HWPO", desc: "Hard Work Pays Off - Mat Fraser's program" },
+                { name: "Mayhem", desc: "Rich Froning's training methodology" },
+                { name: "Street Parking", desc: "Home & garage gym friendly workouts" },
+                { name: "Linchpin", desc: "Balanced CrossFit programming by Pat Sherwood" },
+              ].map((program) => (
+                <div
+                  key={program.name}
+                  className="flex items-center justify-between p-4 bg-gray-50 rounded-xl"
+                >
+                  <div>
+                    <h4 className="font-medium text-gray-900">{program.name}</h4>
+                    <p className="text-gray-500 text-sm">{program.desc}</p>
                   </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* Coming Soon - Partner Programs */}
-        <div className="mb-8">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Partner Programs</h2>
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div className="text-center">
-              <div className="w-16 h-16 bg-gradient-to-br from-orange-100 to-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <span className="text-3xl">🚀</span>
-              </div>
-              <h3 className="font-semibold text-gray-900 mb-2">Coming Soon</h3>
-              <p className="text-gray-500 text-sm max-w-md mx-auto">
-                We&apos;re working on partnerships with popular programming providers.
-                Soon you&apos;ll be able to subscribe to programs like Comptrain, HWPO, and more directly through the app.
-              </p>
-              <div className="mt-6 flex flex-wrap justify-center gap-3">
-                {["Comptrain", "HWPO", "Mayhem", "Street Parking", "Linchpin"].map((name) => (
-                  <span key={name} className="px-3 py-1.5 bg-gray-100 text-gray-500 text-sm rounded-full">
-                    {name}
+                  <span className="px-3 py-1.5 bg-gray-200 text-gray-500 text-sm rounded-full">
+                    Coming Soon
                   </span>
-                ))}
-              </div>
+                </div>
+              ))}
             </div>
           </div>
-        </div>
+        )}
 
-        {/* Create Your Own Gym */}
-        {user?.role !== "owner" && user?.role !== "coach" && (
-          <div className="bg-gradient-to-r from-gray-800 to-gray-900 rounded-2xl p-6 text-white">
-            <div className="flex items-center gap-4">
+        {selectedPath === "own-gym" && (
+          <div className="mb-8 bg-gradient-to-r from-gray-800 to-gray-900 rounded-2xl p-6 text-white animate-in slide-in-from-top-2 duration-300">
+            <div className="flex items-center gap-4 mb-6">
               <div className="w-14 h-14 bg-white/10 rounded-xl flex items-center justify-center">
                 <span className="text-3xl">🏢</span>
               </div>
-              <div className="flex-1">
-                <h3 className="text-xl font-bold">Are You a Coach?</h3>
+              <div>
+                <h3 className="text-xl font-bold">Own a Gym</h3>
                 <p className="text-gray-300 text-sm mt-1">
-                  Create your own gym, manage athletes, and use AI to program workouts
+                  Create and manage your own gym with AI-powered programming
                 </p>
               </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 mb-6">
+              <div className="bg-white/10 rounded-xl p-4">
+                <div className="text-2xl mb-2">👥</div>
+                <h4 className="font-semibold text-sm">Manage Athletes</h4>
+                <p className="text-gray-400 text-xs mt-1">Track your members&apos; progress</p>
+              </div>
+              <div className="bg-white/10 rounded-xl p-4">
+                <div className="text-2xl mb-2">📅</div>
+                <h4 className="font-semibold text-sm">Program Workouts</h4>
+                <p className="text-gray-400 text-xs mt-1">Create and schedule WODs</p>
+              </div>
+              <div className="bg-white/10 rounded-xl p-4">
+                <div className="text-2xl mb-2">🤖</div>
+                <h4 className="font-semibold text-sm">AI Assistance</h4>
+                <p className="text-gray-400 text-xs mt-1">Let AI help draft programming</p>
+              </div>
+              <div className="bg-white/10 rounded-xl p-4">
+                <div className="text-2xl mb-2">📊</div>
+                <h4 className="font-semibold text-sm">Analytics</h4>
+                <p className="text-gray-400 text-xs mt-1">Gym-wide performance data</p>
+              </div>
+            </div>
+
+            {user?.role === "owner" || user?.role === "coach" ? (
+              <div className="space-y-3">
+                <p className="text-sm text-gray-300 mb-2">Your gyms:</p>
+                {myGyms.filter(gym => gym.ownerId === user?.id || gym.coachIds?.includes(user?.id || "")).map((gym) => (
+                  <div
+                    key={gym.id}
+                    className="flex items-center justify-between p-4 bg-white/10 rounded-xl"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="text-2xl">🏋️</span>
+                      <div>
+                        <h4 className="font-medium">{gym.name}</h4>
+                        <p className="text-gray-400 text-sm">
+                          {(gym.memberIds?.length || 0) + (gym.coachIds?.length || 0) + 1} members
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => router.push(`/gym/${gym.id}`)}
+                      className="px-4 py-2 bg-white text-gray-900 text-sm font-medium rounded-lg hover:bg-gray-100"
+                    >
+                      Manage
+                    </button>
+                  </div>
+                ))}
+                <button
+                  onClick={() => router.push("/gym")}
+                  className="w-full mt-4 px-6 py-3 bg-white/20 text-white font-semibold rounded-lg hover:bg-white/30 transition-colors"
+                >
+                  + Create Another Gym
+                </button>
+              </div>
+            ) : (
               <button
                 onClick={() => router.push("/gym")}
-                className="px-5 py-2.5 bg-white text-gray-900 font-semibold rounded-lg hover:bg-gray-100 transition-colors"
+                className="w-full px-6 py-3 bg-white text-gray-900 font-bold rounded-lg hover:bg-gray-100 transition-colors"
               >
-                Create Gym
+                Create Your Gym
               </button>
+            )}
+          </div>
+        )}
+
+        {/* Active Sources Summary */}
+        {(myGyms.length > 0 || hasActiveAI) && (
+          <div className="mb-8 bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Your Active Workout Sources</h2>
+            <div className="space-y-3">
+              {myGyms.map((gym) => (
+                <div key={gym.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl">🏋️</span>
+                    <span className="font-medium text-gray-900">{gym.name}</span>
+                  </div>
+                  <span className="px-2 py-1 bg-green-100 text-green-700 text-xs font-medium rounded-full">Active</span>
+                </div>
+              ))}
+              {hasActiveAI && (
+                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl">🤖</span>
+                    <span className="font-medium text-gray-900">AI Programmer</span>
+                  </div>
+                  <span className="px-2 py-1 bg-green-100 text-green-700 text-xs font-medium rounded-full">Active</span>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -481,7 +661,7 @@ export default function ProgrammingPage() {
               </div>
               <h2 className="text-xl font-bold text-gray-900 mb-2">Cancel Subscription?</h2>
               <p className="text-gray-600">
-                Are you sure you want to cancel your {isCoachOrOwner ? "AI Programming" : "AI Coach"} subscription?
+                Are you sure you want to cancel your AI Programmer subscription?
                 You&apos;ll lose access to all AI features immediately.
               </p>
             </div>
