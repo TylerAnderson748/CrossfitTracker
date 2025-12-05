@@ -68,6 +68,13 @@ service cloud.firestore {
       return request.resource.data[field] is timestamp;
     }
 
+    // Check if user is a super admin
+    function isSuperAdmin() {
+      return isAuthenticated() &&
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'superAdmin';
+    }
+
     // ==========================================
     // USER DATA
     // ==========================================
@@ -76,7 +83,8 @@ service cloud.firestore {
       // Authenticated users can read profiles (for member lookups)
       allow read: if isAuthenticated();
       allow create: if isOwner(userId);
-      allow update: if isOwner(userId);
+      // Owner can update their own profile, super admin can update roles
+      allow update: if isOwner(userId) || isSuperAdmin();
       allow delete: if isOwner(userId);
     }
 
@@ -96,8 +104,9 @@ service cloud.firestore {
       allow read: if isAuthenticated();
 
       // VULNERABILITY #3 FIX: Validate all fields on creation
+      // Super admins can create gyms (when approving applications)
       allow create: if isAuthenticated() &&
-                       request.resource.data.ownerId == request.auth.uid &&
+                       (request.resource.data.ownerId == request.auth.uid || isSuperAdmin()) &&
                        hasRequiredFields(['name', 'ownerId', 'createdAt']) &&
                        isValidString('name') &&
                        request.resource.data.ownerId is string &&
@@ -105,9 +114,9 @@ service cloud.firestore {
                        (!('memberIds' in request.resource.data) || request.resource.data.memberIds == []) &&
                        (!('coachIds' in request.resource.data) || request.resource.data.coachIds == []);
 
-      // Only owner can update gym settings
-      allow update: if isGymOwner(gymId);
-      allow delete: if isGymOwner(gymId);
+      // Only owner or super admin can update gym settings
+      allow update: if isGymOwner(gymId) || isSuperAdmin();
+      allow delete: if isGymOwner(gymId) || isSuperAdmin();
     }
 
     match /gymMembershipRequests/{requestId} {
@@ -135,6 +144,28 @@ service cloud.firestore {
       allow delete: if isAuthenticated() &&
                        (resource.data.userId == request.auth.uid ||
                         isGymStaff(resource.data.gymId));
+    }
+
+    // ==========================================
+    // GYM APPLICATIONS (Requires Admin Approval)
+    // ==========================================
+
+    match /gymApplications/{applicationId} {
+      // Users can read their own applications, super admins can read all
+      allow read: if isAuthenticated() &&
+                     (resource.data.userId == request.auth.uid || isSuperAdmin());
+
+      // Any authenticated user can apply to create a gym
+      allow create: if isAuthenticated() &&
+                       request.resource.data.userId == request.auth.uid &&
+                       request.resource.data.status == 'pending' &&
+                       hasRequiredFields(['userId', 'userEmail', 'gymName', 'gymAddress', 'gymCity', 'gymState', 'gymZip', 'status', 'submittedAt']);
+
+      // Only super admins can update applications (approve/reject)
+      allow update: if isSuperAdmin();
+
+      // Super admins can delete applications
+      allow delete: if isSuperAdmin();
     }
 
     match /groups/{groupId} {
