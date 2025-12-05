@@ -175,6 +175,33 @@ export default function ProgrammingPage() {
           <p className="text-gray-500">Choose how you want to get your workouts</p>
         </div>
 
+        {/* Active Workout Sources Summary - at the top */}
+        {(myGyms.length > 0 || hasActiveAIProgrammer) && (
+          <div className="mb-8 bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Your Active Workout Sources</h2>
+            <div className="space-y-3">
+              {myGyms.map((gym) => (
+                <div key={gym.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl">🏋️</span>
+                    <span className="font-medium text-gray-900">{gym.name}</span>
+                  </div>
+                  <span className="px-2 py-1 bg-green-100 text-green-700 text-xs font-medium rounded-full">Active</span>
+                </div>
+              ))}
+              {hasActiveAIProgrammer && (
+                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl">🤖</span>
+                    <span className="font-medium text-gray-900">AI Programmer</span>
+                  </div>
+                  <span className="px-2 py-1 bg-green-100 text-green-700 text-xs font-medium rounded-full">Active</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Workout Source Selection */}
         <div className="mb-8">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Select Your Workout Source</h2>
@@ -645,32 +672,6 @@ export default function ProgrammingPage() {
           </div>
         </div>
 
-        {/* Active Workout Sources Summary */}
-        {(myGyms.length > 0 || hasActiveAIProgrammer) && (
-          <div className="mb-8 bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Your Active Workout Sources</h2>
-            <div className="space-y-3">
-              {myGyms.map((gym) => (
-                <div key={gym.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
-                  <div className="flex items-center gap-3">
-                    <span className="text-xl">🏋️</span>
-                    <span className="font-medium text-gray-900">{gym.name}</span>
-                  </div>
-                  <span className="px-2 py-1 bg-green-100 text-green-700 text-xs font-medium rounded-full">Active</span>
-                </div>
-              ))}
-              {hasActiveAIProgrammer && (
-                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
-                  <div className="flex items-center gap-3">
-                    <span className="text-xl">🤖</span>
-                    <span className="font-medium text-gray-900">AI Programmer</span>
-                  </div>
-                  <span className="px-2 py-1 bg-green-100 text-green-700 text-xs font-medium rounded-full">Active</span>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
       </main>
 
       {/* Find Gym Modal */}
