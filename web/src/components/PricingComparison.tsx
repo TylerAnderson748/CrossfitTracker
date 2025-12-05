@@ -123,19 +123,20 @@ export default function PricingComparison({ onSelectPlan, currentPlan }: Pricing
         </div>
 
         {/* AI Coach Add-on */}
-        <div className="mt-4 p-4 bg-green-50 rounded-xl border border-green-200">
-          <div className="flex items-center justify-between">
+        <div className="mt-4 p-4 bg-green-50 rounded-xl border-2 border-green-300 border-dashed relative">
+          <div className="absolute -top-3 left-4 px-2.5 py-0.5 bg-green-500 text-white text-xs font-bold rounded uppercase">Optional Add-on</div>
+          <div className="flex items-center justify-between mt-1">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
                 <span className="text-xl">🎯</span>
               </div>
               <div>
-                <h4 className="font-semibold text-gray-900">AI Coach Add-on</h4>
+                <h4 className="font-semibold text-gray-900">AI Coach</h4>
                 <p className="text-gray-500 text-sm">Personal scaling & coaching for any workout</p>
               </div>
             </div>
             <div className="text-right">
-              <div className="text-xl font-bold text-gray-900">+${PRICING.INDIVIDUAL_AI_COACH}</div>
+              <div className="text-xl font-bold text-green-600">+${PRICING.INDIVIDUAL_AI_COACH}</div>
               <div className="text-gray-500 text-xs">/month</div>
             </div>
           </div>
@@ -258,8 +259,9 @@ export default function PricingComparison({ onSelectPlan, currentPlan }: Pricing
         </div>
 
         {/* AI Coach for Gym Members */}
-        <div className="mt-4 p-4 bg-green-50 rounded-xl border border-green-200">
-          <div className="flex items-center justify-between">
+        <div className="mt-4 p-4 bg-green-50 rounded-xl border-2 border-green-300 border-dashed relative">
+          <div className="absolute -top-3 left-4 px-2.5 py-0.5 bg-green-500 text-white text-xs font-bold rounded uppercase">Optional Add-on</div>
+          <div className="flex items-center justify-between mt-1">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
                 <span className="text-xl">🎯</span>
@@ -270,7 +272,7 @@ export default function PricingComparison({ onSelectPlan, currentPlan }: Pricing
               </div>
             </div>
             <div className="text-right">
-              <div className="text-xl font-bold text-gray-900">+${PRICING.GYM_AI_COACH_PER_MEMBER}</div>
+              <div className="text-xl font-bold text-green-600">+${PRICING.GYM_AI_COACH_PER_MEMBER}</div>
               <div className="text-gray-500 text-xs">/member/month</div>
             </div>
           </div>
@@ -283,35 +285,44 @@ export default function PricingComparison({ onSelectPlan, currentPlan }: Pricing
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <h5 className="text-sm font-medium text-gray-700 mb-2">Individual Athletes</h5>
-            <div className="space-y-1 text-sm text-gray-600">
-              <div className="flex justify-between">
+            <div className="space-y-2 text-sm text-gray-600">
+              <div className="flex justify-between items-center">
                 <span>External Programming</span>
                 <span className="font-medium">${PRICING.INDIVIDUAL_EXTERNAL_PROGRAMMING}/mo</span>
               </div>
-              <div className="flex justify-between">
+              <div className="flex justify-between items-center">
                 <span>AI Programmer</span>
                 <span className="font-medium">${PRICING.INDIVIDUAL_AI_PROGRAMMER}/mo</span>
               </div>
-              <div className="flex justify-between">
-                <span>AI Coach (add-on)</span>
-                <span className="font-medium">+${PRICING.INDIVIDUAL_AI_COACH}/mo</span>
+              <div className="flex justify-between items-center pt-2 border-t border-gray-200">
+                <span className="flex items-center gap-1.5">
+                  <span className="px-1.5 py-0.5 bg-green-100 text-green-700 text-xs font-bold rounded">ADD-ON</span>
+                  AI Coach
+                </span>
+                <span className="font-medium text-green-600">+${PRICING.INDIVIDUAL_AI_COACH}/mo</span>
               </div>
             </div>
           </div>
           <div>
             <h5 className="text-sm font-medium text-gray-700 mb-2">Gym Owners</h5>
-            <div className="space-y-1 text-sm text-gray-600">
-              <div className="flex justify-between">
+            <div className="space-y-2 text-sm text-gray-600">
+              <div className="flex justify-between items-center">
                 <span>Base Gym</span>
                 <span className="font-medium">${PRICING.GYM_BASE}/mo</span>
               </div>
-              <div className="flex justify-between">
-                <span>AI Programmer (add-on)</span>
-                <span className="font-medium">+${PRICING.GYM_AI_PROGRAMMER}/mo</span>
+              <div className="flex justify-between items-center pt-2 border-t border-gray-200">
+                <span className="flex items-center gap-1.5">
+                  <span className="px-1.5 py-0.5 bg-purple-100 text-purple-700 text-xs font-bold rounded">ADD-ON</span>
+                  AI Programmer
+                </span>
+                <span className="font-medium text-purple-600">+${PRICING.GYM_AI_PROGRAMMER}/mo</span>
               </div>
-              <div className="flex justify-between">
-                <span>AI Coach for members</span>
-                <span className="font-medium">+${PRICING.GYM_AI_COACH_PER_MEMBER}/member/mo</span>
+              <div className="flex justify-between items-center">
+                <span className="flex items-center gap-1.5">
+                  <span className="px-1.5 py-0.5 bg-green-100 text-green-700 text-xs font-bold rounded">ADD-ON</span>
+                  AI Coach
+                </span>
+                <span className="font-medium text-green-600">+${PRICING.GYM_AI_COACH_PER_MEMBER}/member/mo</span>
               </div>
             </div>
           </div>
