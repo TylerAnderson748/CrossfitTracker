@@ -39,19 +39,21 @@ export default function GymSetupPage() {
       // Check if user has an approved application without a gym yet
       const applicationsQuery = query(
         collection(db, "gymApplications"),
-        where("userId", "==", user.id),
-        where("status", "==", "approved")
+        where("userId", "==", user.id)
       );
       const snapshot = await getDocs(applicationsQuery);
 
-      if (!snapshot.empty) {
-        const app = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() } as GymApplication;
-        // Only show if no gym has been created yet
-        if (!app.approvedGymId) {
-          setApprovedApplication(app);
-        } else {
-          // Gym already exists, redirect to it
-          router.push(`/gym/${app.approvedGymId}`);
+      // Find approved application without gym created
+      for (const doc of snapshot.docs) {
+        const app = { id: doc.id, ...doc.data() } as GymApplication;
+        if (app.status === "approved") {
+          if (!app.approvedGymId) {
+            setApprovedApplication(app);
+          } else {
+            // Gym already exists, redirect to it
+            router.push(`/gym/${app.approvedGymId}`);
+          }
+          break;
         }
       }
     } catch (error) {
