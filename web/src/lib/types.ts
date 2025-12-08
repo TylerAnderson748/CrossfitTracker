@@ -38,7 +38,7 @@ export interface AICoachPreferences {
 }
 
 // AI Trainer Subscription types
-export type AISubscriptionTier = "free" | "pro" | "elite";
+export type AISubscriptionTier = "free" | "pro" | "elite" | "coach";
 
 export interface AITrainerSubscription {
   tier: AISubscriptionTier;
