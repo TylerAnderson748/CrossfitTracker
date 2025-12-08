@@ -39,7 +39,7 @@ export default function GymDetailPage() {
   const [leaderboardEntries, setLeaderboardEntries] = useState<LeaderboardEntry[]>([]);
   const [allScheduledWorkouts, setAllScheduledWorkouts] = useState<ScheduledWorkout[]>([]);
   const [loadingData, setLoadingData] = useState(true);
-  const [activeTab, setActiveTab] = useState<"members" | "coaches" | "groups" | "programming" | "requests" | "pricing">("programming");
+  const [activeTab, setActiveTab] = useState<"members" | "coaches" | "groups" | "programming" | "requests" | "pricing" | "subscription">("programming");
   const [showAddGroupModal, setShowAddGroupModal] = useState(false);
   const [showDeleteGymModal, setShowDeleteGymModal] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
@@ -1325,6 +1325,48 @@ export default function GymDetailPage() {
           </div>
         </div>
 
+        {/* Subscription Setup Banner - for owners without active subscription */}
+        {isOwner && (!gym.subscription || gym.subscription.status !== "active") && (
+          <div className="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-xl p-6 mb-6 text-white">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
+                  <span className="text-2xl">🚀</span>
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold">Complete Your Gym Setup</h2>
+                  <p className="text-blue-100 text-sm">
+                    Subscribe to unlock all gym features - programming, member management, and more
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => router.push(`/gym/${gymId}/subscription`)}
+                className="px-6 py-3 bg-white text-blue-700 font-bold rounded-lg hover:bg-blue-50 transition-colors"
+              >
+                Continue Setup
+              </button>
+            </div>
+            <div className="mt-4 pt-4 border-t border-white/20">
+              <p className="text-sm text-blue-100 mb-2">What you&apos;ll get with a subscription:</p>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="flex items-center gap-2 text-sm">
+                  <span>✓</span> Unlimited members
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <span>✓</span> Programming tools
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <span>✓</span> Class scheduling
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <span>✓</span> External imports
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Tabs */}
         <div className="flex gap-2 mb-6 overflow-x-auto">
           {[
@@ -1334,6 +1376,7 @@ export default function GymDetailPage() {
             ...(isCoach ? [{ id: "programming", label: "Programming", count: scheduledWorkouts.length }] : []),
             ...(isOwner ? [{ id: "requests", label: "Requests", count: requests.length }] : []),
             ...(isOwner ? [{ id: "pricing", label: "Pricing", count: pricingTiers.filter(t => t.isActive).length }] : []),
+            ...(isOwner ? [{ id: "subscription", label: "Subscription", count: 0 }] : []),
           ].map((tab) => (
             <button
               key={tab.id}
@@ -2391,6 +2434,97 @@ export default function GymDetailPage() {
                   </div>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* Subscription Tab */}
+          {activeTab === "subscription" && isOwner && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="flex justify-between items-start mb-6">
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">Gym Subscription</h2>
+                  <p className="text-sm text-gray-500 mt-1">Manage your gym&apos;s platform subscription</p>
+                </div>
+                {gym.subscription?.status === "active" ? (
+                  <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm font-medium">
+                    Active
+                  </span>
+                ) : (
+                  <span className="px-3 py-1 bg-yellow-100 text-yellow-700 rounded-full text-sm font-medium">
+                    Not Subscribed
+                  </span>
+                )}
+              </div>
+
+              {gym.subscription?.status === "active" ? (
+                <div className="space-y-4">
+                  {/* Current Plan */}
+                  <div className="bg-gray-50 rounded-xl p-4">
+                    <h3 className="font-medium text-gray-900 mb-3">Current Plan</h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-sm text-gray-500">Base Plan</p>
+                        <p className="font-semibold text-gray-900">
+                          {gym.subscription.aiProgrammerEnabled ? "Base + AI Programmer" : "Base Gym"}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-500">AI Coach</p>
+                        <p className="font-semibold text-gray-900">
+                          {gym.subscription.aiCoachEnabled ? `Enabled (${gym.subscription.aiCoachMemberCount || 0} members)` : "Not enabled"}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Features */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className="text-green-500">✓</span>
+                      <span className="text-gray-700">Unlimited members</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className="text-green-500">✓</span>
+                      <span className="text-gray-700">Programming tools</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className="text-green-500">✓</span>
+                      <span className="text-gray-700">External imports</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className={gym.subscription.aiProgrammerEnabled ? "text-green-500" : "text-gray-300"}>
+                        {gym.subscription.aiProgrammerEnabled ? "✓" : "○"}
+                      </span>
+                      <span className={gym.subscription.aiProgrammerEnabled ? "text-gray-700" : "text-gray-400"}>
+                        AI Programming
+                      </span>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => router.push(`/gym/${gymId}/subscription`)}
+                    className="w-full mt-4 py-3 bg-gray-100 text-gray-700 font-medium rounded-lg hover:bg-gray-200 transition-colors"
+                  >
+                    Manage Subscription
+                  </button>
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <span className="text-3xl">🚀</span>
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Get Started</h3>
+                  <p className="text-gray-500 mb-6 max-w-md mx-auto">
+                    Subscribe to unlock all gym features including programming tools, member management, and optional AI add-ons.
+                  </p>
+                  <button
+                    onClick={() => router.push(`/gym/${gymId}/subscription`)}
+                    className="px-8 py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    Choose Your Plan
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
