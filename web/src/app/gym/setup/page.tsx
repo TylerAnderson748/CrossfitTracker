@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { collection, query, where, getDocs, addDoc, updateDoc, doc, Timestamp } from "firebase/firestore";
+import { useRouter, useSearchParams } from "next/navigation";
+import { collection, query, where, getDocs, getDoc, addDoc, updateDoc, doc, Timestamp } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
 import { GymApplication, GymSubscription, PRICING } from "@/lib/types";
@@ -13,6 +13,8 @@ type PlanSelection = "base" | "ai_programmer";
 export default function GymSetupPage() {
   const { user, loading, switching, refreshUser } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const applicationId = searchParams.get("applicationId");
 
   const [approvedApplication, setApprovedApplication] = useState<GymApplication | null>(null);
   const [loadingData, setLoadingData] = useState(true);
@@ -30,13 +32,27 @@ export default function GymSetupPage() {
     if (user && !switching) {
       fetchApprovedApplication();
     }
-  }, [user, switching]);
+  }, [user, switching, applicationId]);
 
   const fetchApprovedApplication = async () => {
     if (!user) return;
 
     try {
-      // Check if user has an approved application without a gym yet
+      // If we have an applicationId from URL, fetch it directly
+      if (applicationId) {
+        const appDoc = await getDoc(doc(db, "gymApplications", applicationId));
+        if (appDoc.exists()) {
+          const app = { id: appDoc.id, ...appDoc.data() } as GymApplication;
+          // Verify this application belongs to the user and is approved
+          if (app.userId === user.id && app.status === "approved" && !app.approvedGymId) {
+            setApprovedApplication(app);
+            setLoadingData(false);
+            return;
+          }
+        }
+      }
+
+      // Fallback: Query for approved applications
       const applicationsQuery = query(
         collection(db, "gymApplications"),
         where("userId", "==", user.id)
@@ -44,8 +60,8 @@ export default function GymSetupPage() {
       const snapshot = await getDocs(applicationsQuery);
 
       // Find approved application without gym created
-      for (const doc of snapshot.docs) {
-        const app = { id: doc.id, ...doc.data() } as GymApplication;
+      for (const docSnap of snapshot.docs) {
+        const app = { id: docSnap.id, ...docSnap.data() } as GymApplication;
         if (app.status === "approved") {
           if (!app.approvedGymId) {
             setApprovedApplication(app);

@@ -105,12 +105,12 @@ export default function GymPage() {
             <h1 className="text-2xl font-bold text-gray-900 mb-2">Your Gym is Approved!</h1>
             <p className="text-gray-500">Complete your setup to start managing {approvedApplication.gymName}</p>
           </div>
-          <button
-            onClick={() => router.push("/gym/setup")}
-            className="w-full py-4 bg-green-600 text-white font-bold text-lg rounded-xl hover:bg-green-700 transition-colors"
+          <Link
+            href={`/gym/setup?applicationId=${approvedApplication.id}`}
+            className="w-full py-4 bg-green-600 text-white font-bold text-lg rounded-xl hover:bg-green-700 transition-colors block text-center"
           >
             Complete Setup & Subscribe
-          </button>
+          </Link>
         </main>
       </div>
     );
