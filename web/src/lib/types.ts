@@ -432,6 +432,8 @@ export interface GymSubscription {
   aiCoachMemberCount?: number;   // Number of members with AI Coach enabled
   startDate?: Timestamp;
   currentPeriodEnd?: Timestamp;
+  aiProgrammerEndsAt?: Timestamp;  // When AI Programmer will be disabled (if downgrading)
+  aiCoachEndsAt?: Timestamp;       // When AI Coach will be disabled (if canceling)
   stripeCustomerId?: string;
   stripeSubscriptionId?: string;
 }

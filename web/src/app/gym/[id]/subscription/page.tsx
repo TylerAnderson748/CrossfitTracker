@@ -78,24 +78,55 @@ export default function GymSubscriptionPage() {
 
     setIsSaving(true);
     try {
+      // Determine dates based on upgrade vs downgrade
+      const existingSubscription = gym.subscription;
+      const isNewSubscription = !existingSubscription?.status || existingSubscription.status !== "active";
+
+      // Keep existing period end date when downgrading, otherwise set new 30-day period
+      const periodEndDate = isNewSubscription
+        ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+        : existingSubscription?.currentPeriodEnd?.toDate() || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
       const subscription: GymSubscription = {
         plan: selectedPlan === "ai_programmer" ? "ai_programmer" : "base",
         status: "active",
         aiProgrammerEnabled: selectedPlan === "ai_programmer",
         aiCoachEnabled: aiCoachEnabled,
         aiCoachMemberCount: aiCoachEnabled ? memberCount : 0,
-        startDate: Timestamp.now(),
-        currentPeriodEnd: Timestamp.fromDate(
-          new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
-        ),
+        startDate: existingSubscription?.startDate || Timestamp.now(),
+        currentPeriodEnd: Timestamp.fromDate(periodEndDate),
       };
+
+      // If downgrading from AI Programmer, schedule the end date
+      if (currentlyHasAiProgrammer && selectedPlan === "base") {
+        subscription.aiProgrammerEndsAt = Timestamp.fromDate(periodEndDate);
+        // Keep AI Programmer active until period ends
+        subscription.aiProgrammerEnabled = true;
+      } else if (selectedPlan === "ai_programmer") {
+        // If upgrading to AI Programmer, clear any scheduled end
+        subscription.aiProgrammerEndsAt = undefined;
+      }
+
+      // Same logic for AI Coach
+      const currentlyHasAiCoach = existingSubscription?.aiCoachEnabled || false;
+      if (currentlyHasAiCoach && !aiCoachEnabled) {
+        subscription.aiCoachEndsAt = Timestamp.fromDate(periodEndDate);
+        // Keep AI Coach active until period ends
+        subscription.aiCoachEnabled = true;
+        subscription.aiCoachMemberCount = existingSubscription?.aiCoachMemberCount || memberCount;
+      } else if (aiCoachEnabled) {
+        subscription.aiCoachEndsAt = undefined;
+      }
 
       await updateDoc(doc(db, "gyms", gymId), {
         subscription,
         pricingEnabled: true,
       });
 
-      alert("Subscription updated successfully!");
+      const message = isDowngradingAiProgrammer
+        ? `AI Programmer will remain active until ${formatDate(periodEndDate)}`
+        : "Subscription updated successfully!";
+      alert(message);
       router.push(`/gym/${gymId}`);
     } catch (error) {
       console.error("Error updating subscription:", error);
@@ -130,6 +161,22 @@ export default function GymSubscriptionPage() {
   }
 
   const hasActiveSubscription = gym.subscription?.status === "active";
+  const currentlyHasAiProgrammer = gym.subscription?.aiProgrammerEnabled || false;
+  const isDowngradingAiProgrammer = currentlyHasAiProgrammer && selectedPlan === "base";
+  const currentPeriodEnd = gym.subscription?.currentPeriodEnd?.toDate();
+
+  // Check if there's a pending cancellation for AI Programmer
+  const aiProgrammerEndsAt = gym.subscription?.aiProgrammerEndsAt?.toDate();
+  const hasScheduledAiProgrammerEnd = aiProgrammerEndsAt && aiProgrammerEndsAt > new Date();
+
+  const formatDate = (date: Date | undefined) => {
+    if (!date) return "";
+    return date.toLocaleDateString("en-US", {
+      month: "long",
+      day: "numeric",
+      year: "numeric"
+    });
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -166,6 +213,38 @@ export default function GymSubscriptionPage() {
             )}
           </div>
         </div>
+
+        {/* Scheduled Cancellation Notice */}
+        {hasScheduledAiProgrammerEnd && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6">
+            <div className="flex items-start gap-3">
+              <span className="text-xl">⚠️</span>
+              <div>
+                <h3 className="font-semibold text-amber-800">AI Programmer Ending Soon</h3>
+                <p className="text-amber-700 text-sm">
+                  Your AI Programmer access will end on <strong>{formatDate(aiProgrammerEndsAt)}</strong>.
+                  You can re-subscribe anytime to keep access.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Downgrade Warning */}
+        {isDowngradingAiProgrammer && !hasScheduledAiProgrammerEnd && (
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
+            <div className="flex items-start gap-3">
+              <span className="text-xl">ℹ️</span>
+              <div>
+                <h3 className="font-semibold text-blue-800">Downgrading to Base Plan</h3>
+                <p className="text-blue-700 text-sm">
+                  Your AI Programmer access will remain active until <strong>{formatDate(currentPeriodEnd)}</strong>.
+                  After that date, you&apos;ll lose access to AI-generated programming.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Plan Selection */}
         <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
@@ -311,10 +390,16 @@ export default function GymSubscriptionPage() {
         <button
           onClick={handleSubscribe}
           disabled={isSaving}
-          className="w-full py-4 bg-gray-900 text-white font-semibold rounded-xl hover:bg-gray-800 transition-colors disabled:opacity-50"
+          className={`w-full py-4 font-semibold rounded-xl transition-colors disabled:opacity-50 ${
+            isDowngradingAiProgrammer
+              ? "bg-amber-600 hover:bg-amber-700 text-white"
+              : "bg-gray-900 hover:bg-gray-800 text-white"
+          }`}
         >
           {isSaving
             ? "Processing..."
+            : isDowngradingAiProgrammer
+            ? "Downgrade Plan"
             : hasActiveSubscription
             ? "Update Subscription"
             : "Subscribe Now"}
