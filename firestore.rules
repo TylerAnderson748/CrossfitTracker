@@ -339,7 +339,7 @@ service cloud.firestore {
       // Only owner can write their results
       allow create: if isAuthenticated() &&
                        request.resource.data.userId == request.auth.uid &&
-                       hasRequiredFields(['userId', 'liftName', 'weight']);
+                       hasRequiredFields(['userId', 'liftTitle', 'weight']);
       allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
       allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
     }
