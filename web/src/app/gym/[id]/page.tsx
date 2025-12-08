@@ -1314,6 +1314,12 @@ export default function GymDetailPage() {
                 <span className="px-3 py-1 bg-purple-100 text-purple-600 rounded-full text-sm font-medium">
                   Owner
                 </span>
+                <Link
+                  href={`/gym/${gymId}/edit`}
+                  className="px-3 py-1 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 text-sm font-medium"
+                >
+                  Edit
+                </Link>
                 <button
                   onClick={() => setShowDeleteGymModal(true)}
                   className="px-3 py-1 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 text-sm font-medium"
