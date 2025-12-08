@@ -200,8 +200,8 @@ export default function GymDetailPage() {
         ...doc.data(),
       })) as AppUser[];
 
-      // Filter members (athlete or member role) and coaches
-      const memberResults = allGymUsers.filter(u => u.role === "athlete" || u.role === "member");
+      // Filter members (athlete, member, or owner - owners are also members who work out)
+      const memberResults = allGymUsers.filter(u => u.role === "athlete" || u.role === "member" || u.role === "owner");
       const coachResults = allGymUsers.filter(u => u.role === "coach");
 
       setMembers(memberResults);
