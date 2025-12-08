@@ -160,8 +160,13 @@ service cloud.firestore {
                        request.resource.data.status == 'pending' &&
                        hasRequiredFields(['userId', 'userEmail', 'gymName', 'gymAddress', 'gymCity', 'gymState', 'gymZip', 'status', 'submittedAt']);
 
-      // Only super admins can update applications (approve/reject)
-      allow update: if isSuperAdmin();
+      // Super admins can update applications (approve/reject)
+      // Application owner can update their own approved application to set approvedGymId
+      allow update: if isSuperAdmin() ||
+                       (isAuthenticated() &&
+                        resource.data.userId == request.auth.uid &&
+                        resource.data.status == 'approved' &&
+                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['approvedGymId']));
 
       // Super admins can delete applications
       allow delete: if isSuperAdmin();

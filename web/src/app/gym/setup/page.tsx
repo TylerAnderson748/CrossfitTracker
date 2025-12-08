@@ -106,8 +106,8 @@ export default function GymSetupPage() {
         ),
       };
 
-      // Create the gym
-      const gymData = {
+      // Create the gym - don't include null/undefined values
+      const gymData: Record<string, unknown> = {
         name: approvedApplication.gymName,
         ownerId: user.id,
         coachIds: [],
@@ -117,13 +117,19 @@ export default function GymSetupPage() {
         city: approvedApplication.gymCity,
         state: approvedApplication.gymState,
         zip: approvedApplication.gymZip,
-        phone: approvedApplication.gymPhone || null,
-        website: approvedApplication.gymWebsite || null,
         applicationId: approvedApplication.id,
         isApproved: true,
         subscription,
         pricingEnabled: true,
       };
+
+      // Only add optional fields if they have values
+      if (approvedApplication.gymPhone) {
+        gymData.phone = approvedApplication.gymPhone;
+      }
+      if (approvedApplication.gymWebsite) {
+        gymData.website = approvedApplication.gymWebsite;
+      }
 
       const gymRef = await addDoc(collection(db, "gyms"), gymData);
 
