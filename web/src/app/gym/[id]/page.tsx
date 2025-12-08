@@ -1579,7 +1579,7 @@ export default function GymDetailPage() {
                             )}
                           </div>
                           <p className="text-gray-500 text-sm">
-                            {group.memberIds?.length || 0} members
+                            {group.membershipType === "auto-assign-all" ? members.length : (group.memberIds?.length || 0)} members
                             {group.defaultTimeSlots?.length > 0 && ` • ${group.defaultTimeSlots.length} class times`}
                           </p>
                         </div>
@@ -2303,7 +2303,7 @@ export default function GymDetailPage() {
                         </div>
                         <div>
                           <p className="font-medium text-gray-900">{group.name}</p>
-                          <p className="text-xs text-gray-500">{group.memberIds?.length || 0} members</p>
+                          <p className="text-xs text-gray-500">{group.membershipType === "auto-assign-all" ? members.length : (group.memberIds?.length || 0)} members</p>
                         </div>
                       </div>
 
