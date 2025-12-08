@@ -3,24 +3,27 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { collection, getDocs } from "firebase/firestore";
+import { collection, getDocs, query, where } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
-import { Gym } from "@/lib/types";
+import { Gym, GymApplication } from "@/lib/types";
 import AccountSwitcher from "./AccountSwitcher";
 
 export default function Navigation() {
   const pathname = usePathname();
   const { user } = useAuth();
   const [isGymOwner, setIsGymOwner] = useState(false);
+  const [hasApprovedApplication, setHasApprovedApplication] = useState(false);
 
   useEffect(() => {
     const checkGymOwnership = async () => {
       if (!user) {
         setIsGymOwner(false);
+        setHasApprovedApplication(false);
         return;
       }
       try {
+        // Check if user owns any gyms
         const gymsSnapshot = await getDocs(collection(db, "gyms"));
         const gyms = gymsSnapshot.docs.map((doc) => ({
           id: doc.id,
@@ -29,9 +32,27 @@ export default function Navigation() {
 
         const ownsGym = gyms.some((gym) => gym.ownerId === user.id);
         setIsGymOwner(ownsGym);
+
+        // Check if user has an approved application awaiting setup
+        if (!ownsGym) {
+          const applicationsQuery = query(
+            collection(db, "gymApplications"),
+            where("userId", "==", user.id),
+            where("status", "==", "approved")
+          );
+          const appSnapshot = await getDocs(applicationsQuery);
+          const hasApproved = appSnapshot.docs.some(doc => {
+            const data = doc.data() as GymApplication;
+            return !data.approvedGymId; // Only if gym not yet created
+          });
+          setHasApprovedApplication(hasApproved);
+        } else {
+          setHasApprovedApplication(false);
+        }
       } catch (error) {
         console.error("Error checking gym ownership:", error);
         setIsGymOwner(false);
+        setHasApprovedApplication(false);
       }
     };
 
@@ -82,9 +103,12 @@ export default function Navigation() {
   // Super admin check
   const isSuperAdmin = user?.role === "superAdmin";
 
+  // Show Gym tab if user owns a gym OR has an approved application
+  const showGymTab = isGymOwner || hasApprovedApplication;
+
   const navItems = [
     { href: "/weekly", label: "Home", icon: "🏠" },
-    ...(isGymOwner ? [{ href: "/gym", label: "Gym", icon: "🏢" }] : []),
+    ...(showGymTab ? [{ href: "/gym", label: "Gym", icon: "🏢" }] : []),
     { href: "/programming", label: "Programming", icon: "📅" },
     { href: "/workouts", label: "Workouts", icon: "📋" },
     { href: "/profile", label: "Profile", icon: "👤" },
