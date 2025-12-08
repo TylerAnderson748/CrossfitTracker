@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { collection, addDoc, updateDoc, doc, query, where, getDocs, orderBy, Timestamp, serverTimestamp, deleteDoc } from "firebase/firestore";
+import { collection, addDoc, updateDoc, doc, query, where, getDocs, getDoc, orderBy, Timestamp, serverTimestamp, deleteDoc } from "firebase/firestore";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { db } from "@/lib/firebase";
 import { AIProgrammingSession, AIChatMessage, AIGeneratedDay, WorkoutGroup, WorkoutComponent, AIProgrammingPreferences, AITrainerSubscription, ScheduledTimeSlot } from "@/lib/types";
@@ -421,7 +421,23 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
 
     setIsCanceling(true);
     try {
-      // Set status to canceled and set end date to current period end or trial end
+      // For gym owners, update the gym's subscription
+      if (gymId) {
+        const gymDoc = await getDoc(doc(db, "gyms", gymId));
+        if (gymDoc.exists()) {
+          const gymData = gymDoc.data();
+          const currentPeriodEnd = gymData.subscription?.currentPeriodEnd || Timestamp.fromDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000));
+
+          await updateDoc(doc(db, "gyms", gymId), {
+            "subscription.aiProgrammerEndsAt": currentPeriodEnd,
+          });
+          setShowCancelModal(false);
+          window.location.reload();
+          return;
+        }
+      }
+
+      // Fallback: Update user's individual subscription
       const endDate = subscription?.trialEndsAt || subscription?.endDate || Timestamp.fromDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000));
 
       await updateDoc(doc(db, "users", userId), {
@@ -429,7 +445,6 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
         "aiProgrammingSubscription.endDate": endDate,
       });
       setShowCancelModal(false);
-      // Force page reload to refresh subscription status
       window.location.reload();
     } catch (err) {
       console.error("Error canceling subscription:", err);

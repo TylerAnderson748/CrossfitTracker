@@ -1684,7 +1684,12 @@ export default function GymDetailPage() {
                     userId={user.id}
                     userEmail={user.email}
                     groups={groups}
-                    subscription={user.aiProgrammingSubscription}
+                    subscription={gym?.subscription?.aiProgrammerEnabled ? {
+                      tier: "coach" as const,
+                      status: gym.subscription.aiProgrammerEndsAt ? "canceled" : (gym.subscription.status || "active"),
+                      endDate: gym.subscription.aiProgrammerEndsAt || gym.subscription.currentPeriodEnd,
+                      startDate: gym.subscription.startDate,
+                    } : undefined}
                     onPublish={() => {
                       // Refresh workouts after publishing
                       fetchGymData();
