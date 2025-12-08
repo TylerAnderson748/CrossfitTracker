@@ -189,9 +189,9 @@ export default function GymDetailPage() {
       setGym(gymData);
 
       // Fetch all users with this gymId, then filter by role client-side
-      // (avoids needing a composite Firestore index)
+      // (uses "users" collection since gymId may not be synced to userProfiles)
       const gymUsersQuery = query(
-        collection(db, "userProfiles"),
+        collection(db, "users"),
         where("gymId", "==", gymId)
       );
       const gymUsersSnapshot = await getDocs(gymUsersQuery);
