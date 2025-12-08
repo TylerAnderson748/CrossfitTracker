@@ -1325,48 +1325,6 @@ export default function GymDetailPage() {
           </div>
         </div>
 
-        {/* Subscription Setup Banner - for owners without active subscription */}
-        {isOwner && (!gym.subscription || gym.subscription.status !== "active") && (
-          <div className="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-xl p-6 mb-6 text-white">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
-                  <span className="text-2xl">🚀</span>
-                </div>
-                <div>
-                  <h2 className="text-lg font-bold">Complete Your Gym Setup</h2>
-                  <p className="text-blue-100 text-sm">
-                    Subscribe to unlock all gym features - programming, member management, and more
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => router.push(`/gym/${gymId}/subscription`)}
-                className="px-6 py-3 bg-white text-blue-700 font-bold rounded-lg hover:bg-blue-50 transition-colors"
-              >
-                Continue Setup
-              </button>
-            </div>
-            <div className="mt-4 pt-4 border-t border-white/20">
-              <p className="text-sm text-blue-100 mb-2">What you&apos;ll get with a subscription:</p>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <div className="flex items-center gap-2 text-sm">
-                  <span>✓</span> Unlimited members
-                </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <span>✓</span> Programming tools
-                </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <span>✓</span> Class scheduling
-                </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <span>✓</span> External imports
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Tabs */}
         <div className="flex gap-2 mb-6 overflow-x-auto">
           {[

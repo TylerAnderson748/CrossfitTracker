@@ -75,38 +75,11 @@ export default function GymApplicationsPage() {
 
     setIsProcessing(true);
     try {
-      // Create the gym
-      const gymData = {
-        name: application.gymName,
-        ownerId: application.userId,
-        coachIds: [],
-        memberIds: [],
-        createdAt: Timestamp.now(),
-        address: application.gymAddress,
-        city: application.gymCity,
-        state: application.gymState,
-        zip: application.gymZip,
-        phone: application.gymPhone || null,
-        website: application.gymWebsite || null,
-        applicationId: application.id,
-        isApproved: true,
-        pricingEnabled: false,
-      };
-
-      const gymRef = await addDoc(collection(db, "gyms"), gymData);
-
-      // Update the application status
+      // Just approve the application - gym will be created when they subscribe
       await updateDoc(doc(db, "gymApplications", application.id), {
         status: "approved",
         reviewedAt: Timestamp.now(),
         reviewedBy: user.id,
-        approvedGymId: gymRef.id,
-      });
-
-      // Update the user's role to owner
-      await updateDoc(doc(db, "users", application.userId), {
-        role: "owner",
-        gymId: gymRef.id,
       });
 
       // Refresh applications
@@ -114,7 +87,7 @@ export default function GymApplicationsPage() {
       setShowReviewModal(false);
       setSelectedApplication(null);
 
-      alert(`Gym "${application.gymName}" has been approved and created!`);
+      alert(`Application for "${application.gymName}" has been approved! The applicant can now complete their subscription to create the gym.`);
     } catch (error) {
       console.error("Error approving application:", error);
       alert("Failed to approve application. Please try again.");

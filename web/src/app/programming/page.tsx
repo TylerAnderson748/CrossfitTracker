@@ -664,6 +664,35 @@ export default function ProgrammingPage() {
               </div>
             </div>
 
+            {/* Approved Applications - Awaiting Setup */}
+            {gymApplications.filter(app => app.status === "approved" && !app.approvedGymId).length > 0 && (
+              <div className="mb-6">
+                <h4 className="font-semibold text-sm mb-3 text-green-300">Ready to Setup!</h4>
+                {gymApplications.filter(app => app.status === "approved" && !app.approvedGymId).map((app) => (
+                  <div key={app.id} className="p-4 bg-green-500/10 border border-green-500/30 rounded-xl">
+                    <div className="flex items-center justify-between mb-3">
+                      <div>
+                        <h5 className="font-medium text-lg">{app.gymName}</h5>
+                        <p className="text-gray-400 text-xs">{app.gymCity}, {app.gymState}</p>
+                      </div>
+                      <span className="px-3 py-1 bg-green-500/20 text-green-300 text-xs font-medium rounded-full">
+                        Approved!
+                      </span>
+                    </div>
+                    <p className="text-green-200 text-sm mb-4">
+                      Your gym has been approved! Complete your subscription to start managing your gym.
+                    </p>
+                    <button
+                      onClick={() => router.push("/gym/setup")}
+                      className="w-full py-3 bg-green-500 text-white font-bold rounded-lg hover:bg-green-600 transition-colors"
+                    >
+                      Complete Setup & Subscribe
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
             {/* Pending Applications */}
             {gymApplications.filter(app => app.status === "pending").length > 0 && (
               <div className="mb-6">
