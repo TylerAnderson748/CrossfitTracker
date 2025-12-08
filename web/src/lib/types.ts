@@ -452,14 +452,14 @@ export interface IndividualSubscription {
 // Pricing Constants
 export const PRICING = {
   // Gym pricing
-  GYM_BASE: 50,           // $50/mo base gym subscription
-  GYM_AI_PROGRAMMER: 100, // +$100/mo AI Programmer add-on for gyms
-  GYM_AI_COACH_PER_MEMBER: 1, // $1/member/mo for AI Coach
+  GYM_BASE: 49,             // $49/mo base gym subscription (includes external programming import)
+  GYM_AI_PROGRAMMER: 99,    // +$99/mo AI Programmer add-on for gyms
+  GYM_AI_COACH_PER_MEMBER: 1, // +$1/member/mo for AI Coach
 
-  // Individual pricing
-  INDIVIDUAL_AI_COACH: 9.99,      // $9.99/mo personal AI Coach
-  INDIVIDUAL_EXTERNAL_PROGRAMMING: 50, // $50/mo external programming import
-  INDIVIDUAL_AI_PROGRAMMER: 100,  // $100/mo AI-generated workouts
+  // Individual pricing (FREE tier = tracking only)
+  INDIVIDUAL_AI_COACH: 9.99,        // $9.99/mo personal AI Coach
+  INDIVIDUAL_AI_PROGRAMMER: 9.99,   // $9.99/mo AI-generated personal programming
+  INDIVIDUAL_AI_PROGRAMMER_PLUS: 14.99, // $14.99/mo premium AI programming
 } as const;
 
 // Feature Access Helpers

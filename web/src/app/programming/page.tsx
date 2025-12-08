@@ -542,8 +542,8 @@ export default function ProgrammingPage() {
                 </div>
               </div>
               <div className="text-right">
-                <div className="text-2xl font-bold">${PRICING.INDIVIDUAL_EXTERNAL_PROGRAMMING}</div>
-                <div className="text-orange-200 text-xs">/month</div>
+                <div className="text-2xl font-bold">FREE</div>
+                <div className="text-orange-200 text-xs">included with tracking</div>
               </div>
             </div>
 
@@ -584,10 +584,10 @@ export default function ProgrammingPage() {
             </ul>
 
             <button
-              onClick={() => router.push("/subscribe?variant=external")}
+              onClick={() => router.push("/weekly")}
               className="w-full px-6 py-3 bg-white text-orange-600 font-bold rounded-lg hover:bg-orange-50 transition-colors"
             >
-              Subscribe - ${PRICING.INDIVIDUAL_EXTERNAL_PROGRAMMING}/mo
+              Start Tracking - Free
             </button>
 
             {/* Future Integrations Note */}
