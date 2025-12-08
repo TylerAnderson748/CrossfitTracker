@@ -188,30 +188,23 @@ export default function GymDetailPage() {
       const gymData = { id: gymDoc.id, ...gymDoc.data() } as Gym;
       setGym(gymData);
 
-      // Fetch members by querying users with this gymId and athlete/member role
-      const membersQuery = query(
+      // Fetch all users with this gymId, then filter by role client-side
+      // (avoids needing a composite Firestore index)
+      const gymUsersQuery = query(
         collection(db, "userProfiles"),
-        where("gymId", "==", gymId),
-        where("role", "in", ["athlete", "member"])
+        where("gymId", "==", gymId)
       );
-      const membersSnapshot = await getDocs(membersQuery);
-      const memberResults = membersSnapshot.docs.map((doc) => ({
+      const gymUsersSnapshot = await getDocs(gymUsersQuery);
+      const allGymUsers = gymUsersSnapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       })) as AppUser[];
-      setMembers(memberResults);
 
-      // Fetch coaches by querying users with this gymId and coach role
-      const coachesQuery = query(
-        collection(db, "userProfiles"),
-        where("gymId", "==", gymId),
-        where("role", "==", "coach")
-      );
-      const coachesSnapshot = await getDocs(coachesQuery);
-      const coachResults = coachesSnapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      })) as AppUser[];
+      // Filter members (athlete or member role) and coaches
+      const memberResults = allGymUsers.filter(u => u.role === "athlete" || u.role === "member");
+      const coachResults = allGymUsers.filter(u => u.role === "coach");
+
+      setMembers(memberResults);
       setCoaches(coachResults);
 
       // Fetch groups
