@@ -11,7 +11,7 @@ import Navigation from "@/components/Navigation";
 type PlanSelection = "base" | "ai_programmer";
 
 export default function GymSetupPage() {
-  const { user, loading, refreshUser } = useAuth();
+  const { user, loading, switching, refreshUser } = useAuth();
   const router = useRouter();
 
   const [approvedApplication, setApprovedApplication] = useState<GymApplication | null>(null);
@@ -21,16 +21,16 @@ export default function GymSetupPage() {
   const [isCreating, setIsCreating] = useState(false);
 
   useEffect(() => {
-    if (!loading && !user) {
+    if (!loading && !switching && !user) {
       router.push("/login");
     }
-  }, [user, loading, router]);
+  }, [user, loading, switching, router]);
 
   useEffect(() => {
-    if (user) {
+    if (user && !switching) {
       fetchApprovedApplication();
     }
-  }, [user]);
+  }, [user, switching]);
 
   const fetchApprovedApplication = async () => {
     if (!user) return;
@@ -135,7 +135,7 @@ export default function GymSetupPage() {
     }
   };
 
-  if (loading || loadingData) {
+  if (loading || switching || loadingData) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <p className="text-gray-500">Loading...</p>
