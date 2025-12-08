@@ -960,17 +960,21 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
         {subscription && (
           <div className="px-4 py-2 bg-white/10 flex items-center justify-between text-xs">
             <span className="text-white/80">
-              {subscription.status === "canceled" && subscription.endDate ? (
-                <>Access ends {subscription.endDate?.toDate?.().toLocaleDateString() || "soon"}</>
+              {subscription.scheduledEndDate ? (
+                // Has scheduled cancellation - show end date
+                <>Access ends {subscription.scheduledEndDate?.toDate?.().toLocaleDateString() || "soon"}</>
+              ) : subscription.status === "canceled" && subscription.endDate ? (
+                <>Access ended {subscription.endDate?.toDate?.().toLocaleDateString() || ""}</>
               ) : subscription.status === "trialing" ? (
                 <>Trial ends {subscription.trialEndsAt?.toDate?.().toLocaleDateString() || "soon"}</>
               ) : (
                 <>Subscription active</>
               )}
             </span>
-            {subscription.status === "canceled" ? (
+            {subscription.scheduledEndDate || subscription.status === "canceled" ? (
+              // Already cancelled or scheduled to cancel - show resubscribe
               <button
-                onClick={() => window.location.href = "/subscribe?variant=coach"}
+                onClick={() => window.location.href = `/gym/${gymId}/subscription`}
                 className="text-green-200 hover:text-green-100 hover:underline"
               >
                 Resubscribe

@@ -1686,9 +1686,14 @@ export default function GymDetailPage() {
                     groups={groups}
                     subscription={gym?.subscription?.aiProgrammerEnabled ? {
                       tier: "coach" as const,
-                      status: gym.subscription.aiProgrammerEndsAt ? "canceled" : (gym.subscription.status || "active"),
+                      // Only show as canceled if end date has PASSED, otherwise keep active
+                      status: gym.subscription.aiProgrammerEndsAt && gym.subscription.aiProgrammerEndsAt.toDate() <= new Date()
+                        ? "canceled"
+                        : (gym.subscription.status || "active"),
                       endDate: gym.subscription.aiProgrammerEndsAt || gym.subscription.currentPeriodEnd,
                       startDate: gym.subscription.startDate,
+                      // Pass the scheduled end date so the UI can show "ends on X"
+                      scheduledEndDate: gym.subscription.aiProgrammerEndsAt,
                     } : undefined}
                     onPublish={() => {
                       // Refresh workouts after publishing

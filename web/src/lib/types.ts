@@ -46,6 +46,7 @@ export interface AITrainerSubscription {
   startDate?: Timestamp;
   endDate?: Timestamp;
   trialEndsAt?: Timestamp;
+  scheduledEndDate?: Timestamp;  // When subscription is scheduled to end (cancelled but still active)
   stripeCustomerId?: string;
   stripeSubscriptionId?: string;
 }

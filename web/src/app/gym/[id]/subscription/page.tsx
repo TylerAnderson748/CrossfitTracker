@@ -80,12 +80,18 @@ export default function GymSubscriptionPage() {
     try {
       // Determine dates based on upgrade vs downgrade
       const existingSubscription = gym.subscription;
+      const existingPeriodEnd = existingSubscription?.currentPeriodEnd?.toDate();
+      const periodHasExpired = !existingPeriodEnd || existingPeriodEnd < new Date();
       const isNewSubscription = !existingSubscription?.status || existingSubscription.status !== "active";
 
-      // Keep existing period end date when downgrading, otherwise set new 30-day period
-      const periodEndDate = isNewSubscription
+      // GAMING PREVENTION: Only start a new period if:
+      // 1. This is a brand new subscription, OR
+      // 2. The existing period has expired
+      // Otherwise keep the existing period end date (prevents cancel/re-subscribe gaming)
+      const needsNewPeriod = isNewSubscription || periodHasExpired;
+      const periodEndDate = needsNewPeriod
         ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
-        : existingSubscription?.currentPeriodEnd?.toDate() || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+        : existingPeriodEnd;
 
       const subscription: GymSubscription = {
         plan: selectedPlan === "ai_programmer" ? "ai_programmer" : "base",
