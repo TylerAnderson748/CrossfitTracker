@@ -96,26 +96,25 @@ export default function GroupDetailPage({
   const loadData = async () => {
     setLoading(true);
     try {
+      // Load all gym members by querying users with this gymId
+      const gymMembersQuery = query(
+        collection(db, "users"),
+        where("gymId", "==", gymId)
+      );
+      const gymMembersSnapshot = await getDocs(gymMembersQuery);
+      const allGymMembers = gymMembersSnapshot.docs
+        .map((doc) => ({ id: doc.id, ...doc.data() } as AppUser))
+        .filter(u => u.role === "athlete" || u.role === "member" || u.role === "owner");
+      setGymMembers(allGymMembers);
+
       // Load gym
       const gymDoc = await getDoc(doc(db, "gyms", gymId));
-      let gymData: Gym | null = null;
       if (gymDoc.exists()) {
-        gymData = { id: gymDoc.id, ...gymDoc.data() } as Gym;
+        const gymData = { id: gymDoc.id, ...gymDoc.data() } as Gym;
         setGym(gymData);
         setIsCoachOrOwner(
           gymData.ownerId === user?.id || gymData.coachIds?.includes(user?.id || "")
         );
-
-        // Load all gym members by querying users with this gymId
-        const gymMembersQuery = query(
-          collection(db, "users"),
-          where("gymId", "==", gymId)
-        );
-        const gymMembersSnapshot = await getDocs(gymMembersQuery);
-        const allGymMembers = gymMembersSnapshot.docs
-          .map((doc) => ({ id: doc.id, ...doc.data() } as AppUser))
-          .filter(u => u.role === "athlete" || u.role === "member" || u.role === "owner");
-        setGymMembers(allGymMembers);
       }
 
       // Load group
