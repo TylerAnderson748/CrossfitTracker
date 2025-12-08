@@ -79,12 +79,16 @@ export default function Navigation() {
   const hasAISubscription = relevantSubscription?.status === "active" ||
     relevantSubscription?.status === "trialing";
 
+  // Super admin check
+  const isSuperAdmin = user?.role === "superAdmin";
+
   const navItems = [
     { href: "/weekly", label: "Home", icon: "🏠" },
     ...(isGymOwner ? [{ href: "/gym", label: "Gym", icon: "🏢" }] : []),
     { href: "/programming", label: "Programming", icon: "📅" },
     { href: "/workouts", label: "Workouts", icon: "📋" },
     { href: "/profile", label: "Profile", icon: "👤" },
+    ...(isSuperAdmin ? [{ href: "/admin/gym-applications", label: "Admin", icon: "🛡️" }] : []),
     ...(!hasAISubscription ? [{ href: isGymOwner ? "/subscribe?variant=coach" : "/subscribe", label: isGymOwner ? "AI Programming" : "AI Coach", icon: "⚡" }] : []),
     ...(canSeeSpecialTabs ? [{ href: "/hi-devin", label: "Hi Devin!", icon: "🎉" }] : []),
     ...(canSeeSpecialTabs ? [{ href: "/hi-blake", label: "Hi Blake...", icon: "💀" }] : []),

@@ -22,8 +22,6 @@ export default function GymApplicationsPage() {
   useEffect(() => {
     if (!loading && !user) {
       router.push("/login");
-    } else if (!loading && user && user.role !== "superAdmin") {
-      router.push("/");
     }
   }, [user, loading, router]);
 
@@ -32,6 +30,22 @@ export default function GymApplicationsPage() {
       fetchApplications();
     }
   }, [user]);
+
+  // Show access denied for non-superAdmins
+  if (!loading && user && user.role !== "superAdmin") {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Navigation />
+        <main className="max-w-4xl mx-auto px-4 py-8">
+          <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
+            <h1 className="text-xl font-bold text-red-700 mb-2">Access Denied</h1>
+            <p className="text-red-600 mb-4">You need super admin privileges to access this page.</p>
+            <p className="text-sm text-gray-500">Your current role: <code className="bg-gray-100 px-2 py-1 rounded">{user.role || "none"}</code></p>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   const fetchApplications = async () => {
     try {
