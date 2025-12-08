@@ -3,20 +3,19 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { collection, query, where, getDocs, addDoc, updateDoc, doc, Timestamp } from "firebase/firestore";
+import { collection, query, where, getDocs, deleteDoc, doc } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
-import { Gym } from "@/lib/types";
+import { Gym, GymApplication } from "@/lib/types";
 import Navigation from "@/components/Navigation";
 
 export default function GymPage() {
-  const { user, loading, switching, refreshUser } = useAuth();
+  const { user, loading, switching } = useAuth();
   const router = useRouter();
   const [myGyms, setMyGyms] = useState<(Gym & { role: string })[]>([]);
+  const [approvedApplication, setApprovedApplication] = useState<GymApplication | null>(null);
+  const [pendingApplication, setPendingApplication] = useState<GymApplication | null>(null);
   const [loadingData, setLoadingData] = useState(true);
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [newGymName, setNewGymName] = useState("");
-  const [creating, setCreating] = useState(false);
 
   useEffect(() => {
     if (!loading && !switching && !user) {
@@ -26,22 +25,29 @@ export default function GymPage() {
 
   useEffect(() => {
     if (user) {
-      fetchGyms();
+      loadData();
     }
   }, [user]);
 
-  const fetchGyms = async () => {
+  const loadData = async () => {
     if (!user) return;
 
     try {
-      // Fetch all gyms and filter to owned ones
-      const gymsSnapshot = await getDocs(collection(db, "gyms"));
+      // Fetch gyms and all user's applications in parallel
+      const [gymsSnapshot, applicationsSnapshot] = await Promise.all([
+        getDocs(collection(db, "gyms")),
+        getDocs(query(
+          collection(db, "gymApplications"),
+          where("userId", "==", user.id)
+        ))
+      ]);
+
+      // Process gyms
       const gyms = gymsSnapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       })) as Gym[];
 
-      // Filter gyms where user is the owner only
       const ownedGyms = gyms
         .filter((gym) => gym.ownerId === user.id)
         .map((gym) => ({
@@ -50,68 +56,20 @@ export default function GymPage() {
         }));
 
       setMyGyms(ownedGyms);
+
+      // Process applications
+      applicationsSnapshot.docs.forEach((doc) => {
+        const app = { id: doc.id, ...doc.data() } as GymApplication;
+        if (app.status === "approved" && !app.approvedGymId) {
+          setApprovedApplication(app);
+        } else if (app.status === "pending") {
+          setPendingApplication(app);
+        }
+      });
     } catch (error) {
-      console.error("Error fetching gyms:", error);
+      console.error("Error loading data:", error);
     } finally {
       setLoadingData(false);
-    }
-  };
-
-  const handleCreateGym = async () => {
-    if (!user || !newGymName.trim()) return;
-
-    setCreating(true);
-    try {
-      // Create the gym
-      const gymRef = await addDoc(collection(db, "gyms"), {
-        name: newGymName.trim(),
-        ownerId: user.id,
-        coachIds: [],
-        memberIds: [],
-        createdAt: Timestamp.now(),
-      });
-
-      // Set gymId and role on the owner's user document
-      await updateDoc(doc(db, "users", user.id), {
-        gymId: gymRef.id,
-        role: "owner",
-      });
-
-      // Create the default "Members" group for this gym
-      await addDoc(collection(db, "groups"), {
-        name: "Members",
-        type: "default",
-        gymId: gymRef.id,
-        ownerId: user.id,
-        memberIds: [],
-        coachIds: [user.id], // Owner is also a coach
-        membershipType: "auto-assign-all",
-        isPublic: true,
-        isDeletable: false,
-        defaultTimeSlots: [],
-        hideDetailsByDefault: false,
-        defaultRevealDaysBefore: 0,
-        defaultRevealHour: 0,
-        defaultRevealMinute: 0,
-        signupCutoffMinutes: 0,
-        createdAt: Timestamp.now(),
-      });
-
-      // Refresh user to get updated role
-      if (refreshUser) {
-        await refreshUser();
-      }
-
-      setShowCreateModal(false);
-      setNewGymName("");
-
-      // Redirect to the new gym's page
-      router.push(`/gym/${gymRef.id}`);
-    } catch (error) {
-      console.error("Error creating gym:", error);
-      alert("Failed to create gym. Please try again.");
-    } finally {
-      setCreating(false);
     }
   };
 
@@ -126,6 +84,60 @@ export default function GymPage() {
     }
   };
 
+  const handleDeleteGym = async (gymId: string, gymName: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!confirm(`Delete "${gymName}"? This will delete all groups, workouts, and membership requests. This cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      // Delete all groups associated with this gym
+      const groupsQuery = query(collection(db, "groups"), where("gymId", "==", gymId));
+      const groupsSnapshot = await getDocs(groupsQuery);
+      for (const groupDoc of groupsSnapshot.docs) {
+        await deleteDoc(doc(db, "groups", groupDoc.id));
+      }
+
+      // Delete all scheduled workouts for this gym's groups
+      const groupIds = groupsSnapshot.docs.map(d => d.id);
+      if (groupIds.length > 0) {
+        const workoutsQuery = query(
+          collection(db, "scheduledWorkouts"),
+          where("groupIds", "array-contains-any", groupIds.slice(0, 10))
+        );
+        const workoutsSnapshot = await getDocs(workoutsQuery);
+        for (const workoutDoc of workoutsSnapshot.docs) {
+          await deleteDoc(doc(db, "scheduledWorkouts", workoutDoc.id));
+        }
+      }
+
+      // Delete membership requests for this gym
+      const requestsQuery = query(collection(db, "gymMembershipRequests"), where("gymId", "==", gymId));
+      const requestsSnapshot = await getDocs(requestsQuery);
+      for (const requestDoc of requestsSnapshot.docs) {
+        await deleteDoc(doc(db, "gymMembershipRequests", requestDoc.id));
+      }
+
+      // Delete group membership requests for this gym
+      const groupRequestsQuery = query(collection(db, "groupMembershipRequests"), where("gymId", "==", gymId));
+      const groupRequestsSnapshot = await getDocs(groupRequestsQuery);
+      for (const requestDoc of groupRequestsSnapshot.docs) {
+        await deleteDoc(doc(db, "groupMembershipRequests", requestDoc.id));
+      }
+
+      // Delete the gym itself
+      await deleteDoc(doc(db, "gyms", gymId));
+
+      // Reload data
+      loadData();
+    } catch (error) {
+      console.error("Error deleting gym:", error);
+      alert("Failed to delete gym. Please try again.");
+    }
+  };
+
   if (loading || !user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -134,129 +146,83 @@ export default function GymPage() {
     );
   }
 
-  // Show create gym flow for users who don't own any gyms
+  // If user has an approved application waiting for setup, redirect to setup
+  if (!loadingData && approvedApplication) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Navigation />
+        <main className="max-w-2xl mx-auto px-4 py-12">
+          <div className="text-center mb-8">
+            <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <span className="text-4xl">🎉</span>
+            </div>
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">Your Gym is Approved!</h1>
+            <p className="text-gray-500">Complete your setup to start managing {approvedApplication.gymName}</p>
+          </div>
+          <Link
+            href={`/gym/setup?applicationId=${approvedApplication.id}`}
+            className="w-full py-4 bg-green-600 text-white font-bold text-lg rounded-xl hover:bg-green-700 transition-colors block text-center"
+          >
+            Complete Setup & Subscribe
+          </Link>
+        </main>
+      </div>
+    );
+  }
+
+  // Show pending application status
+  if (!loadingData && myGyms.length === 0 && pendingApplication) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Navigation />
+        <main className="max-w-2xl mx-auto px-4 py-12">
+          <div className="text-center mb-8">
+            <div className="w-20 h-20 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <span className="text-4xl">⏳</span>
+            </div>
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">Application Pending</h1>
+            <p className="text-gray-500">Your application for <strong>{pendingApplication.gymName}</strong> is under review.</p>
+          </div>
+          <div className="bg-white rounded-xl border border-gray-200 p-6">
+            <h3 className="font-semibold text-gray-900 mb-4">Application Details</h3>
+            <div className="space-y-3 text-sm">
+              <div className="flex justify-between">
+                <span className="text-gray-500">Gym Name</span>
+                <span className="font-medium text-gray-900">{pendingApplication.gymName}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Location</span>
+                <span className="font-medium text-gray-900">{pendingApplication.gymCity}, {pendingApplication.gymState}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Status</span>
+                <span className="px-2 py-1 bg-yellow-100 text-yellow-700 text-xs font-medium rounded-full">Pending Review</span>
+              </div>
+            </div>
+            <p className="text-gray-400 text-sm mt-4">We&apos;ll notify you once your application is reviewed.</p>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  // Show message for users who don't own any gyms and have no applications
   if (!loadingData && myGyms.length === 0) {
     return (
       <div className="min-h-screen bg-gray-50">
         <Navigation />
         <main className="max-w-2xl mx-auto px-4 py-12">
-          {/* Hero Section */}
-          <div className="text-center mb-10">
-            <div className="w-20 h-20 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg">
-              <span className="text-4xl">🏋️</span>
+          <div className="text-center">
+            <div className="w-20 h-20 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-6">
+              <span className="text-4xl">🏢</span>
             </div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-3">Create Your Gym</h1>
-            <p className="text-gray-500 text-lg">
-              Set up your gym to manage athletes, program workouts, and build your community
+            <h1 className="text-2xl font-bold text-gray-900 mb-3">No Gyms Yet</h1>
+            <p className="text-gray-500 mb-6">
+              You don&apos;t own any gyms yet.
             </p>
-          </div>
-
-          {/* Benefits */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 mb-8">
-            <h2 className="font-semibold text-gray-900 mb-4">What you&apos;ll get:</h2>
-            <div className="space-y-4">
-              <div className="flex items-start gap-4">
-                <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                  <span className="text-xl">👥</span>
-                </div>
-                <div>
-                  <h3 className="font-medium text-gray-900">Athlete Management</h3>
-                  <p className="text-gray-500 text-sm">Invite athletes, create groups, and track their progress</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-4">
-                <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                  <span className="text-xl">📅</span>
-                </div>
-                <div>
-                  <h3 className="font-medium text-gray-900">Class Scheduling</h3>
-                  <p className="text-gray-500 text-sm">Set up class times and let athletes sign up for sessions</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-4">
-                <div className="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                  <span className="text-xl">📋</span>
-                </div>
-                <div>
-                  <h3 className="font-medium text-gray-900">Manual Programming</h3>
-                  <p className="text-gray-500 text-sm">Create and publish workouts for your athletes</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-4">
-                <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                  <span className="text-xl">📊</span>
-                </div>
-                <div>
-                  <h3 className="font-medium text-gray-900">Leaderboards</h3>
-                  <p className="text-gray-500 text-sm">Track results and see how athletes compare</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* AI Features Upsell */}
-          <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-2xl p-6 mb-8">
-            <div className="flex items-start gap-4">
-              <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-xl flex items-center justify-center flex-shrink-0">
-                <span className="text-2xl">🤖</span>
-              </div>
-              <div>
-                <h3 className="font-semibold text-gray-900">Want AI-Powered Features?</h3>
-                <p className="text-gray-600 text-sm mt-1">
-                  Subscribe to AI Coach Pro to unlock AI programming, photo scanning, and personalized coaching for just $9.99/month.
-                </p>
-                <Link href="/subscribe" className="inline-block mt-3 text-sm text-purple-600 font-medium hover:underline">
-                  Learn more about AI Coach Pro →
-                </Link>
-              </div>
-            </div>
-          </div>
-
-          {/* Create Form */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-            <h2 className="font-semibold text-gray-900 mb-4">Get Started</h2>
-            <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                What&apos;s your gym called?
-              </label>
-              <input
-                type="text"
-                value={newGymName}
-                onChange={(e) => setNewGymName(e.target.value)}
-                placeholder="e.g., CrossFit Downtown, Iron Athletics..."
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl text-gray-900 text-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                autoFocus
-              />
-            </div>
-            <button
-              onClick={handleCreateGym}
-              disabled={!newGymName.trim() || creating}
-              className="w-full py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold rounded-xl hover:from-purple-700 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
-            >
-              {creating ? (
-                <>
-                  <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                  </svg>
-                  Creating...
-                </>
-              ) : (
-                <>
-                  <span>🚀</span> Create My Gym
-                </>
-              )}
-            </button>
-            <p className="text-center text-gray-400 text-sm mt-4">
-              Free to create • No credit card required
+            <p className="text-gray-400 text-sm">
+              To apply for a gym, go to <button onClick={() => router.push("/programming")} className="text-blue-600 hover:underline">Programming</button> and select &quot;Own a Gym&quot;
             </p>
-          </div>
-
-          {/* Back link */}
-          <div className="text-center mt-6">
-            <Link href="/programming" className="text-gray-500 hover:text-gray-700 text-sm">
-              ← Back to Subscriptions
-            </Link>
           </div>
         </main>
       </div>
@@ -268,17 +234,9 @@ export default function GymPage() {
       <Navigation />
       <main className="max-w-4xl mx-auto px-4 py-8">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">My Gyms</h1>
-            <p className="text-gray-500">Manage gyms you own</p>
-          </div>
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="px-4 py-2 bg-purple-600 text-white font-medium rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2"
-          >
-            <span>➕</span> Create Gym
-          </button>
+        <div className="mb-8">
+          <h1 className="text-2xl font-bold text-gray-900">My Gyms</h1>
+          <p className="text-gray-500">Manage gyms you own</p>
         </div>
 
         {/* My Gyms */}
@@ -310,6 +268,22 @@ export default function GymPage() {
                     <span className={`px-3 py-1 rounded-full text-sm font-medium ${getRoleColor(gym.role)}`}>
                       {gym.role}
                     </span>
+                    {gym.subscription?.status === "active" ? (
+                      <span className="px-2 py-1 bg-green-100 text-green-600 text-xs font-medium rounded-full">
+                        Subscribed
+                      </span>
+                    ) : (
+                      <span className="px-2 py-1 bg-yellow-100 text-yellow-600 text-xs font-medium rounded-full">
+                        Setup Needed
+                      </span>
+                    )}
+                    <button
+                      onClick={(e) => handleDeleteGym(gym.id, gym.name, e)}
+                      className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                      title="Delete gym"
+                    >
+                      🗑️
+                    </button>
                     <span className="text-gray-400 text-xl">→</span>
                   </div>
                 </Link>
@@ -318,53 +292,15 @@ export default function GymPage() {
           )}
         </div>
 
-        {/* Create Gym Modal (for owners who want another gym) */}
-        {showCreateModal && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl p-6 w-full max-w-md">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-xl flex items-center justify-center">
-                  <span className="text-2xl">🏋️</span>
-                </div>
-                <div>
-                  <h2 className="text-xl font-bold text-gray-900">Create New Gym</h2>
-                  <p className="text-gray-500 text-sm">Add another gym to manage</p>
-                </div>
-              </div>
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Gym Name
-                </label>
-                <input
-                  type="text"
-                  value={newGymName}
-                  onChange={(e) => setNewGymName(e.target.value)}
-                  placeholder="e.g., CrossFit Downtown"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl text-gray-900 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  autoFocus
-                />
-              </div>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => {
-                    setShowCreateModal(false);
-                    setNewGymName("");
-                  }}
-                  className="flex-1 py-2.5 border border-gray-300 text-gray-700 font-medium rounded-xl hover:bg-gray-50 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleCreateGym}
-                  disabled={!newGymName.trim() || creating}
-                  className="flex-1 py-2.5 bg-purple-600 text-white font-medium rounded-xl hover:bg-purple-700 disabled:opacity-50 transition-colors"
-                >
-                  {creating ? "Creating..." : "Create Gym"}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* Apply for another gym */}
+        <div className="text-center">
+          <button
+            onClick={() => router.push("/programming")}
+            className="text-blue-600 hover:text-blue-700 text-sm font-medium"
+          >
+            Want to add another gym? Apply here →
+          </button>
+        </div>
       </main>
     </div>
   );

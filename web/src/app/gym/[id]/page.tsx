@@ -39,7 +39,7 @@ export default function GymDetailPage() {
   const [leaderboardEntries, setLeaderboardEntries] = useState<LeaderboardEntry[]>([]);
   const [allScheduledWorkouts, setAllScheduledWorkouts] = useState<ScheduledWorkout[]>([]);
   const [loadingData, setLoadingData] = useState(true);
-  const [activeTab, setActiveTab] = useState<"members" | "coaches" | "groups" | "programming" | "requests" | "pricing">("programming");
+  const [activeTab, setActiveTab] = useState<"members" | "coaches" | "groups" | "programming" | "requests" | "pricing" | "subscription">("programming");
   const [showAddGroupModal, setShowAddGroupModal] = useState(false);
   const [showDeleteGymModal, setShowDeleteGymModal] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
@@ -188,29 +188,24 @@ export default function GymDetailPage() {
       const gymData = { id: gymDoc.id, ...gymDoc.data() } as Gym;
       setGym(gymData);
 
-      // Fetch members from public profiles (for display purposes)
-      const memberPromises = (gymData.memberIds || []).map(async (id) => {
-        // Read from userProfiles (public) instead of users (private)
-        const userDoc = await getDoc(doc(db, "userProfiles", id));
-        if (userDoc.exists()) {
-          return { id: userDoc.id, ...userDoc.data() } as AppUser;
-        }
-        return null;
-      });
-      const memberResults = await Promise.all(memberPromises);
-      setMembers(memberResults.filter(Boolean) as AppUser[]);
+      // Fetch all users with this gymId, then filter by role client-side
+      // (uses "users" collection since gymId may not be synced to userProfiles)
+      const gymUsersQuery = query(
+        collection(db, "users"),
+        where("gymId", "==", gymId)
+      );
+      const gymUsersSnapshot = await getDocs(gymUsersQuery);
+      const allGymUsers = gymUsersSnapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as AppUser[];
 
-      // Fetch coaches from public profiles (for display purposes)
-      const coachPromises = (gymData.coachIds || []).map(async (id) => {
-        // Read from userProfiles (public) instead of users (private)
-        const userDoc = await getDoc(doc(db, "userProfiles", id));
-        if (userDoc.exists()) {
-          return { id: userDoc.id, ...userDoc.data() } as AppUser;
-        }
-        return null;
-      });
-      const coachResults = await Promise.all(coachPromises);
-      setCoaches(coachResults.filter(Boolean) as AppUser[]);
+      // Filter members (athlete, member, or owner - owners are also members who work out)
+      const memberResults = allGymUsers.filter(u => u.role === "athlete" || u.role === "member" || u.role === "owner");
+      const coachResults = allGymUsers.filter(u => u.role === "coach");
+
+      setMembers(memberResults);
+      setCoaches(coachResults);
 
       // Fetch groups
       const groupsQuery = query(collection(db, "groups"), where("gymId", "==", gymId));
@@ -1306,7 +1301,7 @@ export default function GymDetailPage() {
             <div>
               <h1 className="text-2xl font-bold text-gray-900">{gym.name}</h1>
               <p className="text-gray-500">
-                {(gym.memberIds?.length || 0) + (gym.coachIds?.length || 0) + 1} members
+                {members.length + coaches.length + 1} members
               </p>
             </div>
             {isOwner && (
@@ -1314,6 +1309,12 @@ export default function GymDetailPage() {
                 <span className="px-3 py-1 bg-purple-100 text-purple-600 rounded-full text-sm font-medium">
                   Owner
                 </span>
+                <Link
+                  href={`/gym/${gymId}/edit`}
+                  className="px-3 py-1 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 text-sm font-medium"
+                >
+                  Edit
+                </Link>
                 <button
                   onClick={() => setShowDeleteGymModal(true)}
                   className="px-3 py-1 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 text-sm font-medium"
@@ -1334,6 +1335,7 @@ export default function GymDetailPage() {
             ...(isCoach ? [{ id: "programming", label: "Programming", count: scheduledWorkouts.length }] : []),
             ...(isOwner ? [{ id: "requests", label: "Requests", count: requests.length }] : []),
             ...(isOwner ? [{ id: "pricing", label: "Pricing", count: pricingTiers.filter(t => t.isActive).length }] : []),
+            ...(isOwner ? [{ id: "subscription", label: "Subscription", count: 0 }] : []),
           ].map((tab) => (
             <button
               key={tab.id}
@@ -1577,7 +1579,7 @@ export default function GymDetailPage() {
                             )}
                           </div>
                           <p className="text-gray-500 text-sm">
-                            {group.memberIds?.length || 0} members
+                            {group.membershipType === "auto-assign-all" ? members.length : (group.memberIds?.length || 0)} members
                             {group.defaultTimeSlots?.length > 0 && ` • ${group.defaultTimeSlots.length} class times`}
                           </p>
                         </div>
@@ -1683,7 +1685,17 @@ export default function GymDetailPage() {
                     userId={user.id}
                     userEmail={user.email}
                     groups={groups}
-                    subscription={user.aiProgrammingSubscription}
+                    subscription={gym?.subscription?.aiProgrammerEnabled ? {
+                      tier: "coach" as const,
+                      // Only show as canceled if end date has PASSED, otherwise keep active
+                      status: gym.subscription.aiProgrammerEndsAt && gym.subscription.aiProgrammerEndsAt.toDate() <= new Date()
+                        ? "canceled"
+                        : (gym.subscription.status || "active"),
+                      endDate: gym.subscription.aiProgrammerEndsAt || gym.subscription.currentPeriodEnd,
+                      startDate: gym.subscription.startDate,
+                      // Pass the scheduled end date so the UI can show "ends on X"
+                      scheduledEndDate: gym.subscription.aiProgrammerEndsAt,
+                    } : undefined}
                     onPublish={() => {
                       // Refresh workouts after publishing
                       fetchGymData();
@@ -2291,7 +2303,7 @@ export default function GymDetailPage() {
                         </div>
                         <div>
                           <p className="font-medium text-gray-900">{group.name}</p>
-                          <p className="text-xs text-gray-500">{group.memberIds?.length || 0} members</p>
+                          <p className="text-xs text-gray-500">{group.membershipType === "auto-assign-all" ? members.length : (group.memberIds?.length || 0)} members</p>
                         </div>
                       </div>
 
@@ -2391,6 +2403,97 @@ export default function GymDetailPage() {
                   </div>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* Subscription Tab */}
+          {activeTab === "subscription" && isOwner && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="flex justify-between items-start mb-6">
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">Gym Subscription</h2>
+                  <p className="text-sm text-gray-500 mt-1">Manage your gym&apos;s platform subscription</p>
+                </div>
+                {gym.subscription?.status === "active" ? (
+                  <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm font-medium">
+                    Active
+                  </span>
+                ) : (
+                  <span className="px-3 py-1 bg-yellow-100 text-yellow-700 rounded-full text-sm font-medium">
+                    Not Subscribed
+                  </span>
+                )}
+              </div>
+
+              {gym.subscription?.status === "active" ? (
+                <div className="space-y-4">
+                  {/* Current Plan */}
+                  <div className="bg-gray-50 rounded-xl p-4">
+                    <h3 className="font-medium text-gray-900 mb-3">Current Plan</h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-sm text-gray-500">Base Plan</p>
+                        <p className="font-semibold text-gray-900">
+                          {gym.subscription.aiProgrammerEnabled ? "Base + AI Programmer" : "Base Gym"}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-500">AI Coach</p>
+                        <p className="font-semibold text-gray-900">
+                          {gym.subscription.aiCoachEnabled ? `Enabled (${gym.subscription.aiCoachMemberCount || 0} members)` : "Not enabled"}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Features */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className="text-green-500">✓</span>
+                      <span className="text-gray-700">Unlimited members</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className="text-green-500">✓</span>
+                      <span className="text-gray-700">Programming tools</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className="text-green-500">✓</span>
+                      <span className="text-gray-700">External imports</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className={gym.subscription.aiProgrammerEnabled ? "text-green-500" : "text-gray-300"}>
+                        {gym.subscription.aiProgrammerEnabled ? "✓" : "○"}
+                      </span>
+                      <span className={gym.subscription.aiProgrammerEnabled ? "text-gray-700" : "text-gray-400"}>
+                        AI Programming
+                      </span>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => router.push(`/gym/${gymId}/subscription`)}
+                    className="w-full mt-4 py-3 bg-gray-100 text-gray-700 font-medium rounded-lg hover:bg-gray-200 transition-colors"
+                  >
+                    Manage Subscription
+                  </button>
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <span className="text-3xl">🚀</span>
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Get Started</h3>
+                  <p className="text-gray-500 mb-6 max-w-md mx-auto">
+                    Subscribe to unlock all gym features including programming tools, member management, and optional AI add-ons.
+                  </p>
+                  <button
+                    onClick={() => router.push(`/gym/${gymId}/subscription`)}
+                    className="px-8 py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    Choose Your Plan
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>

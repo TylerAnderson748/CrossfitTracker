@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { collection, addDoc, updateDoc, doc, query, where, getDocs, orderBy, Timestamp, serverTimestamp, deleteDoc } from "firebase/firestore";
+import { collection, addDoc, updateDoc, doc, query, where, getDocs, getDoc, orderBy, Timestamp, serverTimestamp, deleteDoc } from "firebase/firestore";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { db } from "@/lib/firebase";
 import { AIProgrammingSession, AIChatMessage, AIGeneratedDay, WorkoutGroup, WorkoutComponent, AIProgrammingPreferences, AITrainerSubscription, ScheduledTimeSlot } from "@/lib/types";
@@ -421,11 +421,30 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
 
     setIsCanceling(true);
     try {
+      // For gym owners, update the gym's subscription
+      if (gymId) {
+        const gymDoc = await getDoc(doc(db, "gyms", gymId));
+        if (gymDoc.exists()) {
+          const gymData = gymDoc.data();
+          const currentPeriodEnd = gymData.subscription?.currentPeriodEnd || Timestamp.fromDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000));
+
+          await updateDoc(doc(db, "gyms", gymId), {
+            "subscription.aiProgrammerEndsAt": currentPeriodEnd,
+          });
+          setShowCancelModal(false);
+          window.location.reload();
+          return;
+        }
+      }
+
+      // Fallback: Update user's individual subscription
+      const endDate = subscription?.trialEndsAt || subscription?.endDate || Timestamp.fromDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000));
+
       await updateDoc(doc(db, "users", userId), {
         "aiProgrammingSubscription.status": "canceled",
+        "aiProgrammingSubscription.endDate": endDate,
       });
       setShowCancelModal(false);
-      // Force page reload to refresh subscription status
       window.location.reload();
     } catch (err) {
       console.error("Error canceling subscription:", err);
@@ -941,18 +960,33 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
         {subscription && (
           <div className="px-4 py-2 bg-white/10 flex items-center justify-between text-xs">
             <span className="text-white/80">
-              {subscription.status === "trialing" ? (
+              {subscription.scheduledEndDate ? (
+                // Has scheduled cancellation - show end date
+                <>Access ends {subscription.scheduledEndDate?.toDate?.().toLocaleDateString() || "soon"}</>
+              ) : subscription.status === "canceled" && subscription.endDate ? (
+                <>Access ended {subscription.endDate?.toDate?.().toLocaleDateString() || ""}</>
+              ) : subscription.status === "trialing" ? (
                 <>Trial ends {subscription.trialEndsAt?.toDate?.().toLocaleDateString() || "soon"}</>
               ) : (
-                <>Subscription {subscription.status === "active" ? "active" : subscription.status}</>
+                <>Subscription active</>
               )}
             </span>
-            <button
-              onClick={() => setShowCancelModal(true)}
-              className="text-red-200 hover:text-red-100 hover:underline"
-            >
-              Cancel Subscription
-            </button>
+            {subscription.scheduledEndDate || subscription.status === "canceled" ? (
+              // Already cancelled or scheduled to cancel - show resubscribe
+              <button
+                onClick={() => window.location.href = `/gym/${gymId}/subscription`}
+                className="text-green-200 hover:text-green-100 hover:underline"
+              >
+                Resubscribe
+              </button>
+            ) : (
+              <button
+                onClick={() => setShowCancelModal(true)}
+                className="text-red-200 hover:text-red-100 hover:underline"
+              >
+                Cancel Subscription
+              </button>
+            )}
           </div>
         )}
       </div>

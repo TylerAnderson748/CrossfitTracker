@@ -96,29 +96,25 @@ export default function GroupDetailPage({
   const loadData = async () => {
     setLoading(true);
     try {
+      // Load all gym members by querying users with this gymId
+      const gymMembersQuery = query(
+        collection(db, "users"),
+        where("gymId", "==", gymId)
+      );
+      const gymMembersSnapshot = await getDocs(gymMembersQuery);
+      const allGymMembers = gymMembersSnapshot.docs
+        .map((doc) => ({ id: doc.id, ...doc.data() } as AppUser))
+        .filter(u => u.role === "athlete" || u.role === "member" || u.role === "owner");
+      setGymMembers(allGymMembers);
+
       // Load gym
       const gymDoc = await getDoc(doc(db, "gyms", gymId));
-      let gymData: Gym | null = null;
       if (gymDoc.exists()) {
-        gymData = { id: gymDoc.id, ...gymDoc.data() } as Gym;
+        const gymData = { id: gymDoc.id, ...gymDoc.data() } as Gym;
         setGym(gymData);
         setIsCoachOrOwner(
           gymData.ownerId === user?.id || gymData.coachIds?.includes(user?.id || "")
         );
-
-        // Load all gym members for the add member modal (from public profiles)
-        if (gymData.memberIds && gymData.memberIds.length > 0) {
-          const membersQuery = query(
-            collection(db, "userProfiles"),
-            where("__name__", "in", gymData.memberIds.slice(0, 10)) // Firestore limit
-          );
-          const membersSnapshot = await getDocs(membersQuery);
-          const allGymMembers = membersSnapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-          })) as AppUser[];
-          setGymMembers(allGymMembers);
-        }
       }
 
       // Load group
@@ -144,27 +140,18 @@ export default function GroupDetailPage({
         setSignupCutoffMinutes(groupData.signupCutoffMinutes ?? 0);
         setRequiresPayment(groupData.requiresPayment ?? false);
         setAdditionalFee(groupData.additionalFee ?? 0);
-        setMemberIds(groupData.memberIds || []);
-
-        // Load member details from public profiles
-        if (groupData.memberIds && groupData.memberIds.length > 0) {
-          const memberChunks = [];
-          for (let i = 0; i < groupData.memberIds.length; i += 10) {
-            memberChunks.push(groupData.memberIds.slice(i, i + 10));
+        // For "auto-assign-all" groups, use all gym members automatically
+        if (groupData.membershipType === "auto-assign-all") {
+          setMemberIds(allGymMembers.map(m => m.id));
+          setMembers(allGymMembers);
+        } else {
+          // For other groups, use the stored memberIds but validate against actual users
+          setMemberIds(groupData.memberIds || []);
+          if (groupData.memberIds && groupData.memberIds.length > 0) {
+            // Filter gym members to only those in this group's memberIds
+            const groupMembers = allGymMembers.filter(m => groupData.memberIds?.includes(m.id));
+            setMembers(groupMembers);
           }
-
-          const allMembers: AppUser[] = [];
-          for (const chunk of memberChunks) {
-            const membersQuery = query(
-              collection(db, "userProfiles"),
-              where("__name__", "in", chunk)
-            );
-            const membersSnapshot = await getDocs(membersQuery);
-            membersSnapshot.docs.forEach((doc) => {
-              allMembers.push({ id: doc.id, ...doc.data() } as AppUser);
-            });
-          }
-          setMembers(allMembers);
         }
       }
     } catch (err) {

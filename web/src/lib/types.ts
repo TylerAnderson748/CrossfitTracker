@@ -22,6 +22,10 @@ export interface AppUser {
   aiProgrammingSubscription?: AITrainerSubscription;
   // AI Coach preferences and goals
   aiCoachPreferences?: AICoachPreferences;
+  // Individual subscription (for users not in a gym)
+  individualSubscription?: IndividualSubscription;
+  // Flag to indicate if user has AI Coach via their gym
+  gymAICoachEnabled?: boolean;
 }
 
 // AI Coach user preferences
@@ -42,6 +46,7 @@ export interface AITrainerSubscription {
   startDate?: Timestamp;
   endDate?: Timestamp;
   trialEndsAt?: Timestamp;
+  scheduledEndDate?: Timestamp;  // When subscription is scheduled to end (cancelled but still active)
   stripeCustomerId?: string;
   stripeSubscriptionId?: string;
 }
@@ -243,6 +248,18 @@ export interface Gym {
   // Pricing settings (mockup)
   pricingEnabled?: boolean;
   defaultPricingTierId?: string;
+  // Gym subscription (platform fees)
+  subscription?: GymSubscription;
+  // Gym details (from application)
+  address?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  phone?: string;
+  website?: string;
+  // Application tracking
+  applicationId?: string; // Reference to original application
+  isApproved: boolean; // Whether the gym has been approved by admin
 }
 
 // Group types
@@ -399,6 +416,99 @@ export interface AIProgrammingPreferences {
   programmingStyle: string; // e.g., "Mayhem", "CompTrain", "HWPO", "Custom"
   additionalRules: string; // Any other rules or preferences
   updatedAt: Timestamp;
+}
+
+// =========================
+// SUBSCRIPTION & PRICING TYPES
+// =========================
+
+// Gym Plan Types
+export type GymPlanType = "base" | "ai_programmer";
+
+export interface GymSubscription {
+  plan: GymPlanType;
+  status: "active" | "canceled" | "past_due" | "trialing";
+  aiProgrammerEnabled: boolean;  // +$100/mo add-on
+  aiCoachEnabled: boolean;       // Enables $1/member/mo AI Coach for all members
+  aiCoachMemberCount?: number;   // Number of members with AI Coach enabled
+  startDate?: Timestamp;
+  currentPeriodEnd?: Timestamp;
+  aiProgrammerEndsAt?: Timestamp;  // When AI Programmer will be disabled (if downgrading)
+  aiCoachEndsAt?: Timestamp;       // When AI Coach will be disabled (if canceling)
+  stripeCustomerId?: string;
+  stripeSubscriptionId?: string;
+}
+
+// Individual User Subscription Flags
+export interface IndividualSubscription {
+  isIndividual: boolean;           // true if user is not affiliated with a gym
+  aiCoachEnabled: boolean;         // $9.99/mo personal AI Coach subscription
+  externalProgrammingEnabled: boolean; // $50/mo for external programming import
+  aiProgrammerEnabled: boolean;    // $100/mo for AI-generated workouts
+  status: "active" | "canceled" | "past_due" | "trialing";
+  startDate?: Timestamp;
+  currentPeriodEnd?: Timestamp;
+  stripeCustomerId?: string;
+  stripeSubscriptionId?: string;
+}
+
+// Pricing Constants
+export const PRICING = {
+  // Gym pricing
+  GYM_BASE: 49,             // $49/mo base gym subscription (includes external programming import)
+  GYM_AI_PROGRAMMER: 99,    // +$99/mo AI Programmer add-on for gyms
+  GYM_AI_COACH_PER_MEMBER: 1, // +$1/member/mo for AI Coach
+
+  // Individual pricing (FREE tier = tracking only)
+  INDIVIDUAL_AI_COACH: 9.99,        // $9.99/mo personal AI Coach
+  INDIVIDUAL_AI_PROGRAMMER: 9.99,   // $9.99/mo AI-generated personal programming
+  INDIVIDUAL_AI_PROGRAMMER_PLUS: 14.99, // $14.99/mo premium AI programming
+} as const;
+
+// Feature Access Helpers
+export interface FeatureAccess {
+  canUseAIProgrammer: boolean;
+  canUseAICoach: boolean;
+  canImportExternalProgramming: boolean;
+  isGymOwner: boolean;
+  isGymMember: boolean;
+}
+
+// =========================
+// GYM APPLICATION TYPES
+// =========================
+
+export type GymApplicationStatus = "pending" | "approved" | "rejected";
+
+export interface GymApplication {
+  id: string;
+  // Applicant info
+  userId: string;
+  userEmail: string;
+  userName: string;
+
+  // Gym details
+  gymName: string;
+  gymAddress: string;
+  gymCity: string;
+  gymState: string;
+  gymZip: string;
+  gymPhone?: string;
+  gymWebsite?: string;
+
+  // Verification
+  ownershipProof?: string; // Description of how they can prove ownership
+  additionalNotes?: string;
+
+  // Status
+  status: GymApplicationStatus;
+  submittedAt: Timestamp;
+  reviewedAt?: Timestamp;
+  reviewedBy?: string; // Super admin user ID
+  rejectionReason?: string;
+
+  // If approved, the created gym ID
+  approvedGymId?: string;
 }
 
 
