@@ -24,22 +24,30 @@ export default function GymPage() {
 
   useEffect(() => {
     if (user) {
-      fetchGyms();
-      checkApprovedApplication();
+      loadData();
     }
   }, [user]);
 
-  const fetchGyms = async () => {
+  const loadData = async () => {
     if (!user) return;
 
     try {
-      const gymsSnapshot = await getDocs(collection(db, "gyms"));
+      // Fetch both gyms and applications in parallel
+      const [gymsSnapshot, applicationsSnapshot] = await Promise.all([
+        getDocs(collection(db, "gyms")),
+        getDocs(query(
+          collection(db, "gymApplications"),
+          where("userId", "==", user.id),
+          where("status", "==", "approved")
+        ))
+      ]);
+
+      // Process gyms
       const gyms = gymsSnapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       })) as Gym[];
 
-      // Filter gyms where user is the owner
       const ownedGyms = gyms
         .filter((gym) => gym.ownerId === user.id)
         .map((gym) => ({
@@ -48,33 +56,19 @@ export default function GymPage() {
         }));
 
       setMyGyms(ownedGyms);
-    } catch (error) {
-      console.error("Error fetching gyms:", error);
-    } finally {
-      setLoadingData(false);
-    }
-  };
 
-  const checkApprovedApplication = async () => {
-    if (!user) return;
-
-    try {
-      const applicationsQuery = query(
-        collection(db, "gymApplications"),
-        where("userId", "==", user.id),
-        where("status", "==", "approved")
-      );
-      const snapshot = await getDocs(applicationsQuery);
-
-      if (!snapshot.empty) {
-        const app = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() } as GymApplication;
+      // Process approved applications
+      if (!applicationsSnapshot.empty) {
+        const app = { id: applicationsSnapshot.docs[0].id, ...applicationsSnapshot.docs[0].data() } as GymApplication;
         // Only show if no gym has been created yet
         if (!app.approvedGymId) {
           setApprovedApplication(app);
         }
       }
     } catch (error) {
-      console.error("Error checking applications:", error);
+      console.error("Error loading data:", error);
+    } finally {
+      setLoadingData(false);
     }
   };
 
