@@ -297,8 +297,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Sign out current user and sign in with the new account
       await firebaseSignOut(auth);
       await signInWithEmailAndPassword(auth, account.email, account.password);
-      // Refresh the page to reload all data for the new user
-      window.location.reload();
+      // Redirect to home page and refresh to reload all data for the new user
+      window.location.href = "/";
     } finally {
       switchingRef.current = false;
       setSwitching(false);
