@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { collection, query, where, getDocs } from "firebase/firestore";
+import { collection, query, where, getDocs, deleteDoc, doc } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
 import { Gym, GymApplication } from "@/lib/types";
@@ -81,6 +81,60 @@ export default function GymPage() {
         return "bg-blue-100 text-blue-600";
       default:
         return "bg-green-100 text-green-600";
+    }
+  };
+
+  const handleDeleteGym = async (gymId: string, gymName: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!confirm(`Delete "${gymName}"? This will delete all groups, workouts, and membership requests. This cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      // Delete all groups associated with this gym
+      const groupsQuery = query(collection(db, "groups"), where("gymId", "==", gymId));
+      const groupsSnapshot = await getDocs(groupsQuery);
+      for (const groupDoc of groupsSnapshot.docs) {
+        await deleteDoc(doc(db, "groups", groupDoc.id));
+      }
+
+      // Delete all scheduled workouts for this gym's groups
+      const groupIds = groupsSnapshot.docs.map(d => d.id);
+      if (groupIds.length > 0) {
+        const workoutsQuery = query(
+          collection(db, "scheduledWorkouts"),
+          where("groupIds", "array-contains-any", groupIds.slice(0, 10))
+        );
+        const workoutsSnapshot = await getDocs(workoutsQuery);
+        for (const workoutDoc of workoutsSnapshot.docs) {
+          await deleteDoc(doc(db, "scheduledWorkouts", workoutDoc.id));
+        }
+      }
+
+      // Delete membership requests for this gym
+      const requestsQuery = query(collection(db, "gymMembershipRequests"), where("gymId", "==", gymId));
+      const requestsSnapshot = await getDocs(requestsQuery);
+      for (const requestDoc of requestsSnapshot.docs) {
+        await deleteDoc(doc(db, "gymMembershipRequests", requestDoc.id));
+      }
+
+      // Delete group membership requests for this gym
+      const groupRequestsQuery = query(collection(db, "groupMembershipRequests"), where("gymId", "==", gymId));
+      const groupRequestsSnapshot = await getDocs(groupRequestsQuery);
+      for (const requestDoc of groupRequestsSnapshot.docs) {
+        await deleteDoc(doc(db, "groupMembershipRequests", requestDoc.id));
+      }
+
+      // Delete the gym itself
+      await deleteDoc(doc(db, "gyms", gymId));
+
+      // Reload data
+      loadData();
+    } catch (error) {
+      console.error("Error deleting gym:", error);
+      alert("Failed to delete gym. Please try again.");
     }
   };
 
@@ -223,6 +277,13 @@ export default function GymPage() {
                         Setup Needed
                       </span>
                     )}
+                    <button
+                      onClick={(e) => handleDeleteGym(gym.id, gym.name, e)}
+                      className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                      title="Delete gym"
+                    >
+                      🗑️
+                    </button>
                     <span className="text-gray-400 text-xl">→</span>
                   </div>
                 </Link>

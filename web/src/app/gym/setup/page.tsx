@@ -93,6 +93,32 @@ export default function GymSetupPage() {
 
     setIsCreating(true);
     try {
+      // Check if a gym already exists for this application to prevent duplicates
+      const existingGymsQuery = query(
+        collection(db, "gyms"),
+        where("applicationId", "==", approvedApplication.id)
+      );
+      const existingGyms = await getDocs(existingGymsQuery);
+
+      if (!existingGyms.empty) {
+        // Gym already exists, just redirect to it
+        const existingGymId = existingGyms.docs[0].id;
+
+        // Make sure the application is updated
+        await updateDoc(doc(db, "gymApplications", approvedApplication.id), {
+          approvedGymId: existingGymId,
+        });
+
+        // Make sure user has correct role
+        await updateDoc(doc(db, "users", user.id), {
+          role: "owner",
+          gymId: existingGymId,
+        });
+
+        await refreshUser();
+        router.push(`/gym/${existingGymId}`);
+        return;
+      }
       // Create subscription
       const subscription: GymSubscription = {
         plan: selectedPlan === "ai_programmer" ? "ai_programmer" : "base",
