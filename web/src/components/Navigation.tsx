@@ -13,13 +13,13 @@ export default function Navigation() {
   const pathname = usePathname();
   const { user } = useAuth();
   const [isGymOwner, setIsGymOwner] = useState(false);
-  const [hasApprovedApplication, setHasApprovedApplication] = useState(false);
+  const [hasGymApplication, setHasGymApplication] = useState(false);
 
   useEffect(() => {
     const checkGymOwnership = async () => {
       if (!user) {
         setIsGymOwner(false);
-        setHasApprovedApplication(false);
+        setHasGymApplication(false);
         return;
       }
       try {
@@ -33,26 +33,28 @@ export default function Navigation() {
         const ownsGym = gyms.some((gym) => gym.ownerId === user.id);
         setIsGymOwner(ownsGym);
 
-        // Check if user has an approved application awaiting setup
+        // Check if user has any gym application (pending or approved awaiting setup)
         if (!ownsGym) {
           const applicationsQuery = query(
             collection(db, "gymApplications"),
-            where("userId", "==", user.id),
-            where("status", "==", "approved")
+            where("userId", "==", user.id)
           );
           const appSnapshot = await getDocs(applicationsQuery);
-          const hasApproved = appSnapshot.docs.some(doc => {
+          // Show gym tab if user has pending or approved (without gym created) application
+          const hasApplication = appSnapshot.docs.some(doc => {
             const data = doc.data() as GymApplication;
-            return !data.approvedGymId; // Only if gym not yet created
+            if (data.status === "pending") return true;
+            if (data.status === "approved" && !data.approvedGymId) return true;
+            return false;
           });
-          setHasApprovedApplication(hasApproved);
+          setHasGymApplication(hasApplication);
         } else {
-          setHasApprovedApplication(false);
+          setHasGymApplication(false);
         }
       } catch (error) {
         console.error("Error checking gym ownership:", error);
         setIsGymOwner(false);
-        setHasApprovedApplication(false);
+        setHasGymApplication(false);
       }
     };
 
@@ -103,8 +105,8 @@ export default function Navigation() {
   // Super admin check
   const isSuperAdmin = user?.role === "superAdmin";
 
-  // Show Gym tab if user owns a gym OR has an approved application
-  const showGymTab = isGymOwner || hasApprovedApplication;
+  // Show Gym tab if user owns a gym OR has an application (pending or approved)
+  const showGymTab = isGymOwner || hasGymApplication;
 
   const navItems = [
     { href: "/weekly", label: "Home", icon: "🏠" },
