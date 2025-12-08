@@ -14,6 +14,7 @@ export default function GymPage() {
   const router = useRouter();
   const [myGyms, setMyGyms] = useState<(Gym & { role: string })[]>([]);
   const [approvedApplication, setApprovedApplication] = useState<GymApplication | null>(null);
+  const [pendingApplication, setPendingApplication] = useState<GymApplication | null>(null);
   const [loadingData, setLoadingData] = useState(true);
 
   useEffect(() => {
@@ -32,13 +33,12 @@ export default function GymPage() {
     if (!user) return;
 
     try {
-      // Fetch both gyms and applications in parallel
+      // Fetch gyms and all user's applications in parallel
       const [gymsSnapshot, applicationsSnapshot] = await Promise.all([
         getDocs(collection(db, "gyms")),
         getDocs(query(
           collection(db, "gymApplications"),
-          where("userId", "==", user.id),
-          where("status", "==", "approved")
+          where("userId", "==", user.id)
         ))
       ]);
 
@@ -57,14 +57,15 @@ export default function GymPage() {
 
       setMyGyms(ownedGyms);
 
-      // Process approved applications
-      if (!applicationsSnapshot.empty) {
-        const app = { id: applicationsSnapshot.docs[0].id, ...applicationsSnapshot.docs[0].data() } as GymApplication;
-        // Only show if no gym has been created yet
-        if (!app.approvedGymId) {
+      // Process applications
+      applicationsSnapshot.docs.forEach((doc) => {
+        const app = { id: doc.id, ...doc.data() } as GymApplication;
+        if (app.status === "approved" && !app.approvedGymId) {
           setApprovedApplication(app);
+        } else if (app.status === "pending") {
+          setPendingApplication(app);
         }
-      }
+      });
     } catch (error) {
       console.error("Error loading data:", error);
     } finally {
@@ -115,65 +116,60 @@ export default function GymPage() {
     );
   }
 
-  // Show message for users who don't own any gyms
+  // Show pending application status
+  if (!loadingData && myGyms.length === 0 && pendingApplication) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Navigation />
+        <main className="max-w-2xl mx-auto px-4 py-12">
+          <div className="text-center mb-8">
+            <div className="w-20 h-20 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <span className="text-4xl">⏳</span>
+            </div>
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">Application Pending</h1>
+            <p className="text-gray-500">Your application for <strong>{pendingApplication.gymName}</strong> is under review.</p>
+          </div>
+          <div className="bg-white rounded-xl border border-gray-200 p-6">
+            <h3 className="font-semibold text-gray-900 mb-4">Application Details</h3>
+            <div className="space-y-3 text-sm">
+              <div className="flex justify-between">
+                <span className="text-gray-500">Gym Name</span>
+                <span className="font-medium text-gray-900">{pendingApplication.gymName}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Location</span>
+                <span className="font-medium text-gray-900">{pendingApplication.gymCity}, {pendingApplication.gymState}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Status</span>
+                <span className="px-2 py-1 bg-yellow-100 text-yellow-700 text-xs font-medium rounded-full">Pending Review</span>
+              </div>
+            </div>
+            <p className="text-gray-400 text-sm mt-4">We&apos;ll notify you once your application is reviewed.</p>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  // Show message for users who don't own any gyms and have no applications
   if (!loadingData && myGyms.length === 0) {
     return (
       <div className="min-h-screen bg-gray-50">
         <Navigation />
         <main className="max-w-2xl mx-auto px-4 py-12">
-          <div className="text-center mb-10">
+          <div className="text-center">
             <div className="w-20 h-20 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-6">
               <span className="text-4xl">🏢</span>
             </div>
             <h1 className="text-2xl font-bold text-gray-900 mb-3">No Gyms Yet</h1>
-            <p className="text-gray-500">
-              You don&apos;t own any gyms yet. Apply to create one and we&apos;ll review your application.
+            <p className="text-gray-500 mb-6">
+              You don&apos;t own any gyms yet.
+            </p>
+            <p className="text-gray-400 text-sm">
+              To apply for a gym, go to <button onClick={() => router.push("/programming")} className="text-blue-600 hover:underline">Programming</button> and select &quot;Own a Gym&quot;
             </p>
           </div>
-
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 mb-6">
-            <h2 className="font-semibold text-gray-900 mb-4">How it works:</h2>
-            <div className="space-y-4">
-              <div className="flex items-start gap-4">
-                <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0 text-blue-600 font-bold">
-                  1
-                </div>
-                <div>
-                  <h3 className="font-medium text-gray-900">Apply</h3>
-                  <p className="text-gray-500 text-sm">Submit your gym details for verification</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-4">
-                <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0 text-blue-600 font-bold">
-                  2
-                </div>
-                <div>
-                  <h3 className="font-medium text-gray-900">Get Approved</h3>
-                  <p className="text-gray-500 text-sm">We&apos;ll verify your gym and approve your application</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-4">
-                <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0 text-blue-600 font-bold">
-                  3
-                </div>
-                <div>
-                  <h3 className="font-medium text-gray-900">Subscribe & Launch</h3>
-                  <p className="text-gray-500 text-sm">Choose your plan and start managing your gym</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <button
-            onClick={() => router.push("/programming")}
-            className="w-full py-4 bg-blue-600 text-white font-bold text-lg rounded-xl hover:bg-blue-700 transition-colors"
-          >
-            Apply to Create a Gym
-          </button>
-
-          <p className="text-center text-gray-400 text-sm mt-4">
-            Go to Programming → Own a Gym to start your application
-          </p>
         </main>
       </div>
     );
