@@ -421,8 +421,12 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
 
     setIsCanceling(true);
     try {
+      // Set status to canceled and set end date to current period end or trial end
+      const endDate = subscription?.trialEndsAt || subscription?.endDate || Timestamp.fromDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000));
+
       await updateDoc(doc(db, "users", userId), {
         "aiProgrammingSubscription.status": "canceled",
+        "aiProgrammingSubscription.endDate": endDate,
       });
       setShowCancelModal(false);
       // Force page reload to refresh subscription status
@@ -941,18 +945,29 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
         {subscription && (
           <div className="px-4 py-2 bg-white/10 flex items-center justify-between text-xs">
             <span className="text-white/80">
-              {subscription.status === "trialing" ? (
+              {subscription.status === "canceled" && subscription.endDate ? (
+                <>Access ends {subscription.endDate?.toDate?.().toLocaleDateString() || "soon"}</>
+              ) : subscription.status === "trialing" ? (
                 <>Trial ends {subscription.trialEndsAt?.toDate?.().toLocaleDateString() || "soon"}</>
               ) : (
-                <>Subscription {subscription.status === "active" ? "active" : subscription.status}</>
+                <>Subscription active</>
               )}
             </span>
-            <button
-              onClick={() => setShowCancelModal(true)}
-              className="text-red-200 hover:text-red-100 hover:underline"
-            >
-              Cancel Subscription
-            </button>
+            {subscription.status === "canceled" ? (
+              <button
+                onClick={() => window.location.href = "/subscribe?variant=coach"}
+                className="text-green-200 hover:text-green-100 hover:underline"
+              >
+                Resubscribe
+              </button>
+            ) : (
+              <button
+                onClick={() => setShowCancelModal(true)}
+                className="text-red-200 hover:text-red-100 hover:underline"
+              >
+                Cancel Subscription
+              </button>
+            )}
           </div>
         )}
       </div>
