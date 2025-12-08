@@ -188,29 +188,31 @@ export default function GymDetailPage() {
       const gymData = { id: gymDoc.id, ...gymDoc.data() } as Gym;
       setGym(gymData);
 
-      // Fetch members from public profiles (for display purposes)
-      const memberPromises = (gymData.memberIds || []).map(async (id) => {
-        // Read from userProfiles (public) instead of users (private)
-        const userDoc = await getDoc(doc(db, "userProfiles", id));
-        if (userDoc.exists()) {
-          return { id: userDoc.id, ...userDoc.data() } as AppUser;
-        }
-        return null;
-      });
-      const memberResults = await Promise.all(memberPromises);
-      setMembers(memberResults.filter(Boolean) as AppUser[]);
+      // Fetch members by querying users with this gymId and athlete/member role
+      const membersQuery = query(
+        collection(db, "userProfiles"),
+        where("gymId", "==", gymId),
+        where("role", "in", ["athlete", "member"])
+      );
+      const membersSnapshot = await getDocs(membersQuery);
+      const memberResults = membersSnapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as AppUser[];
+      setMembers(memberResults);
 
-      // Fetch coaches from public profiles (for display purposes)
-      const coachPromises = (gymData.coachIds || []).map(async (id) => {
-        // Read from userProfiles (public) instead of users (private)
-        const userDoc = await getDoc(doc(db, "userProfiles", id));
-        if (userDoc.exists()) {
-          return { id: userDoc.id, ...userDoc.data() } as AppUser;
-        }
-        return null;
-      });
-      const coachResults = await Promise.all(coachPromises);
-      setCoaches(coachResults.filter(Boolean) as AppUser[]);
+      // Fetch coaches by querying users with this gymId and coach role
+      const coachesQuery = query(
+        collection(db, "userProfiles"),
+        where("gymId", "==", gymId),
+        where("role", "==", "coach")
+      );
+      const coachesSnapshot = await getDocs(coachesQuery);
+      const coachResults = coachesSnapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as AppUser[];
+      setCoaches(coachResults);
 
       // Fetch groups
       const groupsQuery = query(collection(db, "groups"), where("gymId", "==", gymId));
@@ -1306,7 +1308,7 @@ export default function GymDetailPage() {
             <div>
               <h1 className="text-2xl font-bold text-gray-900">{gym.name}</h1>
               <p className="text-gray-500">
-                {(gym.memberIds?.length || 0) + (gym.coachIds?.length || 0) + 1} members
+                {members.length + coaches.length + 1} members
               </p>
             </div>
             {isOwner && (
