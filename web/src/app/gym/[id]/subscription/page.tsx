@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { doc, getDoc, updateDoc, Timestamp } from "firebase/firestore";
+import { doc, getDoc, updateDoc, Timestamp, deleteField } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
 import { Gym, GymSubscription, PRICING } from "@/lib/types";
@@ -102,9 +102,6 @@ export default function GymSubscriptionPage() {
         subscription.aiProgrammerEndsAt = Timestamp.fromDate(periodEndDate);
         // Keep AI Programmer active until period ends
         subscription.aiProgrammerEnabled = true;
-      } else if (selectedPlan === "ai_programmer") {
-        // If upgrading to AI Programmer, clear any scheduled end
-        subscription.aiProgrammerEndsAt = undefined;
       }
 
       // Same logic for AI Coach
@@ -114,14 +111,23 @@ export default function GymSubscriptionPage() {
         // Keep AI Coach active until period ends
         subscription.aiCoachEnabled = true;
         subscription.aiCoachMemberCount = existingSubscription?.aiCoachMemberCount || memberCount;
-      } else if (aiCoachEnabled) {
-        subscription.aiCoachEndsAt = undefined;
       }
 
-      await updateDoc(doc(db, "gyms", gymId), {
+      // Build update object
+      const updateData: Record<string, unknown> = {
         subscription,
         pricingEnabled: true,
-      });
+      };
+
+      // Use deleteField() to remove scheduled end dates when upgrading/re-subscribing
+      if (selectedPlan === "ai_programmer" && existingSubscription?.aiProgrammerEndsAt) {
+        updateData["subscription.aiProgrammerEndsAt"] = deleteField();
+      }
+      if (aiCoachEnabled && existingSubscription?.aiCoachEndsAt) {
+        updateData["subscription.aiCoachEndsAt"] = deleteField();
+      }
+
+      await updateDoc(doc(db, "gyms", gymId), updateData);
 
       const message = isDowngradingAiProgrammer
         ? `AI Programmer will remain active until ${formatDate(periodEndDate)}`
