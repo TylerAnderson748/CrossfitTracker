@@ -23,14 +23,15 @@ interface WodRecord {
   timeInSeconds?: number;
   rounds?: number;
   reps?: number;
-  category: string;
+  category?: string;
+  notes?: string; // Category is stored in notes field
   completedDate: Timestamp;
 }
 
 interface SkillRecord {
   id: string;
-  skillName: string;
-  reps?: number;
+  skillTitle: string;
+  maxReps?: number;
   notes?: string;
   date: Timestamp;
 }
@@ -134,9 +135,9 @@ export default function ProgressPage() {
       wodData.sort((a, b) => (b.completedDate?.toMillis() || 0) - (a.completedDate?.toMillis() || 0));
       setWods(wodData);
 
-      // Fetch skill logs (sort in JS to avoid needing composite index)
+      // Fetch skill results (sort in JS to avoid needing composite index)
       const skillQuery = query(
-        collection(db, "skillLogs"),
+        collection(db, "skillResults"),
         where("userId", "==", user.id),
         limit(200)
       );
@@ -221,7 +222,7 @@ export default function ProgressPage() {
     }
 
     // RX percentage
-    const rxWods = recentWods.filter(w => w.category === "RX");
+    const rxWods = recentWods.filter(w => (w.notes || w.category) === "RX");
     const rxPercentage = (rxWods.length / recentWods.length) * 100;
 
     // Calculate consistency (workouts per week)
@@ -300,7 +301,7 @@ export default function ProgressPage() {
     const strengthScore = Math.min(100, (liftPRs.length * 10) + (recentLifts.length * 2));
 
     // Conditioning score: based on WOD volume and RX percentage
-    const rxWods = recentWods.filter(w => w.category === "RX");
+    const rxWods = recentWods.filter(w => (w.notes || w.category) === "RX");
     const rxRatio = recentWods.length > 0 ? rxWods.length / recentWods.length : 0;
     const conditioningScore = Math.min(100, (recentWods.length * 5) + (rxRatio * 50));
 
