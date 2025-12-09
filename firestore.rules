@@ -371,6 +371,23 @@ service cloud.firestore {
     }
 
     // ==========================================
+    // AI COACH ADVICE (Persisted recommendations)
+    // ==========================================
+
+    match /aiCoachAdvice/{adviceId} {
+      // Users can read their own saved advice
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+      // Users can create/update their own advice
+      allow create: if isAuthenticated() &&
+                       request.resource.data.userId == request.auth.uid &&
+                       hasRequiredFields(['userId', 'advice', 'date']);
+
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    // ==========================================
     // SUBSCRIPTIONS (Read-only from client)
     // ==========================================
 
