@@ -65,6 +65,7 @@ interface SkillStats {
 interface OverallProgress {
   strengthScore: number; // 0-100
   conditioningScore: number; // 0-100
+  skillsScore: number; // 0-100
   consistencyScore: number; // 0-100
   overallScore: number; // 0-100
 }
@@ -480,6 +481,61 @@ export default function ProgressPage() {
 
     conditioningScore = Math.min(100, Math.round(conditioningScore));
 
+    // ========== SKILLS SCORE (0-100) ==========
+    // Pure skill performance metrics
+    // 1. Skill PR Achievement (up to 40 pts) - new personal records in skills
+    // 2. Progressive Improvement (up to 40 pts) - reps trending up over time
+    // 3. Skill Variety (up to 20 pts) - practicing different skills
+
+    let skillsScore = 0;
+
+    // 1. Skill PR Achievement (40 pts max)
+    const skillPRs = recentSkills.filter(s => {
+      const olderSkills = skillData.filter(
+        os => os.skillTitle === s.skillTitle && (os.date?.toMillis() || 0) < (s.date?.toMillis() || 0)
+      );
+      const previousMax = olderSkills.length > 0 ? Math.max(...olderSkills.map(os => os.maxReps || 0)) : 0;
+      return (s.maxReps || 0) > previousMax && previousMax > 0;
+    });
+    const skillPrPoints = Math.min(40, skillPRs.length * 10); // Each PR worth 10 pts, max 40
+    skillsScore += skillPrPoints;
+
+    // 2. Progressive Improvement (40 pts max) - are skills trending upward?
+    const skillsByName = new Map<string, SkillRecord[]>();
+    recentSkills.forEach(s => {
+      const name = s.skillTitle || "Unknown";
+      if (!skillsByName.has(name)) skillsByName.set(name, []);
+      skillsByName.get(name)!.push(s);
+    });
+
+    let progressingSkills = 0;
+    let totalTrackedSkills = 0;
+    skillsByName.forEach((records) => {
+      if (records.length >= 2) {
+        totalTrackedSkills++;
+        records.sort((a, b) => (a.date?.toMillis() || 0) - (b.date?.toMillis() || 0));
+        const firstHalf = records.slice(0, Math.floor(records.length / 2));
+        const secondHalf = records.slice(Math.floor(records.length / 2));
+        const firstAvg = firstHalf.reduce((sum, r) => sum + (r.maxReps || 0), 0) / firstHalf.length;
+        const secondAvg = secondHalf.reduce((sum, r) => sum + (r.maxReps || 0), 0) / secondHalf.length;
+        if (secondAvg > firstAvg) progressingSkills++;
+      }
+    });
+    const skillProgressionRate = totalTrackedSkills > 0 ? progressingSkills / totalTrackedSkills : 0;
+    skillsScore += Math.round(skillProgressionRate * 40);
+
+    // 3. Skill Variety (20 pts max) - practicing different skills
+    const uniqueSkills = new Set(recentSkills.map(s => s.skillTitle)).size;
+    const skillVarietyPoints = Math.min(20, uniqueSkills * 5);
+    skillsScore += skillVarietyPoints;
+
+    // If no skills logged, give a base score of 50 (neutral) to not penalize
+    if (recentSkills.length === 0) {
+      skillsScore = 50;
+    } else {
+      skillsScore = Math.min(100, Math.round(skillsScore));
+    }
+
     // ========== CONSISTENCY SCORE (0-100) ==========
     // Components:
     // 1. Weekly Attendance (up to 40 pts) - showing up regularly
@@ -558,11 +614,11 @@ export default function ProgressPage() {
 
     // ========== OVERALL SCORE ==========
     // Weighted average with slight bonus for balance
-    const baseScore = (strengthScore * 0.33) + (conditioningScore * 0.33) + (consistencyScore * 0.34);
+    const baseScore = (strengthScore * 0.25) + (conditioningScore * 0.25) + (skillsScore * 0.25) + (consistencyScore * 0.25);
 
-    // Balance bonus: if all three scores are within 20 pts of each other, add up to 5 pts
-    const scoreRange = Math.max(strengthScore, conditioningScore, consistencyScore) -
-                       Math.min(strengthScore, conditioningScore, consistencyScore);
+    // Balance bonus: if all four scores are within 20 pts of each other, add up to 5 pts
+    const scoreRange = Math.max(strengthScore, conditioningScore, skillsScore, consistencyScore) -
+                       Math.min(strengthScore, conditioningScore, skillsScore, consistencyScore);
     const balanceBonus = scoreRange <= 20 ? Math.round((20 - scoreRange) / 4) : 0;
 
     const overallScore = Math.min(100, Math.round(baseScore + balanceBonus));
@@ -570,6 +626,7 @@ export default function ProgressPage() {
     setOverallProgress({
       strengthScore,
       conditioningScore,
+      skillsScore,
       consistencyScore,
       overallScore
     });
@@ -745,9 +802,10 @@ Be specific, use their actual numbers, and be encouraging but honest. Keep it co
             {overallProgress && (
               <div className="bg-white rounded-xl shadow-sm p-6">
                 <h2 className="text-lg font-semibold text-gray-900 mb-4">Overall Progress</h2>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                   <ScoreCard label="Strength" score={overallProgress.strengthScore} color="purple" />
                   <ScoreCard label="Conditioning" score={overallProgress.conditioningScore} color="orange" />
+                  <ScoreCard label="Skills" score={overallProgress.skillsScore} color="cyan" />
                   <ScoreCard label="Consistency" score={overallProgress.consistencyScore} color="green" />
                   <ScoreCard label="Overall" score={overallProgress.overallScore} color="blue" highlight />
                 </div>
