@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { collection, query, where, getDocs, Timestamp, orderBy, limit } from "firebase/firestore";
+import { collection, query, where, getDocs, Timestamp, limit } from "firebase/firestore";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
@@ -101,11 +101,10 @@ export default function ProgressPage() {
       startDate.setDate(startDate.getDate() - daysAgo);
       const startTimestamp = Timestamp.fromDate(startDate);
 
-      // Fetch lift results
+      // Fetch lift results (sort in JS to avoid needing composite index)
       const liftQuery = query(
         collection(db, "liftResults"),
         where("userId", "==", user.id),
-        orderBy("date", "desc"),
         limit(500)
       );
       const liftSnapshot = await getDocs(liftQuery);
@@ -113,13 +112,14 @@ export default function ProgressPage() {
         id: doc.id,
         ...doc.data()
       })) as LiftRecord[];
+      // Sort by date descending in JavaScript
+      liftData.sort((a, b) => (b.date?.toMillis() || 0) - (a.date?.toMillis() || 0));
       setLifts(liftData);
 
-      // Fetch WOD logs
+      // Fetch WOD logs (sort in JS to avoid needing composite index)
       const wodQuery = query(
         collection(db, "workoutLogs"),
         where("userId", "==", user.id),
-        orderBy("completedDate", "desc"),
         limit(500)
       );
       const wodSnapshot = await getDocs(wodQuery);
@@ -127,13 +127,14 @@ export default function ProgressPage() {
         id: doc.id,
         ...doc.data()
       })) as WodRecord[];
+      // Sort by completedDate descending in JavaScript
+      wodData.sort((a, b) => (b.completedDate?.toMillis() || 0) - (a.completedDate?.toMillis() || 0));
       setWods(wodData);
 
-      // Fetch skill logs
+      // Fetch skill logs (sort in JS to avoid needing composite index)
       const skillQuery = query(
         collection(db, "skillLogs"),
         where("userId", "==", user.id),
-        orderBy("date", "desc"),
         limit(200)
       );
       const skillSnapshot = await getDocs(skillQuery);
@@ -141,6 +142,8 @@ export default function ProgressPage() {
         id: doc.id,
         ...doc.data()
       })) as SkillRecord[];
+      // Sort by date descending in JavaScript
+      skillData.sort((a, b) => (b.date?.toMillis() || 0) - (a.date?.toMillis() || 0));
       setSkills(skillData);
 
       // Calculate stats
