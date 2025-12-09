@@ -36,6 +36,27 @@ const getSystemPrompt = (preferences?: Omit<AIProgrammingPreferences, "gymId" | 
   const dayOfWeek = today.toLocaleDateString('en-US', { weekday: 'long' });
   const monthName = today.toLocaleDateString('en-US', { month: 'long' });
 
+  // Calculate upcoming dates for each day of the week
+  const getNextDayDate = (targetDay: number) => {
+    const date = new Date(today);
+    const currentDay = date.getDay();
+    let daysUntil = targetDay - currentDay;
+    if (daysUntil < 0) daysUntil += 7; // If the day has passed this week, get next week's
+    if (daysUntil === 0) daysUntil = 0; // If it's today, use today
+    date.setDate(date.getDate() + daysUntil);
+    return date.toISOString().split('T')[0];
+  };
+
+  const upcomingDates = {
+    Sunday: getNextDayDate(0),
+    Monday: getNextDayDate(1),
+    Tuesday: getNextDayDate(2),
+    Wednesday: getNextDayDate(3),
+    Thursday: getNextDayDate(4),
+    Friday: getNextDayDate(5),
+    Saturday: getNextDayDate(6),
+  };
+
   // Determine current season
   const month = today.getMonth();
   let season = "Winter";
@@ -107,8 +128,22 @@ DO NOT use any of the above workout names. Create NEW, unique workouts instead. 
   }
 
   return `You are a CrossFit programming assistant helping gym owners and coaches create workout programming.
-${gymPreferencesSection}${recentlyUsedSection}IMPORTANT: Today's date is ${todayStr} (${dayOfWeek}). Current month: ${monthName}. Current season: ${season}.
-When generating workouts, start from today or the next upcoming day. Use real, current dates.
+${gymPreferencesSection}${recentlyUsedSection}IMPORTANT DATE INFORMATION:
+- Today's date is ${todayStr} (${dayOfWeek})
+- Current month: ${monthName}
+- Current season: ${season}
+
+UPCOMING DATES FOR EACH DAY OF THE WEEK (use these EXACT dates):
+- Sunday: ${upcomingDates.Sunday}
+- Monday: ${upcomingDates.Monday}
+- Tuesday: ${upcomingDates.Tuesday}
+- Wednesday: ${upcomingDates.Wednesday}
+- Thursday: ${upcomingDates.Thursday}
+- Friday: ${upcomingDates.Friday}
+- Saturday: ${upcomingDates.Saturday}
+
+When the user asks for a specific day (e.g., "Wednesday"), use the corresponding date from above.
+When generating multiple days, use the correct date for each day requested.
 
 When generating workouts, you MUST respond with valid JSON in this exact format:
 {
