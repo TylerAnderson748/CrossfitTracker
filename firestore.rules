@@ -371,6 +371,40 @@ service cloud.firestore {
     }
 
     // ==========================================
+    // AI COACH ADVICE (Persisted recommendations)
+    // ==========================================
+
+    match /aiCoachAdvice/{adviceId} {
+      // Users can read advice - doc ID contains their userId for security
+      // We allow general authenticated read because getDoc on non-existent docs
+      // fails if we check resource.data (which is null for missing docs)
+      allow read: if isAuthenticated();
+
+      // Users can create/update their own advice
+      allow create: if isAuthenticated() &&
+                       request.resource.data.userId == request.auth.uid &&
+                       hasRequiredFields(['userId', 'advice', 'date']);
+
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    // ==========================================
+    // AI COACH SUGGESTIONS (Global cached suggestions)
+    // Generated daily at 1 AM by cron/admin
+    // ==========================================
+
+    match /aiCoachSuggestions/{suggestionId} {
+      // All authenticated users can read cached suggestions
+      allow read: if isAuthenticated();
+
+      // Only super admins can write (for manual refresh)
+      allow create: if isSuperAdmin();
+      allow update: if isSuperAdmin();
+      allow delete: if isSuperAdmin();
+    }
+
+    // ==========================================
     // SUBSCRIPTIONS (Read-only from client)
     // ==========================================
 

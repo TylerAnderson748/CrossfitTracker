@@ -2,10 +2,9 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { collection, query, where, getDocs, Timestamp, limit } from "firebase/firestore";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { collection, query, where, getDocs, Timestamp, limit, doc, setDoc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { ScheduledWorkout, AICoachPreferences, WorkoutComponent } from "@/lib/types";
+import { ScheduledWorkout, AICoachPreferences, WorkoutComponent, UserRole } from "@/lib/types";
 
 // Types for user workout history
 interface LiftHistoryEntry {
@@ -43,6 +42,7 @@ interface PersonalAITrainerProps {
   todayPersonalWorkouts?: PersonalWorkout[];
   gymId?: string;
   userPreferences?: AICoachPreferences;
+  viewerRole?: UserRole; // For super admins viewing other users' AI coach
 }
 
 interface GymMemberStats {
@@ -50,7 +50,15 @@ interface GymMemberStats {
   count: number;
 }
 
-export default function PersonalAITrainer({ userId, todayWorkout, todayPersonalWorkouts, gymId, userPreferences }: PersonalAITrainerProps) {
+// Generate a unique ID for storing advice
+function getAdviceDocId(userId: string, workoutId?: string, personalWorkoutIds?: string[]): string {
+  const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+  const workoutPart = workoutId || (personalWorkoutIds?.join('_') || 'personal');
+  return `${userId}_${today}_${workoutPart}`;
+}
+
+export default function PersonalAITrainer({ userId, todayWorkout, todayPersonalWorkouts, gymId, userPreferences, viewerRole }: PersonalAITrainerProps) {
+  const isSuperAdmin = viewerRole === "superAdmin";
   // Check if there's any workout to analyze (gym or personal)
   const hasWorkoutToAnalyze = todayWorkout || (todayPersonalWorkouts && todayPersonalWorkouts.length > 0);
   const [userHistory, setUserHistory] = useState<UserWorkoutHistory>({ lifts: [], wods: [] });
@@ -59,6 +67,34 @@ export default function PersonalAITrainer({ userId, todayWorkout, todayPersonalW
   const [isLoading, setIsLoading] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [hasLoadedHistory, setHasLoadedHistory] = useState(false);
+  const [hasCheckedSavedAdvice, setHasCheckedSavedAdvice] = useState(false);
+
+  // Check for existing saved advice on mount
+  useEffect(() => {
+    const loadSavedAdvice = async () => {
+      if (!userId || !hasWorkoutToAnalyze) {
+        setHasCheckedSavedAdvice(true);
+        return;
+      }
+
+      try {
+        const personalWorkoutIds = todayPersonalWorkouts?.map(pw => pw.id);
+        const adviceDocId = getAdviceDocId(userId, todayWorkout?.id, personalWorkoutIds);
+        const adviceDoc = await getDoc(doc(db, "aiCoachAdvice", adviceDocId));
+
+        if (adviceDoc.exists()) {
+          const savedAdvice = adviceDoc.data();
+          setAiAdvice(savedAdvice.advice);
+        }
+      } catch (err) {
+        console.error("Error loading saved advice:", err);
+      } finally {
+        setHasCheckedSavedAdvice(true);
+      }
+    };
+
+    loadSavedAdvice();
+  }, [userId, todayWorkout?.id, todayPersonalWorkouts, hasWorkoutToAnalyze]);
 
   // Load user workout history
   useEffect(() => {
@@ -179,9 +215,9 @@ export default function PersonalAITrainer({ userId, todayWorkout, todayPersonalW
     setAiAdvice(null);
 
     try {
-      const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+      const apiKey = process.env.NEXT_PUBLIC_XAI_API_KEY;
       if (!apiKey) {
-        setAiAdvice("AI service not configured. Please contact support.");
+        setAiAdvice("AI service not configured. Please add NEXT_PUBLIC_XAI_API_KEY to your environment.");
         setIsLoading(false);
         return;
       }
@@ -304,9 +340,6 @@ export default function PersonalAITrainer({ userId, todayWorkout, todayPersonalW
         });
       }
 
-      const genAI = new GoogleGenerativeAI(apiKey);
-      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
-
       // Build prompt based on whether scaling options are prescribed
       let scalingInstructions = "";
       if (prescribedScalingOptions.trim()) {
@@ -321,40 +354,110 @@ Do NOT suggest any scaling modifications outside of what the coach has prescribe
 No specific scaling options were prescribed by the coach, so you may suggest appropriate scaling based on the athlete's ability level (Rx, Scaled, or Foundations).`;
       }
 
-      const prompt = `You are a personal CrossFit coach providing personalized advice.
+      // Determine if we should focus on weaknesses (no goals set)
+      const shouldFocusOnWeaknesses = !userPreferences?.goals;
+
+      // Analyze weaknesses from workout history
+      let weaknessAnalysis = "";
+      if (shouldFocusOnWeaknesses && userHistory.wods.length > 0) {
+        // Look for patterns in workout categories/results to identify weaknesses
+        const wodsByCategory: Record<string, number[]> = {};
+        userHistory.wods.forEach(wod => {
+          if (wod.timeInSeconds && wod.category) {
+            if (!wodsByCategory[wod.category]) wodsByCategory[wod.category] = [];
+            wodsByCategory[wod.category].push(wod.timeInSeconds);
+          }
+        });
+        weaknessAnalysis = "\nPotential areas for improvement based on logged workouts - focus your advice here.";
+      }
+
+      const prompt = `You are a personal CrossFit coach providing SPECIFIC, ACTIONABLE advice for today's workout.
 
 TODAY'S WORKOUT:
 ${workoutDescription}
 ${scalingInstructions}
 
 ATHLETE'S WORKOUT HISTORY:
-${historySummary || "No workout history available yet."}
-${userGoalsInfo ? `\nATHLETE'S PROFILE & GOALS:${userGoalsInfo}` : ""}
+${historySummary || "No workout history available yet - treat them as an intermediate athlete."}
+${userGoalsInfo ? `\nATHLETE'S PROFILE & GOALS:${userGoalsInfo}` : `\nNO GOALS SET - Focus advice on improving their weaknesses and building well-rounded fitness.${weaknessAnalysis}`}
 ${gymComparisonInfo}
 
-Based on this athlete's history, goals, and today's workout, provide SPECIFIC and PERSONALIZED recommendations:
+You MUST provide advice in this EXACT format with these sections:
 
-1. Suggest specific weights they should use based on their lift PRs
-2. ${prescribedScalingOptions.trim() ? "Help them choose the RIGHT prescribed scaling option for their ability level" : "Recommend a scaling option (Rx, Scaled, or Foundations) based on their typical performance level"}
-3. Give them a goal pace or target to aim for
-4. One mental cue or focus point for the workout
-${userPreferences?.goals ? "5. Briefly mention how today's workout connects to their stated goals" : ""}
+**SCALING RECOMMENDATION:**
+${prescribedScalingOptions.trim() ? "Choose from the coach's prescribed options and explain which one they should do" : "Recommend Rx, Scaled, or Foundations"} and explain WHY this is the right choice for them based on their specific numbers. Be direct: "Do [this option] because [specific reason]."
+
+**SPECIFIC WEIGHTS/LOADS:**
+List each movement that requires loading and give them an EXACT number based on their lift PRs. Example: "Deadlifts: Use 185lb (that's 65% of your 285lb 1RM - perfect for this workout style)." If you don't have data for a lift, give a conservative recommendation and tell them to track it.
+
+**PACING & REP SCHEME STRATEGY:**
+Give them a specific pacing target. For AMRAP: target rounds/hour and how to break up reps (e.g., "Break the wall balls into sets of 10 from the start"). For For Time: target finish time and when to push/rest. For EMOMs: work-to-rest ratio goals. Be SPECIFIC with numbers.
+
+**WHY THIS APPROACH IS BEST FOR YOU:**
+${userPreferences?.goals ? `Connect this workout to their stated goal: "${userPreferences.goals}". Explain how today's approach helps them progress toward it.` : "Since they haven't set specific goals, explain how this approach helps them get fitter overall or addresses a weakness you noticed in their history."}
+
+**ONE MENTAL CUE:**
+A single focused thought to keep in mind during the workout.
 
 CRITICAL RULES:
-- ${prescribedScalingOptions.trim() ? "ONLY suggest scaling options from the coach's prescribed options above - never invent your own scaling" : "You may suggest appropriate scaling since none was prescribed"}
-- Keep recommendations consistent with what similar athletes in the gym would do
-- Be encouraging but realistic. Reference their actual numbers
-- Keep it concise (3-4 short paragraphs max)
-- If they don't have relevant lift data, help them choose based on the prescribed options and note they should track their lifts
-${userPreferences?.injuries ? "- IMPORTANT: Consider their injuries/limitations when giving advice - suggest modifications if needed" : ""}
+- ${prescribedScalingOptions.trim() ? "ONLY suggest scaling options from the coach's prescribed options above" : "You may suggest appropriate scaling"}
+- Use their ACTUAL numbers from history when recommending weights
+- Be specific and direct - no vague advice like "listen to your body" or "go at a moderate pace"
+- If this is a heavy strength day, give percentage-based recommendations
+- If this is a metcon, give specific split times or round targets
+${userPreferences?.injuries ? `- CRITICAL: They have injuries/limitations (${userPreferences.injuries}). Provide SPECIFIC modifications for affected movements.` : ""}
 
-Respond in a friendly, coach-like tone. Use their actual numbers when giving recommendations.`;
+Respond in a confident, direct coach tone. This advice will be saved and shown every time they view this workout, so make it count.`;
 
-      const result = await model.generateContent(prompt);
-      const response = result.response;
-      const text = response.text();
+      // Call xAI/Grok API (OpenAI-compatible format)
+      const response = await fetch("https://api.x.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: "grok-4-latest",
+          messages: [
+            { role: "system", content: "You are an experienced CrossFit coach providing personalized workout advice." },
+            { role: "user", content: prompt }
+          ],
+          temperature: 0.7
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error?.message || `API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const text = data.choices?.[0]?.message?.content;
+
+      if (!text) {
+        throw new Error("No response from AI");
+      }
 
       setAiAdvice(text);
+
+      // Save the advice to Firestore so it persists
+      try {
+        const personalWorkoutIds = todayPersonalWorkouts?.map(pw => pw.id);
+        const adviceDocId = getAdviceDocId(userId, todayWorkout?.id, personalWorkoutIds);
+
+        await setDoc(doc(db, "aiCoachAdvice", adviceDocId), {
+          userId,
+          advice: text,
+          workoutId: todayWorkout?.id || null,
+          personalWorkoutIds: personalWorkoutIds || null,
+          gymId: gymId || null,
+          createdAt: Timestamp.now(),
+          date: new Date().toISOString().split('T')[0],
+        });
+      } catch (saveErr) {
+        console.error("Error saving advice to Firestore:", saveErr);
+        // Don't fail - advice is still shown to user
+      }
     } catch (err) {
       console.error("Error getting AI advice:", err);
       setAiAdvice("Sorry, I couldn't generate personalized advice right now. Please try again.");
@@ -385,7 +488,22 @@ Respond in a friendly, coach-like tone. Use their actual numbers when giving rec
       .join(" | ");
   };
 
-  if (!hasLoadedHistory) {
+  // Count unique lifts and WODs for requirements check
+  const getUniqueLiftCount = () => {
+    const uniqueLifts = new Set(userHistory.lifts.map(l => l.liftTitle));
+    return uniqueLifts.size;
+  };
+
+  const getUniqueWodCount = () => {
+    const uniqueWods = new Set(userHistory.wods.map(w => w.wodTitle));
+    return uniqueWods.size;
+  };
+
+  const uniqueLiftCount = getUniqueLiftCount();
+  const uniqueWodCount = getUniqueWodCount();
+  const meetsRequirements = uniqueLiftCount >= 5 && uniqueWodCount >= 5;
+
+  if (!hasLoadedHistory || !hasCheckedSavedAdvice) {
     return null;
   }
 
@@ -440,27 +558,65 @@ Respond in a friendly, coach-like tone. Use their actual numbers when giving rec
             </svg>
           </Link>
 
-          {/* User History Summary */}
-          {(userHistory.lifts.length > 0 || userHistory.wods.length > 0) && (
-            <div className="bg-white/10 rounded-lg p-3">
-              <p className="text-xs font-medium text-white/70 mb-2">Your Stats (AI uses these):</p>
-              <div className="text-sm space-y-1">
-                {userHistory.lifts.length > 0 && (
-                  <p className="text-white/90">{getLiftPRsSummary()}</p>
-                )}
-                {userHistory.wods.length > 0 && (
-                  <p className="text-white/70 text-xs">
-                    {userHistory.wods.length} WODs logged | Most recent: {userHistory.wods[0]?.wodTitle}
-                  </p>
-                )}
+          {/* Requirements Check */}
+          {!meetsRequirements ? (
+            <div className="bg-white/10 rounded-lg p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <svg className="w-5 h-5 text-yellow-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <span className="font-medium">Unlock AI Coach</span>
               </div>
+              <p className="text-sm text-white/80 mb-3">
+                Log at least 5 different lifts and 5 different WODs to unlock personalized AI coaching.
+              </p>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-white/70">Unique Lifts</span>
+                  <div className="flex items-center gap-2">
+                    <div className="w-24 h-2 bg-white/20 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-green-400 rounded-full transition-all"
+                        style={{ width: `${Math.min(100, (uniqueLiftCount / 5) * 100)}%` }}
+                      />
+                    </div>
+                    <span className={`text-sm font-medium ${uniqueLiftCount >= 5 ? 'text-green-400' : 'text-white/90'}`}>
+                      {uniqueLiftCount}/5
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-white/70">Unique WODs</span>
+                  <div className="flex items-center gap-2">
+                    <div className="w-24 h-2 bg-white/20 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-green-400 rounded-full transition-all"
+                        style={{ width: `${Math.min(100, (uniqueWodCount / 5) * 100)}%` }}
+                      />
+                    </div>
+                    <span className={`text-sm font-medium ${uniqueWodCount >= 5 ? 'text-green-400' : 'text-white/90'}`}>
+                      {uniqueWodCount}/5
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <p className="text-xs text-white/50 mt-3">
+                Log your results from preset workouts to build your training profile.
+              </p>
             </div>
-          )}
-
-          {/* Get Advice Button or AI Advice Display */}
-          {hasWorkoutToAnalyze ? (
+          ) : (
             <>
-              {/* Only show button if no advice yet */}
+              {/* User Stats Summary */}
+              {(userHistory.lifts.length > 0) && (
+                <div className="bg-white/10 rounded-lg p-3">
+                  <p className="text-xs font-medium text-white/70 mb-1">Your Stats (AI uses these):</p>
+                  <p className="text-sm text-white/90">{getLiftPRsSummary()}</p>
+                </div>
+              )}
+
+              {/* Get Advice Button or AI Advice Display */}
+              {hasWorkoutToAnalyze && (
+            <>
               {!aiAdvice && (
                 <button
                   onClick={getPersonalizedAdvice}
@@ -483,32 +639,45 @@ Respond in a friendly, coach-like tone. Use their actual numbers when giving rec
                 </button>
               )}
 
-              {/* AI Advice Display */}
               {aiAdvice && (
                 <div className="bg-white/10 rounded-lg p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <svg className="w-4 h-4 text-yellow-300" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-                    </svg>
-                    <span className="font-medium text-yellow-300 text-sm">Your Personalized Plan</span>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <svg className="w-4 h-4 text-yellow-300" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                      </svg>
+                      <span className="font-medium text-yellow-300 text-sm">Your Personalized Plan</span>
+                    </div>
+                    {isSuperAdmin && (
+                      <button
+                        onClick={getPersonalizedAdvice}
+                        disabled={isLoading}
+                        className="text-xs bg-red-500/20 text-red-200 hover:bg-red-500/30 px-2 py-1 rounded flex items-center gap-1 disabled:opacity-50"
+                        title="Super Admin: Force regenerate advice"
+                      >
+                        {isLoading ? (
+                          <div className="w-3 h-3 border border-red-300/30 border-t-red-300 rounded-full animate-spin" />
+                        ) : (
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                          </svg>
+                        )}
+                      </button>
+                    )}
                   </div>
-                  <p className="text-sm text-white/90 whitespace-pre-line">{aiAdvice}</p>
+                  <div className="text-sm text-white/90 whitespace-pre-line">
+                    {aiAdvice.split('\n').map((line, i) => {
+                      if (line.startsWith('**') && line.endsWith('**')) {
+                        return <p key={i} className="font-bold text-white mt-3 first:mt-0">{line.replace(/\*\*/g, '')}</p>;
+                      }
+                      return line ? <p key={i} className="mt-1">{line}</p> : null;
+                    })}
+                  </div>
                 </div>
               )}
             </>
-          ) : (
-            <div className="bg-white/10 rounded-lg p-3 text-center">
-              <p className="text-white/70 text-sm">No workout scheduled for today.</p>
-              <p className="text-white/50 text-xs mt-1">Check back when you have a workout to get personalized advice!</p>
-            </div>
           )}
-
-          {/* No History Message */}
-          {userHistory.lifts.length === 0 && userHistory.wods.length === 0 && (
-            <div className="bg-white/10 rounded-lg p-3 text-center">
-              <p className="text-white/70 text-sm">Start logging your workouts to unlock personalized recommendations!</p>
-              <p className="text-white/50 text-xs mt-1">The more you log, the smarter your AI trainer becomes.</p>
-            </div>
+            </>
           )}
         </div>
       )}

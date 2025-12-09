@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { collection, addDoc, updateDoc, doc, query, where, getDocs, getDoc, orderBy, Timestamp, serverTimestamp, deleteDoc } from "firebase/firestore";
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import { db } from "@/lib/firebase";
 import { AIProgrammingSession, AIChatMessage, AIGeneratedDay, WorkoutGroup, WorkoutComponent, AIProgrammingPreferences, AITrainerSubscription, ScheduledTimeSlot } from "@/lib/types";
 import { getAllSkills, getAllLifts, getAllWods } from "@/lib/workoutData";
@@ -36,6 +35,27 @@ const getSystemPrompt = (preferences?: Omit<AIProgrammingPreferences, "gymId" | 
   const todayStr = today.toISOString().split('T')[0]; // YYYY-MM-DD format
   const dayOfWeek = today.toLocaleDateString('en-US', { weekday: 'long' });
   const monthName = today.toLocaleDateString('en-US', { month: 'long' });
+
+  // Calculate upcoming dates for each day of the week
+  const getNextDayDate = (targetDay: number) => {
+    const date = new Date(today);
+    const currentDay = date.getDay();
+    let daysUntil = targetDay - currentDay;
+    if (daysUntil < 0) daysUntil += 7; // If the day has passed this week, get next week's
+    if (daysUntil === 0) daysUntil = 0; // If it's today, use today
+    date.setDate(date.getDate() + daysUntil);
+    return date.toISOString().split('T')[0];
+  };
+
+  const upcomingDates = {
+    Sunday: getNextDayDate(0),
+    Monday: getNextDayDate(1),
+    Tuesday: getNextDayDate(2),
+    Wednesday: getNextDayDate(3),
+    Thursday: getNextDayDate(4),
+    Friday: getNextDayDate(5),
+    Saturday: getNextDayDate(6),
+  };
 
   // Determine current season
   const month = today.getMonth();
@@ -108,8 +128,22 @@ DO NOT use any of the above workout names. Create NEW, unique workouts instead. 
   }
 
   return `You are a CrossFit programming assistant helping gym owners and coaches create workout programming.
-${gymPreferencesSection}${recentlyUsedSection}IMPORTANT: Today's date is ${todayStr} (${dayOfWeek}). Current month: ${monthName}. Current season: ${season}.
-When generating workouts, start from today or the next upcoming day. Use real, current dates.
+${gymPreferencesSection}${recentlyUsedSection}IMPORTANT DATE INFORMATION:
+- Today's date is ${todayStr} (${dayOfWeek})
+- Current month: ${monthName}
+- Current season: ${season}
+
+UPCOMING DATES FOR EACH DAY OF THE WEEK (use these EXACT dates):
+- Sunday: ${upcomingDates.Sunday}
+- Monday: ${upcomingDates.Monday}
+- Tuesday: ${upcomingDates.Tuesday}
+- Wednesday: ${upcomingDates.Wednesday}
+- Thursday: ${upcomingDates.Thursday}
+- Friday: ${upcomingDates.Friday}
+- Saturday: ${upcomingDates.Saturday}
+
+When the user asks for a specific day (e.g., "Wednesday"), use the corresponding date from above.
+When generating multiple days, use the correct date for each day requested.
 
 When generating workouts, you MUST respond with valid JSON in this exact format:
 {
@@ -124,26 +158,32 @@ When generating workouts, you MUST respond with valid JSON in this exact format:
           "type": "warmup",
           "title": "General Warm-up",
           "description": "3 rounds:\\n10 air squats\\n10 push-ups\\n200m run",
-          "notes": "Focus on mobility and increasing heart rate gradually"
+          "notes": "Focus on mobility and increasing heart rate gradually. No rest between movements."
         },
         {
           "type": "lift",
           "title": "Back Squat",
-          "description": "5x5 @ 75% 1RM\\nRest 2-3 min between sets",
-          "notes": "Stimulus: Build strength with moderate load. Focus on depth and control.\\nScaling: Reduce weight if form breaks down. Beginners use goblet squats."
+          "description": "Build to a heavy set of 5, then:\\n3 x 5 @ 80-85% of today's heavy set\\nRest 2-3 min between sets",
+          "notes": "STIMULUS: Build strength with moderate-heavy load. Should feel challenging but controlled.\\n\\nGOAL: Improve 5-rep max capacity. Focus on depth, bracing, and bar speed.\\n\\nSCALED: Reduce weight 10-20% if form breaks down or if newer to back squatting.\\n\\nFOUNDATIONS: Goblet squat with dumbbell/kettlebell. Focus on depth and core stability. 3 x 8-10 reps."
         },
         {
           "type": "skill",
           "title": "Toes-to-Bar",
-          "description": "3 sets of 8-10 reps (or max effort)\\nRest 90 sec between sets\\n\\nDrill Work:\\n- 10 kip swings (focus on hollow/arch)\\n- 10 knees-to-chest\\n- 5 slow toes-to-bar with pause at top",
-          "notes": "Stimulus: Skill development, focus on rhythm and efficiency.\\nScaling: Knees-to-Elbow if can't reach toes. Hanging Knee Raises if still developing kip. V-ups on floor if grip is limiting.\\nIntent: Quality over quantity - stop if form breaks down.\\nProgression: Master kip swing first, then knees-to-chest, then full TTB."
+          "description": "Every 90 sec for 6 rounds:\\n5-8 Toes-to-Bar (or progression)\\n\\nDrill Work (before sets):\\n- 10 kip swings (hollow to arch)\\n- 5 slow knees-to-chest\\n- 5 controlled leg raises",
+          "notes": "STIMULUS: Skill development - focus on rhythm, timing, and efficiency, not fatigue.\\n\\nGOAL: Build capacity and consistency in the kipping pattern. Quality over quantity.\\n\\nSCALED: Knees-to-Elbows (same rep scheme). Focus on full extension at bottom.\\n\\nFOUNDATIONS: Hanging knee raises or V-ups on floor. 6 rounds of 8-10 reps.\\n\\nPROGRESSION TIP: Master the kip swing timing before adding leg lift."
         },
         {
           "type": "wod",
           "title": "Fran",
-          "description": "21-15-9\\nThrusters (95/65)\\nPull-ups",
+          "description": "21-15-9 For Time:\\nThrusters\\nPull-ups\\n\\nTime Cap: 10 minutes",
           "scoringType": "fortime",
-          "notes": "Stimulus: Fast and intense, aim for sub-10 minutes.\\nRx: Thrusters (95/65), Kipping Pull-ups\\nScaled: Thrusters (65/45), Ring Rows or Banded Pull-ups\\nFoundations: Thrusters (45/35), Ring Rows\\n\\nScoring: Using scaled weights? Log as Scaled. Using less than scaled or ring rows? Log as Foundations.\\nIntent: Sprint effort, unbroken if possible."
+          "notes": "STIMULUS: Sprint effort. This should feel intense from the first rep. Heart rate high, breathing hard.\\n\\nGOAL: Sub-5 elite, sub-7 competitive, sub-10 fitness. Aim for large sets or unbroken if possible.\\n\\nRx: Thrusters 95/65 lb, Kipping Pull-ups\\n\\nSCALED: Thrusters 65/45 lb, Banded Pull-ups or Jumping Pull-ups\\n- For athletes who can do pull-ups but not 45 total\\n- For athletes building toward Rx weights\\n\\nFOUNDATIONS: Thrusters 45/35 lb (or dumbbells 20/15), Ring Rows\\n- For newer athletes still building capacity\\n- Focus on moving well, not moving fast\\n\\nSCORING: Record time and note Rx/Scaled/Foundations. If you modified further, note in comments."
+        },
+        {
+          "type": "cooldown",
+          "title": "Recovery",
+          "description": "2 rounds:\\n1 min couch stretch each leg\\n1 min pigeon pose each side\\n10 slow cat-cows",
+          "notes": "Take your time. Breathe deeply. This is recovery, not a workout."
         }
       ]
     }
@@ -205,21 +245,42 @@ The notes field for skills MUST include:
 - For WODs, use benchmark WODs when appropriate, but get CREATIVE with custom WOD names using themes!
 - Pay attention to any themes, preferences, or special requests from the user
 
-IMPORTANT - WOD SCALING AND SCORING CATEGORIES:
-For ALL WOD components, you MUST include THREE scaling levels in the notes:
-1. Rx (prescribed): The standard weights and movements
-2. Scaled: Lighter weights or easier movement variations
-3. Foundations: Lightest weights or most accessible modifications
+IMPORTANT - STIMULUS, GOALS, AND SCALING:
+Every workout component MUST have detailed notes with:
 
-ALWAYS include scoring guidance like:
-"Scoring: Using Rx weights? Log as Rx. Using scaled weights? Log as Scaled. Using less than scaled weights or significant modifications? Log as Foundations."
+1. STIMULUS: What should this feel like? (sprint effort, grinding pace, controlled movement, etc.)
+   - Be specific: "Heart rate should stay elevated", "Should feel heavy but controlled", "Breathing hard but recoverable"
 
-Example scaling formats:
-- Barbell movements: "Rx: 135/95, Scaled: 95/65, Foundations: 65/45 or empty bar"
-- Kettlebell: "Rx: 53/35, Scaled: 35/26, Foundations: 26/18"
-- Pull-ups: "Rx: Kipping Pull-ups, Scaled: Banded Pull-ups, Foundations: Ring Rows"
-- Box Jumps: "Rx: 24/20, Scaled: 20/16, Foundations: Step-ups"
-- Wall Balls: "Rx: 20/14 to 10/9ft, Scaled: 14/10, Foundations: 10/6 to 9ft"
+2. GOAL: What is this workout trying to achieve?
+   - Time targets for For Time workouts (elite/competitive/fitness ranges)
+   - Rep targets for AMRAPs
+   - Intensity expectations
+   - What the athlete should focus on (unbroken sets, pacing, technique, etc.)
+
+3. THREE SCALING LEVELS with clear guidance:
+   a) Rx (prescribed): Standard weights and movements with specific expectations
+   b) SCALED: Lighter weights OR easier movement variations
+      - Include WHO should scale: "For athletes building toward Rx" or "If you can't do 15+ unbroken"
+      - Be specific about modifications: exact weights, band colors, etc.
+   c) FOUNDATIONS (Beginner): Most accessible option
+      - For newer athletes or those with limitations
+      - Focus should be on movement quality, not intensity
+      - Include alternative equipment if needed (dumbbells instead of barbell)
+
+SCALING WEIGHT EXAMPLES:
+- Barbell Clean/Snatch: "Rx: 135/95, Scaled: 95/65, Foundations: 65/45 or PVC/empty bar"
+- Thrusters: "Rx: 95/65, Scaled: 65/45, Foundations: 45/35 or DB 20/15"
+- Deadlift: "Rx: 225/155, Scaled: 155/105, Foundations: 95/65"
+- Kettlebell Swings: "Rx: 53/35, Scaled: 35/26, Foundations: 26/18"
+- Wall Balls: "Rx: 20/14 to 10/9ft, Scaled: 14/10 to 9ft, Foundations: 10/6 to 9ft"
+
+SCALING MOVEMENT EXAMPLES:
+- Pull-ups: "Rx: Kipping, Scaled: Banded (green/blue) or Jumping, Foundations: Ring Rows"
+- Muscle-ups: "Rx: Bar/Ring MU, Scaled: C2B + Dips, Foundations: Pull-ups + Push-ups"
+- Handstand Push-ups: "Rx: Strict/Kipping, Scaled: Pike Push-ups (box), Foundations: DB Strict Press"
+- Box Jumps: "Rx: 24/20 jump, Scaled: 20/16 jump, Foundations: Step-ups any height"
+- Double-Unders: "Rx: DUs, Scaled: 2:1 Singles, Foundations: 3:1 Singles or Penguin Jumps"
+- Toes-to-Bar: "Rx: TTB, Scaled: Knees-to-Elbows, Foundations: Hanging Knee Raises or V-ups"
 
 If the user is just chatting or asking questions (not requesting workouts), respond with just:
 {
@@ -516,45 +577,19 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
     setError(null);
 
     try {
-      // Find all scheduled workouts created by this session
-      // We'll match by createdBy (userId) and date range from the session's workouts
-      const session = sessions.find(s => s.id === sessionId);
-      if (!session) {
-        throw new Error("Session not found");
-      }
-
-      // Get all workouts for this gym
+      // Query workouts by aiSessionId to only delete workouts from THIS session
       const workoutsQuery = query(
         collection(db, "scheduledWorkouts"),
         where("gymId", "==", gymId),
-        where("createdBy", "==", userId)
+        where("aiSessionId", "==", sessionId)
       );
       const snapshot = await getDocs(workoutsQuery);
 
-      // Get the generated workouts from this session to match dates
-      const generatedDates = new Set<string>();
-      session.messages.forEach(msg => {
-        if (msg.generatedWorkouts) {
-          msg.generatedWorkouts.forEach(w => {
-            if (w.date) generatedDates.add(w.date);
-          });
-        }
-      });
-
-      // Delete matching workouts
+      // Delete all workouts from this session
       let deletedCount = 0;
       for (const docSnap of snapshot.docs) {
-        const data = docSnap.data();
-        const workoutDate = data.date?.toDate();
-        if (workoutDate) {
-          const dateStr = workoutDate.toISOString().split('T')[0];
-          // Check if this workout's date matches one of the generated dates
-          // or if the wodTitle contains "Programming" (AI-generated pattern)
-          if (generatedDates.has(dateStr) || data.wodTitle?.includes("Programming")) {
-            await deleteDoc(doc(db, "scheduledWorkouts", docSnap.id));
-            deletedCount++;
-          }
-        }
+        await deleteDoc(doc(db, "scheduledWorkouts", docSnap.id));
+        deletedCount++;
       }
 
       // Update session status back to active
@@ -595,32 +630,16 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
 
       // If session was published, delete the workouts first
       if (session?.status === "published") {
+        // Query workouts by aiSessionId to only delete workouts from THIS session
         const workoutsQuery = query(
           collection(db, "scheduledWorkouts"),
           where("gymId", "==", gymId),
-          where("createdBy", "==", userId)
+          where("aiSessionId", "==", sessionId)
         );
         const snapshot = await getDocs(workoutsQuery);
 
-        // Get the generated dates from this session
-        const generatedDates = new Set<string>();
-        session.messages.forEach(msg => {
-          if (msg.generatedWorkouts) {
-            msg.generatedWorkouts.forEach(w => {
-              if (w.date) generatedDates.add(w.date);
-            });
-          }
-        });
-
         for (const docSnap of snapshot.docs) {
-          const data = docSnap.data();
-          const workoutDate = data.date?.toDate();
-          if (workoutDate) {
-            const dateStr = workoutDate.toISOString().split('T')[0];
-            if (generatedDates.has(dateStr) || data.wodTitle?.includes("Programming")) {
-              await deleteDoc(doc(db, "scheduledWorkouts", docSnap.id));
-            }
-          }
+          await deleteDoc(doc(db, "scheduledWorkouts", docSnap.id));
         }
       }
 
@@ -661,14 +680,11 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
     setError(null);
 
     try {
-      // Initialize Google AI
-      const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+      // Initialize xAI/Grok API
+      const apiKey = process.env.NEXT_PUBLIC_XAI_API_KEY;
       if (!apiKey) {
-        throw new Error("Gemini API key not configured. Add NEXT_PUBLIC_GEMINI_API_KEY to your environment.");
+        throw new Error("xAI API key not configured. Add NEXT_PUBLIC_XAI_API_KEY to your environment.");
       }
-
-      const genAI = new GoogleGenerativeAI(apiKey);
-      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
       // Build conversation history for context
       const conversationHistory = updatedMessages.map(msg =>
@@ -677,9 +693,34 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
 
       const prompt = `${getSystemPrompt(preferences, recentlyUsedWorkouts)}\n\nConversation so far:\n${conversationHistory}\n\nRespond to the user's latest message. Remember to output valid JSON only.`;
 
-      const result = await model.generateContent(prompt);
-      const response = result.response;
-      const text = response.text();
+      // Call xAI/Grok API
+      const response = await fetch("https://api.x.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: "grok-4-latest",
+          messages: [
+            { role: "system", content: "You are an expert CrossFit programming assistant. Always respond with valid JSON." },
+            { role: "user", content: prompt }
+          ],
+          temperature: 0.7
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error?.message || `API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const text = data.choices?.[0]?.message?.content || "";
+
+      if (!text) {
+        throw new Error("No response from AI");
+      }
 
       // Parse the JSON response
       let parsedResponse: { message: string; workouts: AIGeneratedDay[] };
@@ -833,8 +874,16 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
         // Skip if no valid components
         if (cleanComponents.length === 0) continue;
 
-        // Build workout date
-        const workoutDate = new Date(day.date);
+        // Build workout date - parse as local time to avoid timezone issues
+        // When parsing "YYYY-MM-DD", JavaScript treats it as UTC which can shift the day
+        // So we parse the components manually to ensure local time
+        let workoutDate: Date;
+        if (day.date && day.date.includes('-')) {
+          const [year, month, dayNum] = day.date.split('-').map(Number);
+          workoutDate = new Date(year, month - 1, dayNum, 12, 0, 0); // noon local time
+        } else {
+          workoutDate = new Date(day.date);
+        }
         if (isNaN(workoutDate.getTime())) continue; // Skip invalid dates
 
         // Generate time slots from selected groups' default time slots
@@ -865,7 +914,7 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
         // Sort time slots by time
         timeSlots.sort((a, b) => a.hour * 60 + a.minute - (b.hour * 60 + b.minute));
 
-        // Create document
+        // Create document with aiSessionId to track which session created it
         await addDoc(collection(db, "scheduledWorkouts"), {
           gymId: String(gymId),
           wodTitle: String(`${day.dayOfWeek || "Day"} Programming`),
@@ -879,6 +928,7 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
           date: Timestamp.fromDate(workoutDate),
           createdAt: serverTimestamp(),
           timeSlots,
+          aiSessionId: activeSession.id, // Track which AI programming session created this workout
         });
       }
 
