@@ -293,26 +293,25 @@ export default function ProgressPage() {
     const weeks = days / 7;
 
     // ========== STRENGTH SCORE (0-100) ==========
-    // Components:
-    // 1. PR Achievement (up to 35 pts) - new personal records
-    // 2. Progressive Overload (up to 25 pts) - weight trending up over time
+    // Pure performance metrics - no attendance/consistency factors
+    // 1. PR Achievement (up to 50 pts) - new personal records
+    // 2. Progressive Overload (up to 30 pts) - weight trending up over time
     // 3. Lift Variety (up to 20 pts) - hitting different movement patterns
-    // 4. Volume Consistency (up to 20 pts) - regular lifting sessions
 
     let strengthScore = 0;
 
-    // 1. PR Achievement (35 pts max)
+    // 1. PR Achievement (50 pts max) - the core of strength progress
     const liftPRs = recentLifts.filter(l => {
       const olderLifts = liftData.filter(
         ol => ol.liftTitle === l.liftTitle && ol.date?.toMillis() < l.date?.toMillis()
       );
       const previousMax = olderLifts.length > 0 ? Math.max(...olderLifts.map(ol => ol.weight)) : 0;
-      return l.weight > previousMax && previousMax > 0; // Only count if there was a previous max
+      return l.weight > previousMax && previousMax > 0;
     });
-    const prPoints = Math.min(35, liftPRs.length * 7); // Each PR worth 7 pts, max 35
+    const prPoints = Math.min(50, liftPRs.length * 10); // Each PR worth 10 pts, max 50
     strengthScore += prPoints;
 
-    // 2. Progressive Overload (25 pts max) - are lifts trending upward?
+    // 2. Progressive Overload (30 pts max) - are lifts trending upward?
     const liftsByName = new Map<string, LiftRecord[]>();
     recentLifts.forEach(l => {
       const name = l.liftTitle || "Unknown";
@@ -334,38 +333,32 @@ export default function ProgressPage() {
       }
     });
     const progressionRate = totalTrackedLifts > 0 ? progressingLifts / totalTrackedLifts : 0;
-    strengthScore += Math.round(progressionRate * 25);
+    strengthScore += Math.round(progressionRate * 30);
 
-    // 3. Lift Variety (20 pts max) - different lifts = better rounded
+    // 3. Lift Variety (20 pts max) - well-rounded strength training
     const uniqueLifts = new Set(recentLifts.map(l => l.liftTitle)).size;
-    const varietyPoints = Math.min(20, uniqueLifts * 4); // 4 pts per unique lift, max 20
+    const varietyPoints = Math.min(20, uniqueLifts * 4);
     strengthScore += varietyPoints;
-
-    // 4. Volume Consistency (20 pts max) - regular lifting sessions per week
-    const liftSessionsPerWeek = recentLifts.length / weeks;
-    const volumePoints = Math.min(20, liftSessionsPerWeek * 5); // 5 pts per session/week, max 20
-    strengthScore += volumePoints;
 
     strengthScore = Math.min(100, Math.round(strengthScore));
 
     // ========== CONDITIONING SCORE (0-100) ==========
-    // Components:
-    // 1. RX Progression (up to 30 pts) - doing workouts as prescribed
-    // 2. Time Improvements (up to 30 pts) - getting faster on repeated workouts
+    // Pure performance metrics - no attendance/consistency factors
+    // 1. RX Progression (up to 40 pts) - doing workouts as prescribed
+    // 2. Time/Score Improvements (up to 40 pts) - getting faster/better
     // 3. Workout Variety (up to 20 pts) - different types of WODs
-    // 4. Volume (up to 20 pts) - consistent WOD attendance
 
     let conditioningScore = 0;
 
-    // 1. RX Progression (30 pts max)
+    // 1. RX Progression (40 pts max) - scaling progression is key
     const rxWods = recentWods.filter(w => (w.notes || w.category) === "RX");
     const rxRatio = recentWods.length > 0 ? rxWods.length / recentWods.length : 0;
-    conditioningScore += Math.round(rxRatio * 30);
+    conditioningScore += Math.round(rxRatio * 40);
 
-    // 2. Time Improvements (30 pts max) - compare repeated WODs
+    // 2. Time/Score Improvements (40 pts max) - compare repeated WODs
     const wodsByTitle = new Map<string, WodRecord[]>();
     recentWods.forEach(w => {
-      if (w.timeInSeconds && w.wodTitle) {
+      if (w.wodTitle) {
         if (!wodsByTitle.has(w.wodTitle)) wodsByTitle.set(w.wodTitle, []);
         wodsByTitle.get(w.wodTitle)!.push(w);
       }
@@ -376,27 +369,35 @@ export default function ProgressPage() {
     wodsByTitle.forEach(records => {
       if (records.length >= 2) {
         records.sort((a, b) => (a.completedDate?.toMillis() || 0) - (b.completedDate?.toMillis() || 0));
-        const firstTime = records[0].timeInSeconds!;
-        const lastTime = records[records.length - 1].timeInSeconds!;
-        if (firstTime > 0 && lastTime < firstTime) {
-          const improvement = ((firstTime - lastTime) / firstTime) * 100;
-          totalImprovement += improvement;
-          improvementCount++;
+        // For Time workouts - lower is better
+        if (records[0].timeInSeconds && records[records.length - 1].timeInSeconds) {
+          const firstTime = records[0].timeInSeconds;
+          const lastTime = records[records.length - 1].timeInSeconds;
+          if (firstTime > 0 && lastTime < firstTime) {
+            const improvement = ((firstTime - lastTime) / firstTime) * 100;
+            totalImprovement += improvement;
+            improvementCount++;
+          }
+        }
+        // For AMRAP workouts - higher rounds is better
+        if (records[0].rounds !== undefined && records[records.length - 1].rounds !== undefined) {
+          const firstRounds = records[0].rounds + (records[0].reps || 0) / 100;
+          const lastRounds = records[records.length - 1].rounds! + (records[records.length - 1].reps || 0) / 100;
+          if (firstRounds > 0 && lastRounds > firstRounds) {
+            const improvement = ((lastRounds - firstRounds) / firstRounds) * 100;
+            totalImprovement += improvement;
+            improvementCount++;
+          }
         }
       }
     });
     const avgImprovement = improvementCount > 0 ? totalImprovement / improvementCount : 0;
-    // 10% improvement = full 30 pts
-    conditioningScore += Math.min(30, Math.round(avgImprovement * 3));
+    // 10% improvement = full 40 pts
+    conditioningScore += Math.min(40, Math.round(avgImprovement * 4));
 
     // 3. Workout Variety (20 pts max) - different WODs
     const uniqueWods = new Set(recentWods.map(w => w.wodTitle)).size;
     conditioningScore += Math.min(20, uniqueWods * 2);
-
-    // 4. Volume (20 pts max) - WODs per week (3-5 is ideal)
-    const wodsPerWeek = recentWods.length / weeks;
-    const wodVolumePoints = wodsPerWeek >= 3 ? Math.min(20, 10 + (wodsPerWeek * 2)) : wodsPerWeek * 5;
-    conditioningScore += Math.round(wodVolumePoints);
 
     conditioningScore = Math.min(100, Math.round(conditioningScore));
 
