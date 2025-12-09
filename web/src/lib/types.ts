@@ -463,6 +463,7 @@ export const PRICING = {
   INDIVIDUAL_AI_COACH: 9.99,        // $9.99/mo personal AI Coach
   INDIVIDUAL_AI_PROGRAMMER: 9.99,   // $9.99/mo AI-generated personal programming
   INDIVIDUAL_AI_PROGRAMMER_PLUS: 14.99, // $14.99/mo premium AI programming
+  INDIVIDUAL_EXTERNAL_PROGRAMMING: 4.99, // $4.99/mo external programming import
 } as const;
 
 // Feature Access Helpers
