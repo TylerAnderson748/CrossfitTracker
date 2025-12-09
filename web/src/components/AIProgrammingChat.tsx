@@ -577,45 +577,19 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
     setError(null);
 
     try {
-      // Find all scheduled workouts created by this session
-      // We'll match by createdBy (userId) and date range from the session's workouts
-      const session = sessions.find(s => s.id === sessionId);
-      if (!session) {
-        throw new Error("Session not found");
-      }
-
-      // Get all workouts for this gym
+      // Query workouts by aiSessionId to only delete workouts from THIS session
       const workoutsQuery = query(
         collection(db, "scheduledWorkouts"),
         where("gymId", "==", gymId),
-        where("createdBy", "==", userId)
+        where("aiSessionId", "==", sessionId)
       );
       const snapshot = await getDocs(workoutsQuery);
 
-      // Get the generated workouts from this session to match dates
-      const generatedDates = new Set<string>();
-      session.messages.forEach(msg => {
-        if (msg.generatedWorkouts) {
-          msg.generatedWorkouts.forEach(w => {
-            if (w.date) generatedDates.add(w.date);
-          });
-        }
-      });
-
-      // Delete matching workouts
+      // Delete all workouts from this session
       let deletedCount = 0;
       for (const docSnap of snapshot.docs) {
-        const data = docSnap.data();
-        const workoutDate = data.date?.toDate();
-        if (workoutDate) {
-          const dateStr = workoutDate.toISOString().split('T')[0];
-          // Check if this workout's date matches one of the generated dates
-          // or if the wodTitle contains "Programming" (AI-generated pattern)
-          if (generatedDates.has(dateStr) || data.wodTitle?.includes("Programming")) {
-            await deleteDoc(doc(db, "scheduledWorkouts", docSnap.id));
-            deletedCount++;
-          }
-        }
+        await deleteDoc(doc(db, "scheduledWorkouts", docSnap.id));
+        deletedCount++;
       }
 
       // Update session status back to active
@@ -656,32 +630,16 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
 
       // If session was published, delete the workouts first
       if (session?.status === "published") {
+        // Query workouts by aiSessionId to only delete workouts from THIS session
         const workoutsQuery = query(
           collection(db, "scheduledWorkouts"),
           where("gymId", "==", gymId),
-          where("createdBy", "==", userId)
+          where("aiSessionId", "==", sessionId)
         );
         const snapshot = await getDocs(workoutsQuery);
 
-        // Get the generated dates from this session
-        const generatedDates = new Set<string>();
-        session.messages.forEach(msg => {
-          if (msg.generatedWorkouts) {
-            msg.generatedWorkouts.forEach(w => {
-              if (w.date) generatedDates.add(w.date);
-            });
-          }
-        });
-
         for (const docSnap of snapshot.docs) {
-          const data = docSnap.data();
-          const workoutDate = data.date?.toDate();
-          if (workoutDate) {
-            const dateStr = workoutDate.toISOString().split('T')[0];
-            if (generatedDates.has(dateStr) || data.wodTitle?.includes("Programming")) {
-              await deleteDoc(doc(db, "scheduledWorkouts", docSnap.id));
-            }
-          }
+          await deleteDoc(doc(db, "scheduledWorkouts", docSnap.id));
         }
       }
 
@@ -956,7 +914,7 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
         // Sort time slots by time
         timeSlots.sort((a, b) => a.hour * 60 + a.minute - (b.hour * 60 + b.minute));
 
-        // Create document
+        // Create document with aiSessionId to track which session created it
         await addDoc(collection(db, "scheduledWorkouts"), {
           gymId: String(gymId),
           wodTitle: String(`${day.dayOfWeek || "Day"} Programming`),
@@ -970,6 +928,7 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
           date: Timestamp.fromDate(workoutDate),
           createdAt: serverTimestamp(),
           timeSlots,
+          aiSessionId: activeSession.id, // Track which AI programming session created this workout
         });
       }
 
