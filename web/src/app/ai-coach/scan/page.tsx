@@ -5,25 +5,30 @@ import { useRouter } from "next/navigation";
 import { collection, query, where, getDocs, addDoc, Timestamp } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
-import { Gym, WorkoutGroup, ScheduledTimeSlot } from "@/lib/types";
+import { Gym, WorkoutGroup, ScheduledTimeSlot, WorkoutComponentType, workoutComponentLabels, workoutComponentColors } from "@/lib/types";
 import Navigation from "@/components/Navigation";
 
 interface GeneratedWorkout {
+  id: string;
   title: string;
-  type: string;
+  type: WorkoutComponentType;
   description: string;
   notes?: string;
 }
+
+const COMPONENT_TYPES: WorkoutComponentType[] = ["warmup", "lift", "wod", "skill", "cooldown"];
 
 export default function AIScanPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [scannedImages, setScannedImages] = useState<string[]>([]); // Track all scanned images
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [generatedWorkouts, setGeneratedWorkouts] = useState<GeneratedWorkout[]>([]);
   const [rawResponse, setRawResponse] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [editingWorkoutId, setEditingWorkoutId] = useState<string | null>(null);
 
   // Gym/coach state
   const [userGym, setUserGym] = useState<Gym | null>(null);
@@ -101,7 +106,7 @@ export default function AIScanPage() {
       const reader = new FileReader();
       reader.onloadend = () => {
         setSelectedImage(reader.result as string);
-        setGeneratedWorkouts([]);
+        // Don't clear workouts - allow accumulating from multiple scans
         setRawResponse(null);
         setError(null);
       };
@@ -128,7 +133,6 @@ export default function AIScanPage() {
 
     setIsAnalyzing(true);
     setError(null);
-    setGeneratedWorkouts([]);
 
     try {
       const apiKey = process.env.NEXT_PUBLIC_XAI_API_KEY;
@@ -140,17 +144,16 @@ export default function AIScanPage() {
 
       const prompt = `You are a CrossFit coach analyzing a handwritten workout or programming notes.
 
-Look at this image and extract any workout programming you can see. This could include:
-- WODs (Workout of the Day)
-- Strength work (squats, deadlifts, presses, etc.)
-- Skill work (gymnastics movements)
-- Conditioning pieces
-- EMOM, AMRAP, For Time workouts
-- Any other CrossFit-style programming
+Look at this image and extract any workout programming you can see. Classify each component into ONE of these types:
+- "warmup" - Warm-up exercises, mobility, activation
+- "lift" - Strength work (squats, deadlifts, presses, Olympic lifts, etc.)
+- "wod" - WOD/Metcon (AMRAP, EMOM, For Time, conditioning pieces)
+- "skill" - Skill work (gymnastics movements, technique practice, drills)
+- "cooldown" - Cool-down, stretching, recovery
 
 For each workout or component you identify, provide:
 1. A title/name for the workout
-2. The type (WOD, Strength, Skill, Conditioning, Warmup, etc.)
+2. The type (MUST be one of: warmup, lift, wod, skill, cooldown)
 3. A clear, formatted description of the workout
 4. Any additional notes (scaling options, intended stimulus, etc.)
 
@@ -158,13 +161,13 @@ Format your response as JSON array like this:
 [
   {
     "title": "Back Squat",
-    "type": "Strength",
+    "type": "lift",
     "description": "5x5 Back Squat @ 75%",
     "notes": "Rest 2-3 min between sets"
   },
   {
     "title": "Fran",
-    "type": "WOD",
+    "type": "wod",
     "description": "21-15-9\\nThrusters (95/65)\\nPull-ups",
     "notes": "For Time. Scale to jumping pull-ups if needed."
   }
@@ -172,7 +175,9 @@ Format your response as JSON array like this:
 
 If you cannot read the handwriting or the image doesn't contain workout programming, respond with an empty array [] and explain the issue.
 
-IMPORTANT: Only respond with valid JSON. No additional text before or after the JSON.`;
+IMPORTANT:
+- Only respond with valid JSON. No additional text before or after the JSON.
+- The "type" field MUST be exactly one of: warmup, lift, wod, skill, cooldown (lowercase)`;
 
       // Call xAI/Grok Vision API
       const response = await fetch("https://api.x.ai/v1/chat/completions", {
@@ -225,8 +230,32 @@ IMPORTANT: Only respond with valid JSON. No additional text before or after the 
 
         const parsed = JSON.parse(cleanedText);
         if (Array.isArray(parsed)) {
-          setGeneratedWorkouts(parsed);
-          if (parsed.length === 0) {
+          // Map type to valid WorkoutComponentType and add IDs
+          const mappedWorkouts: GeneratedWorkout[] = parsed.map((w, idx) => {
+            const typeLower = (w.type || "wod").toLowerCase();
+            let mappedType: WorkoutComponentType = "wod";
+            if (typeLower.includes("warmup") || typeLower.includes("warm")) mappedType = "warmup";
+            else if (typeLower.includes("lift") || typeLower.includes("strength")) mappedType = "lift";
+            else if (typeLower.includes("skill") || typeLower.includes("gymnastics")) mappedType = "skill";
+            else if (typeLower.includes("cooldown") || typeLower.includes("cool")) mappedType = "cooldown";
+            else if (typeLower.includes("wod") || typeLower.includes("metcon") || typeLower.includes("conditioning")) mappedType = "wod";
+
+            return {
+              id: `workout_${Date.now()}_${idx}_${Math.random().toString(36).substr(2, 9)}`,
+              title: w.title || "Untitled",
+              type: mappedType,
+              description: w.description || "",
+              notes: w.notes || "",
+            };
+          });
+
+          // Append to existing workouts (for multi-image scanning)
+          setGeneratedWorkouts(prev => [...prev, ...mappedWorkouts]);
+
+          // Track the scanned image
+          setScannedImages(prev => [...prev, selectedImage]);
+
+          if (mappedWorkouts.length === 0) {
             setError("Could not identify any workouts in the image. Try a clearer photo of your programming notes.");
           }
         } else {
@@ -246,14 +275,59 @@ IMPORTANT: Only respond with valid JSON. No additional text before or after the 
 
   const clearImage = () => {
     setSelectedImage(null);
+    setRawResponse(null);
+    setError(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const clearAll = () => {
+    setSelectedImage(null);
+    setScannedImages([]);
     setGeneratedWorkouts([]);
     setRawResponse(null);
     setError(null);
     setSaveSuccess(null);
     setShowDatePicker(false);
+    setEditingWorkoutId(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
+  };
+
+  // Update a workout field
+  const updateWorkout = (workoutId: string, field: keyof GeneratedWorkout, value: string) => {
+    setGeneratedWorkouts(prev => prev.map(w =>
+      w.id === workoutId ? { ...w, [field]: value } : w
+    ));
+  };
+
+  // Update workout type
+  const updateWorkoutType = (workoutId: string, type: WorkoutComponentType) => {
+    setGeneratedWorkouts(prev => prev.map(w =>
+      w.id === workoutId ? { ...w, type } : w
+    ));
+  };
+
+  // Remove a workout
+  const removeWorkout = (workoutId: string) => {
+    setGeneratedWorkouts(prev => prev.filter(w => w.id !== workoutId));
+  };
+
+  // Reorder workouts (move up/down)
+  const moveWorkout = (workoutId: string, direction: "up" | "down") => {
+    setGeneratedWorkouts(prev => {
+      const index = prev.findIndex(w => w.id === workoutId);
+      if (index === -1) return prev;
+      if (direction === "up" && index === 0) return prev;
+      if (direction === "down" && index === prev.length - 1) return prev;
+
+      const newList = [...prev];
+      const swapIndex = direction === "up" ? index - 1 : index + 1;
+      [newList[index], newList[swapIndex]] = [newList[swapIndex], newList[index]];
+      return newList;
+    });
   };
 
   // Save to gym programming
@@ -268,21 +342,10 @@ IMPORTANT: Only respond with valid JSON. No additional text before or after the 
       const [year, month, day] = selectedDate.split("-").map(Number);
       const workoutDate = new Date(year, month - 1, day, 12, 0, 0, 0);
 
-      // Map workout type to component type
-      const mapType = (type: string): string => {
-        const typeLower = type.toLowerCase();
-        if (typeLower.includes("strength") || typeLower.includes("lift")) return "lift";
-        if (typeLower.includes("wod") || typeLower.includes("metcon") || typeLower.includes("conditioning")) return "wod";
-        if (typeLower.includes("skill") || typeLower.includes("gymnastics")) return "skill";
-        if (typeLower.includes("warmup") || typeLower.includes("warm-up")) return "warmup";
-        if (typeLower.includes("cooldown") || typeLower.includes("cool-down")) return "cooldown";
-        return "wod";
-      };
-
-      // Create workout components from generated workouts
+      // Create workout components from generated workouts (type is already WorkoutComponentType)
       const components = generatedWorkouts.map((w, idx) => ({
         id: `comp_${Date.now()}_${idx}`,
-        type: mapType(w.type),
+        type: w.type,
         title: w.title,
         description: w.description,
         notes: w.notes || "",
@@ -357,21 +420,10 @@ IMPORTANT: Only respond with valid JSON. No additional text before or after the 
       const [year, month, day] = dateToUse.split("-").map(Number);
       const workoutDate = new Date(year, month - 1, day, 12, 0, 0, 0);
 
-      // Map workout type to component type
-      const mapType = (type: string): string => {
-        const typeLower = type.toLowerCase();
-        if (typeLower.includes("strength") || typeLower.includes("lift")) return "lift";
-        if (typeLower.includes("wod") || typeLower.includes("metcon") || typeLower.includes("conditioning")) return "wod";
-        if (typeLower.includes("skill") || typeLower.includes("gymnastics")) return "skill";
-        if (typeLower.includes("warmup") || typeLower.includes("warm-up")) return "warmup";
-        if (typeLower.includes("cooldown") || typeLower.includes("cool-down")) return "cooldown";
-        return "wod";
-      };
-
-      // Create workout components from generated workouts
+      // Create workout components from generated workouts (type is already WorkoutComponentType)
       const components = generatedWorkouts.map((w, idx) => ({
         id: `comp_${Date.now()}_${idx}`,
-        type: mapType(w.type),
+        type: w.type,
         title: w.title,
         description: w.description,
         notes: w.notes || "",
@@ -545,8 +597,8 @@ IMPORTANT: Only respond with valid JSON. No additional text before or after the 
                 </button>
               </div>
 
-              {/* Analyze Button */}
-              {generatedWorkouts.length === 0 && !error && (
+              {/* Analyze Button - show if no error and image not yet analyzed */}
+              {!error && !scannedImages.includes(selectedImage) && (
                 <button
                   onClick={analyzeImage}
                   disabled={isAnalyzing}
@@ -557,6 +609,13 @@ IMPORTANT: Only respond with valid JSON. No additional text before or after the 
                       <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                       Analyzing your notes...
                     </>
+                  ) : generatedWorkouts.length > 0 ? (
+                    <>
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                      </svg>
+                      Add to Workout Card
+                    </>
                   ) : (
                     <>
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -566,6 +625,16 @@ IMPORTANT: Only respond with valid JSON. No additional text before or after the 
                     </>
                   )}
                 </button>
+              )}
+
+              {/* Already analyzed indicator */}
+              {scannedImages.includes(selectedImage) && (
+                <div className="mt-4 py-2 px-4 bg-green-50 text-green-700 text-sm font-medium rounded-lg flex items-center justify-center gap-2">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  Already scanned - components added below
+                </div>
               )}
             </div>
 
@@ -594,31 +663,132 @@ IMPORTANT: Only respond with valid JSON. No additional text before or after the 
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <h2 className="text-lg font-bold text-gray-900">
-                    Found {generatedWorkouts.length} Workout{generatedWorkouts.length !== 1 ? "s" : ""}
+                    {generatedWorkouts.length} Component{generatedWorkouts.length !== 1 ? "s" : ""}
                   </h2>
+                  <div className="flex items-center gap-2">
+                    {scannedImages.length > 0 && (
+                      <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
+                        {scannedImages.length} scan{scannedImages.length !== 1 ? "s" : ""}
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 {generatedWorkouts.map((workout, index) => (
                   <div
-                    key={index}
-                    className="bg-white rounded-xl shadow-sm border border-gray-200 p-4"
+                    key={workout.id}
+                    className={`bg-white rounded-xl shadow-sm border-2 p-4 transition-colors ${
+                      editingWorkoutId === workout.id ? "border-purple-400" : "border-gray-200"
+                    }`}
                   >
-                    <div className="flex items-start justify-between mb-2">
-                      <div>
-                        <h3 className="font-bold text-gray-900">{workout.title}</h3>
-                        <span className="inline-block px-2 py-0.5 bg-purple-100 text-purple-700 text-xs font-medium rounded-full mt-1">
-                          {workout.type}
-                        </span>
+                    {/* Header with type badge, edit/delete buttons */}
+                    <div className="flex items-center justify-between mb-3">
+                      {/* Type selector */}
+                      <div className="flex flex-wrap gap-1">
+                        {COMPONENT_TYPES.map((type) => (
+                          <button
+                            key={type}
+                            onClick={() => updateWorkoutType(workout.id, type)}
+                            className={`px-2 py-1 text-xs font-medium rounded-full transition-colors ${
+                              workout.type === type
+                                ? `${workoutComponentColors[type]?.bg || "bg-gray-100"} ${workoutComponentColors[type]?.text || "text-gray-700"}`
+                                : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                            }`}
+                          >
+                            {workoutComponentLabels[type]}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Action buttons */}
+                      <div className="flex items-center gap-1">
+                        {/* Move up */}
+                        <button
+                          onClick={() => moveWorkout(workout.id, "up")}
+                          disabled={index === 0}
+                          className="p-1 text-gray-400 hover:text-gray-600 disabled:opacity-30"
+                          title="Move up"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                          </svg>
+                        </button>
+                        {/* Move down */}
+                        <button
+                          onClick={() => moveWorkout(workout.id, "down")}
+                          disabled={index === generatedWorkouts.length - 1}
+                          className="p-1 text-gray-400 hover:text-gray-600 disabled:opacity-30"
+                          title="Move down"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </button>
+                        {/* Edit toggle */}
+                        <button
+                          onClick={() => setEditingWorkoutId(editingWorkoutId === workout.id ? null : workout.id)}
+                          className={`p-1 rounded transition-colors ${
+                            editingWorkoutId === workout.id
+                              ? "text-purple-600 bg-purple-50"
+                              : "text-gray-400 hover:text-gray-600"
+                          }`}
+                          title="Edit"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                          </svg>
+                        </button>
+                        {/* Delete */}
+                        <button
+                          onClick={() => removeWorkout(workout.id)}
+                          className="p-1 text-gray-400 hover:text-red-600 transition-colors"
+                          title="Remove"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
                       </div>
                     </div>
-                    <p className="text-gray-700 whitespace-pre-line mt-2">
-                      {workout.description}
-                    </p>
-                    {workout.notes && (
-                      <div className="mt-3 p-3 bg-gray-50 rounded-lg">
-                        <p className="text-sm text-gray-600">
-                          <span className="font-medium">Notes:</span> {workout.notes}
+
+                    {/* Content - editable or display mode */}
+                    {editingWorkoutId === workout.id ? (
+                      <div className="space-y-3">
+                        <input
+                          type="text"
+                          value={workout.title}
+                          onChange={(e) => updateWorkout(workout.id, "title", e.target.value)}
+                          placeholder="Title"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 font-medium focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        />
+                        <textarea
+                          value={workout.description}
+                          onChange={(e) => updateWorkout(workout.id, "description", e.target.value)}
+                          placeholder="Description"
+                          rows={4}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        />
+                        <textarea
+                          value={workout.notes || ""}
+                          onChange={(e) => updateWorkout(workout.id, "notes", e.target.value)}
+                          placeholder="Notes (scaling options, coach notes, etc.)"
+                          rows={2}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        />
+                      </div>
+                    ) : (
+                      <div>
+                        <h3 className="font-bold text-gray-900 mb-2">{workout.title}</h3>
+                        <p className="text-gray-700 text-sm whitespace-pre-line">
+                          {workout.description}
                         </p>
+                        {workout.notes && (
+                          <div className="mt-3 p-2 bg-amber-50 rounded-lg border-l-2 border-amber-300">
+                            <p className="text-sm text-amber-800">
+                              <span className="font-medium">Notes:</span> {workout.notes}
+                            </p>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -789,28 +959,44 @@ IMPORTANT: Only respond with valid JSON. No additional text before or after the 
                     )}
 
                     {/* Secondary Actions */}
-                    <div className="flex gap-3">
+                    <div className="space-y-2">
+                      {/* Scan Another Photo - adds to existing */}
                       <button
                         onClick={() => {
-                          const text = generatedWorkouts.map(w =>
-                            `${w.title} (${w.type})\n${w.description}${w.notes ? `\nNotes: ${w.notes}` : ""}`
-                          ).join("\n\n");
-                          navigator.clipboard.writeText(text);
-                          alert("Workouts copied to clipboard!");
+                          clearImage();
+                          // File input will open
                         }}
-                        className="flex-1 py-2.5 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
+                        className="w-full py-2.5 bg-blue-50 text-blue-700 font-medium rounded-lg hover:bg-blue-100 transition-colors flex items-center justify-center gap-2"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                         </svg>
-                        Copy
+                        Scan Another Photo (Add More)
                       </button>
-                      <button
-                        onClick={clearImage}
-                        className="flex-1 py-2.5 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors"
-                      >
-                        Scan Another
-                      </button>
+
+                      <div className="flex gap-3">
+                        <button
+                          onClick={() => {
+                            const text = generatedWorkouts.map(w =>
+                              `${w.title} (${workoutComponentLabels[w.type]})\n${w.description}${w.notes ? `\nNotes: ${w.notes}` : ""}`
+                            ).join("\n\n");
+                            navigator.clipboard.writeText(text);
+                            alert("Workouts copied to clipboard!");
+                          }}
+                          className="flex-1 py-2.5 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                          </svg>
+                          Copy
+                        </button>
+                        <button
+                          onClick={clearAll}
+                          className="flex-1 py-2.5 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors"
+                        >
+                          Start Over
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )}
