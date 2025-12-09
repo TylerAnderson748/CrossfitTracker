@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { collection, addDoc, updateDoc, doc, query, where, getDocs, getDoc, orderBy, Timestamp, serverTimestamp, deleteDoc } from "firebase/firestore";
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import { db } from "@/lib/firebase";
 import { AIProgrammingSession, AIChatMessage, AIGeneratedDay, WorkoutGroup, WorkoutComponent, AIProgrammingPreferences, AITrainerSubscription, ScheduledTimeSlot } from "@/lib/types";
 import { getAllSkills, getAllLifts, getAllWods } from "@/lib/workoutData";
@@ -661,14 +660,11 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
     setError(null);
 
     try {
-      // Initialize Google AI
-      const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+      // Initialize xAI/Grok API
+      const apiKey = process.env.NEXT_PUBLIC_XAI_API_KEY;
       if (!apiKey) {
-        throw new Error("Gemini API key not configured. Add NEXT_PUBLIC_GEMINI_API_KEY to your environment.");
+        throw new Error("xAI API key not configured. Add NEXT_PUBLIC_XAI_API_KEY to your environment.");
       }
-
-      const genAI = new GoogleGenerativeAI(apiKey);
-      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
       // Build conversation history for context
       const conversationHistory = updatedMessages.map(msg =>
@@ -677,9 +673,34 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
 
       const prompt = `${getSystemPrompt(preferences, recentlyUsedWorkouts)}\n\nConversation so far:\n${conversationHistory}\n\nRespond to the user's latest message. Remember to output valid JSON only.`;
 
-      const result = await model.generateContent(prompt);
-      const response = result.response;
-      const text = response.text();
+      // Call xAI/Grok API
+      const response = await fetch("https://api.x.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: "grok-3-fast",
+          messages: [
+            { role: "system", content: "You are an expert CrossFit programming assistant. Always respond with valid JSON." },
+            { role: "user", content: prompt }
+          ],
+          temperature: 0.7
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error?.message || `API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const text = data.choices?.[0]?.message?.content || "";
+
+      if (!text) {
+        throw new Error("No response from AI");
+      }
 
       // Parse the JSON response
       let parsedResponse: { message: string; workouts: AIGeneratedDay[] };

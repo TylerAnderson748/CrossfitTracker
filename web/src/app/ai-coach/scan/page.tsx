@@ -3,7 +3,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { collection, query, where, getDocs, addDoc, Timestamp } from "firebase/firestore";
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
 import { Gym, WorkoutGroup, ScheduledTimeSlot } from "@/lib/types";
@@ -132,19 +131,12 @@ export default function AIScanPage() {
     setGeneratedWorkouts([]);
 
     try {
-      const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+      const apiKey = process.env.NEXT_PUBLIC_XAI_API_KEY;
       if (!apiKey) {
-        setError("AI service not configured. Please contact support.");
+        setError("AI service not configured. Please add NEXT_PUBLIC_XAI_API_KEY to your environment.");
         setIsAnalyzing(false);
         return;
       }
-
-      const genAI = new GoogleGenerativeAI(apiKey);
-      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
-
-      // Extract base64 data from data URL
-      const base64Data = selectedImage.split(",")[1];
-      const mimeType = selectedImage.split(";")[0].split(":")[1];
 
       const prompt = `You are a CrossFit coach analyzing a handwritten workout or programming notes.
 
@@ -182,18 +174,39 @@ If you cannot read the handwriting or the image doesn't contain workout programm
 
 IMPORTANT: Only respond with valid JSON. No additional text before or after the JSON.`;
 
-      const result = await model.generateContent([
-        prompt,
-        {
-          inlineData: {
-            mimeType,
-            data: base64Data,
-          },
+      // Call xAI/Grok Vision API
+      const response = await fetch("https://api.x.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${apiKey}`
         },
-      ]);
+        body: JSON.stringify({
+          model: "grok-2-vision-1212",
+          messages: [
+            {
+              role: "user",
+              content: [
+                { type: "text", text: prompt },
+                { type: "image_url", image_url: { url: selectedImage } }
+              ]
+            }
+          ],
+          temperature: 0.3
+        })
+      });
 
-      const response = result.response;
-      const text = response.text();
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error?.message || `API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const text = data.choices?.[0]?.message?.content || "";
+
+      if (!text) {
+        throw new Error("No response from AI");
+      }
       setRawResponse(text);
 
       // Try to parse JSON from response
