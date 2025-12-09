@@ -182,7 +182,7 @@ IMPORTANT: Only respond with valid JSON. No additional text before or after the 
           "Authorization": `Bearer ${apiKey}`
         },
         body: JSON.stringify({
-          model: "grok-2-vision-1212",
+          model: "grok-4-latest",
           messages: [
             {
               role: "user",

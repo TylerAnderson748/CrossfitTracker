@@ -681,7 +681,7 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
           "Authorization": `Bearer ${apiKey}`
         },
         body: JSON.stringify({
-          model: "grok-3-fast",
+          model: "grok-4-latest",
           messages: [
             { role: "system", content: "You are an expert CrossFit programming assistant. Always respond with valid JSON." },
             { role: "user", content: prompt }

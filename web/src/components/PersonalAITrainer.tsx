@@ -417,7 +417,7 @@ Respond in a confident, direct coach tone. This advice will be saved and shown e
           "Authorization": `Bearer ${apiKey}`
         },
         body: JSON.stringify({
-          model: "grok-3-fast",
+          model: "grok-4-latest",
           messages: [
             { role: "system", content: "You are an experienced CrossFit coach providing personalized workout advice." },
             { role: "user", content: prompt }

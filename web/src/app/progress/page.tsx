@@ -663,7 +663,7 @@ Be specific, use their actual numbers, and be encouraging but honest. Keep it co
           "Authorization": `Bearer ${apiKey}`
         },
         body: JSON.stringify({
-          model: "grok-3-fast",
+          model: "grok-4-latest",
           messages: [
             { role: "system", content: "You are an experienced CrossFit coach providing personalized fitness analysis and advice." },
             { role: "user", content: prompt }
