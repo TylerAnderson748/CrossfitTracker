@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { collection, query, where, getDocs, getDoc, addDoc, updateDoc, doc, Timestamp } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
@@ -10,7 +10,7 @@ import Navigation from "@/components/Navigation";
 
 type PlanSelection = "base" | "ai_programmer";
 
-export default function GymSetupPage() {
+function GymSetupContent() {
   const { user, loading, switching, refreshUser } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -407,5 +407,17 @@ export default function GymSetupPage() {
         </p>
       </main>
     </div>
+  );
+}
+
+export default function GymSetupPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <p className="text-gray-500">Loading...</p>
+      </div>
+    }>
+      <GymSetupContent />
+    </Suspense>
   );
 }
