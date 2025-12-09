@@ -79,6 +79,7 @@ export default function Navigation() {
     ...(showGymTab ? [{ href: "/gym", label: "Gym", icon: "🏢" }] : []),
     { href: "/programming", label: "Programming", icon: "📅" },
     { href: "/workouts", label: "Workouts", icon: "📋" },
+    { href: "/progress", label: "Progress", icon: "📈" },
     { href: "/profile", label: "Profile", icon: "👤" },
     ...(isSuperAdmin ? [{ href: "/admin/gym-applications", label: "Admin", icon: "🛡️" }] : []),
     ...(!hasAISubscription ? [{ href: isGymOwner ? "/subscribe?variant=coach" : "/subscribe", label: isGymOwner ? "AI Programming" : "AI Coach", icon: "⚡" }] : []),

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { collection, query, where, getDocs, Timestamp, limit, doc, setDoc, getDoc } from "firebase/firestore";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { db } from "@/lib/firebase";
-import { ScheduledWorkout, AICoachPreferences, WorkoutComponent } from "@/lib/types";
+import { ScheduledWorkout, AICoachPreferences, WorkoutComponent, UserRole } from "@/lib/types";
 
 // Types for user workout history
 interface LiftHistoryEntry {
@@ -43,6 +43,7 @@ interface PersonalAITrainerProps {
   todayPersonalWorkouts?: PersonalWorkout[];
   gymId?: string;
   userPreferences?: AICoachPreferences;
+  viewerRole?: UserRole; // For super admins viewing other users' AI coach
 }
 
 interface GymMemberStats {
@@ -57,7 +58,8 @@ function getAdviceDocId(userId: string, workoutId?: string, personalWorkoutIds?:
   return `${userId}_${today}_${workoutPart}`;
 }
 
-export default function PersonalAITrainer({ userId, todayWorkout, todayPersonalWorkouts, gymId, userPreferences }: PersonalAITrainerProps) {
+export default function PersonalAITrainer({ userId, todayWorkout, todayPersonalWorkouts, gymId, userPreferences, viewerRole }: PersonalAITrainerProps) {
+  const isSuperAdmin = viewerRole === "superAdmin";
   // Check if there's any workout to analyze (gym or personal)
   const hasWorkoutToAnalyze = todayWorkout || (todayPersonalWorkouts && todayPersonalWorkouts.length > 0);
   const [userHistory, setUserHistory] = useState<UserWorkoutHistory>({ lifts: [], wods: [] });
@@ -573,21 +575,23 @@ Respond in a confident, direct coach tone. This advice will be saved and shown e
                       </svg>
                       <span className="font-medium text-yellow-300 text-sm">Your Personalized Plan</span>
                     </div>
-                    <button
-                      onClick={getPersonalizedAdvice}
-                      disabled={isLoading}
-                      className="text-xs text-white/50 hover:text-white/80 flex items-center gap-1 disabled:opacity-50"
-                      title="Get new advice"
-                    >
-                      {isLoading ? (
-                        <div className="w-3 h-3 border border-white/30 border-t-white rounded-full animate-spin" />
-                      ) : (
-                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                        </svg>
-                      )}
-                      Regenerate
-                    </button>
+                    {isSuperAdmin && (
+                      <button
+                        onClick={getPersonalizedAdvice}
+                        disabled={isLoading}
+                        className="text-xs bg-red-500/20 text-red-200 hover:bg-red-500/30 px-2 py-1 rounded flex items-center gap-1 disabled:opacity-50"
+                        title="Super Admin: Force regenerate advice"
+                      >
+                        {isLoading ? (
+                          <div className="w-3 h-3 border border-red-300/30 border-t-red-300 rounded-full animate-spin" />
+                        ) : (
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                          </svg>
+                        )}
+                        Admin Regenerate
+                      </button>
+                    )}
                   </div>
                   <div className="text-sm text-white/90 whitespace-pre-line prose prose-sm prose-invert max-w-none">
                     {aiAdvice.split('\n').map((line, i) => {
