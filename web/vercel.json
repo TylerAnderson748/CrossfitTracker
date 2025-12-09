@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/ai-coach/generate-suggestions",
+      "schedule": "0 1 * * *"
+    }
+  ]
+}

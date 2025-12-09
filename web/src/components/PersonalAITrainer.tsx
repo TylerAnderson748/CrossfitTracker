@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { collection, query, where, getDocs, Timestamp, limit, doc, setDoc, getDoc } from "firebase/firestore";
+import { collection, query, where, getDocs, Timestamp, limit, doc, setDoc, getDoc, orderBy } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { ScheduledWorkout, AICoachPreferences, WorkoutComponent, UserRole } from "@/lib/types";
+import { ScheduledWorkout, AICoachPreferences, WorkoutComponent, UserRole, AISuggestionType, AICoachSuggestion } from "@/lib/types";
 
 // Types for user workout history
 interface LiftHistoryEntry {
@@ -70,7 +70,10 @@ export default function PersonalAITrainer({ userId, todayWorkout, todayPersonalW
   const [hasCheckedSavedAdvice, setHasCheckedSavedAdvice] = useState(false);
   const [suggestionType, setSuggestionType] = useState<"today" | "tomorrow" | "week" | null>(null);
   const [suggestionResponse, setSuggestionResponse] = useState<string | null>(null);
+  const [suggestionGeneratedAt, setSuggestionGeneratedAt] = useState<Date | null>(null);
   const [isSuggestionLoading, setIsSuggestionLoading] = useState(false);
+  const [cachedSuggestions, setCachedSuggestions] = useState<Map<AISuggestionType, AICoachSuggestion>>(new Map());
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Check for existing saved advice on mount
   useEffect(() => {
@@ -210,6 +213,67 @@ export default function PersonalAITrainer({ userId, todayWorkout, todayPersonalW
 
     loadGymMemberStats();
   }, [gymId, userId]);
+
+  // Load cached AI coach suggestions
+  useEffect(() => {
+    const loadCachedSuggestions = async () => {
+      try {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const todayStr = today.toISOString().split("T")[0];
+
+        // Get start of week (Sunday)
+        const weekStart = new Date(today);
+        weekStart.setDate(today.getDate() - today.getDay());
+        const weekStartStr = weekStart.toISOString().split("T")[0];
+
+        // Load today and tomorrow suggestions
+        const suggestionsQuery = query(
+          collection(db, "aiCoachSuggestions"),
+          where("targetDate", ">=", todayStr),
+          orderBy("targetDate", "asc"),
+          limit(10)
+        );
+        const snapshot = await getDocs(suggestionsQuery);
+
+        const suggestions = new Map<AISuggestionType, AICoachSuggestion>();
+
+        snapshot.docs.forEach((docSnap) => {
+          const data = docSnap.data();
+          const suggestion: AICoachSuggestion = {
+            id: docSnap.id,
+            type: data.type,
+            content: data.content,
+            generatedAt: data.generatedAt,
+            targetDate: data.targetDate,
+            weekStartDate: data.weekStartDate,
+          };
+
+          // Match today suggestion
+          if (data.type === "today" && data.targetDate === todayStr) {
+            suggestions.set("today", suggestion);
+          }
+          // Match tomorrow suggestion
+          const tomorrow = new Date(today);
+          tomorrow.setDate(today.getDate() + 1);
+          const tomorrowStr = tomorrow.toISOString().split("T")[0];
+          if (data.type === "tomorrow" && data.targetDate === tomorrowStr) {
+            suggestions.set("tomorrow", suggestion);
+          }
+          // Match week suggestion (current week starting Sunday)
+          if (data.type === "week" && data.weekStartDate === weekStartStr) {
+            suggestions.set("week", suggestion);
+          }
+        });
+
+        setCachedSuggestions(suggestions);
+      } catch (err) {
+        console.error("Error loading cached suggestions:", err);
+      }
+    };
+
+    loadCachedSuggestions();
+  }, []);
 
   const getPersonalizedAdvice = async () => {
     if (!hasWorkoutToAnalyze || isLoading) return;
@@ -469,271 +533,88 @@ Respond in a confident, direct coach tone. This advice will be saved and shown e
     setIsLoading(false);
   };
 
-  // Handle quick suggestion requests
-  const handleSuggestion = async (type: "today" | "tomorrow" | "week") => {
+  // Handle quick suggestion requests - loads from cache for regular users
+  const handleSuggestion = (type: "today" | "tomorrow" | "week") => {
     if (isSuggestionLoading) return;
 
     setSuggestionType(type);
-    setIsSuggestionLoading(true);
-    setSuggestionResponse(null);
+
+    // Check for cached suggestion
+    const cached = cachedSuggestions.get(type);
+    if (cached) {
+      setSuggestionResponse(cached.content);
+      setSuggestionGeneratedAt(cached.generatedAt?.toDate?.() || null);
+    } else {
+      setSuggestionResponse("No advice available yet. Check back after 1 AM when daily advice is generated.");
+      setSuggestionGeneratedAt(null);
+    }
+  };
+
+  // Super admin: Force refresh suggestions
+  const handleRefreshSuggestion = async (type: "today" | "tomorrow" | "week" | "all") => {
+    if (!isSuperAdmin || isRefreshing) return;
+
+    setIsRefreshing(true);
 
     try {
-      const apiKey = process.env.NEXT_PUBLIC_XAI_API_KEY;
-      if (!apiKey) {
-        setSuggestionResponse("AI service not configured.");
-        setIsSuggestionLoading(false);
-        return;
-      }
-
-      // Build user context
-      let userContext = "";
-      if (userHistory.lifts.length > 0) {
-        const liftBests = new Map<string, number>();
-        userHistory.lifts.forEach(lift => {
-          const existing = liftBests.get(lift.liftTitle);
-          if (!existing || lift.weight > existing) {
-            liftBests.set(lift.liftTitle, lift.weight);
-          }
-        });
-        userContext += "Lift PRs: " + Array.from(liftBests.entries()).slice(0, 5).map(([name, weight]) => `${name}: ${weight}lb`).join(", ");
-      }
-      if (userHistory.wods.length > 0) {
-        userContext += `\n${userHistory.wods.length} WODs logged recently.`;
-      }
-      if (userPreferences?.goals) {
-        userContext += `\nGoals: ${userPreferences.goals}`;
-      }
-      if (userPreferences?.injuries) {
-        userContext += `\nInjuries/limitations: ${userPreferences.injuries}`;
-      }
-
-      // Get today's date info
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-      const todayName = dayNames[today.getDay()];
-
-      // Helper to format date
-      const formatDate = (date: Date) => {
-        return `${dayNames[date.getDay()]} ${date.getMonth() + 1}/${date.getDate()}`;
-      };
-
-      // Helper to describe a workout
-      const describeWorkout = (workout: ScheduledWorkout | { components?: WorkoutComponent[] }) => {
-        if ('components' in workout && workout.components && workout.components.length > 0) {
-          return workout.components.map(c => {
-            let desc = `${c.type.toUpperCase()}: ${c.title}`;
-            if (c.description) desc += ` - ${c.description.substring(0, 100)}${c.description.length > 100 ? '...' : ''}`;
-            return desc;
-          }).join('\n');
-        }
-        if ('wodTitle' in workout && workout.wodTitle) {
-          return `${workout.wodTitle}${workout.wodDescription ? `: ${workout.wodDescription.substring(0, 100)}` : ''}`;
-        }
-        return 'Workout scheduled';
-      };
-
-      // Fetch scheduled workouts for date range
-      const fetchWorkoutsForRange = async (startDate: Date, endDate: Date) => {
-        const start = new Date(startDate);
-        start.setHours(0, 0, 0, 0);
-        const end = new Date(endDate);
-        end.setHours(23, 59, 59, 999);
-
-        try {
-          const workoutsQuery = query(
-            collection(db, "scheduledWorkouts"),
-            where("date", ">=", Timestamp.fromDate(start)),
-            where("date", "<=", Timestamp.fromDate(end))
-          );
-          const snapshot = await getDocs(workoutsQuery);
-          return snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-          })) as ScheduledWorkout[];
-        } catch {
-          return [];
-        }
-      };
-
-      // Fetch personal workouts for date range
-      const fetchPersonalWorkoutsForRange = async (startDate: Date, endDate: Date) => {
-        if (!userId) return [];
-
-        try {
-          const personalQuery = query(
-            collection(db, "personalWorkouts"),
-            where("userId", "==", userId)
-          );
-          const snapshot = await getDocs(personalQuery);
-          const allWorkouts = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-          }));
-
-          // Filter by date range
-          return allWorkouts.filter(w => {
-            const workoutDate = (w as { date?: Timestamp }).date?.toDate?.();
-            if (!workoutDate) return false;
-            return workoutDate >= startDate && workoutDate <= endDate;
-          });
-        } catch {
-          return [];
-        }
-      };
-
-      // Calculate date ranges
-      const threeDaysAgo = new Date(today);
-      threeDaysAgo.setDate(today.getDate() - 3);
-
-      const tomorrow = new Date(today);
-      tomorrow.setDate(today.getDate() + 1);
-
-      const weekEnd = new Date(today);
-      weekEnd.setDate(today.getDate() + 7);
-
-      // Fetch workouts based on suggestion type
-      let recentWorkouts: ScheduledWorkout[] = [];
-      let upcomingWorkouts: ScheduledWorkout[] = [];
-      let recentPersonalWorkouts: unknown[] = [];
-      let upcomingPersonalWorkouts: unknown[] = [];
-
-      // Always fetch last 3 days for context
-      recentWorkouts = await fetchWorkoutsForRange(threeDaysAgo, new Date(today.getTime() - 1));
-      recentPersonalWorkouts = await fetchPersonalWorkoutsForRange(threeDaysAgo, new Date(today.getTime() - 1));
-
-      if (type === "today") {
-        const todayEnd = new Date(today);
-        todayEnd.setHours(23, 59, 59, 999);
-        upcomingWorkouts = await fetchWorkoutsForRange(today, todayEnd);
-        upcomingPersonalWorkouts = await fetchPersonalWorkoutsForRange(today, todayEnd);
-      } else if (type === "tomorrow") {
-        const tomorrowEnd = new Date(tomorrow);
-        tomorrowEnd.setHours(23, 59, 59, 999);
-        upcomingWorkouts = await fetchWorkoutsForRange(tomorrow, tomorrowEnd);
-        upcomingPersonalWorkouts = await fetchPersonalWorkoutsForRange(tomorrow, tomorrowEnd);
-      } else if (type === "week") {
-        upcomingWorkouts = await fetchWorkoutsForRange(today, weekEnd);
-        upcomingPersonalWorkouts = await fetchPersonalWorkoutsForRange(today, weekEnd);
-      }
-
-      // Build workout context strings
-      let recentWorkoutContext = "";
-      if (recentWorkouts.length > 0 || recentPersonalWorkouts.length > 0) {
-        recentWorkoutContext = "\nLAST 3 DAYS WORKOUTS:\n";
-        recentWorkouts.forEach(w => {
-          const workoutDate = w.date?.toDate?.();
-          if (workoutDate) {
-            recentWorkoutContext += `${formatDate(workoutDate)}:\n${describeWorkout(w)}\n\n`;
-          }
-        });
-        recentPersonalWorkouts.forEach(w => {
-          const pw = w as { date?: Timestamp; components?: WorkoutComponent[] };
-          const workoutDate = pw.date?.toDate?.();
-          if (workoutDate) {
-            recentWorkoutContext += `${formatDate(workoutDate)} (Personal):\n${describeWorkout(pw)}\n\n`;
-          }
-        });
-      }
-
-      let upcomingWorkoutContext = "";
-      if (upcomingWorkouts.length > 0 || upcomingPersonalWorkouts.length > 0) {
-        const label = type === "today" ? "TODAY'S WORKOUT" : type === "tomorrow" ? "TOMORROW'S WORKOUT" : "THIS WEEK'S WORKOUTS";
-        upcomingWorkoutContext = `\n${label}:\n`;
-        upcomingWorkouts.forEach(w => {
-          const workoutDate = w.date?.toDate?.();
-          if (workoutDate) {
-            upcomingWorkoutContext += `${formatDate(workoutDate)}:\n${describeWorkout(w)}\n\n`;
-          }
-        });
-        upcomingPersonalWorkouts.forEach(w => {
-          const pw = w as { date?: Timestamp; components?: WorkoutComponent[] };
-          const workoutDate = pw.date?.toDate?.();
-          if (workoutDate) {
-            upcomingWorkoutContext += `${formatDate(workoutDate)} (Personal):\n${describeWorkout(pw)}\n\n`;
-          }
-        });
-      }
-
-      let prompt = "";
-
-      if (type === "today") {
-        prompt = `You are a CrossFit coach. Give brief, actionable advice for TODAY (${todayName}).
-
-${userContext ? `ATHLETE INFO:\n${userContext}\n` : ""}${recentWorkoutContext}${upcomingWorkoutContext || "No workout scheduled for today."}
-
-Based on what they've done recently and what's coming up today, in 2-3 sentences tell them:
-1. What they should focus on today (considering recent training load)
-2. One specific tip for today's workout or recovery
-
-Be direct and motivating. Reference specific workouts if relevant.`;
-      } else if (type === "tomorrow") {
-        const tomorrowDate = new Date(today);
-        tomorrowDate.setDate(tomorrowDate.getDate() + 1);
-        const tomorrowName = dayNames[tomorrowDate.getDay()];
-
-        prompt = `You are a CrossFit coach. Give brief advice about TOMORROW (${tomorrowName}).
-
-${userContext ? `ATHLETE INFO:\n${userContext}\n` : ""}${recentWorkoutContext}${upcomingWorkoutContext || "No workout scheduled for tomorrow yet."}
-
-Based on recent training and tomorrow's workout, in 2-3 sentences tell them:
-1. How to prepare for tomorrow's specific workout
-2. Recovery or nutrition tips for tonight based on what's coming
-
-Be specific and actionable. Reference the actual workout if one is scheduled.`;
-      } else if (type === "week") {
-        prompt = `You are a CrossFit coach planning the athlete's week (starting ${todayName}).
-
-${userContext ? `ATHLETE INFO:\n${userContext}\n` : ""}${recentWorkoutContext}${upcomingWorkoutContext || "No workouts scheduled this week yet."}
-
-Looking at their recent training and the week ahead, in 3-4 sentences give them:
-1. What to focus on this week based on the scheduled workouts
-2. How to balance the training load and recovery
-3. One specific goal to hit by week's end
-
-Be motivating and reference specific upcoming workouts.`;
-      }
-
-      const response = await fetch("https://api.x.ai/v1/chat/completions", {
+      // Call the API to generate new suggestions
+      const response = await fetch("/api/ai-coach/generate-suggestions", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-          model: "grok-4-latest",
-          messages: [
-            { role: "system", content: "You are a supportive CrossFit coach giving quick, actionable advice. Keep responses brief and motivating. Reference specific workouts when available." },
-            { role: "user", content: prompt }
-          ],
-          temperature: 0.7,
-          max_tokens: 400
-        })
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type })
       });
 
       if (!response.ok) {
-        throw new Error(`API error: ${response.status}`);
+        throw new Error("Failed to generate suggestions");
       }
 
       const data = await response.json();
-      const text = data.choices?.[0]?.message?.content;
 
-      if (!text) {
-        throw new Error("No response from AI");
+      if (data.success && data.suggestions) {
+        // Save to Firestore and update local cache
+        for (const suggestion of data.suggestions) {
+          const docId = `${suggestion.type}_${suggestion.targetDate}`;
+          await setDoc(doc(db, "aiCoachSuggestions", docId), {
+            type: suggestion.type,
+            content: suggestion.content,
+            targetDate: suggestion.targetDate,
+            weekStartDate: suggestion.weekStartDate || null,
+            generatedAt: Timestamp.now()
+          });
+
+          // Update local cache
+          setCachedSuggestions(prev => {
+            const newMap = new Map(prev);
+            newMap.set(suggestion.type as AISuggestionType, {
+              id: docId,
+              type: suggestion.type,
+              content: suggestion.content,
+              targetDate: suggestion.targetDate,
+              weekStartDate: suggestion.weekStartDate,
+              generatedAt: Timestamp.now()
+            });
+            return newMap;
+          });
+
+          // If this is the currently displayed type, update the display
+          if (suggestion.type === suggestionType) {
+            setSuggestionResponse(suggestion.content);
+            setSuggestionGeneratedAt(new Date());
+          }
+        }
       }
-
-      setSuggestionResponse(text);
     } catch (err) {
-      console.error("Error getting suggestion:", err);
-      setSuggestionResponse("Sorry, couldn't get advice right now. Try again!");
+      console.error("Error refreshing suggestions:", err);
+      alert("Failed to refresh suggestions. Check console for details.");
     }
 
-    setIsSuggestionLoading(false);
+    setIsRefreshing(false);
   };
 
   const clearSuggestion = () => {
     setSuggestionType(null);
     setSuggestionResponse(null);
+    setSuggestionGeneratedAt(null);
   };
 
   // Get lift PRs summary for display
@@ -862,32 +743,77 @@ Be motivating and reference specific upcoming workouts.`;
             </div>
 
             {/* Suggestion Response */}
-            {(suggestionType || isSuggestionLoading) && (
+            {(suggestionType || isSuggestionLoading || isRefreshing) && (
               <div className="bg-white/10 rounded-lg p-3 mt-2">
-                {isSuggestionLoading ? (
+                {(isSuggestionLoading || isRefreshing) ? (
                   <div className="flex items-center gap-2 text-white/70 text-sm">
                     <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    Thinking...
+                    {isRefreshing ? "Generating fresh advice..." : "Loading..."}
                   </div>
                 ) : suggestionResponse ? (
                   <div>
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-medium text-white/70 uppercase">
-                        {suggestionType === "today" ? "Today's Focus" : suggestionType === "tomorrow" ? "Tomorrow's Prep" : "Weekly Plan"}
-                      </span>
-                      <button
-                        onClick={clearSuggestion}
-                        className="text-white/50 hover:text-white/80 transition-colors"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-medium text-white/70 uppercase">
+                          {suggestionType === "today" ? "Today's Focus" : suggestionType === "tomorrow" ? "Tomorrow's Prep" : "Weekly Plan"}
+                        </span>
+                        {suggestionGeneratedAt && (
+                          <span className="text-xs text-white/40">
+                            Generated {suggestionGeneratedAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        {/* Super Admin Refresh Button */}
+                        {isSuperAdmin && suggestionType && (
+                          <button
+                            onClick={() => handleRefreshSuggestion(suggestionType)}
+                            disabled={isRefreshing}
+                            className="text-xs bg-red-500/20 text-red-200 hover:bg-red-500/30 px-2 py-1 rounded flex items-center gap-1 disabled:opacity-50"
+                            title="Super Admin: Regenerate this suggestion"
+                          >
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                          </button>
+                        )}
+                        <button
+                          onClick={clearSuggestion}
+                          className="text-white/50 hover:text-white/80 transition-colors"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
                     </div>
                     <p className="text-sm text-white/90 whitespace-pre-line">{suggestionResponse}</p>
                   </div>
                 ) : null}
               </div>
+            )}
+
+            {/* Super Admin: Refresh All Suggestions */}
+            {isSuperAdmin && (
+              <button
+                onClick={() => handleRefreshSuggestion("all")}
+                disabled={isRefreshing}
+                className="w-full py-2 text-xs bg-red-500/20 text-red-200 hover:bg-red-500/30 rounded-lg flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {isRefreshing ? (
+                  <>
+                    <div className="w-3 h-3 border border-red-300/30 border-t-red-300 rounded-full animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Admin: Refresh All Suggestions Now
+                  </>
+                )}
+              </button>
             )}
           </div>
 

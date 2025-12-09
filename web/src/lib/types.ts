@@ -476,6 +476,23 @@ export interface FeatureAccess {
 }
 
 // =========================
+// AI COACH SUGGESTION CACHE
+// =========================
+
+export type AISuggestionType = "today" | "tomorrow" | "week";
+
+export interface AICoachSuggestion {
+  id: string;
+  type: AISuggestionType;
+  content: string;
+  generatedAt: Timestamp;
+  // Date the suggestion is for (e.g., 2024-01-15 for "today" suggestion generated on that date)
+  targetDate: string; // ISO date string YYYY-MM-DD
+  // For week suggestions, this is the start of the week (Sunday)
+  weekStartDate?: string;
+}
+
+// =========================
 // GYM APPLICATION TYPES
 // =========================
 
