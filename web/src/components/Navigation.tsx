@@ -61,40 +61,6 @@ export default function Navigation() {
     checkGymOwnership();
   }, [user]);
 
-  // Only show special tabs to these specific users (by email or UID)
-  const allowedEmails = ["indi@user.com", "1@1.com", "cheese@cheese.com", "tyguy4201@gmail.com"];
-  const allowedUIDs = ["ttgK41hHOnPiUKemZoPZSiktQXC3"];
-  const canSeeSpecialTabs = (user?.email && allowedEmails.includes(user.email)) || (user?.id && allowedUIDs.includes(user.id));
-
-  // Crystal and Reno tabs visible only to specific UIDs
-  const crystalRenoAllowedUIDs = ["uknIhGe53pcj6sZBbSYVRo9NF713", "WuxjspCO48ZWyhiuWkTLbRRNKDz2"];
-  const canSeeCrystalRenoTabs = user?.id && crystalRenoAllowedUIDs.includes(user.id);
-
-  // My Wife tab visible to specific user
-  const myWifeAllowedUIDs = ["WuxjspCO48ZWyhiuWkTLbRRNKDz2"];
-  const myWifeAllowedEmails = ["tyguy4201@gmail.com"];
-  const canSeeMyWifeTab = (user?.id && myWifeAllowedUIDs.includes(user.id)) || (user?.email && myWifeAllowedEmails.includes(user.email));
-
-  // Hi Dan tab - supercross & jiu-jitsu themed
-  const danAllowedEmails = ["indi@user.com", "tyguy4201@gmail.com"];
-  const canSeeDanTab = user?.email && danAllowedEmails.some(e => e.toLowerCase() === user.email?.toLowerCase());
-
-  // Hi Claire tab - outdoors & anti-cat themed
-  const claireAllowedEmails = ["tyguy4201@gmail.com", "chap@mans.com"];
-  const canSeeClairTab = user?.email && claireAllowedEmails.some(e => e.toLowerCase() === user.email?.toLowerCase());
-
-  // Chappy tab - outdoors & beer themed
-  const chappyAllowedEmails = ["tyguy4201@gmail.com", "chap@mans.com"];
-  const canSeeChappyTab = user?.email && chappyAllowedEmails.some(e => e.toLowerCase() === user.email?.toLowerCase());
-
-  // Hazel tab - birthday & meatball quesadilla themed
-  const hazelAllowedEmails = ["tyguy4201@gmail.com", "chap@mans.com"];
-  const canSeeHazelTab = user?.email && hazelAllowedEmails.some(e => e.toLowerCase() === user.email?.toLowerCase());
-
-  // Aspen tab - princess & SpongeBob themed
-  const aspenAllowedEmails = ["tyguy4201@gmail.com", "chap@mans.com"];
-  const canSeeAspenTab = user?.email && aspenAllowedEmails.some(e => e.toLowerCase() === user.email?.toLowerCase());
-
   // Check if user needs to subscribe - coaches check aiProgrammingSubscription, athletes check aiTrainerSubscription
   const relevantSubscription = isGymOwner
     ? user?.aiProgrammingSubscription
@@ -116,16 +82,6 @@ export default function Navigation() {
     { href: "/profile", label: "Profile", icon: "👤" },
     ...(isSuperAdmin ? [{ href: "/admin/gym-applications", label: "Admin", icon: "🛡️" }] : []),
     ...(!hasAISubscription ? [{ href: isGymOwner ? "/subscribe?variant=coach" : "/subscribe", label: isGymOwner ? "AI Programming" : "AI Coach", icon: "⚡" }] : []),
-    ...(canSeeSpecialTabs ? [{ href: "/hi-devin", label: "Hi Devin!", icon: "🎉" }] : []),
-    ...(canSeeSpecialTabs ? [{ href: "/hi-blake", label: "Hi Blake...", icon: "💀" }] : []),
-    ...(canSeeCrystalRenoTabs ? [{ href: "/hi-crystal", label: "Hi Crystal!", icon: "☕" }] : []),
-    ...(canSeeCrystalRenoTabs ? [{ href: "/hi-reno", label: "Hi Reno...", icon: "🤘" }] : []),
-    ...(canSeeMyWifeTab ? [{ href: "/my-wife", label: "My Wife!", icon: "👍" }] : []),
-    ...(canSeeDanTab ? [{ href: "/hi-dan", label: "Hi Dan!", icon: "🏍️" }] : []),
-    ...(canSeeClairTab ? [{ href: "/hi-claire", label: "Hi Claire!", icon: "🌲" }] : []),
-    ...(canSeeChappyTab ? [{ href: "/hi-chappy", label: "Hi Chappy!", icon: "🍺" }] : []),
-    ...(canSeeHazelTab ? [{ href: "/hi-hazel", label: "Hi Hazel!", icon: "🎂" }] : []),
-    ...(canSeeAspenTab ? [{ href: "/hi-aspen", label: "Hi Aspen!", icon: "👑" }] : []),
   ];
 
   return (
