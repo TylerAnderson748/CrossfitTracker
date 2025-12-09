@@ -286,39 +286,212 @@ export default function ProgressPage() {
     skillData: SkillRecord[],
     startDate: Timestamp
   ) => {
-    const recentLifts = liftData.filter(l => l.date.toMillis() >= startDate.toMillis());
-    const recentWods = wodData.filter(w => w.completedDate.toMillis() >= startDate.toMillis());
-    const recentSkills = skillData.filter(s => s.date.toMillis() >= startDate.toMillis());
+    const recentLifts = liftData.filter(l => l.date?.toMillis() >= startDate.toMillis());
+    const recentWods = wodData.filter(w => w.completedDate?.toMillis() >= startDate.toMillis());
+    const recentSkills = skillData.filter(s => s.date?.toMillis() >= startDate.toMillis());
+    const days = parseInt(selectedTimeRange);
+    const weeks = days / 7;
 
-    // Strength score: based on number of PRs and consistency
+    // ========== STRENGTH SCORE (0-100) ==========
+    // Components:
+    // 1. PR Achievement (up to 35 pts) - new personal records
+    // 2. Progressive Overload (up to 25 pts) - weight trending up over time
+    // 3. Lift Variety (up to 20 pts) - hitting different movement patterns
+    // 4. Volume Consistency (up to 20 pts) - regular lifting sessions
+
+    let strengthScore = 0;
+
+    // 1. PR Achievement (35 pts max)
     const liftPRs = recentLifts.filter(l => {
       const olderLifts = liftData.filter(
-        ol => ol.liftTitle === l.liftTitle && ol.date.toMillis() < l.date.toMillis()
+        ol => ol.liftTitle === l.liftTitle && ol.date?.toMillis() < l.date?.toMillis()
       );
       const previousMax = olderLifts.length > 0 ? Math.max(...olderLifts.map(ol => ol.weight)) : 0;
-      return l.weight > previousMax;
+      return l.weight > previousMax && previousMax > 0; // Only count if there was a previous max
     });
-    const strengthScore = Math.min(100, (liftPRs.length * 10) + (recentLifts.length * 2));
+    const prPoints = Math.min(35, liftPRs.length * 7); // Each PR worth 7 pts, max 35
+    strengthScore += prPoints;
 
-    // Conditioning score: based on WOD volume and RX percentage
+    // 2. Progressive Overload (25 pts max) - are lifts trending upward?
+    const liftsByName = new Map<string, LiftRecord[]>();
+    recentLifts.forEach(l => {
+      const name = l.liftTitle || "Unknown";
+      if (!liftsByName.has(name)) liftsByName.set(name, []);
+      liftsByName.get(name)!.push(l);
+    });
+
+    let progressingLifts = 0;
+    let totalTrackedLifts = 0;
+    liftsByName.forEach((records) => {
+      if (records.length >= 2) {
+        totalTrackedLifts++;
+        records.sort((a, b) => (a.date?.toMillis() || 0) - (b.date?.toMillis() || 0));
+        const firstHalf = records.slice(0, Math.floor(records.length / 2));
+        const secondHalf = records.slice(Math.floor(records.length / 2));
+        const firstAvg = firstHalf.reduce((sum, r) => sum + r.weight, 0) / firstHalf.length;
+        const secondAvg = secondHalf.reduce((sum, r) => sum + r.weight, 0) / secondHalf.length;
+        if (secondAvg > firstAvg) progressingLifts++;
+      }
+    });
+    const progressionRate = totalTrackedLifts > 0 ? progressingLifts / totalTrackedLifts : 0;
+    strengthScore += Math.round(progressionRate * 25);
+
+    // 3. Lift Variety (20 pts max) - different lifts = better rounded
+    const uniqueLifts = new Set(recentLifts.map(l => l.liftTitle)).size;
+    const varietyPoints = Math.min(20, uniqueLifts * 4); // 4 pts per unique lift, max 20
+    strengthScore += varietyPoints;
+
+    // 4. Volume Consistency (20 pts max) - regular lifting sessions per week
+    const liftSessionsPerWeek = recentLifts.length / weeks;
+    const volumePoints = Math.min(20, liftSessionsPerWeek * 5); // 5 pts per session/week, max 20
+    strengthScore += volumePoints;
+
+    strengthScore = Math.min(100, Math.round(strengthScore));
+
+    // ========== CONDITIONING SCORE (0-100) ==========
+    // Components:
+    // 1. RX Progression (up to 30 pts) - doing workouts as prescribed
+    // 2. Time Improvements (up to 30 pts) - getting faster on repeated workouts
+    // 3. Workout Variety (up to 20 pts) - different types of WODs
+    // 4. Volume (up to 20 pts) - consistent WOD attendance
+
+    let conditioningScore = 0;
+
+    // 1. RX Progression (30 pts max)
     const rxWods = recentWods.filter(w => (w.notes || w.category) === "RX");
     const rxRatio = recentWods.length > 0 ? rxWods.length / recentWods.length : 0;
-    const conditioningScore = Math.min(100, (recentWods.length * 5) + (rxRatio * 50));
+    conditioningScore += Math.round(rxRatio * 30);
 
-    // Consistency score: based on total activity
-    const days = parseInt(selectedTimeRange);
+    // 2. Time Improvements (30 pts max) - compare repeated WODs
+    const wodsByTitle = new Map<string, WodRecord[]>();
+    recentWods.forEach(w => {
+      if (w.timeInSeconds && w.wodTitle) {
+        if (!wodsByTitle.has(w.wodTitle)) wodsByTitle.set(w.wodTitle, []);
+        wodsByTitle.get(w.wodTitle)!.push(w);
+      }
+    });
+
+    let totalImprovement = 0;
+    let improvementCount = 0;
+    wodsByTitle.forEach(records => {
+      if (records.length >= 2) {
+        records.sort((a, b) => (a.completedDate?.toMillis() || 0) - (b.completedDate?.toMillis() || 0));
+        const firstTime = records[0].timeInSeconds!;
+        const lastTime = records[records.length - 1].timeInSeconds!;
+        if (firstTime > 0 && lastTime < firstTime) {
+          const improvement = ((firstTime - lastTime) / firstTime) * 100;
+          totalImprovement += improvement;
+          improvementCount++;
+        }
+      }
+    });
+    const avgImprovement = improvementCount > 0 ? totalImprovement / improvementCount : 0;
+    // 10% improvement = full 30 pts
+    conditioningScore += Math.min(30, Math.round(avgImprovement * 3));
+
+    // 3. Workout Variety (20 pts max) - different WODs
+    const uniqueWods = new Set(recentWods.map(w => w.wodTitle)).size;
+    conditioningScore += Math.min(20, uniqueWods * 2);
+
+    // 4. Volume (20 pts max) - WODs per week (3-5 is ideal)
+    const wodsPerWeek = recentWods.length / weeks;
+    const wodVolumePoints = wodsPerWeek >= 3 ? Math.min(20, 10 + (wodsPerWeek * 2)) : wodsPerWeek * 5;
+    conditioningScore += Math.round(wodVolumePoints);
+
+    conditioningScore = Math.min(100, Math.round(conditioningScore));
+
+    // ========== CONSISTENCY SCORE (0-100) ==========
+    // Components:
+    // 1. Weekly Attendance (up to 40 pts) - showing up regularly
+    // 2. Streak Bonus (up to 25 pts) - consecutive weeks with activity
+    // 3. Gap Penalty (up to -20 pts) - penalize long breaks
+    // 4. Activity Spread (up to 35 pts) - not cramming all workouts in one day
+
+    let consistencyScore = 0;
+
+    // Get all activity dates
+    const allActivityDates = [
+      ...recentLifts.map(l => l.date?.toMillis() || 0),
+      ...recentWods.map(w => w.completedDate?.toMillis() || 0),
+      ...recentSkills.map(s => s.date?.toMillis() || 0)
+    ].filter(d => d > 0).sort((a, b) => a - b);
+
+    // 1. Weekly Attendance (40 pts max) - based on activities per week
     const totalActivities = recentLifts.length + recentWods.length + recentSkills.length;
-    const activitiesPerWeek = totalActivities / (days / 7);
-    const consistencyScore = Math.min(100, activitiesPerWeek * 15);
+    const activitiesPerWeek = totalActivities / weeks;
+    // 4-6 activities/week is ideal (80-100%), scale down from there
+    if (activitiesPerWeek >= 4) {
+      consistencyScore += Math.min(40, 30 + (activitiesPerWeek * 2));
+    } else {
+      consistencyScore += Math.round(activitiesPerWeek * 10);
+    }
 
-    // Overall score: weighted average
-    const overallScore = (strengthScore * 0.35) + (conditioningScore * 0.35) + (consistencyScore * 0.3);
+    // 2. Streak Bonus (25 pts max) - consecutive weeks with at least 2 activities
+    if (allActivityDates.length >= 2) {
+      const weekBuckets = new Map<number, number>();
+      allActivityDates.forEach(date => {
+        const weekNum = Math.floor(date / (7 * 24 * 60 * 60 * 1000));
+        weekBuckets.set(weekNum, (weekBuckets.get(weekNum) || 0) + 1);
+      });
+
+      const weekNumbers = Array.from(weekBuckets.keys()).sort((a, b) => a - b);
+      let currentStreak = 0;
+      let maxStreak = 0;
+
+      for (let i = 0; i < weekNumbers.length; i++) {
+        const count = weekBuckets.get(weekNumbers[i]) || 0;
+        if (count >= 2) {
+          if (i === 0 || weekNumbers[i] - weekNumbers[i - 1] === 1) {
+            currentStreak++;
+          } else {
+            currentStreak = 1;
+          }
+          maxStreak = Math.max(maxStreak, currentStreak);
+        } else {
+          currentStreak = 0;
+        }
+      }
+      consistencyScore += Math.min(25, maxStreak * 5); // 5 pts per week streak
+    }
+
+    // 3. Gap Penalty (up to -20 pts) - penalize gaps > 7 days
+    if (allActivityDates.length >= 2) {
+      let maxGap = 0;
+      for (let i = 1; i < allActivityDates.length; i++) {
+        const gap = (allActivityDates[i] - allActivityDates[i - 1]) / (24 * 60 * 60 * 1000);
+        maxGap = Math.max(maxGap, gap);
+      }
+      if (maxGap > 14) {
+        consistencyScore -= Math.min(20, Math.round((maxGap - 7) * 1.5));
+      } else if (maxGap > 7) {
+        consistencyScore -= Math.round((maxGap - 7) * 1);
+      }
+    }
+
+    // 4. Activity Spread (35 pts max) - activities spread across different days
+    const uniqueDays = new Set(allActivityDates.map(d => Math.floor(d / (24 * 60 * 60 * 1000)))).size;
+    const spreadRatio = totalActivities > 0 ? uniqueDays / totalActivities : 0;
+    // Perfect spread (1 activity per day) = 35 pts, cramming = fewer pts
+    consistencyScore += Math.round(spreadRatio * 35);
+
+    consistencyScore = Math.max(0, Math.min(100, Math.round(consistencyScore)));
+
+    // ========== OVERALL SCORE ==========
+    // Weighted average with slight bonus for balance
+    const baseScore = (strengthScore * 0.33) + (conditioningScore * 0.33) + (consistencyScore * 0.34);
+
+    // Balance bonus: if all three scores are within 20 pts of each other, add up to 5 pts
+    const scoreRange = Math.max(strengthScore, conditioningScore, consistencyScore) -
+                       Math.min(strengthScore, conditioningScore, consistencyScore);
+    const balanceBonus = scoreRange <= 20 ? Math.round((20 - scoreRange) / 4) : 0;
+
+    const overallScore = Math.min(100, Math.round(baseScore + balanceBonus));
 
     setOverallProgress({
-      strengthScore: Math.round(strengthScore),
-      conditioningScore: Math.round(conditioningScore),
-      consistencyScore: Math.round(consistencyScore),
-      overallScore: Math.round(overallScore)
+      strengthScore,
+      conditioningScore,
+      consistencyScore,
+      overallScore
     });
   };
 
