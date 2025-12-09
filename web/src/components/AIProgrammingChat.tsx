@@ -158,26 +158,32 @@ When generating workouts, you MUST respond with valid JSON in this exact format:
           "type": "warmup",
           "title": "General Warm-up",
           "description": "3 rounds:\\n10 air squats\\n10 push-ups\\n200m run",
-          "notes": "Focus on mobility and increasing heart rate gradually"
+          "notes": "Focus on mobility and increasing heart rate gradually. No rest between movements."
         },
         {
           "type": "lift",
           "title": "Back Squat",
-          "description": "5x5 @ 75% 1RM\\nRest 2-3 min between sets",
-          "notes": "Stimulus: Build strength with moderate load. Focus on depth and control.\\nScaling: Reduce weight if form breaks down. Beginners use goblet squats."
+          "description": "Build to a heavy set of 5, then:\\n3 x 5 @ 80-85% of today's heavy set\\nRest 2-3 min between sets",
+          "notes": "STIMULUS: Build strength with moderate-heavy load. Should feel challenging but controlled.\\n\\nGOAL: Improve 5-rep max capacity. Focus on depth, bracing, and bar speed.\\n\\nSCALED: Reduce weight 10-20% if form breaks down or if newer to back squatting.\\n\\nFOUNDATIONS: Goblet squat with dumbbell/kettlebell. Focus on depth and core stability. 3 x 8-10 reps."
         },
         {
           "type": "skill",
           "title": "Toes-to-Bar",
-          "description": "3 sets of 8-10 reps (or max effort)\\nRest 90 sec between sets\\n\\nDrill Work:\\n- 10 kip swings (focus on hollow/arch)\\n- 10 knees-to-chest\\n- 5 slow toes-to-bar with pause at top",
-          "notes": "Stimulus: Skill development, focus on rhythm and efficiency.\\nScaling: Knees-to-Elbow if can't reach toes. Hanging Knee Raises if still developing kip. V-ups on floor if grip is limiting.\\nIntent: Quality over quantity - stop if form breaks down.\\nProgression: Master kip swing first, then knees-to-chest, then full TTB."
+          "description": "Every 90 sec for 6 rounds:\\n5-8 Toes-to-Bar (or progression)\\n\\nDrill Work (before sets):\\n- 10 kip swings (hollow to arch)\\n- 5 slow knees-to-chest\\n- 5 controlled leg raises",
+          "notes": "STIMULUS: Skill development - focus on rhythm, timing, and efficiency, not fatigue.\\n\\nGOAL: Build capacity and consistency in the kipping pattern. Quality over quantity.\\n\\nSCALED: Knees-to-Elbows (same rep scheme). Focus on full extension at bottom.\\n\\nFOUNDATIONS: Hanging knee raises or V-ups on floor. 6 rounds of 8-10 reps.\\n\\nPROGRESSION TIP: Master the kip swing timing before adding leg lift."
         },
         {
           "type": "wod",
           "title": "Fran",
-          "description": "21-15-9\\nThrusters (95/65)\\nPull-ups",
+          "description": "21-15-9 For Time:\\nThrusters\\nPull-ups\\n\\nTime Cap: 10 minutes",
           "scoringType": "fortime",
-          "notes": "Stimulus: Fast and intense, aim for sub-10 minutes.\\nRx: Thrusters (95/65), Kipping Pull-ups\\nScaled: Thrusters (65/45), Ring Rows or Banded Pull-ups\\nFoundations: Thrusters (45/35), Ring Rows\\n\\nScoring: Using scaled weights? Log as Scaled. Using less than scaled or ring rows? Log as Foundations.\\nIntent: Sprint effort, unbroken if possible."
+          "notes": "STIMULUS: Sprint effort. This should feel intense from the first rep. Heart rate high, breathing hard.\\n\\nGOAL: Sub-5 elite, sub-7 competitive, sub-10 fitness. Aim for large sets or unbroken if possible.\\n\\nRx: Thrusters 95/65 lb, Kipping Pull-ups\\n\\nSCALED: Thrusters 65/45 lb, Banded Pull-ups or Jumping Pull-ups\\n- For athletes who can do pull-ups but not 45 total\\n- For athletes building toward Rx weights\\n\\nFOUNDATIONS: Thrusters 45/35 lb (or dumbbells 20/15), Ring Rows\\n- For newer athletes still building capacity\\n- Focus on moving well, not moving fast\\n\\nSCORING: Record time and note Rx/Scaled/Foundations. If you modified further, note in comments."
+        },
+        {
+          "type": "cooldown",
+          "title": "Recovery",
+          "description": "2 rounds:\\n1 min couch stretch each leg\\n1 min pigeon pose each side\\n10 slow cat-cows",
+          "notes": "Take your time. Breathe deeply. This is recovery, not a workout."
         }
       ]
     }
@@ -239,21 +245,42 @@ The notes field for skills MUST include:
 - For WODs, use benchmark WODs when appropriate, but get CREATIVE with custom WOD names using themes!
 - Pay attention to any themes, preferences, or special requests from the user
 
-IMPORTANT - WOD SCALING AND SCORING CATEGORIES:
-For ALL WOD components, you MUST include THREE scaling levels in the notes:
-1. Rx (prescribed): The standard weights and movements
-2. Scaled: Lighter weights or easier movement variations
-3. Foundations: Lightest weights or most accessible modifications
+IMPORTANT - STIMULUS, GOALS, AND SCALING:
+Every workout component MUST have detailed notes with:
 
-ALWAYS include scoring guidance like:
-"Scoring: Using Rx weights? Log as Rx. Using scaled weights? Log as Scaled. Using less than scaled weights or significant modifications? Log as Foundations."
+1. STIMULUS: What should this feel like? (sprint effort, grinding pace, controlled movement, etc.)
+   - Be specific: "Heart rate should stay elevated", "Should feel heavy but controlled", "Breathing hard but recoverable"
 
-Example scaling formats:
-- Barbell movements: "Rx: 135/95, Scaled: 95/65, Foundations: 65/45 or empty bar"
-- Kettlebell: "Rx: 53/35, Scaled: 35/26, Foundations: 26/18"
-- Pull-ups: "Rx: Kipping Pull-ups, Scaled: Banded Pull-ups, Foundations: Ring Rows"
-- Box Jumps: "Rx: 24/20, Scaled: 20/16, Foundations: Step-ups"
-- Wall Balls: "Rx: 20/14 to 10/9ft, Scaled: 14/10, Foundations: 10/6 to 9ft"
+2. GOAL: What is this workout trying to achieve?
+   - Time targets for For Time workouts (elite/competitive/fitness ranges)
+   - Rep targets for AMRAPs
+   - Intensity expectations
+   - What the athlete should focus on (unbroken sets, pacing, technique, etc.)
+
+3. THREE SCALING LEVELS with clear guidance:
+   a) Rx (prescribed): Standard weights and movements with specific expectations
+   b) SCALED: Lighter weights OR easier movement variations
+      - Include WHO should scale: "For athletes building toward Rx" or "If you can't do 15+ unbroken"
+      - Be specific about modifications: exact weights, band colors, etc.
+   c) FOUNDATIONS (Beginner): Most accessible option
+      - For newer athletes or those with limitations
+      - Focus should be on movement quality, not intensity
+      - Include alternative equipment if needed (dumbbells instead of barbell)
+
+SCALING WEIGHT EXAMPLES:
+- Barbell Clean/Snatch: "Rx: 135/95, Scaled: 95/65, Foundations: 65/45 or PVC/empty bar"
+- Thrusters: "Rx: 95/65, Scaled: 65/45, Foundations: 45/35 or DB 20/15"
+- Deadlift: "Rx: 225/155, Scaled: 155/105, Foundations: 95/65"
+- Kettlebell Swings: "Rx: 53/35, Scaled: 35/26, Foundations: 26/18"
+- Wall Balls: "Rx: 20/14 to 10/9ft, Scaled: 14/10 to 9ft, Foundations: 10/6 to 9ft"
+
+SCALING MOVEMENT EXAMPLES:
+- Pull-ups: "Rx: Kipping, Scaled: Banded (green/blue) or Jumping, Foundations: Ring Rows"
+- Muscle-ups: "Rx: Bar/Ring MU, Scaled: C2B + Dips, Foundations: Pull-ups + Push-ups"
+- Handstand Push-ups: "Rx: Strict/Kipping, Scaled: Pike Push-ups (box), Foundations: DB Strict Press"
+- Box Jumps: "Rx: 24/20 jump, Scaled: 20/16 jump, Foundations: Step-ups any height"
+- Double-Unders: "Rx: DUs, Scaled: 2:1 Singles, Foundations: 3:1 Singles or Penguin Jumps"
+- Toes-to-Bar: "Rx: TTB, Scaled: Knees-to-Elbows, Foundations: Hanging Knee Raises or V-ups"
 
 If the user is just chatting or asking questions (not requesting workouts), respond with just:
 {
