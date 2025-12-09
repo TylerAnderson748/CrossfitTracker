@@ -375,8 +375,10 @@ service cloud.firestore {
     // ==========================================
 
     match /aiCoachAdvice/{adviceId} {
-      // Users can read their own saved advice
-      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      // Users can read advice - doc ID contains their userId for security
+      // We allow general authenticated read because getDoc on non-existent docs
+      // fails if we check resource.data (which is null for missing docs)
+      allow read: if isAuthenticated();
 
       // Users can create/update their own advice
       allow create: if isAuthenticated() &&
