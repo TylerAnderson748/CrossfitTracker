@@ -889,8 +889,16 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
         // Skip if no valid components
         if (cleanComponents.length === 0) continue;
 
-        // Build workout date
-        const workoutDate = new Date(day.date);
+        // Build workout date - parse as local time to avoid timezone issues
+        // When parsing "YYYY-MM-DD", JavaScript treats it as UTC which can shift the day
+        // So we parse the components manually to ensure local time
+        let workoutDate: Date;
+        if (day.date && day.date.includes('-')) {
+          const [year, month, dayNum] = day.date.split('-').map(Number);
+          workoutDate = new Date(year, month - 1, dayNum, 12, 0, 0); // noon local time
+        } else {
+          workoutDate = new Date(day.date);
+        }
         if (isNaN(workoutDate.getTime())) continue; // Skip invalid dates
 
         // Generate time slots from selected groups' default time slots
