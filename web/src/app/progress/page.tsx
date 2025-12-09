@@ -1019,6 +1019,7 @@ function ScoreCard({ label, score, color, highlight }: { label: string; score: n
   const colorClasses = {
     purple: "bg-purple-100 text-purple-700",
     orange: "bg-orange-100 text-orange-700",
+    cyan: "bg-cyan-100 text-cyan-700",
     green: "bg-green-100 text-green-700",
     blue: "bg-blue-100 text-blue-700"
   };
