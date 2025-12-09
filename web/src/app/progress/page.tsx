@@ -450,9 +450,11 @@ export default function ProgressPage() {
       if (records.length >= 2) {
         records.sort((a, b) => (a.completedDate?.toMillis() || 0) - (b.completedDate?.toMillis() || 0));
         // For Time workouts - lower is better
-        if (records[0].timeInSeconds && records[records.length - 1].timeInSeconds) {
-          const firstTime = records[0].timeInSeconds;
-          const lastTime = records[records.length - 1].timeInSeconds;
+        const firstTimeRecord = records[0].timeInSeconds;
+        const lastTimeRecord = records[records.length - 1].timeInSeconds;
+        if (firstTimeRecord && lastTimeRecord) {
+          const firstTime = firstTimeRecord;
+          const lastTime = lastTimeRecord;
           if (firstTime > 0 && lastTime < firstTime) {
             const improvement = ((firstTime - lastTime) / firstTime) * 100;
             totalImprovement += improvement;
