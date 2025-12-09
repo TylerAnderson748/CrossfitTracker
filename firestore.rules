@@ -390,6 +390,21 @@ service cloud.firestore {
     }
 
     // ==========================================
+    // AI COACH SUGGESTIONS (Global cached suggestions)
+    // Generated daily at 1 AM by cron/admin
+    // ==========================================
+
+    match /aiCoachSuggestions/{suggestionId} {
+      // All authenticated users can read cached suggestions
+      allow read: if isAuthenticated();
+
+      // Only super admins can write (for manual refresh)
+      allow create: if isSuperAdmin();
+      allow update: if isSuperAdmin();
+      allow delete: if isSuperAdmin();
+    }
+
+    // ==========================================
     // SUBSCRIPTIONS (Read-only from client)
     // ==========================================
 
