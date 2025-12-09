@@ -96,26 +96,38 @@ export default function GroupDetailPage({
   const loadData = async () => {
     setLoading(true);
     try {
+      // Load gym first to get ownerId
+      const gymDoc = await getDoc(doc(db, "gyms", gymId));
+      let gymOwnerId: string | null = null;
+      if (gymDoc.exists()) {
+        const gymData = { id: gymDoc.id, ...gymDoc.data() } as Gym;
+        setGym(gymData);
+        gymOwnerId = gymData.ownerId;
+        setIsCoachOrOwner(
+          gymData.ownerId === user?.id || gymData.coachIds?.includes(user?.id || "")
+        );
+      }
+
       // Load all gym members by querying users with this gymId
       const gymMembersQuery = query(
         collection(db, "users"),
         where("gymId", "==", gymId)
       );
       const gymMembersSnapshot = await getDocs(gymMembersQuery);
-      const allGymMembers = gymMembersSnapshot.docs
+      let allGymMembers = gymMembersSnapshot.docs
         .map((doc) => ({ id: doc.id, ...doc.data() } as AppUser))
-        .filter(u => u.role === "athlete" || u.role === "member" || u.role === "owner");
-      setGymMembers(allGymMembers);
+        .filter(u => u.role === "athlete" || u.role === "member" || u.role === "owner" || u.role === "coach");
 
-      // Load gym
-      const gymDoc = await getDoc(doc(db, "gyms", gymId));
-      if (gymDoc.exists()) {
-        const gymData = { id: gymDoc.id, ...gymDoc.data() } as Gym;
-        setGym(gymData);
-        setIsCoachOrOwner(
-          gymData.ownerId === user?.id || gymData.coachIds?.includes(user?.id || "")
-        );
+      // Also fetch the gym owner if they're not already in the list (owner might not have gymId set)
+      if (gymOwnerId && !allGymMembers.some(m => m.id === gymOwnerId)) {
+        const ownerDoc = await getDoc(doc(db, "users", gymOwnerId));
+        if (ownerDoc.exists()) {
+          const ownerData = { id: ownerDoc.id, ...ownerDoc.data() } as AppUser;
+          allGymMembers = [ownerData, ...allGymMembers];
+        }
       }
+
+      setGymMembers(allGymMembers);
 
       // Load group
       const groupDoc = await getDoc(doc(db, "groups", groupId));
