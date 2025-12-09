@@ -76,8 +76,11 @@ export default function ProgressPage() {
 
   // Check if user has AI Coach access
   const hasAICoach = user?.aiTrainerSubscription?.status === "active" ||
+                     user?.aiTrainerSubscription?.status === "trialing" ||
                      user?.gymAICoachEnabled ||
-                     user?.individualSubscription?.aiCoachEnabled;
+                     user?.individualSubscription?.aiCoachEnabled ||
+                     user?.role === "superAdmin" || // Super admins always have access
+                     user?.role === "owner"; // Gym owners have access
 
   useEffect(() => {
     if (!loading && !switching && !user) {
