@@ -54,6 +54,15 @@ interface WodStats {
   weeklyAverage: number;
 }
 
+interface SkillStats {
+  skillName: string;
+  currentMax: number;
+  previousMax: number;
+  percentChange: number;
+  totalSessions: number;
+  trend: "up" | "down" | "stable";
+}
+
 interface OverallProgress {
   strengthScore: number; // 0-100
   conditioningScore: number; // 0-100
@@ -68,6 +77,7 @@ export default function ProgressPage() {
   const [wods, setWods] = useState<WodRecord[]>([]);
   const [skills, setSkills] = useState<SkillRecord[]>([]);
   const [liftStats, setLiftStats] = useState<LiftStats[]>([]);
+  const [skillStats, setSkillStats] = useState<SkillStats[]>([]);
   const [wodStats, setWodStats] = useState<WodStats | null>(null);
   const [overallProgress, setOverallProgress] = useState<OverallProgress | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -152,6 +162,7 @@ export default function ProgressPage() {
 
       // Calculate stats
       calculateLiftStats(liftData, startTimestamp);
+      calculateSkillStats(skillData, startTimestamp);
       calculateWodStats(wodData, startTimestamp);
       calculateOverallProgress(liftData, wodData, skillData, startTimestamp);
 
@@ -211,6 +222,56 @@ export default function ProgressPage() {
     // Sort by total sessions (most tracked first)
     stats.sort((a, b) => b.totalSessions - a.totalSessions);
     setLiftStats(stats.slice(0, 10)); // Top 10 lifts
+  };
+
+  const calculateSkillStats = (skillData: SkillRecord[], startDate: Timestamp) => {
+    // Group skills by name
+    const skillsByName = new Map<string, SkillRecord[]>();
+    skillData.forEach(skill => {
+      const name = skill.skillTitle || "Unknown";
+      if (!skillsByName.has(name)) {
+        skillsByName.set(name, []);
+      }
+      skillsByName.get(name)!.push(skill);
+    });
+
+    const stats: SkillStats[] = [];
+    skillsByName.forEach((records, skillName) => {
+      // Sort by date descending
+      records.sort((a, b) => (b.date?.toMillis() || 0) - (a.date?.toMillis() || 0));
+
+      // Get max reps (current best)
+      const currentMax = Math.max(...records.map(r => r.maxReps || 0));
+
+      // Find previous max (before the time range)
+      const recentRecords = records.filter(r => (r.date?.toMillis() || 0) >= startDate.toMillis());
+      const olderRecords = records.filter(r => (r.date?.toMillis() || 0) < startDate.toMillis());
+
+      const previousMax = olderRecords.length > 0
+        ? Math.max(...olderRecords.map(r => r.maxReps || 0))
+        : currentMax;
+
+      const percentChange = previousMax > 0 ? ((currentMax - previousMax) / previousMax) * 100 : 0;
+
+      let trend: "up" | "down" | "stable" = "stable";
+      if (percentChange > 5) trend = "up";
+      else if (percentChange < -5) trend = "down";
+
+      if (recentRecords.length > 0 || olderRecords.length > 0) {
+        stats.push({
+          skillName,
+          currentMax,
+          previousMax,
+          percentChange,
+          totalSessions: records.length,
+          trend
+        });
+      }
+    });
+
+    // Sort by total sessions (most tracked first)
+    stats.sort((a, b) => b.totalSessions - a.totalSessions);
+    setSkillStats(stats.slice(0, 10)); // Top 10 skills
   };
 
   const calculateWodStats = (wodData: WodRecord[], startDate: Timestamp) => {
@@ -535,6 +596,14 @@ export default function ProgressPage() {
         summary += `- Time Improvement: ${wodStats.avgTimeImprovement > 0 ? '+' : ''}${wodStats.avgTimeImprovement.toFixed(1)}%\n\n`;
       }
 
+      if (skillStats.length > 0) {
+        summary += `SKILLS PROGRESS:\n`;
+        skillStats.slice(0, 5).forEach(skill => {
+          summary += `- ${skill.skillName}: ${skill.currentMax} reps (${skill.percentChange > 0 ? '+' : ''}${skill.percentChange.toFixed(1)}% from previous period, ${skill.totalSessions} sessions)\n`;
+        });
+        summary += "\n";
+      }
+
       if (user?.aiCoachPreferences?.goals) {
         summary += `ATHLETE'S GOALS: ${user.aiCoachPreferences.goals}\n\n`;
       }
@@ -556,10 +625,10 @@ Provide a comprehensive analysis in this EXACT format:
 A 2-3 sentence overview of their overall progress and what stands out.
 
 **STRENGTHS:**
-- List 2-3 specific things they're doing well based on the data
+- List 2-3 specific things they're doing well based on the data (include lifts, WODs, and skills)
 
 **AREAS FOR IMPROVEMENT:**
-- List 2-3 specific areas where they could improve, with actionable advice
+- List 2-3 specific areas where they could improve (strength, conditioning, skills, consistency), with actionable advice
 
 **RECOMMENDATIONS:**
 Based on the data, give 3 specific recommendations for the next ${selectedTimeRange === "30" ? "month" : selectedTimeRange === "90" ? "3 months" : selectedTimeRange === "180" ? "6 months" : "year"}:
@@ -596,9 +665,10 @@ Be specific, use their actual numbers, and be encouraging but honest. Keep it co
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20">
+    <div className="min-h-screen bg-gray-50">
+      <Navigation />
       {/* Header */}
-      <header className="bg-white shadow-sm sticky top-0 z-10">
+      <header className="bg-white shadow-sm">
         <div className="max-w-7xl mx-auto px-4 py-4">
           <h1 className="text-xl font-bold text-gray-900">Progress Tracking</h1>
           <p className="text-sm text-gray-500">Track your fitness journey over time</p>
@@ -670,6 +740,34 @@ Be specific, use their actual numbers, and be encouraging but honest. Keep it co
               </div>
             )}
 
+            {/* Skills Progress */}
+            {skillStats.length > 0 && (
+              <div className="bg-white rounded-xl shadow-sm p-6">
+                <h2 className="text-lg font-semibold text-gray-900 mb-4">Skills Progress</h2>
+                <div className="space-y-3">
+                  {skillStats.map((skill) => (
+                    <div key={skill.skillName} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                      <div>
+                        <p className="font-medium text-gray-900">{skill.skillName}</p>
+                        <p className="text-sm text-gray-500">{skill.totalSessions} sessions logged</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-bold text-gray-900">{skill.currentMax} reps</p>
+                        <p className={`text-sm ${
+                          skill.trend === "up" ? "text-green-600" :
+                          skill.trend === "down" ? "text-red-600" : "text-gray-500"
+                        }`}>
+                          {skill.trend === "up" && "↑ "}
+                          {skill.trend === "down" && "↓ "}
+                          {skill.percentChange > 0 ? "+" : ""}{skill.percentChange.toFixed(1)}%
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* WOD Stats */}
             {wodStats && (
               <div className="bg-white rounded-xl shadow-sm p-6">
@@ -688,7 +786,7 @@ Be specific, use their actual numbers, and be encouraging but honest. Keep it co
             )}
 
             {/* No Data Message */}
-            {lifts.length === 0 && wods.length === 0 && (
+            {lifts.length === 0 && wods.length === 0 && skills.length === 0 && (
               <div className="bg-white rounded-xl shadow-sm p-8 text-center">
                 <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
                   <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -696,23 +794,23 @@ Be specific, use their actual numbers, and be encouraging but honest. Keep it co
                   </svg>
                 </div>
                 <h3 className="text-lg font-medium text-gray-900 mb-2">No Data Yet</h3>
-                <p className="text-gray-500">Start logging your lifts and WODs to see your progress over time!</p>
+                <p className="text-gray-500">Start logging your lifts, WODs, and skills to see your progress over time!</p>
               </div>
             )}
 
             {/* Data exists but no stats calculated - try longer time range */}
-            {(lifts.length > 0 || wods.length > 0) && !overallProgress && !wodStats && liftStats.length === 0 && (
+            {(lifts.length > 0 || wods.length > 0 || skills.length > 0) && !overallProgress && !wodStats && liftStats.length === 0 && skillStats.length === 0 && (
               <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-6">
                 <h3 className="font-medium text-yellow-800 mb-2">No activity in selected time range</h3>
                 <p className="text-sm text-yellow-700">
-                  You have {lifts.length} lift records and {wods.length} WOD records total,
+                  You have {lifts.length} lift records, {wods.length} WOD records, and {skills.length} skill records total,
                   but none in the last {selectedTimeRange} days. Try selecting a longer time range above.
                 </p>
               </div>
             )}
 
             {/* AI Analysis Section */}
-            {hasAICoach && (lifts.length > 0 || wods.length > 0) && (
+            {hasAICoach && (lifts.length > 0 || wods.length > 0 || skills.length > 0) && (
               <div className="bg-gradient-to-r from-purple-600 to-blue-600 rounded-xl shadow-sm p-6 text-white">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-3">
@@ -778,7 +876,7 @@ Be specific, use their actual numbers, and be encouraging but honest. Keep it co
             )}
 
             {/* Upgrade CTA for non-AI Coach users */}
-            {!hasAICoach && (lifts.length > 0 || wods.length > 0) && (
+            {!hasAICoach && (lifts.length > 0 || wods.length > 0 || skills.length > 0) && (
               <div className="bg-gray-100 rounded-xl p-6 text-center">
                 <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-3">
                   <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -800,8 +898,6 @@ Be specific, use their actual numbers, and be encouraging but honest. Keep it co
           </>
         )}
       </main>
-
-      <Navigation />
     </div>
   );
 }
