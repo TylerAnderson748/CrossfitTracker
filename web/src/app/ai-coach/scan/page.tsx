@@ -42,10 +42,13 @@ export default function AIScanPage() {
   );
   const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
 
-  const isCoach = user?.role === "coach" || user?.role === "owner";
+  // Check if user has coach/owner role OR is associated with a gym as staff
+  // userGym being set means they're either gym owner or in coachIds
+  const isCoachByRole = user?.role === "coach" || user?.role === "owner";
+  const canPublishToGym = isCoachByRole || !!userGym;
 
-  // Check subscription - coaches use aiProgrammingSubscription, athletes use aiTrainerSubscription
-  const relevantSubscription = isCoach
+  // Check subscription - gym staff use aiProgrammingSubscription, athletes use aiTrainerSubscription
+  const relevantSubscription = canPublishToGym
     ? user?.aiProgrammingSubscription
     : user?.aiTrainerSubscription;
   const hasSubscription = relevantSubscription?.status === "active" ||
@@ -507,18 +510,18 @@ IMPORTANT:
               </svg>
             </div>
             <h2 className="text-xl font-bold text-gray-900 mb-2">
-              {isCoach ? "AI Programming Feature" : "AI Coach Feature"}
+              {canPublishToGym ? "AI Programming Feature" : "AI Coach Feature"}
             </h2>
             <p className="text-gray-600 mb-4">
-              {isCoach
+              {canPublishToGym
                 ? "Photo scanning is available for AI Programming subscribers."
                 : "Photo scanning is available for AI Coach subscribers."}
             </p>
             <button
-              onClick={() => router.push(isCoach ? "/subscribe?variant=coach" : "/subscribe")}
+              onClick={() => router.push(canPublishToGym ? "/subscribe?variant=coach" : "/subscribe")}
               className="px-6 py-3 bg-purple-600 text-white font-medium rounded-lg hover:bg-purple-700 transition-colors"
             >
-              {isCoach ? "Subscribe to AI Programming" : "Subscribe to AI Coach"}
+              {canPublishToGym ? "Subscribe to AI Programming" : "Subscribe to AI Coach"}
             </button>
           </div>
         </main>
@@ -823,7 +826,7 @@ IMPORTANT:
                 )}
 
                 {/* Date/Group Picker for Saving (Coach flow) */}
-                {showDatePicker && !saveSuccess && isCoach && userGym && (
+                {showDatePicker && !saveSuccess && userGym && (
                   <div className="bg-purple-50 border border-purple-200 rounded-xl p-4 space-y-4">
                     <h3 className="font-semibold text-purple-900">Publish to {userGym.name}</h3>
 
@@ -949,7 +952,7 @@ IMPORTANT:
                 )}
 
                 {/* Custom Date Picker for Personal Workouts (Athlete flow) */}
-                {showDatePicker && !saveSuccess && !isCoach && (
+                {showDatePicker && !saveSuccess && !userGym && (
                   <div className="bg-purple-50 border border-purple-200 rounded-xl p-4 space-y-4">
                     <h3 className="font-semibold text-purple-900">Save to My Workouts</h3>
 
@@ -988,8 +991,8 @@ IMPORTANT:
                 {/* Action Buttons */}
                 {!showDatePicker && !saveSuccess && (
                   <div className="space-y-3">
-                    {/* Coach: Publish to Gym Calendar */}
-                    {isCoach && userGym ? (
+                    {/* Coach/Staff: Publish to Gym Calendar */}
+                    {userGym ? (
                       <button
                         onClick={() => setShowDatePicker(true)}
                         className="w-full py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold rounded-lg hover:from-purple-700 hover:to-indigo-700 transition-colors flex items-center justify-center gap-2"
