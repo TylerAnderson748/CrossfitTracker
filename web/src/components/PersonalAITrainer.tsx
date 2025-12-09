@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { collection, query, where, getDocs, Timestamp, limit, doc, setDoc, getDoc } from "firebase/firestore";
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import { db } from "@/lib/firebase";
 import { ScheduledWorkout, AICoachPreferences, WorkoutComponent, UserRole } from "@/lib/types";
 
@@ -216,9 +215,9 @@ export default function PersonalAITrainer({ userId, todayWorkout, todayPersonalW
     setAiAdvice(null);
 
     try {
-      const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+      const apiKey = process.env.NEXT_PUBLIC_XAI_API_KEY;
       if (!apiKey) {
-        setAiAdvice("AI service not configured. Please contact support.");
+        setAiAdvice("AI service not configured. Please add NEXT_PUBLIC_XAI_API_KEY to your environment.");
         setIsLoading(false);
         return;
       }
@@ -341,9 +340,6 @@ export default function PersonalAITrainer({ userId, todayWorkout, todayPersonalW
         });
       }
 
-      const genAI = new GoogleGenerativeAI(apiKey);
-      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
-
       // Build prompt based on whether scaling options are prescribed
       let scalingInstructions = "";
       if (prescribedScalingOptions.trim()) {
@@ -413,9 +409,34 @@ ${userPreferences?.injuries ? `- CRITICAL: They have injuries/limitations (${use
 
 Respond in a confident, direct coach tone. This advice will be saved and shown every time they view this workout, so make it count.`;
 
-      const result = await model.generateContent(prompt);
-      const response = result.response;
-      const text = response.text();
+      // Call xAI/Grok API (OpenAI-compatible format)
+      const response = await fetch("https://api.x.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: "grok-3-fast",
+          messages: [
+            { role: "system", content: "You are an experienced CrossFit coach providing personalized workout advice." },
+            { role: "user", content: prompt }
+          ],
+          temperature: 0.7
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error?.message || `API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const text = data.choices?.[0]?.message?.content;
+
+      if (!text) {
+        throw new Error("No response from AI");
+      }
 
       setAiAdvice(text);
 
