@@ -56,33 +56,34 @@ export async function POST(request: NextRequest) {
       let prompt = "";
 
       if (suggestionType === "today") {
-        prompt = `You are a CrossFit coach giving a brief daily motivation and focus for TODAY (${todayName}, ${formatDateISO(today)}).
+        prompt = `You are a CrossFit coach giving brief daily motivation for TODAY (${todayName}).
 
-In 2-3 sentences, provide:
-1. An energizing focus point for today's training
-2. A quick tip for maximizing today's workout (recovery, mindset, or nutrition)
+In 2-3 short sentences (under 45 seconds reading time):
+- Give an energizing mindset focus for training today
+- One quick recovery or mental tip
 
-Be direct, motivating, and actionable. This is general advice for all athletes.`;
+Be direct and motivating. No workout specifics or diet advice.`;
       } else if (suggestionType === "tomorrow") {
-        prompt = `You are a CrossFit coach giving preparation advice for TOMORROW (${tomorrowName}, ${formatDateISO(tomorrow)}).
+        prompt = `You are a CrossFit coach reflecting on the past few days of training and looking ahead to TOMORROW (${tomorrowName}).
 
-In 2-3 sentences, provide:
-1. How to prepare tonight for tomorrow's training
-2. A recovery or nutrition tip to optimize tomorrow's performance
+In 3-4 short sentences (under 45 seconds reading time), focus on:
+- Acknowledge what muscles/areas might be sore from recent training
+- Suggest recovery techniques for tonight (foam rolling, stretching, sleep)
+- Brief mental prep thought for tomorrow
 
-Be specific and actionable. This is general advice for all athletes.`;
+NO workout advice, NO diet advice. Just recovery and reflection.`;
       } else if (suggestionType === "week") {
         const weekEndDate = new Date(weekStart);
         weekEndDate.setDate(weekStart.getDate() + 6);
 
-        prompt = `You are a CrossFit coach planning the training week (${formatDateISO(weekStart)} to ${formatDateISO(weekEndDate)}).
+        prompt = `You are a CrossFit coach reflecting on last week's training and setting intentions for this week.
 
-In 3-4 sentences, provide:
-1. A weekly training focus or theme
-2. How to balance intensity throughout the week
-3. One specific goal to achieve by week's end
+In 3-4 short sentences (under 45 seconds reading time), write like:
+- "Last week we probably hit [general CrossFit focus areas]. I hope this week we continue building on [skill/strength area]."
+- Mention potential soreness areas and recovery focus
+- One hopeful goal or improvement to work toward
 
-Be motivating and give practical guidance. This is general advice for all athletes.`;
+NO specific workout advice, NO diet advice. Just reflection and recovery focus. Workouts are hidden so keep it general.`;
       }
 
       const response = await fetch("https://api.x.ai/v1/chat/completions", {
@@ -94,11 +95,11 @@ Be motivating and give practical guidance. This is general advice for all athlet
         body: JSON.stringify({
           model: "grok-4-latest",
           messages: [
-            { role: "system", content: "You are a supportive CrossFit coach giving quick, actionable advice. Keep responses brief and motivating." },
+            { role: "system", content: "You are a supportive CrossFit coach focused on recovery, mindset, and reflection. Keep responses brief (under 45 seconds reading). No workout programming or diet advice." },
             { role: "user", content: prompt }
           ],
           temperature: 0.7,
-          max_tokens: 400
+          max_tokens: 200
         })
       });
 
@@ -186,33 +187,34 @@ export async function GET(request: NextRequest) {
     let prompt = "";
 
     if (suggestionType === "today") {
-      prompt = `You are a CrossFit coach giving a brief daily motivation and focus for TODAY (${todayName}, ${formatDateISO(today)}).
+      prompt = `You are a CrossFit coach giving brief daily motivation for TODAY (${todayName}).
 
-In 2-3 sentences, provide:
-1. An energizing focus point for today's training
-2. A quick tip for maximizing today's workout (recovery, mindset, or nutrition)
+In 2-3 short sentences (under 45 seconds reading time):
+- Give an energizing mindset focus for training today
+- One quick recovery or mental tip
 
-Be direct, motivating, and actionable. This is general advice for all athletes.`;
+Be direct and motivating. No workout specifics or diet advice.`;
     } else if (suggestionType === "tomorrow") {
-      prompt = `You are a CrossFit coach giving preparation advice for TOMORROW (${tomorrowName}, ${formatDateISO(tomorrow)}).
+      prompt = `You are a CrossFit coach reflecting on the past few days of training and looking ahead to TOMORROW (${tomorrowName}).
 
-In 2-3 sentences, provide:
-1. How to prepare tonight for tomorrow's training
-2. A recovery or nutrition tip to optimize tomorrow's performance
+In 3-4 short sentences (under 45 seconds reading time), focus on:
+- Acknowledge what muscles/areas might be sore from recent training
+- Suggest recovery techniques for tonight (foam rolling, stretching, sleep)
+- Brief mental prep thought for tomorrow
 
-Be specific and actionable. This is general advice for all athletes.`;
+NO workout advice, NO diet advice. Just recovery and reflection.`;
     } else if (suggestionType === "week") {
       const weekEndDate = new Date(weekStart);
       weekEndDate.setDate(weekStart.getDate() + 6);
 
-      prompt = `You are a CrossFit coach planning the training week (${formatDateISO(weekStart)} to ${formatDateISO(weekEndDate)}).
+      prompt = `You are a CrossFit coach reflecting on last week's training and setting intentions for this week.
 
-In 3-4 sentences, provide:
-1. A weekly training focus or theme
-2. How to balance intensity throughout the week
-3. One specific goal to achieve by week's end
+In 3-4 short sentences (under 45 seconds reading time), write like:
+- "Last week we probably hit [general CrossFit focus areas]. I hope this week we continue building on [skill/strength area]."
+- Mention potential soreness areas and recovery focus
+- One hopeful goal or improvement to work toward
 
-Be motivating and give practical guidance. This is general advice for all athletes.`;
+NO specific workout advice, NO diet advice. Just reflection and recovery focus. Workouts are hidden so keep it general.`;
     }
 
     const response = await fetch("https://api.x.ai/v1/chat/completions", {
