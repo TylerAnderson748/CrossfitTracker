@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { collection, query, where, getDocs, Timestamp, limit } from "firebase/firestore";
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
 import Navigation from "@/components/Navigation";
@@ -582,9 +581,9 @@ export default function ProgressPage() {
     setAiAnalysis(null);
 
     try {
-      const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+      const apiKey = process.env.NEXT_PUBLIC_XAI_API_KEY;
       if (!apiKey) {
-        setAiAnalysis("AI service not configured.");
+        setAiAnalysis("AI service not configured. Please add NEXT_PUBLIC_XAI_API_KEY to your environment.");
         return;
       }
 
@@ -631,9 +630,6 @@ export default function ProgressPage() {
         summary += `INJURIES/LIMITATIONS: ${user.aiCoachPreferences.injuries}\n\n`;
       }
 
-      const genAI = new GoogleGenerativeAI(apiKey);
-      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
-
       const prompt = `You are an experienced CrossFit coach analyzing an athlete's progress data.
 
 ${summary}
@@ -659,9 +655,36 @@ ${user?.aiCoachPreferences?.goals ? `**GOAL ALIGNMENT:**\nHow their current prog
 
 Be specific, use their actual numbers, and be encouraging but honest. Keep it concise.`;
 
-      const result = await model.generateContent(prompt);
-      const response = result.response;
-      setAiAnalysis(response.text());
+      // Call xAI/Grok API (OpenAI-compatible format)
+      const response = await fetch("https://api.x.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: "grok-3-fast",
+          messages: [
+            { role: "system", content: "You are an experienced CrossFit coach providing personalized fitness analysis and advice." },
+            { role: "user", content: prompt }
+          ],
+          temperature: 0.7
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error?.message || `API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const analysisText = data.choices?.[0]?.message?.content;
+
+      if (analysisText) {
+        setAiAnalysis(analysisText);
+      } else {
+        throw new Error("No response from AI");
+      }
 
     } catch (err) {
       console.error("Error generating AI analysis:", err);
