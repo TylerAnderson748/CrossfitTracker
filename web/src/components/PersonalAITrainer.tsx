@@ -488,6 +488,21 @@ Respond in a confident, direct coach tone. This advice will be saved and shown e
       .join(" | ");
   };
 
+  // Count unique lifts and WODs for requirements check
+  const getUniqueLiftCount = () => {
+    const uniqueLifts = new Set(userHistory.lifts.map(l => l.liftTitle));
+    return uniqueLifts.size;
+  };
+
+  const getUniqueWodCount = () => {
+    const uniqueWods = new Set(userHistory.wods.map(w => w.wodTitle));
+    return uniqueWods.size;
+  };
+
+  const uniqueLiftCount = getUniqueLiftCount();
+  const uniqueWodCount = getUniqueWodCount();
+  const meetsRequirements = uniqueLiftCount >= 5 && uniqueWodCount >= 5;
+
   if (!hasLoadedHistory || !hasCheckedSavedAdvice) {
     return null;
   }
@@ -543,16 +558,64 @@ Respond in a confident, direct coach tone. This advice will be saved and shown e
             </svg>
           </Link>
 
-          {/* User Stats Summary */}
-          {(userHistory.lifts.length > 0) && (
-            <div className="bg-white/10 rounded-lg p-3">
-              <p className="text-xs font-medium text-white/70 mb-1">Your Stats (AI uses these):</p>
-              <p className="text-sm text-white/90">{getLiftPRsSummary()}</p>
+          {/* Requirements Check */}
+          {!meetsRequirements ? (
+            <div className="bg-white/10 rounded-lg p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <svg className="w-5 h-5 text-yellow-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <span className="font-medium">Unlock AI Coach</span>
+              </div>
+              <p className="text-sm text-white/80 mb-3">
+                Log at least 5 different lifts and 5 different WODs to unlock personalized AI coaching.
+              </p>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-white/70">Unique Lifts</span>
+                  <div className="flex items-center gap-2">
+                    <div className="w-24 h-2 bg-white/20 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-green-400 rounded-full transition-all"
+                        style={{ width: `${Math.min(100, (uniqueLiftCount / 5) * 100)}%` }}
+                      />
+                    </div>
+                    <span className={`text-sm font-medium ${uniqueLiftCount >= 5 ? 'text-green-400' : 'text-white/90'}`}>
+                      {uniqueLiftCount}/5
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-white/70">Unique WODs</span>
+                  <div className="flex items-center gap-2">
+                    <div className="w-24 h-2 bg-white/20 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-green-400 rounded-full transition-all"
+                        style={{ width: `${Math.min(100, (uniqueWodCount / 5) * 100)}%` }}
+                      />
+                    </div>
+                    <span className={`text-sm font-medium ${uniqueWodCount >= 5 ? 'text-green-400' : 'text-white/90'}`}>
+                      {uniqueWodCount}/5
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <p className="text-xs text-white/50 mt-3">
+                Log your results from preset workouts to build your training profile.
+              </p>
             </div>
-          )}
+          ) : (
+            <>
+              {/* User Stats Summary */}
+              {(userHistory.lifts.length > 0) && (
+                <div className="bg-white/10 rounded-lg p-3">
+                  <p className="text-xs font-medium text-white/70 mb-1">Your Stats (AI uses these):</p>
+                  <p className="text-sm text-white/90">{getLiftPRsSummary()}</p>
+                </div>
+              )}
 
-          {/* Get Advice Button or AI Advice Display */}
-          {hasWorkoutToAnalyze && (
+              {/* Get Advice Button or AI Advice Display */}
+              {hasWorkoutToAnalyze && (
             <>
               {!aiAdvice && (
                 <button
@@ -612,6 +675,8 @@ Respond in a confident, direct coach tone. This advice will be saved and shown e
                   </div>
                 </div>
               )}
+            </>
+          )}
             </>
           )}
         </div>
