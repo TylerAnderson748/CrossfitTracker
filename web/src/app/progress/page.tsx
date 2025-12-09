@@ -83,7 +83,7 @@ export default function ProgressPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
   const [isLoadingAI, setIsLoadingAI] = useState(false);
-  const [selectedTimeRange, setSelectedTimeRange] = useState<"30" | "90" | "180" | "365">("90");
+  const [selectedTimeRange, setSelectedTimeRange] = useState<"7" | "30" | "90" | "180" | "365">("90");
 
   // Check if user has AI Coach access
   const hasAICoach = user?.aiTrainerSubscription?.status === "active" ||
@@ -186,37 +186,46 @@ export default function ProgressPage() {
 
     const stats: LiftStats[] = [];
     liftsByName.forEach((records, liftName) => {
-      // Sort by date descending
-      records.sort((a, b) => b.date.toMillis() - a.date.toMillis());
+      // Sort by date ascending (oldest first) for progress calculation
+      records.sort((a, b) => (a.date?.toMillis() || 0) - (b.date?.toMillis() || 0));
 
-      // Get 1RMs (reps === 1) or estimate from other rep ranges
-      const oneRMs = records.filter(r => r.reps === 1);
-      const currentMax = oneRMs.length > 0 ? oneRMs[0].weight : Math.max(...records.map(r => r.weight));
+      // Filter to only records within the time range
+      const recentRecords = records.filter(r => (r.date?.toMillis() || 0) >= startDate.toMillis());
 
-      // Find previous max (before the time range)
-      const recentRecords = records.filter(r => r.date.toMillis() >= startDate.toMillis());
-      const olderRecords = records.filter(r => r.date.toMillis() < startDate.toMillis());
+      if (recentRecords.length === 0) return;
 
-      const previousMax = olderRecords.length > 0
-        ? Math.max(...olderRecords.filter(r => r.reps === 1).map(r => r.weight), 0) || Math.max(...olderRecords.map(r => r.weight))
-        : currentMax;
+      // Current max is the best weight ever recorded
+      const currentMax = Math.max(...recentRecords.map(r => r.weight));
 
-      const percentChange = previousMax > 0 ? ((currentMax - previousMax) / previousMax) * 100 : 0;
+      // For progress calculation, compare first half to second half of the time period
+      let previousMax = currentMax;
+      let percentChange = 0;
+
+      if (recentRecords.length >= 2) {
+        // Split records into first half and second half chronologically
+        const midpoint = Math.floor(recentRecords.length / 2);
+        const firstHalf = recentRecords.slice(0, midpoint);
+        const secondHalf = recentRecords.slice(midpoint);
+
+        const firstMax = Math.max(...firstHalf.map(r => r.weight));
+        const secondMax = Math.max(...secondHalf.map(r => r.weight));
+
+        previousMax = firstMax;
+        percentChange = firstMax > 0 ? ((secondMax - firstMax) / firstMax) * 100 : 0;
+      }
 
       let trend: "up" | "down" | "stable" = "stable";
       if (percentChange > 2) trend = "up";
       else if (percentChange < -2) trend = "down";
 
-      if (recentRecords.length > 0 || olderRecords.length > 0) {
-        stats.push({
-          liftName,
-          currentMax,
-          previousMax,
-          percentChange,
-          totalSessions: records.length,
-          trend
-        });
-      }
+      stats.push({
+        liftName,
+        currentMax,
+        previousMax,
+        percentChange,
+        totalSessions: recentRecords.length,
+        trend
+      });
     });
 
     // Sort by total sessions (most tracked first)
@@ -237,36 +246,46 @@ export default function ProgressPage() {
 
     const stats: SkillStats[] = [];
     skillsByName.forEach((records, skillName) => {
-      // Sort by date descending
-      records.sort((a, b) => (b.date?.toMillis() || 0) - (a.date?.toMillis() || 0));
+      // Sort by date ascending (oldest first) for progress calculation
+      records.sort((a, b) => (a.date?.toMillis() || 0) - (b.date?.toMillis() || 0));
 
-      // Get max reps (current best)
-      const currentMax = Math.max(...records.map(r => r.maxReps || 0));
-
-      // Find previous max (before the time range)
+      // Filter to only records within the time range
       const recentRecords = records.filter(r => (r.date?.toMillis() || 0) >= startDate.toMillis());
-      const olderRecords = records.filter(r => (r.date?.toMillis() || 0) < startDate.toMillis());
 
-      const previousMax = olderRecords.length > 0
-        ? Math.max(...olderRecords.map(r => r.maxReps || 0))
-        : currentMax;
+      if (recentRecords.length === 0) return;
 
-      const percentChange = previousMax > 0 ? ((currentMax - previousMax) / previousMax) * 100 : 0;
+      // Current max is the best reps ever recorded
+      const currentMax = Math.max(...recentRecords.map(r => r.maxReps || 0));
+
+      // For progress calculation, compare first half to second half of the time period
+      let previousMax = currentMax;
+      let percentChange = 0;
+
+      if (recentRecords.length >= 2) {
+        // Split records into first half and second half chronologically
+        const midpoint = Math.floor(recentRecords.length / 2);
+        const firstHalf = recentRecords.slice(0, midpoint);
+        const secondHalf = recentRecords.slice(midpoint);
+
+        const firstMax = Math.max(...firstHalf.map(r => r.maxReps || 0));
+        const secondMax = Math.max(...secondHalf.map(r => r.maxReps || 0));
+
+        previousMax = firstMax;
+        percentChange = firstMax > 0 ? ((secondMax - firstMax) / firstMax) * 100 : 0;
+      }
 
       let trend: "up" | "down" | "stable" = "stable";
       if (percentChange > 5) trend = "up";
       else if (percentChange < -5) trend = "down";
 
-      if (recentRecords.length > 0 || olderRecords.length > 0) {
-        stats.push({
-          skillName,
-          currentMax,
-          previousMax,
-          percentChange,
-          totalSessions: records.length,
-          trend
-        });
-      }
+      stats.push({
+        skillName,
+        currentMax,
+        previousMax,
+        percentChange,
+        totalSessions: recentRecords.length,
+        trend
+      });
     });
 
     // Sort by total sessions (most tracked first)
@@ -631,7 +650,7 @@ A 2-3 sentence overview of their overall progress and what stands out.
 - List 2-3 specific areas where they could improve (strength, conditioning, skills, consistency), with actionable advice
 
 **RECOMMENDATIONS:**
-Based on the data, give 3 specific recommendations for the next ${selectedTimeRange === "30" ? "month" : selectedTimeRange === "90" ? "3 months" : selectedTimeRange === "180" ? "6 months" : "year"}:
+Based on the data, give 3 specific recommendations for the next ${selectedTimeRange === "7" ? "week" : selectedTimeRange === "30" ? "month" : selectedTimeRange === "90" ? "3 months" : selectedTimeRange === "180" ? "6 months" : "year"}:
 1. [Specific goal with numbers if possible]
 2. [Specific goal with numbers if possible]
 3. [Specific goal with numbers if possible]
@@ -677,8 +696,8 @@ Be specific, use their actual numbers, and be encouraging but honest. Keep it co
 
       <main className="max-w-7xl mx-auto px-4 py-6 space-y-6">
         {/* Time Range Selector */}
-        <div className="flex gap-2">
-          {(["30", "90", "180", "365"] as const).map((range) => (
+        <div className="flex gap-2 flex-wrap">
+          {(["7", "30", "90", "180", "365"] as const).map((range) => (
             <button
               key={range}
               onClick={() => setSelectedTimeRange(range)}
@@ -688,7 +707,7 @@ Be specific, use their actual numbers, and be encouraging but honest. Keep it co
                   : "bg-white text-gray-600 hover:bg-gray-100"
               }`}
             >
-              {range === "30" ? "30 Days" : range === "90" ? "90 Days" : range === "180" ? "6 Months" : "1 Year"}
+              {range === "7" ? "Week" : range === "30" ? "30 Days" : range === "90" ? "90 Days" : range === "180" ? "6 Months" : "1 Year"}
             </button>
           ))}
         </div>
@@ -741,30 +760,42 @@ Be specific, use their actual numbers, and be encouraging but honest. Keep it co
             )}
 
             {/* Skills Progress */}
-            {skillStats.length > 0 && (
+            {(lifts.length > 0 || wods.length > 0) && (
               <div className="bg-white rounded-xl shadow-sm p-6">
                 <h2 className="text-lg font-semibold text-gray-900 mb-4">Skills Progress</h2>
-                <div className="space-y-3">
-                  {skillStats.map((skill) => (
-                    <div key={skill.skillName} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                      <div>
-                        <p className="font-medium text-gray-900">{skill.skillName}</p>
-                        <p className="text-sm text-gray-500">{skill.totalSessions} sessions logged</p>
+                {skillStats.length > 0 ? (
+                  <div className="space-y-3">
+                    {skillStats.map((skill) => (
+                      <div key={skill.skillName} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div>
+                          <p className="font-medium text-gray-900">{skill.skillName}</p>
+                          <p className="text-sm text-gray-500">{skill.totalSessions} sessions logged</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-bold text-gray-900">{skill.currentMax} reps</p>
+                          <p className={`text-sm ${
+                            skill.trend === "up" ? "text-green-600" :
+                            skill.trend === "down" ? "text-red-600" : "text-gray-500"
+                          }`}>
+                            {skill.trend === "up" && "↑ "}
+                            {skill.trend === "down" && "↓ "}
+                            {skill.percentChange > 0 ? "+" : ""}{skill.percentChange.toFixed(1)}%
+                          </p>
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <p className="font-bold text-gray-900">{skill.currentMax} reps</p>
-                        <p className={`text-sm ${
-                          skill.trend === "up" ? "text-green-600" :
-                          skill.trend === "down" ? "text-red-600" : "text-gray-500"
-                        }`}>
-                          {skill.trend === "up" && "↑ "}
-                          {skill.trend === "down" && "↓ "}
-                          {skill.percentChange > 0 ? "+" : ""}{skill.percentChange.toFixed(1)}%
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-6 bg-gray-50 rounded-lg">
+                    <p className="text-gray-500">No skills tracked in this time period.</p>
+                    <button
+                      onClick={() => router.push("/workouts")}
+                      className="mt-2 text-sm text-blue-600 hover:text-blue-700"
+                    >
+                      Log a skill workout
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 
