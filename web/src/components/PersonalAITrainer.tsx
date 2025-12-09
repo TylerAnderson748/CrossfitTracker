@@ -68,6 +68,9 @@ export default function PersonalAITrainer({ userId, todayWorkout, todayPersonalW
   const [isExpanded, setIsExpanded] = useState(false);
   const [hasLoadedHistory, setHasLoadedHistory] = useState(false);
   const [hasCheckedSavedAdvice, setHasCheckedSavedAdvice] = useState(false);
+  const [suggestionType, setSuggestionType] = useState<"today" | "tomorrow" | "week" | null>(null);
+  const [suggestionResponse, setSuggestionResponse] = useState<string | null>(null);
+  const [isSuggestionLoading, setIsSuggestionLoading] = useState(false);
 
   // Check for existing saved advice on mount
   useEffect(() => {
@@ -466,6 +469,130 @@ Respond in a confident, direct coach tone. This advice will be saved and shown e
     setIsLoading(false);
   };
 
+  // Handle quick suggestion requests
+  const handleSuggestion = async (type: "today" | "tomorrow" | "week") => {
+    if (isSuggestionLoading) return;
+
+    setSuggestionType(type);
+    setIsSuggestionLoading(true);
+    setSuggestionResponse(null);
+
+    try {
+      const apiKey = process.env.NEXT_PUBLIC_XAI_API_KEY;
+      if (!apiKey) {
+        setSuggestionResponse("AI service not configured.");
+        setIsSuggestionLoading(false);
+        return;
+      }
+
+      // Build user context
+      let userContext = "";
+      if (userHistory.lifts.length > 0) {
+        const liftBests = new Map<string, number>();
+        userHistory.lifts.forEach(lift => {
+          const existing = liftBests.get(lift.liftTitle);
+          if (!existing || lift.weight > existing) {
+            liftBests.set(lift.liftTitle, lift.weight);
+          }
+        });
+        userContext += "Lift PRs: " + Array.from(liftBests.entries()).slice(0, 5).map(([name, weight]) => `${name}: ${weight}lb`).join(", ");
+      }
+      if (userHistory.wods.length > 0) {
+        userContext += `\n${userHistory.wods.length} WODs logged recently.`;
+      }
+      if (userPreferences?.goals) {
+        userContext += `\nGoals: ${userPreferences.goals}`;
+      }
+      if (userPreferences?.injuries) {
+        userContext += `\nInjuries/limitations: ${userPreferences.injuries}`;
+      }
+
+      // Get today's date info
+      const today = new Date();
+      const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+      const todayName = dayNames[today.getDay()];
+
+      let prompt = "";
+
+      if (type === "today") {
+        prompt = `You are a CrossFit coach. Give brief, actionable advice for TODAY (${todayName}).
+
+${userContext ? `ATHLETE INFO:\n${userContext}\n\n` : ""}${hasWorkoutToAnalyze ? "They have a workout scheduled today." : "No gym workout scheduled today."}
+
+In 2-3 sentences, tell them:
+1. What they should focus on today
+2. One specific tip or recommendation
+
+Be direct and motivating. No fluff.`;
+      } else if (type === "tomorrow") {
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const tomorrowName = dayNames[tomorrow.getDay()];
+
+        prompt = `You are a CrossFit coach. Give brief advice about TOMORROW (${tomorrowName}).
+
+${userContext ? `ATHLETE INFO:\n${userContext}\n\n` : ""}
+
+In 2-3 sentences, tell them:
+1. How to prepare for tomorrow's training
+2. Any recovery or nutrition tips for tonight
+
+Be specific and actionable.`;
+      } else if (type === "week") {
+        prompt = `You are a CrossFit coach planning the athlete's week (starting ${todayName}).
+
+${userContext ? `ATHLETE INFO:\n${userContext}\n\n` : ""}
+
+In 3-4 sentences, give them:
+1. What to focus on this week
+2. How to balance training and recovery
+3. One specific goal to hit by week's end
+
+Be motivating and specific.`;
+      }
+
+      const response = await fetch("https://api.x.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: "grok-4-latest",
+          messages: [
+            { role: "system", content: "You are a supportive CrossFit coach giving quick, actionable advice. Keep responses brief and motivating." },
+            { role: "user", content: prompt }
+          ],
+          temperature: 0.7,
+          max_tokens: 300
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const text = data.choices?.[0]?.message?.content;
+
+      if (!text) {
+        throw new Error("No response from AI");
+      }
+
+      setSuggestionResponse(text);
+    } catch (err) {
+      console.error("Error getting suggestion:", err);
+      setSuggestionResponse("Sorry, couldn't get advice right now. Try again!");
+    }
+
+    setIsSuggestionLoading(false);
+  };
+
+  const clearSuggestion = () => {
+    setSuggestionType(null);
+    setSuggestionResponse(null);
+  };
+
   // Get lift PRs summary for display
   const getLiftPRsSummary = () => {
     if (userHistory.lifts.length === 0) return null;
@@ -542,6 +669,84 @@ Respond in a confident, direct coach tone. This advice will be saved and shown e
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
           </Link>
+
+          {/* Quick Suggestion Buttons */}
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-white/70">Quick Advice</p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => handleSuggestion("today")}
+                disabled={isSuggestionLoading}
+                className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-1.5 ${
+                  suggestionType === "today"
+                    ? "bg-white text-purple-600"
+                    : "bg-white/10 hover:bg-white/20 text-white"
+                } disabled:opacity-50`}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707" />
+                </svg>
+                Today
+              </button>
+              <button
+                onClick={() => handleSuggestion("tomorrow")}
+                disabled={isSuggestionLoading}
+                className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-1.5 ${
+                  suggestionType === "tomorrow"
+                    ? "bg-white text-purple-600"
+                    : "bg-white/10 hover:bg-white/20 text-white"
+                } disabled:opacity-50`}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                </svg>
+                Tomorrow
+              </button>
+              <button
+                onClick={() => handleSuggestion("week")}
+                disabled={isSuggestionLoading}
+                className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-1.5 ${
+                  suggestionType === "week"
+                    ? "bg-white text-purple-600"
+                    : "bg-white/10 hover:bg-white/20 text-white"
+                } disabled:opacity-50`}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                This Week
+              </button>
+            </div>
+
+            {/* Suggestion Response */}
+            {(suggestionType || isSuggestionLoading) && (
+              <div className="bg-white/10 rounded-lg p-3 mt-2">
+                {isSuggestionLoading ? (
+                  <div className="flex items-center gap-2 text-white/70 text-sm">
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Thinking...
+                  </div>
+                ) : suggestionResponse ? (
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-medium text-white/70 uppercase">
+                        {suggestionType === "today" ? "Today's Focus" : suggestionType === "tomorrow" ? "Tomorrow's Prep" : "Weekly Plan"}
+                      </span>
+                      <button
+                        onClick={clearSuggestion}
+                        className="text-white/50 hover:text-white/80 transition-colors"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                    <p className="text-sm text-white/90 whitespace-pre-line">{suggestionResponse}</p>
+                  </div>
+                ) : null}
+              </div>
+            )}
+          </div>
 
           {/* User History Summary */}
           {(userHistory.lifts.length > 0 || userHistory.wods.length > 0) && (
