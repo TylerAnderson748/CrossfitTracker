@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { collection, query, where, getDocs, Timestamp, limit, doc, setDoc, getDoc, orderBy } from "firebase/firestore";
+import { collection, query, where, getDocs, Timestamp, limit, doc, setDoc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { ScheduledWorkout, AICoachPreferences, WorkoutComponent, UserRole, AISuggestionType, AICoachSuggestion } from "@/lib/types";
+import { ScheduledWorkout, AICoachPreferences, WorkoutComponent, UserRole } from "@/lib/types";
 
 // Types for user workout history
 interface LiftHistoryEntry {
@@ -68,12 +68,6 @@ export default function PersonalAITrainer({ userId, todayWorkout, todayPersonalW
   const [isExpanded, setIsExpanded] = useState(false);
   const [hasLoadedHistory, setHasLoadedHistory] = useState(false);
   const [hasCheckedSavedAdvice, setHasCheckedSavedAdvice] = useState(false);
-  const [suggestionType, setSuggestionType] = useState<"today" | "tomorrow" | "week" | null>(null);
-  const [suggestionResponse, setSuggestionResponse] = useState<string | null>(null);
-  const [suggestionGeneratedAt, setSuggestionGeneratedAt] = useState<Date | null>(null);
-  const [isSuggestionLoading, setIsSuggestionLoading] = useState(false);
-  const [cachedSuggestions, setCachedSuggestions] = useState<Map<AISuggestionType, AICoachSuggestion>>(new Map());
-  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Check for existing saved advice on mount
   useEffect(() => {
@@ -213,67 +207,6 @@ export default function PersonalAITrainer({ userId, todayWorkout, todayPersonalW
 
     loadGymMemberStats();
   }, [gymId, userId]);
-
-  // Load cached AI coach suggestions
-  useEffect(() => {
-    const loadCachedSuggestions = async () => {
-      try {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const todayStr = today.toISOString().split("T")[0];
-
-        // Get start of week (Sunday)
-        const weekStart = new Date(today);
-        weekStart.setDate(today.getDate() - today.getDay());
-        const weekStartStr = weekStart.toISOString().split("T")[0];
-
-        // Load today and tomorrow suggestions
-        const suggestionsQuery = query(
-          collection(db, "aiCoachSuggestions"),
-          where("targetDate", ">=", todayStr),
-          orderBy("targetDate", "asc"),
-          limit(10)
-        );
-        const snapshot = await getDocs(suggestionsQuery);
-
-        const suggestions = new Map<AISuggestionType, AICoachSuggestion>();
-
-        snapshot.docs.forEach((docSnap) => {
-          const data = docSnap.data();
-          const suggestion: AICoachSuggestion = {
-            id: docSnap.id,
-            type: data.type,
-            content: data.content,
-            generatedAt: data.generatedAt,
-            targetDate: data.targetDate,
-            weekStartDate: data.weekStartDate,
-          };
-
-          // Match today suggestion
-          if (data.type === "today" && data.targetDate === todayStr) {
-            suggestions.set("today", suggestion);
-          }
-          // Match tomorrow suggestion
-          const tomorrow = new Date(today);
-          tomorrow.setDate(today.getDate() + 1);
-          const tomorrowStr = tomorrow.toISOString().split("T")[0];
-          if (data.type === "tomorrow" && data.targetDate === tomorrowStr) {
-            suggestions.set("tomorrow", suggestion);
-          }
-          // Match week suggestion (current week starting Sunday)
-          if (data.type === "week" && data.weekStartDate === weekStartStr) {
-            suggestions.set("week", suggestion);
-          }
-        });
-
-        setCachedSuggestions(suggestions);
-      } catch (err) {
-        console.error("Error loading cached suggestions:", err);
-      }
-    };
-
-    loadCachedSuggestions();
-  }, []);
 
   const getPersonalizedAdvice = async () => {
     if (!hasWorkoutToAnalyze || isLoading) return;
@@ -533,90 +466,6 @@ Respond in a confident, direct coach tone. This advice will be saved and shown e
     setIsLoading(false);
   };
 
-  // Handle quick suggestion requests - loads from cache for regular users
-  const handleSuggestion = (type: "today" | "tomorrow" | "week") => {
-    if (isSuggestionLoading) return;
-
-    setSuggestionType(type);
-
-    // Check for cached suggestion
-    const cached = cachedSuggestions.get(type);
-    if (cached) {
-      setSuggestionResponse(cached.content);
-      setSuggestionGeneratedAt(cached.generatedAt?.toDate?.() || null);
-    } else {
-      setSuggestionResponse("No advice available yet. Check back after 1 AM when daily advice is generated.");
-      setSuggestionGeneratedAt(null);
-    }
-  };
-
-  // Super admin: Force refresh suggestions
-  const handleRefreshSuggestion = async (type: "today" | "tomorrow" | "week" | "all") => {
-    if (!isSuperAdmin || isRefreshing) return;
-
-    setIsRefreshing(true);
-
-    try {
-      // Call the API to generate new suggestions
-      const response = await fetch("/api/ai-coach/generate-suggestions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type })
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to generate suggestions");
-      }
-
-      const data = await response.json();
-
-      if (data.success && data.suggestions) {
-        // Save to Firestore and update local cache
-        for (const suggestion of data.suggestions) {
-          const docId = `${suggestion.type}_${suggestion.targetDate}`;
-          await setDoc(doc(db, "aiCoachSuggestions", docId), {
-            type: suggestion.type,
-            content: suggestion.content,
-            targetDate: suggestion.targetDate,
-            weekStartDate: suggestion.weekStartDate || null,
-            generatedAt: Timestamp.now()
-          });
-
-          // Update local cache
-          setCachedSuggestions(prev => {
-            const newMap = new Map(prev);
-            newMap.set(suggestion.type as AISuggestionType, {
-              id: docId,
-              type: suggestion.type,
-              content: suggestion.content,
-              targetDate: suggestion.targetDate,
-              weekStartDate: suggestion.weekStartDate,
-              generatedAt: Timestamp.now()
-            });
-            return newMap;
-          });
-
-          // If this is the currently displayed type, update the display
-          if (suggestion.type === suggestionType) {
-            setSuggestionResponse(suggestion.content);
-            setSuggestionGeneratedAt(new Date());
-          }
-        }
-      }
-    } catch (err) {
-      console.error("Error refreshing suggestions:", err);
-      alert("Failed to refresh suggestions. Check console for details.");
-    }
-
-    setIsRefreshing(false);
-  };
-
-  const clearSuggestion = () => {
-    setSuggestionType(null);
-    setSuggestionResponse(null);
-    setSuggestionGeneratedAt(null);
-  };
-
   // Get lift PRs summary for display
   const getLiftPRsSummary = () => {
     if (userHistory.lifts.length === 0) return null;
@@ -693,129 +542,6 @@ Respond in a confident, direct coach tone. This advice will be saved and shown e
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
           </Link>
-
-          {/* Quick Suggestion Buttons */}
-          <div className="space-y-2">
-            <p className="text-xs font-medium text-white/70">Quick Advice</p>
-            <div className="flex gap-2">
-              <button
-                onClick={() => handleSuggestion("today")}
-                disabled={isSuggestionLoading}
-                className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-1.5 ${
-                  suggestionType === "today"
-                    ? "bg-white text-purple-600"
-                    : "bg-white/10 hover:bg-white/20 text-white"
-                } disabled:opacity-50`}
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707" />
-                </svg>
-                Today
-              </button>
-              <button
-                onClick={() => handleSuggestion("tomorrow")}
-                disabled={isSuggestionLoading}
-                className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-1.5 ${
-                  suggestionType === "tomorrow"
-                    ? "bg-white text-purple-600"
-                    : "bg-white/10 hover:bg-white/20 text-white"
-                } disabled:opacity-50`}
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-                </svg>
-                Tomorrow
-              </button>
-              <button
-                onClick={() => handleSuggestion("week")}
-                disabled={isSuggestionLoading}
-                className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-1.5 ${
-                  suggestionType === "week"
-                    ? "bg-white text-purple-600"
-                    : "bg-white/10 hover:bg-white/20 text-white"
-                } disabled:opacity-50`}
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-                This Week
-              </button>
-            </div>
-
-            {/* Suggestion Response */}
-            {(suggestionType || isSuggestionLoading || isRefreshing) && (
-              <div className="bg-white/10 rounded-lg p-3 mt-2">
-                {(isSuggestionLoading || isRefreshing) ? (
-                  <div className="flex items-center gap-2 text-white/70 text-sm">
-                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    {isRefreshing ? "Generating fresh advice..." : "Loading..."}
-                  </div>
-                ) : suggestionResponse ? (
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-medium text-white/70 uppercase">
-                          {suggestionType === "today" ? "Today's Focus" : suggestionType === "tomorrow" ? "Tomorrow's Prep" : "Weekly Plan"}
-                        </span>
-                        {suggestionGeneratedAt && (
-                          <span className="text-xs text-white/40">
-                            Generated {suggestionGeneratedAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-1">
-                        {/* Super Admin Refresh Button */}
-                        {isSuperAdmin && suggestionType && (
-                          <button
-                            onClick={() => handleRefreshSuggestion(suggestionType)}
-                            disabled={isRefreshing}
-                            className="text-xs bg-red-500/20 text-red-200 hover:bg-red-500/30 px-2 py-1 rounded flex items-center gap-1 disabled:opacity-50"
-                            title="Super Admin: Regenerate this suggestion"
-                          >
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                            </svg>
-                          </button>
-                        )}
-                        <button
-                          onClick={clearSuggestion}
-                          className="text-white/50 hover:text-white/80 transition-colors"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        </button>
-                      </div>
-                    </div>
-                    <p className="text-sm text-white/90 whitespace-pre-line">{suggestionResponse}</p>
-                  </div>
-                ) : null}
-              </div>
-            )}
-
-            {/* Super Admin: Refresh All Suggestions */}
-            {isSuperAdmin && (
-              <button
-                onClick={() => handleRefreshSuggestion("all")}
-                disabled={isRefreshing}
-                className="w-full py-2 text-xs bg-red-500/20 text-red-200 hover:bg-red-500/30 rounded-lg flex items-center justify-center gap-2 disabled:opacity-50"
-              >
-                {isRefreshing ? (
-                  <>
-                    <div className="w-3 h-3 border border-red-300/30 border-t-red-300 rounded-full animate-spin" />
-                    Generating...
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                    </svg>
-                    Admin: Refresh All Suggestions Now
-                  </>
-                )}
-              </button>
-            )}
-          </div>
 
           {/* User Stats Summary */}
           {(userHistory.lifts.length > 0) && (
