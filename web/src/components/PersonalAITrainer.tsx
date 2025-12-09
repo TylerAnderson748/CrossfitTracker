@@ -509,46 +509,189 @@ Respond in a confident, direct coach tone. This advice will be saved and shown e
 
       // Get today's date info
       const today = new Date();
+      today.setHours(0, 0, 0, 0);
       const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
       const todayName = dayNames[today.getDay()];
+
+      // Helper to format date
+      const formatDate = (date: Date) => {
+        return `${dayNames[date.getDay()]} ${date.getMonth() + 1}/${date.getDate()}`;
+      };
+
+      // Helper to describe a workout
+      const describeWorkout = (workout: ScheduledWorkout | { components?: WorkoutComponent[] }) => {
+        if ('components' in workout && workout.components && workout.components.length > 0) {
+          return workout.components.map(c => {
+            let desc = `${c.type.toUpperCase()}: ${c.title}`;
+            if (c.description) desc += ` - ${c.description.substring(0, 100)}${c.description.length > 100 ? '...' : ''}`;
+            return desc;
+          }).join('\n');
+        }
+        if ('wodTitle' in workout && workout.wodTitle) {
+          return `${workout.wodTitle}${workout.wodDescription ? `: ${workout.wodDescription.substring(0, 100)}` : ''}`;
+        }
+        return 'Workout scheduled';
+      };
+
+      // Fetch scheduled workouts for date range
+      const fetchWorkoutsForRange = async (startDate: Date, endDate: Date) => {
+        const start = new Date(startDate);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+
+        try {
+          const workoutsQuery = query(
+            collection(db, "scheduledWorkouts"),
+            where("date", ">=", Timestamp.fromDate(start)),
+            where("date", "<=", Timestamp.fromDate(end))
+          );
+          const snapshot = await getDocs(workoutsQuery);
+          return snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          })) as ScheduledWorkout[];
+        } catch {
+          return [];
+        }
+      };
+
+      // Fetch personal workouts for date range
+      const fetchPersonalWorkoutsForRange = async (startDate: Date, endDate: Date) => {
+        if (!userId) return [];
+
+        try {
+          const personalQuery = query(
+            collection(db, "personalWorkouts"),
+            where("userId", "==", userId)
+          );
+          const snapshot = await getDocs(personalQuery);
+          const allWorkouts = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+
+          // Filter by date range
+          return allWorkouts.filter(w => {
+            const workoutDate = (w as { date?: Timestamp }).date?.toDate?.();
+            if (!workoutDate) return false;
+            return workoutDate >= startDate && workoutDate <= endDate;
+          });
+        } catch {
+          return [];
+        }
+      };
+
+      // Calculate date ranges
+      const threeDaysAgo = new Date(today);
+      threeDaysAgo.setDate(today.getDate() - 3);
+
+      const tomorrow = new Date(today);
+      tomorrow.setDate(today.getDate() + 1);
+
+      const weekEnd = new Date(today);
+      weekEnd.setDate(today.getDate() + 7);
+
+      // Fetch workouts based on suggestion type
+      let recentWorkouts: ScheduledWorkout[] = [];
+      let upcomingWorkouts: ScheduledWorkout[] = [];
+      let recentPersonalWorkouts: unknown[] = [];
+      let upcomingPersonalWorkouts: unknown[] = [];
+
+      // Always fetch last 3 days for context
+      recentWorkouts = await fetchWorkoutsForRange(threeDaysAgo, new Date(today.getTime() - 1));
+      recentPersonalWorkouts = await fetchPersonalWorkoutsForRange(threeDaysAgo, new Date(today.getTime() - 1));
+
+      if (type === "today") {
+        const todayEnd = new Date(today);
+        todayEnd.setHours(23, 59, 59, 999);
+        upcomingWorkouts = await fetchWorkoutsForRange(today, todayEnd);
+        upcomingPersonalWorkouts = await fetchPersonalWorkoutsForRange(today, todayEnd);
+      } else if (type === "tomorrow") {
+        const tomorrowEnd = new Date(tomorrow);
+        tomorrowEnd.setHours(23, 59, 59, 999);
+        upcomingWorkouts = await fetchWorkoutsForRange(tomorrow, tomorrowEnd);
+        upcomingPersonalWorkouts = await fetchPersonalWorkoutsForRange(tomorrow, tomorrowEnd);
+      } else if (type === "week") {
+        upcomingWorkouts = await fetchWorkoutsForRange(today, weekEnd);
+        upcomingPersonalWorkouts = await fetchPersonalWorkoutsForRange(today, weekEnd);
+      }
+
+      // Build workout context strings
+      let recentWorkoutContext = "";
+      if (recentWorkouts.length > 0 || recentPersonalWorkouts.length > 0) {
+        recentWorkoutContext = "\nLAST 3 DAYS WORKOUTS:\n";
+        recentWorkouts.forEach(w => {
+          const workoutDate = w.date?.toDate?.();
+          if (workoutDate) {
+            recentWorkoutContext += `${formatDate(workoutDate)}:\n${describeWorkout(w)}\n\n`;
+          }
+        });
+        recentPersonalWorkouts.forEach(w => {
+          const pw = w as { date?: Timestamp; components?: WorkoutComponent[] };
+          const workoutDate = pw.date?.toDate?.();
+          if (workoutDate) {
+            recentWorkoutContext += `${formatDate(workoutDate)} (Personal):\n${describeWorkout(pw)}\n\n`;
+          }
+        });
+      }
+
+      let upcomingWorkoutContext = "";
+      if (upcomingWorkouts.length > 0 || upcomingPersonalWorkouts.length > 0) {
+        const label = type === "today" ? "TODAY'S WORKOUT" : type === "tomorrow" ? "TOMORROW'S WORKOUT" : "THIS WEEK'S WORKOUTS";
+        upcomingWorkoutContext = `\n${label}:\n`;
+        upcomingWorkouts.forEach(w => {
+          const workoutDate = w.date?.toDate?.();
+          if (workoutDate) {
+            upcomingWorkoutContext += `${formatDate(workoutDate)}:\n${describeWorkout(w)}\n\n`;
+          }
+        });
+        upcomingPersonalWorkouts.forEach(w => {
+          const pw = w as { date?: Timestamp; components?: WorkoutComponent[] };
+          const workoutDate = pw.date?.toDate?.();
+          if (workoutDate) {
+            upcomingWorkoutContext += `${formatDate(workoutDate)} (Personal):\n${describeWorkout(pw)}\n\n`;
+          }
+        });
+      }
 
       let prompt = "";
 
       if (type === "today") {
         prompt = `You are a CrossFit coach. Give brief, actionable advice for TODAY (${todayName}).
 
-${userContext ? `ATHLETE INFO:\n${userContext}\n\n` : ""}${hasWorkoutToAnalyze ? "They have a workout scheduled today." : "No gym workout scheduled today."}
+${userContext ? `ATHLETE INFO:\n${userContext}\n` : ""}${recentWorkoutContext}${upcomingWorkoutContext || "No workout scheduled for today."}
 
-In 2-3 sentences, tell them:
-1. What they should focus on today
-2. One specific tip or recommendation
+Based on what they've done recently and what's coming up today, in 2-3 sentences tell them:
+1. What they should focus on today (considering recent training load)
+2. One specific tip for today's workout or recovery
 
-Be direct and motivating. No fluff.`;
+Be direct and motivating. Reference specific workouts if relevant.`;
       } else if (type === "tomorrow") {
-        const tomorrow = new Date(today);
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        const tomorrowName = dayNames[tomorrow.getDay()];
+        const tomorrowDate = new Date(today);
+        tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+        const tomorrowName = dayNames[tomorrowDate.getDay()];
 
         prompt = `You are a CrossFit coach. Give brief advice about TOMORROW (${tomorrowName}).
 
-${userContext ? `ATHLETE INFO:\n${userContext}\n\n` : ""}
+${userContext ? `ATHLETE INFO:\n${userContext}\n` : ""}${recentWorkoutContext}${upcomingWorkoutContext || "No workout scheduled for tomorrow yet."}
 
-In 2-3 sentences, tell them:
-1. How to prepare for tomorrow's training
-2. Any recovery or nutrition tips for tonight
+Based on recent training and tomorrow's workout, in 2-3 sentences tell them:
+1. How to prepare for tomorrow's specific workout
+2. Recovery or nutrition tips for tonight based on what's coming
 
-Be specific and actionable.`;
+Be specific and actionable. Reference the actual workout if one is scheduled.`;
       } else if (type === "week") {
         prompt = `You are a CrossFit coach planning the athlete's week (starting ${todayName}).
 
-${userContext ? `ATHLETE INFO:\n${userContext}\n\n` : ""}
+${userContext ? `ATHLETE INFO:\n${userContext}\n` : ""}${recentWorkoutContext}${upcomingWorkoutContext || "No workouts scheduled this week yet."}
 
-In 3-4 sentences, give them:
-1. What to focus on this week
-2. How to balance training and recovery
+Looking at their recent training and the week ahead, in 3-4 sentences give them:
+1. What to focus on this week based on the scheduled workouts
+2. How to balance the training load and recovery
 3. One specific goal to hit by week's end
 
-Be motivating and specific.`;
+Be motivating and reference specific upcoming workouts.`;
       }
 
       const response = await fetch("https://api.x.ai/v1/chat/completions", {
@@ -560,11 +703,11 @@ Be motivating and specific.`;
         body: JSON.stringify({
           model: "grok-4-latest",
           messages: [
-            { role: "system", content: "You are a supportive CrossFit coach giving quick, actionable advice. Keep responses brief and motivating." },
+            { role: "system", content: "You are a supportive CrossFit coach giving quick, actionable advice. Keep responses brief and motivating. Reference specific workouts when available." },
             { role: "user", content: prompt }
           ],
           temperature: 0.7,
-          max_tokens: 300
+          max_tokens: 400
         })
       });
 
