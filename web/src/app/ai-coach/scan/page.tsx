@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { collection, query, where, getDocs, addDoc, Timestamp } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
-import { Gym, WorkoutGroup, ScheduledTimeSlot, WorkoutComponentType, workoutComponentLabels, workoutComponentColors } from "@/lib/types";
+import { Gym, WorkoutGroup, ScheduledTimeSlot, WorkoutComponentType, workoutComponentLabels, workoutComponentColors, formatTimeSlot } from "@/lib/types";
 import Navigation from "@/components/Navigation";
 
 interface GeneratedWorkout {
@@ -383,11 +383,22 @@ IMPORTANT:
       // Sort time slots by time
       timeSlots.sort((a, b) => a.hour * 60 + a.minute - (b.hour * 60 + b.minute));
 
+      // Generate workout title and description from components
+      const wodTitle = generatedWorkouts.length === 1
+        ? generatedWorkouts[0].title
+        : `${generatedWorkouts.length} Components`;
+      const wodDescription = generatedWorkouts.map(w => w.title).join(", ");
+
       // Create the scheduled workout
       const scheduledWorkout = {
         gymId: userGym.id,
         groupIds: selectedGroupIds.length > 0 ? selectedGroupIds : gymGroups.map(g => g.id),
         date: Timestamp.fromDate(workoutDate),
+        wodTitle,
+        wodDescription,
+        workoutType: "wod",
+        recurrenceType: "none",
+        hideDetails: false,
         components,
         createdAt: Timestamp.now(),
         createdBy: user.id,
@@ -396,7 +407,12 @@ IMPORTANT:
 
       await addDoc(collection(db, "scheduledWorkouts"), scheduledWorkout);
 
-      setSaveSuccess(`Saved ${generatedWorkouts.length} workout${generatedWorkouts.length > 1 ? "s" : ""} to ${userGym.name} for ${workoutDate.toLocaleDateString()}`);
+      const selectedGroupNames = gymGroups
+        .filter(g => selectedGroupIds.includes(g.id))
+        .map(g => g.name)
+        .join(", ");
+
+      setSaveSuccess(`Published to ${selectedGroupNames || "all groups"} for ${workoutDate.toLocaleDateString()}`);
       setShowDatePicker(false);
     } catch (err) {
       console.error("Error saving to gym:", err);
@@ -809,7 +825,7 @@ IMPORTANT:
                 {/* Date/Group Picker for Saving (Coach flow) */}
                 {showDatePicker && !saveSuccess && isCoach && userGym && (
                   <div className="bg-purple-50 border border-purple-200 rounded-xl p-4 space-y-4">
-                    <h3 className="font-semibold text-purple-900">Save to {userGym.name}</h3>
+                    <h3 className="font-semibold text-purple-900">Publish to {userGym.name}</h3>
 
                     {/* Date Selection */}
                     <div>
@@ -828,9 +844,20 @@ IMPORTANT:
                     {gymGroups.length > 0 && (
                       <div>
                         <label className="block text-sm font-medium text-purple-800 mb-2">
-                          Select Groups
+                          Publish to Groups
                         </label>
                         <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedGroupIds(gymGroups.map(g => g.id))}
+                            className={`px-3 py-1.5 text-xs rounded-full transition-colors ${
+                              selectedGroupIds.length === gymGroups.length
+                                ? "bg-purple-600 text-white"
+                                : "bg-white text-purple-600 border border-purple-300"
+                            }`}
+                          >
+                            All Groups
+                          </button>
                           {gymGroups.map((group) => (
                             <button
                               key={group.id}
@@ -846,10 +873,51 @@ IMPORTANT:
                             </button>
                           ))}
                         </div>
+                        {selectedGroupIds.length === 0 && (
+                          <p className="text-xs text-red-600 mt-1">Select at least one group</p>
+                        )}
                       </div>
                     )}
 
-                    {/* Save Buttons */}
+                    {/* Time Slots Preview */}
+                    {selectedGroupIds.length > 0 && (
+                      <div>
+                        <label className="block text-sm font-medium text-purple-800 mb-2">
+                          Class Times (from selected groups)
+                        </label>
+                        <div className="flex flex-wrap gap-2">
+                          {(() => {
+                            const seenTimes = new Set<string>();
+                            const slots: { hour: number; minute: number }[] = [];
+                            gymGroups
+                              .filter(g => selectedGroupIds.includes(g.id))
+                              .forEach(group => {
+                                group.defaultTimeSlots?.forEach(slot => {
+                                  const timeKey = `${slot.hour}:${slot.minute}`;
+                                  if (!seenTimes.has(timeKey)) {
+                                    seenTimes.add(timeKey);
+                                    slots.push({ hour: slot.hour, minute: slot.minute });
+                                  }
+                                });
+                              });
+                            slots.sort((a, b) => a.hour * 60 + a.minute - (b.hour * 60 + b.minute));
+                            if (slots.length === 0) {
+                              return <span className="text-xs text-gray-500">No time slots configured for selected groups</span>;
+                            }
+                            return slots.map((slot, idx) => (
+                              <span
+                                key={idx}
+                                className="px-2 py-1 text-xs bg-white text-purple-700 border border-purple-200 rounded"
+                              >
+                                {formatTimeSlot(slot.hour, slot.minute)}
+                              </span>
+                            ));
+                          })()}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Publish Buttons */}
                     <div className="flex gap-3 pt-2">
                       <button
                         onClick={() => setShowDatePicker(false)}
@@ -859,10 +927,22 @@ IMPORTANT:
                       </button>
                       <button
                         onClick={handleSaveToGym}
-                        disabled={isSaving}
-                        className="flex-1 py-2 bg-purple-600 text-white font-medium rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-colors"
+                        disabled={isSaving || selectedGroupIds.length === 0}
+                        className="flex-1 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-medium rounded-lg hover:from-purple-700 hover:to-indigo-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
                       >
-                        {isSaving ? "Saving..." : `Save to ${userGym.name}`}
+                        {isSaving ? (
+                          <>
+                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            Publishing...
+                          </>
+                        ) : (
+                          <>
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                            Publish to Calendar
+                          </>
+                        )}
                       </button>
                     </div>
                   </div>
@@ -908,16 +988,16 @@ IMPORTANT:
                 {/* Action Buttons */}
                 {!showDatePicker && !saveSuccess && (
                   <div className="space-y-3">
-                    {/* Coach: Add to Gym Programming */}
+                    {/* Coach: Publish to Gym Calendar */}
                     {isCoach && userGym ? (
                       <button
                         onClick={() => setShowDatePicker(true)}
                         className="w-full py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold rounded-lg hover:from-purple-700 hover:to-indigo-700 transition-colors flex items-center justify-center gap-2"
                       >
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                         </svg>
-                        Add to {userGym.name} Programming
+                        Publish to {userGym.name}
                       </button>
                     ) : (
                       /* Athlete: Friendly date options */
