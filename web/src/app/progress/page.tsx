@@ -525,6 +525,17 @@ Be specific, use their actual numbers, and be encouraging but honest. Keep it co
               </div>
             )}
 
+            {/* Data exists but no stats calculated - try longer time range */}
+            {(lifts.length > 0 || wods.length > 0) && !overallProgress && !wodStats && liftStats.length === 0 && (
+              <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-6">
+                <h3 className="font-medium text-yellow-800 mb-2">No activity in selected time range</h3>
+                <p className="text-sm text-yellow-700">
+                  You have {lifts.length} lift records and {wods.length} WOD records total,
+                  but none in the last {selectedTimeRange} days. Try selecting a longer time range above.
+                </p>
+              </div>
+            )}
+
             {/* AI Analysis Section */}
             {hasAICoach && (lifts.length > 0 || wods.length > 0) && (
               <div className="bg-gradient-to-r from-purple-600 to-blue-600 rounded-xl shadow-sm p-6 text-white">
