@@ -1,88 +1,24 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { collection, getDocs, query, where } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
-import { db } from "@/lib/firebase";
-import { Gym, GymApplication } from "@/lib/types";
 import AccountSwitcher from "./AccountSwitcher";
 
 export default function Navigation() {
   const pathname = usePathname();
   const { user } = useAuth();
-  const [isGymOwner, setIsGymOwner] = useState(false);
-  const [hasGymApplication, setHasGymApplication] = useState(false);
 
-  useEffect(() => {
-    const checkGymOwnership = async () => {
-      if (!user) {
-        setIsGymOwner(false);
-        setHasGymApplication(false);
-        return;
-      }
-      try {
-        // Check if user owns any gyms
-        const gymsSnapshot = await getDocs(collection(db, "gyms"));
-        const gyms = gymsSnapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        })) as Gym[];
-
-        const ownsGym = gyms.some((gym) => gym.ownerId === user.id);
-        setIsGymOwner(ownsGym);
-
-        // Check if user has any gym application (pending or approved awaiting setup)
-        if (!ownsGym) {
-          const applicationsQuery = query(
-            collection(db, "gymApplications"),
-            where("userId", "==", user.id)
-          );
-          const appSnapshot = await getDocs(applicationsQuery);
-          // Show gym tab if user has pending or approved (without gym created) application
-          const hasApplication = appSnapshot.docs.some(doc => {
-            const data = doc.data() as GymApplication;
-            if (data.status === "pending") return true;
-            if (data.status === "approved" && !data.approvedGymId) return true;
-            return false;
-          });
-          setHasGymApplication(hasApplication);
-        } else {
-          setHasGymApplication(false);
-        }
-      } catch (error) {
-        console.error("Error checking gym ownership:", error);
-        setIsGymOwner(false);
-        setHasGymApplication(false);
-      }
-    };
-
-    checkGymOwnership();
-  }, [user]);
-
-  // Check if user needs to subscribe - coaches check aiProgrammingSubscription, athletes check aiTrainerSubscription
-  const relevantSubscription = isGymOwner
-    ? user?.aiProgrammingSubscription
-    : user?.aiTrainerSubscription;
-  const hasAISubscription = relevantSubscription?.status === "active" ||
-    relevantSubscription?.status === "trialing";
-
-  // Super admin check
-  const isSuperAdmin = user?.role === "superAdmin";
-
-  // Show Gym tab if user owns a gym OR has an application (pending or approved)
-  const showGymTab = isGymOwner || hasGymApplication;
+  const hasAISubscription = user?.aiTrainerSubscription?.status === "active" ||
+    user?.aiTrainerSubscription?.status === "trialing";
 
   const navItems = [
     { href: "/weekly", label: "Home", icon: "🏠" },
-    ...(showGymTab ? [{ href: "/gym", label: "Gym", icon: "🏢" }] : []),
-    { href: "/programming", label: "Programming", icon: "📅" },
+    { href: "/programming", label: "AI Coach", icon: "🤖" },
     { href: "/workouts", label: "Workouts", icon: "📋" },
     { href: "/progress", label: "Progress", icon: "📈" },
     { href: "/profile", label: "Profile", icon: "👤" },
-    ...(isSuperAdmin ? [{ href: "/admin/gym-applications", label: "Admin", icon: "🛡️" }] : []),
-    ...(!hasAISubscription ? [{ href: isGymOwner ? "/subscribe?variant=coach" : "/subscribe", label: isGymOwner ? "AI Programming" : "AI Coach", icon: "⚡" }] : []),
+    ...(!hasAISubscription ? [{ href: "/subscribe", label: "Get AI Coach", icon: "⚡" }] : []),
   ];
 
   return (

@@ -146,7 +146,6 @@ function NewWorkoutContent() {
   // History and leaderboard
   const [history, setHistory] = useState<WorkoutLog[]>([]);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
-  const [leaderboardFilter, setLeaderboardFilter] = useState<"everyone" | "gym">("everyone");
   const [genderFilter, setGenderFilter] = useState<"all" | "Male" | "Female">("all");
   const [categoryFilter, setCategoryFilter] = useState<"all" | WODCategory>("all");
   const [loadingLeaderboard, setLoadingLeaderboard] = useState(false);
@@ -331,7 +330,7 @@ function NewWorkoutContent() {
       }
       loadLeaderboard();
     }
-  }, [user, wodTitle, leaderboardFilter, genderFilter, categoryFilter]);
+  }, [user, wodTitle, genderFilter, categoryFilter]);
 
   // Category priority: RX (0) > Scaled (1) > Just For Fun (2)
   const getCategoryPriority = (cat: string): number => {
@@ -1014,10 +1013,6 @@ function NewWorkoutContent() {
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
               <div className="flex items-center justify-between mb-3">
                 <p className="text-sm font-semibold text-gray-700">Leaderboard</p>
-                <div className="flex rounded-lg overflow-hidden border border-gray-200 text-xs">
-                  <button onClick={() => setLeaderboardFilter("gym")} className={`px-3 py-1.5 font-medium ${leaderboardFilter === "gym" ? "bg-blue-600 text-white" : "bg-white text-gray-600"}`}>Gym</button>
-                  <button onClick={() => setLeaderboardFilter("everyone")} className={`px-3 py-1.5 font-medium ${leaderboardFilter === "everyone" ? "bg-blue-600 text-white" : "bg-white text-gray-600"}`}>Everyone</button>
-                </div>
               </div>
 
               <div className="flex flex-wrap items-center gap-2 mb-3">

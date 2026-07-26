@@ -8,7 +8,7 @@ import {
   createUserWithEmailAndPassword,
   signOut as firebaseSignOut,
 } from "firebase/auth";
-import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs, Timestamp } from "firebase/firestore";
+import { doc, getDoc, setDoc, Timestamp } from "firebase/firestore";
 import { auth, db } from "./firebase";
 import { AppUser, StoredAccount } from "./types";
 import { sanitizeString, isValidEmail } from "./security";
@@ -69,79 +69,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setStoredAccounts(getStoredAccountsFromStorage());
   }, []);
 
-  // Sync gymId for users - verifies current gymId is valid or finds a new one
-  const syncUserGymId = async (userId: string, currentGymId: string | undefined) => {
-    console.log("syncUserGymId called with userId:", userId, "currentGymId:", currentGymId);
-
-    try {
-      // If user has a gymId, verify they're still a member/coach/owner
-      if (currentGymId) {
-        console.log("Verifying user still belongs to gym:", currentGymId);
-        const gymDoc = await getDoc(doc(db, "gyms", currentGymId));
-
-        if (gymDoc.exists()) {
-          const gymData = gymDoc.data();
-          const isOwner = gymData.ownerId === userId;
-          const isCoach = gymData.coachIds?.includes(userId);
-          const isMember = gymData.memberIds?.includes(userId);
-
-          if (isOwner || isCoach || isMember) {
-            console.log("User still belongs to gym, gymId is valid");
-            return currentGymId;
-          }
-        }
-
-        // User no longer belongs to this gym, clear it
-        console.log("User no longer belongs to gym, clearing gymId...");
-        await updateDoc(doc(db, "users", userId), { gymId: null });
-      }
-
-      // Check if user is owner of any gym
-      console.log("Checking if user is gym owner...");
-      const ownerQuery = query(collection(db, "gyms"), where("ownerId", "==", userId));
-      const ownerSnapshot = await getDocs(ownerQuery);
-      console.log("Owner query results:", ownerSnapshot.size, "gyms found");
-      if (!ownerSnapshot.empty) {
-        const gymId = ownerSnapshot.docs[0].id;
-        console.log("User is owner of gym:", gymId, "- updating user document...");
-        await updateDoc(doc(db, "users", userId), { gymId });
-        console.log("Successfully set gymId on user document");
-        return gymId;
-      }
-
-      // Check if user is a coach of any gym
-      console.log("Checking if user is gym coach...");
-      const coachQuery = query(collection(db, "gyms"), where("coachIds", "array-contains", userId));
-      const coachSnapshot = await getDocs(coachQuery);
-      console.log("Coach query results:", coachSnapshot.size, "gyms found");
-      if (!coachSnapshot.empty) {
-        const gymId = coachSnapshot.docs[0].id;
-        console.log("User is coach of gym:", gymId, "- updating user document...");
-        await updateDoc(doc(db, "users", userId), { gymId });
-        console.log("Successfully set gymId on user document");
-        return gymId;
-      }
-
-      // Check if user is a member of any gym
-      console.log("Checking if user is gym member...");
-      const memberQuery = query(collection(db, "gyms"), where("memberIds", "array-contains", userId));
-      const memberSnapshot = await getDocs(memberQuery);
-      console.log("Member query results:", memberSnapshot.size, "gyms found");
-      if (!memberSnapshot.empty) {
-        const gymId = memberSnapshot.docs[0].id;
-        console.log("User is member of gym:", gymId, "- updating user document...");
-        await updateDoc(doc(db, "users", userId), { gymId });
-        console.log("Successfully set gymId on user document");
-        return gymId;
-      }
-
-      console.log("User is not associated with any gym");
-    } catch (error) {
-      console.error("Error syncing gymId:", error);
-    }
-    return undefined;
-  };
-
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setFirebaseUser(firebaseUser);
@@ -150,13 +77,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const userDoc = await getDoc(doc(db, "users", firebaseUser.uid));
         if (userDoc.exists()) {
           const userData = { id: userDoc.id, ...userDoc.data() } as AppUser;
-
-          // Sync gymId if not set
-          const syncedGymId = await syncUserGymId(userDoc.id, userData.gymId);
-          if (syncedGymId) {
-            userData.gymId = syncedGymId;
-          }
-
           setUser(userData);
         }
       } else {

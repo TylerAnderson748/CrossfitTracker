@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { collection, query, where, getDocs, addDoc, Timestamp } from "firebase/firestore";
+import { collection, addDoc, Timestamp } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
-import { Gym, WorkoutGroup, ScheduledTimeSlot, WorkoutComponentType, workoutComponentLabels, workoutComponentColors, formatTimeSlot } from "@/lib/types";
+import { WorkoutComponentType, workoutComponentLabels, workoutComponentColors } from "@/lib/types";
+import { chatCompletion } from "@/lib/ai";
 import Navigation from "@/components/Navigation";
 
 interface GeneratedWorkout {
@@ -30,78 +31,17 @@ export default function AIScanPage() {
   const [error, setError] = useState<string | null>(null);
   const [editingWorkoutId, setEditingWorkoutId] = useState<string | null>(null);
 
-  // Gym/coach state
-  const [userGym, setUserGym] = useState<Gym | null>(null);
-  const [gymGroups, setGymGroups] = useState<WorkoutGroup[]>([]);
-  const [loadingGym, setLoadingGym] = useState(true);
+  // Save state
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string>(
     new Date().toISOString().split("T")[0]
   );
-  const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
 
-  // Check if user has coach/owner role OR is associated with a gym as staff
-  // userGym being set means they're either gym owner or in coachIds
-  const isCoachByRole = user?.role === "coach" || user?.role === "owner";
-  const canPublishToGym = isCoachByRole || !!userGym;
-
-  // Check subscription - gym staff use aiProgrammingSubscription, athletes use aiTrainerSubscription
-  const relevantSubscription = canPublishToGym
-    ? user?.aiProgrammingSubscription
-    : user?.aiTrainerSubscription;
-  const hasSubscription = relevantSubscription?.status === "active" ||
-    relevantSubscription?.status === "trialing";
-
-  // Fetch user's gym if they're a coach
-  useEffect(() => {
-    const fetchUserGym = async () => {
-      if (!user) {
-        setLoadingGym(false);
-        return;
-      }
-
-      try {
-        // Check if user is owner of any gym
-        let gymDoc = null;
-        const ownerQuery = query(collection(db, "gyms"), where("ownerId", "==", user.id));
-        const ownerSnapshot = await getDocs(ownerQuery);
-        if (!ownerSnapshot.empty) {
-          gymDoc = { id: ownerSnapshot.docs[0].id, ...ownerSnapshot.docs[0].data() } as Gym;
-        }
-
-        // Check if user is a coach of any gym
-        if (!gymDoc) {
-          const coachQuery = query(collection(db, "gyms"), where("coachIds", "array-contains", user.id));
-          const coachSnapshot = await getDocs(coachQuery);
-          if (!coachSnapshot.empty) {
-            gymDoc = { id: coachSnapshot.docs[0].id, ...coachSnapshot.docs[0].data() } as Gym;
-          }
-        }
-
-        if (gymDoc) {
-          setUserGym(gymDoc);
-          // Fetch groups for this gym
-          const groupsQuery = query(collection(db, "groups"), where("gymId", "==", gymDoc.id));
-          const groupsSnapshot = await getDocs(groupsQuery);
-          const groups = groupsSnapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-          })) as WorkoutGroup[];
-          setGymGroups(groups);
-          // Select all groups by default
-          setSelectedGroupIds(groups.map(g => g.id));
-        }
-      } catch (err) {
-        console.error("Error fetching user gym:", err);
-      }
-
-      setLoadingGym(false);
-    };
-
-    fetchUserGym();
-  }, [user]);
+  // Check AI Coach subscription
+  const hasSubscription = user?.aiTrainerSubscription?.status === "active" ||
+    user?.aiTrainerSubscription?.status === "trialing";
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -138,13 +78,6 @@ export default function AIScanPage() {
     setError(null);
 
     try {
-      const apiKey = process.env.NEXT_PUBLIC_XAI_API_KEY;
-      if (!apiKey) {
-        setError("AI service not configured. Please add NEXT_PUBLIC_XAI_API_KEY to your environment.");
-        setIsAnalyzing(false);
-        return;
-      }
-
       const prompt = `You are a CrossFit coach analyzing a handwritten workout or programming notes.
 
 Look at this image and extract any workout programming you can see. Classify each component into ONE of these types:
@@ -182,35 +115,19 @@ IMPORTANT:
 - Only respond with valid JSON. No additional text before or after the JSON.
 - The "type" field MUST be exactly one of: warmup, lift, wod, skill, cooldown (lowercase)`;
 
-      // Call xAI/Grok Vision API
-      const response = await fetch("https://api.x.ai/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-          model: "grok-4-latest",
-          messages: [
-            {
-              role: "user",
-              content: [
-                { type: "text", text: prompt },
-                { type: "image_url", image_url: { url: selectedImage } }
-              ]
-            }
-          ],
-          temperature: 0.3
-        })
+      // Call the fast vision model (with automatic fallback)
+      const text = await chatCompletion({
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "text", text: prompt },
+              { type: "image_url", image_url: { url: selectedImage } }
+            ]
+          }
+        ],
+        temperature: 0.3,
       });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error?.message || `API error: ${response.status}`);
-      }
-
-      const data = await response.json();
-      const text = data.choices?.[0]?.message?.content || "";
 
       if (!text) {
         throw new Error("No response from AI");
@@ -333,98 +250,6 @@ IMPORTANT:
     });
   };
 
-  // Save to gym programming
-  const handleSaveToGym = async () => {
-    if (!user || !userGym || generatedWorkouts.length === 0) return;
-
-    setIsSaving(true);
-    setSaveSuccess(null);
-
-    try {
-      // Parse the selected date as local time
-      const [year, month, day] = selectedDate.split("-").map(Number);
-      const workoutDate = new Date(year, month - 1, day, 12, 0, 0, 0);
-
-      // Create workout components from generated workouts (type is already WorkoutComponentType)
-      const components = generatedWorkouts.map((w, idx) => ({
-        id: `comp_${Date.now()}_${idx}`,
-        type: w.type,
-        title: w.title,
-        description: w.description,
-        notes: w.notes || "",
-        order: idx,
-      }));
-
-      // Generate time slots from selected groups' default time slots
-      const groupsToUse = selectedGroupIds.length > 0
-        ? gymGroups.filter(g => selectedGroupIds.includes(g.id))
-        : gymGroups;
-
-      const timeSlots: ScheduledTimeSlot[] = [];
-      const seenTimes = new Set<string>();
-
-      groupsToUse.forEach((group) => {
-        if (group.defaultTimeSlots?.length > 0) {
-          group.defaultTimeSlots.forEach((slot: { hour: number; minute: number; capacity?: number }) => {
-            const hour = typeof slot.hour === 'number' ? slot.hour : parseInt(slot.hour as unknown as string) || 0;
-            const minute = typeof slot.minute === 'number' ? slot.minute : parseInt(slot.minute as unknown as string) || 0;
-            const timeKey = `${hour}:${minute}`;
-            if (!seenTimes.has(timeKey)) {
-              seenTimes.add(timeKey);
-              timeSlots.push({
-                id: `slot_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-                hour: hour,
-                minute: minute,
-                capacity: slot.capacity || 20,
-                signups: [],
-              });
-            }
-          });
-        }
-      });
-
-      // Sort time slots by time
-      timeSlots.sort((a, b) => a.hour * 60 + a.minute - (b.hour * 60 + b.minute));
-
-      // Generate workout title and description from components
-      const wodTitle = generatedWorkouts.length === 1
-        ? generatedWorkouts[0].title
-        : `${generatedWorkouts.length} Components`;
-      const wodDescription = generatedWorkouts.map(w => w.title).join(", ");
-
-      // Create the scheduled workout
-      const scheduledWorkout = {
-        gymId: userGym.id,
-        groupIds: selectedGroupIds.length > 0 ? selectedGroupIds : gymGroups.map(g => g.id),
-        date: Timestamp.fromDate(workoutDate),
-        wodTitle,
-        wodDescription,
-        workoutType: "wod",
-        recurrenceType: "none",
-        hideDetails: false,
-        components,
-        createdAt: Timestamp.now(),
-        createdBy: user.id,
-        timeSlots,
-      };
-
-      await addDoc(collection(db, "scheduledWorkouts"), scheduledWorkout);
-
-      const selectedGroupNames = gymGroups
-        .filter(g => selectedGroupIds.includes(g.id))
-        .map(g => g.name)
-        .join(", ");
-
-      setSaveSuccess(`Published to ${selectedGroupNames || "all groups"} for ${workoutDate.toLocaleDateString()}`);
-      setShowDatePicker(false);
-    } catch (err) {
-      console.error("Error saving to gym:", err);
-      setError("Failed to save workouts. Please try again.");
-    }
-
-    setIsSaving(false);
-  };
-
   // Save to personal workouts
   const handleSaveToPersonal = async (overrideDate?: string) => {
     if (!user || generatedWorkouts.length === 0) return;
@@ -477,14 +302,6 @@ IMPORTANT:
     setIsSaving(false);
   };
 
-  const toggleGroupSelection = (groupId: string) => {
-    setSelectedGroupIds(prev =>
-      prev.includes(groupId)
-        ? prev.filter(id => id !== groupId)
-        : [...prev, groupId]
-    );
-  };
-
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -510,18 +327,16 @@ IMPORTANT:
               </svg>
             </div>
             <h2 className="text-xl font-bold text-gray-900 mb-2">
-              {canPublishToGym ? "AI Programming Feature" : "AI Coach Feature"}
+              AI Coach Feature
             </h2>
             <p className="text-gray-600 mb-4">
-              {canPublishToGym
-                ? "Photo scanning is available for AI Programming subscribers."
-                : "Photo scanning is available for AI Coach subscribers."}
+              Photo scanning is available for AI Coach subscribers.
             </p>
             <button
-              onClick={() => router.push(canPublishToGym ? "/subscribe?variant=coach" : "/subscribe")}
+              onClick={() => router.push("/subscribe")}
               className="px-6 py-3 bg-purple-600 text-white font-medium rounded-lg hover:bg-purple-700 transition-colors"
             >
-              {canPublishToGym ? "Subscribe to AI Programming" : "Subscribe to AI Coach"}
+              Subscribe to AI Coach
             </button>
           </div>
         </main>
@@ -825,134 +640,8 @@ IMPORTANT:
                   </div>
                 )}
 
-                {/* Date/Group Picker for Saving (Coach flow) */}
-                {showDatePicker && !saveSuccess && userGym && (
-                  <div className="bg-purple-50 border border-purple-200 rounded-xl p-4 space-y-4">
-                    <h3 className="font-semibold text-purple-900">Publish to {userGym.name}</h3>
-
-                    {/* Date Selection */}
-                    <div>
-                      <label className="block text-sm font-medium text-purple-800 mb-1">
-                        Select Date
-                      </label>
-                      <input
-                        type="date"
-                        value={selectedDate}
-                        onChange={(e) => setSelectedDate(e.target.value)}
-                        className="w-full px-3 py-2 border border-purple-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-purple-500"
-                      />
-                    </div>
-
-                    {/* Group Selection for Gym */}
-                    {gymGroups.length > 0 && (
-                      <div>
-                        <label className="block text-sm font-medium text-purple-800 mb-2">
-                          Publish to Groups
-                        </label>
-                        <div className="flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setSelectedGroupIds(gymGroups.map(g => g.id))}
-                            className={`px-3 py-1.5 text-xs rounded-full transition-colors ${
-                              selectedGroupIds.length === gymGroups.length
-                                ? "bg-purple-600 text-white"
-                                : "bg-white text-purple-600 border border-purple-300"
-                            }`}
-                          >
-                            All Groups
-                          </button>
-                          {gymGroups.map((group) => (
-                            <button
-                              key={group.id}
-                              type="button"
-                              onClick={() => toggleGroupSelection(group.id)}
-                              className={`px-3 py-1.5 text-sm rounded-full transition-colors ${
-                                selectedGroupIds.includes(group.id)
-                                  ? "bg-purple-600 text-white"
-                                  : "bg-white text-purple-700 border border-purple-300"
-                              }`}
-                            >
-                              {group.name}
-                            </button>
-                          ))}
-                        </div>
-                        {selectedGroupIds.length === 0 && (
-                          <p className="text-xs text-red-600 mt-1">Select at least one group</p>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Time Slots Preview */}
-                    {selectedGroupIds.length > 0 && (
-                      <div>
-                        <label className="block text-sm font-medium text-purple-800 mb-2">
-                          Class Times (from selected groups)
-                        </label>
-                        <div className="flex flex-wrap gap-2">
-                          {(() => {
-                            const seenTimes = new Set<string>();
-                            const slots: { hour: number; minute: number }[] = [];
-                            gymGroups
-                              .filter(g => selectedGroupIds.includes(g.id))
-                              .forEach(group => {
-                                group.defaultTimeSlots?.forEach(slot => {
-                                  const timeKey = `${slot.hour}:${slot.minute}`;
-                                  if (!seenTimes.has(timeKey)) {
-                                    seenTimes.add(timeKey);
-                                    slots.push({ hour: slot.hour, minute: slot.minute });
-                                  }
-                                });
-                              });
-                            slots.sort((a, b) => a.hour * 60 + a.minute - (b.hour * 60 + b.minute));
-                            if (slots.length === 0) {
-                              return <span className="text-xs text-gray-500">No time slots configured for selected groups</span>;
-                            }
-                            return slots.map((slot, idx) => (
-                              <span
-                                key={idx}
-                                className="px-2 py-1 text-xs bg-white text-purple-700 border border-purple-200 rounded"
-                              >
-                                {formatTimeSlot(slot.hour, slot.minute)}
-                              </span>
-                            ));
-                          })()}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Publish Buttons */}
-                    <div className="flex gap-3 pt-2">
-                      <button
-                        onClick={() => setShowDatePicker(false)}
-                        className="flex-1 py-2 border border-purple-300 text-purple-700 rounded-lg hover:bg-purple-100 transition-colors"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        onClick={handleSaveToGym}
-                        disabled={isSaving || selectedGroupIds.length === 0}
-                        className="flex-1 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-medium rounded-lg hover:from-purple-700 hover:to-indigo-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
-                      >
-                        {isSaving ? (
-                          <>
-                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                            Publishing...
-                          </>
-                        ) : (
-                          <>
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                            </svg>
-                            Publish to Calendar
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                )}
-
                 {/* Custom Date Picker for Personal Workouts (Athlete flow) */}
-                {showDatePicker && !saveSuccess && !userGym && (
+                {showDatePicker && !saveSuccess && (
                   <div className="bg-purple-50 border border-purple-200 rounded-xl p-4 space-y-4">
                     <h3 className="font-semibold text-purple-900">Save to My Workouts</h3>
 
@@ -991,55 +680,41 @@ IMPORTANT:
                 {/* Action Buttons */}
                 {!showDatePicker && !saveSuccess && (
                   <div className="space-y-3">
-                    {/* Coach/Staff: Publish to Gym Calendar */}
-                    {userGym ? (
+                    <div className="space-y-2">
                       <button
-                        onClick={() => setShowDatePicker(true)}
-                        className="w-full py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold rounded-lg hover:from-purple-700 hover:to-indigo-700 transition-colors flex items-center justify-center gap-2"
+                        onClick={() => {
+                          const today = new Date().toISOString().split("T")[0];
+                          handleSaveToPersonal(today);
+                        }}
+                        disabled={isSaving}
+                        className="w-full py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold rounded-lg hover:from-purple-700 hover:to-indigo-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                        </svg>
+                        {isSaving ? "Saving..." : "Add to Today"}
+                      </button>
+                      <button
+                        onClick={() => {
+                          const tomorrow = new Date();
+                          tomorrow.setDate(tomorrow.getDate() + 1);
+                          handleSaveToPersonal(tomorrow.toISOString().split("T")[0]);
+                        }}
+                        disabled={isSaving}
+                        className="w-full py-3 bg-purple-100 text-purple-700 font-bold rounded-lg hover:bg-purple-200 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
                       >
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                         </svg>
-                        Publish to {userGym.name}
+                        Add to Tomorrow
                       </button>
-                    ) : (
-                      /* Athlete: Friendly date options */
-                      <div className="space-y-2">
-                        <button
-                          onClick={() => {
-                            const today = new Date().toISOString().split("T")[0];
-                            handleSaveToPersonal(today);
-                          }}
-                          disabled={isSaving}
-                          className="w-full py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold rounded-lg hover:from-purple-700 hover:to-indigo-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
-                        >
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                          </svg>
-                          {isSaving ? "Saving..." : "Add to Today"}
-                        </button>
-                        <button
-                          onClick={() => {
-                            const tomorrow = new Date();
-                            tomorrow.setDate(tomorrow.getDate() + 1);
-                            handleSaveToPersonal(tomorrow.toISOString().split("T")[0]);
-                          }}
-                          disabled={isSaving}
-                          className="w-full py-3 bg-purple-100 text-purple-700 font-bold rounded-lg hover:bg-purple-200 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
-                        >
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                          </svg>
-                          Add to Tomorrow
-                        </button>
-                        <button
-                          onClick={() => setShowDatePicker(true)}
-                          className="w-full py-2.5 border border-purple-300 text-purple-700 font-medium rounded-lg hover:bg-purple-50 transition-colors"
-                        >
-                          Pick a Different Date
-                        </button>
-                      </div>
-                    )}
+                      <button
+                        onClick={() => setShowDatePicker(true)}
+                        className="w-full py-2.5 border border-purple-300 text-purple-700 font-medium rounded-lg hover:bg-purple-50 transition-colors"
+                      >
+                        Pick a Different Date
+                      </button>
+                    </div>
 
                     {/* Secondary Actions */}
                     <div className="space-y-2">

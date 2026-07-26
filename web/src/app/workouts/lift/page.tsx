@@ -21,7 +21,6 @@ interface LiftResult {
   reps: number;
   userId: string;
   userName?: string;
-  gymId?: string;
   date: { toDate: () => Date };
 }
 
@@ -43,7 +42,6 @@ function LiftPageContent() {
   const [history, setHistory] = useState<LiftResult[]>([]);
   const [leaderboard, setLeaderboard] = useState<LiftResult[]>([]);
   const [loadingLeaderboard, setLoadingLeaderboard] = useState(false);
-  const [leaderboardScope, setLeaderboardScope] = useState<"gym" | "everyone">("everyone");
   const [chartTimeRange, setChartTimeRange] = useState<"1m" | "6m" | "1y" | "2y" | "5y">("1y");
 
   // Autocomplete suggestions state
@@ -67,7 +65,7 @@ function LiftPageContent() {
       loadHistory();
       loadLeaderboard();
     }
-  }, [user, liftName, selectedReps, leaderboardScope]);
+  }, [user, liftName, selectedReps]);
 
   const loadHistory = async () => {
     if (!user || !liftName) return;
@@ -131,11 +129,6 @@ function LiftPageContent() {
       // Filter by reps
       results = results.filter((r) => r.reps === selectedReps);
 
-      // Filter by gym if scope is gym
-      if (leaderboardScope === "gym" && user?.gymId) {
-        results = results.filter((r) => r.gymId === user.gymId);
-      }
-
       // Get max weight per user (only 1 entry per user - their best)
       const userBestMap = new Map<string, LiftResult>();
       for (const result of results) {
@@ -182,7 +175,6 @@ function LiftPageContent() {
       await addDoc(collection(db, "liftResults"), {
         userId: user.id,
         userName: user.displayName || `${user.firstName} ${user.lastName}`,
-        gymId: user.gymId || null,
         liftTitle: liftName.trim(),  // iOS app uses liftTitle
         weight: parseFloat(weight),
         reps: selectedReps,
@@ -640,28 +632,6 @@ function LiftPageContent() {
               <p className="text-sm font-semibold text-gray-700">
                 Leaderboard ({selectedReps} rep{selectedReps > 1 ? "s" : ""})
               </p>
-              <div className="flex rounded-lg overflow-hidden border border-gray-200 text-xs">
-                <button
-                  onClick={() => setLeaderboardScope("gym")}
-                  className={`px-3 py-1.5 font-medium transition-colors ${
-                    leaderboardScope === "gym"
-                      ? "bg-purple-600 text-white"
-                      : "bg-white text-gray-600 hover:bg-gray-50"
-                  }`}
-                >
-                  Gym
-                </button>
-                <button
-                  onClick={() => setLeaderboardScope("everyone")}
-                  className={`px-3 py-1.5 font-medium transition-colors ${
-                    leaderboardScope === "everyone"
-                      ? "bg-purple-600 text-white"
-                      : "bg-white text-gray-600 hover:bg-gray-50"
-                  }`}
-                >
-                  Everyone
-                </button>
-              </div>
             </div>
 
             {loadingLeaderboard ? (

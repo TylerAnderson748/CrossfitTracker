@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { collection, addDoc, updateDoc, doc, query, where, getDocs, getDoc, orderBy, Timestamp, serverTimestamp, deleteDoc } from "firebase/firestore";
+import { collection, addDoc, updateDoc, doc, query, where, getDocs, orderBy, Timestamp, serverTimestamp, deleteDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { AIProgrammingSession, AIChatMessage, AIGeneratedDay, WorkoutGroup, WorkoutComponent, AIProgrammingPreferences, AITrainerSubscription, ScheduledTimeSlot } from "@/lib/types";
+import { AIProgrammingSession, AIChatMessage, AIGeneratedDay, AIProgrammingPreferences, AITrainerSubscription } from "@/lib/types";
 import { getAllSkills, getAllLifts, getAllWods } from "@/lib/workoutData";
+import { chatCompletion } from "@/lib/ai";
 import AITrainerPaywall from "./AITrainerPaywall";
 
 // Get preset workout names for the AI prompt
@@ -13,8 +14,9 @@ const getPresetLiftNames = () => getAllLifts().map(l => l.name);
 const getPresetWodNames = () => getAllWods().map(w => w.name);
 
 // Default preferences
-const defaultPreferences: Omit<AIProgrammingPreferences, "gymId" | "updatedAt"> = {
+const defaultPreferences: Omit<AIProgrammingPreferences, "userId" | "updatedAt"> = {
   philosophy: "",
+  equipment: "",
   workoutDuration: "varied",
   benchmarkFrequency: "sometimes",
   programmingStyle: "",
@@ -22,15 +24,13 @@ const defaultPreferences: Omit<AIProgrammingPreferences, "gymId" | "updatedAt"> 
 };
 
 interface AIProgrammingChatProps {
-  gymId: string;
   userId: string;
   userEmail?: string;
-  groups: WorkoutGroup[];
   onPublish?: () => void;
   subscription?: AITrainerSubscription;
 }
 
-const getSystemPrompt = (preferences?: Omit<AIProgrammingPreferences, "gymId" | "updatedAt">, recentlyUsedWorkouts?: string[]) => {
+const getSystemPrompt = (preferences?: Omit<AIProgrammingPreferences, "userId" | "updatedAt">, recentlyUsedWorkouts?: string[]) => {
   const today = new Date();
   const todayStr = today.toISOString().split('T')[0]; // YYYY-MM-DD format
   const dayOfWeek = today.toLocaleDateString('en-US', { weekday: 'long' });
@@ -42,7 +42,6 @@ const getSystemPrompt = (preferences?: Omit<AIProgrammingPreferences, "gymId" | 
     const currentDay = date.getDay();
     let daysUntil = targetDay - currentDay;
     if (daysUntil < 0) daysUntil += 7; // If the day has passed this week, get next week's
-    if (daysUntil === 0) daysUntil = 0; // If it's today, use today
     date.setDate(date.getDate() + daysUntil);
     return date.toISOString().split('T')[0];
   };
@@ -69,13 +68,17 @@ const getSystemPrompt = (preferences?: Omit<AIProgrammingPreferences, "gymId" | 
   const liftNames = getPresetLiftNames();
   const wodNames = getPresetWodNames();
 
-  // Build gym preferences section
-  let gymPreferencesSection = "";
+  // Build athlete preferences section
+  let athletePreferencesSection = "";
   if (preferences) {
     const prefParts: string[] = [];
 
     if (preferences.philosophy) {
-      prefParts.push(`Gym Philosophy: ${preferences.philosophy}`);
+      prefParts.push(`Training Philosophy/Goals: ${preferences.philosophy}`);
+    }
+
+    if (preferences.equipment) {
+      prefParts.push(`Available Equipment (garage/home gym): ${preferences.equipment}\nIMPORTANT: ONLY program movements that can be done with this equipment. Substitute anything that requires equipment they don't have.`);
     }
 
     if (preferences.workoutDuration && preferences.workoutDuration !== "varied") {
@@ -106,8 +109,8 @@ const getSystemPrompt = (preferences?: Omit<AIProgrammingPreferences, "gymId" | 
     }
 
     if (prefParts.length > 0) {
-      gymPreferencesSection = `
-GYM OWNER PREFERENCES (IMPORTANT - Follow these rules):
+      athletePreferencesSection = `
+ATHLETE PREFERENCES (IMPORTANT - Follow these rules):
 ${prefParts.join("\n")}
 
 `;
@@ -127,8 +130,8 @@ DO NOT use any of the above workout names. Create NEW, unique workouts instead. 
 `;
   }
 
-  return `You are a CrossFit programming assistant helping gym owners and coaches create workout programming.
-${gymPreferencesSection}${recentlyUsedSection}IMPORTANT DATE INFORMATION:
+  return `You are a personal CrossFit coach creating workout programming for an individual athlete training in their garage or home gym. You ARE their coach - be direct, encouraging, and specific.
+${athletePreferencesSection}${recentlyUsedSection}IMPORTANT DATE INFORMATION:
 - Today's date is ${todayStr} (${dayOfWeek})
 - Current month: ${monthName}
 - Current season: ${season}
@@ -218,7 +221,8 @@ Guidelines:
 - Create varied, balanced programming
 - Include proper warm-ups and skill work
 - Program appropriate rest days (typically 2 per week)
-- Scale difficulty based on the gym's level
+- Scale difficulty based on the athlete's level
+- Assume a garage/home gym setup: no fancy machines unless the athlete lists them
 - Use standard CrossFit movements and terminology
 - Keep descriptions clear and concise
 - Use newlines (\\n) for formatting within descriptions
@@ -291,29 +295,7 @@ If the user is just chatting or asking questions (not requesting workouts), resp
 IMPORTANT: Always respond with valid JSON only. No markdown, no code blocks, just pure JSON.`;
 };
 
-// Helper to remove undefined values from objects (Firestore doesn't accept undefined)
-function removeUndefined<T>(obj: T): T {
-  if (obj === null || obj === undefined) return obj;
-  if (Array.isArray(obj)) {
-    return obj.map(item => removeUndefined(item)) as T;
-  }
-  if (typeof obj === 'object') {
-    // Don't modify Firestore Timestamps or other special objects
-    if (obj instanceof Timestamp || (obj as Record<string, unknown>).toDate !== undefined) {
-      return obj;
-    }
-    const cleaned: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
-      if (value !== undefined) {
-        cleaned[key] = removeUndefined(value);
-      }
-    }
-    return cleaned as T;
-  }
-  return obj;
-}
-
-export default function AIProgrammingChat({ gymId, userId, userEmail, groups, onPublish, subscription }: AIProgrammingChatProps) {
+export default function AIProgrammingChat({ userId, userEmail, onPublish, subscription }: AIProgrammingChatProps) {
   // Check if user has an active AI subscription
   const hasActiveSubscription = subscription &&
     (subscription.status === "active" || subscription.status === "trialing");
@@ -323,44 +305,39 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showPreview, setShowPreview] = useState(false);
-  const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState("");
   const [isPublishing, setIsPublishing] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-    const [loadingSessions, setLoadingSessions] = useState(true);
+  const [loadingSessions, setLoadingSessions] = useState(true);
 
   // Programming preferences state
-  const [preferences, setPreferences] = useState<Omit<AIProgrammingPreferences, "gymId" | "updatedAt">>(defaultPreferences);
+  const [preferences, setPreferences] = useState<Omit<AIProgrammingPreferences, "userId" | "updatedAt">>(defaultPreferences);
   const [showSettings, setShowSettings] = useState(false);
   const [preferencesDocId, setPreferencesDocId] = useState<string | null>(null);
   const [savingPreferences, setSavingPreferences] = useState(false);
 
-  // Cancel subscription state
-  const [showCancelModal, setShowCancelModal] = useState(false);
-  const [isCanceling, setIsCanceling] = useState(false);
-
   // Recently used workouts (last 6 months) - to avoid repetition
   const [recentlyUsedWorkouts, setRecentlyUsedWorkouts] = useState<string[]>([]);
 
-  // Load recently used workouts from the last 6 months
+  // Load recently used workouts from the last 6 months of the athlete's calendar
   useEffect(() => {
     const loadRecentWorkouts = async () => {
-      if (!gymId) return;
+      if (!userId) return;
 
       try {
         // Get date 6 months ago
         const sixMonthsAgo = new Date();
         sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
 
-        // Query all scheduled workouts for this gym (filter by date client-side to avoid index requirement)
+        // Query the athlete's personal workouts (filter by date client-side to avoid index requirement)
         const workoutsQuery = query(
-          collection(db, "scheduledWorkouts"),
-          where("gymId", "==", gymId)
+          collection(db, "personalWorkouts"),
+          where("userId", "==", userId)
         );
         const snapshot = await getDocs(workoutsQuery);
 
-        // Extract unique workout names from components
+        // Extract unique WOD names from components
         const usedWorkouts = new Set<string>();
 
         snapshot.docs.forEach(doc => {
@@ -370,11 +347,6 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
           const workoutDate = data.date?.toDate?.();
           if (!workoutDate || workoutDate < sixMonthsAgo) return;
 
-          // Add the main workout title if it exists
-          if (data.wodTitle && !data.wodTitle.includes("Programming")) {
-            usedWorkouts.add(data.wodTitle);
-          }
-          // Extract component titles (WODs, lifts, skills)
           if (data.components && Array.isArray(data.components)) {
             data.components.forEach((comp: { type?: string; title?: string }) => {
               if (comp.title && comp.type === "wod") {
@@ -392,7 +364,7 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
     };
 
     loadRecentWorkouts();
-  }, [gymId]);
+  }, [userId]);
 
   // Load existing sessions
   useEffect(() => {
@@ -400,7 +372,7 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
       try {
         const sessionsQuery = query(
           collection(db, "aiProgrammingSessions"),
-          where("gymId", "==", gymId),
+          where("userId", "==", userId),
           orderBy("updatedAt", "desc")
         );
         const snapshot = await getDocs(sessionsQuery);
@@ -422,7 +394,7 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
       }
     };
     loadSessions();
-  }, [gymId]);
+  }, [userId]);
 
   // Load programming preferences
   useEffect(() => {
@@ -430,7 +402,7 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
       try {
         const prefsQuery = query(
           collection(db, "aiProgrammingPreferences"),
-          where("gymId", "==", gymId)
+          where("userId", "==", userId)
         );
         const snapshot = await getDocs(prefsQuery);
         if (!snapshot.empty) {
@@ -439,6 +411,7 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
           setPreferencesDocId(prefDoc.id);
           setPreferences({
             philosophy: prefData.philosophy || "",
+            equipment: prefData.equipment || "",
             workoutDuration: prefData.workoutDuration || "varied",
             benchmarkFrequency: prefData.benchmarkFrequency || "sometimes",
             programmingStyle: prefData.programmingStyle || "",
@@ -450,14 +423,14 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
       }
     };
     loadPreferences();
-  }, [gymId]);
+  }, [userId]);
 
   // Save preferences
   const savePreferences = async () => {
     setSavingPreferences(true);
     try {
       const prefData = {
-        gymId,
+        userId,
         ...preferences,
         updatedAt: serverTimestamp(),
       };
@@ -477,44 +450,6 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
     }
   };
 
-  const handleCancelSubscription = async () => {
-    if (!userId) return;
-
-    setIsCanceling(true);
-    try {
-      // For gym owners, update the gym's subscription
-      if (gymId) {
-        const gymDoc = await getDoc(doc(db, "gyms", gymId));
-        if (gymDoc.exists()) {
-          const gymData = gymDoc.data();
-          const currentPeriodEnd = gymData.subscription?.currentPeriodEnd || Timestamp.fromDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000));
-
-          await updateDoc(doc(db, "gyms", gymId), {
-            "subscription.aiProgrammerEndsAt": currentPeriodEnd,
-          });
-          setShowCancelModal(false);
-          window.location.reload();
-          return;
-        }
-      }
-
-      // Fallback: Update user's individual subscription
-      const endDate = subscription?.trialEndsAt || subscription?.endDate || Timestamp.fromDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000));
-
-      await updateDoc(doc(db, "users", userId), {
-        "aiProgrammingSubscription.status": "canceled",
-        "aiProgrammingSubscription.endDate": endDate,
-      });
-      setShowCancelModal(false);
-      window.location.reload();
-    } catch (err) {
-      console.error("Error canceling subscription:", err);
-      setError("Failed to cancel subscription. Please try again.");
-    } finally {
-      setIsCanceling(false);
-    }
-  };
-
   const createNewSession = async () => {
     // Generate unique name with count
     const todayStr = new Date().toLocaleDateString();
@@ -524,7 +459,7 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
       : `Program ${todayStr}`;
 
     const newSession: Omit<AIProgrammingSession, "id"> = {
-      gymId,
+      userId,
       createdBy: userId,
       title: uniqueTitle,
       status: "active",
@@ -569,7 +504,7 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
   };
 
   const deletePublishedWorkouts = async (sessionId: string) => {
-    if (!confirm("Are you sure you want to delete all workouts from this program? This cannot be undone.")) {
+    if (!confirm("Are you sure you want to remove all workouts from this program from your calendar? This cannot be undone.")) {
       return;
     }
 
@@ -579,8 +514,8 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
     try {
       // Query workouts by aiSessionId to only delete workouts from THIS session
       const workoutsQuery = query(
-        collection(db, "scheduledWorkouts"),
-        where("gymId", "==", gymId),
+        collection(db, "personalWorkouts"),
+        where("userId", "==", userId),
         where("aiSessionId", "==", sessionId)
       );
       const snapshot = await getDocs(workoutsQuery);
@@ -588,7 +523,7 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
       // Delete all workouts from this session
       let deletedCount = 0;
       for (const docSnap of snapshot.docs) {
-        await deleteDoc(doc(db, "scheduledWorkouts", docSnap.id));
+        await deleteDoc(doc(db, "personalWorkouts", docSnap.id));
         deletedCount++;
       }
 
@@ -608,7 +543,7 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
       }
 
       onPublish?.(); // Refresh the calendar
-      alert(`Deleted ${deletedCount} workouts from the calendar.`);
+      alert(`Removed ${deletedCount} workouts from your calendar.`);
     } catch (err) {
       console.error("Error deleting workouts:", err);
       setError("Failed to delete workouts");
@@ -618,7 +553,7 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
   };
 
   const deleteSession = async (sessionId: string) => {
-    if (!confirm("Are you sure you want to delete this program? If published, workouts will also be deleted.")) {
+    if (!confirm("Are you sure you want to delete this program? If published, workouts will also be removed from your calendar.")) {
       return;
     }
 
@@ -632,14 +567,14 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
       if (session?.status === "published") {
         // Query workouts by aiSessionId to only delete workouts from THIS session
         const workoutsQuery = query(
-          collection(db, "scheduledWorkouts"),
-          where("gymId", "==", gymId),
+          collection(db, "personalWorkouts"),
+          where("userId", "==", userId),
           where("aiSessionId", "==", sessionId)
         );
         const snapshot = await getDocs(workoutsQuery);
 
         for (const docSnap of snapshot.docs) {
-          await deleteDoc(doc(db, "scheduledWorkouts", docSnap.id));
+          await deleteDoc(doc(db, "personalWorkouts", docSnap.id));
         }
       }
 
@@ -680,12 +615,6 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
     setError(null);
 
     try {
-      // Initialize xAI/Grok API
-      const apiKey = process.env.NEXT_PUBLIC_XAI_API_KEY;
-      if (!apiKey) {
-        throw new Error("xAI API key not configured. Add NEXT_PUBLIC_XAI_API_KEY to your environment.");
-      }
-
       // Build conversation history for context
       const conversationHistory = updatedMessages.map(msg =>
         `${msg.role === "user" ? "User" : "Assistant"}: ${msg.content}`
@@ -693,30 +622,14 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
 
       const prompt = `${getSystemPrompt(preferences, recentlyUsedWorkouts)}\n\nConversation so far:\n${conversationHistory}\n\nRespond to the user's latest message. Remember to output valid JSON only.`;
 
-      // Call xAI/Grok API
-      const response = await fetch("https://api.x.ai/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-          model: "grok-4-latest",
-          messages: [
-            { role: "system", content: "You are an expert CrossFit programming assistant. Always respond with valid JSON." },
-            { role: "user", content: prompt }
-          ],
-          temperature: 0.7
-        })
+      // Call xAI/Grok API (fast model with automatic fallback)
+      const text = await chatCompletion({
+        messages: [
+          { role: "system", content: "You are an expert CrossFit programming coach. Always respond with valid JSON." },
+          { role: "user", content: prompt }
+        ],
+        temperature: 0.7,
       });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error?.message || `API error: ${response.status}`);
-      }
-
-      const data = await response.json();
-      const text = data.choices?.[0]?.message?.content || "";
 
       if (!text) {
         throw new Error("No response from AI");
@@ -803,7 +716,7 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
       setActiveSession(prev => prev ? { ...prev, messages: finalMessages } : null);
     } catch (err) {
       console.error("Error sending message:", err);
-      setError(err instanceof Error ? err.message : "Failed to get AI response. Make sure Vertex AI API is enabled.");
+      setError(err instanceof Error ? err.message : "Failed to get AI response.");
     } finally {
       setIsLoading(false);
     }
@@ -823,14 +736,13 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
   };
 
   const publishToCalendar = async () => {
-    if (!activeSession || selectedGroups.length === 0) return;
+    if (!activeSession) return;
 
     const workouts = getAllGeneratedWorkouts();
     if (workouts.length === 0) return;
 
-    // Validate required fields
-    if (!gymId || !userId) {
-      setError("Missing gym or user information");
+    if (!userId) {
+      setError("Missing user information");
       return;
     }
 
@@ -838,7 +750,7 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
     setError(null);
 
     try {
-      // Create scheduled workouts for each day
+      // Create a personal workout for each day
       for (const day of workouts) {
         if (day.isRestDay) continue;
         if (!day.components || day.components.length === 0) continue;
@@ -878,56 +790,23 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
         // When parsing "YYYY-MM-DD", JavaScript treats it as UTC which can shift the day
         // So we parse the components manually to ensure local time
         let workoutDate: Date;
+        let dateString: string | null = null;
         if (day.date && day.date.includes('-')) {
           const [year, month, dayNum] = day.date.split('-').map(Number);
           workoutDate = new Date(year, month - 1, dayNum, 12, 0, 0); // noon local time
+          dateString = day.date;
         } else {
           workoutDate = new Date(day.date);
         }
         if (isNaN(workoutDate.getTime())) continue; // Skip invalid dates
 
-        // Generate time slots from selected groups' default time slots
-        const groupsToUse = groups.filter(g => selectedGroups.includes(g.id));
-        const timeSlots: ScheduledTimeSlot[] = [];
-        const seenTimes = new Set<string>();
-
-        groupsToUse.forEach((group) => {
-          if (group.defaultTimeSlots?.length > 0) {
-            group.defaultTimeSlots.forEach((slot: { hour: number; minute: number; capacity?: number }) => {
-              const hour = typeof slot.hour === 'number' ? slot.hour : parseInt(slot.hour as unknown as string) || 0;
-              const minute = typeof slot.minute === 'number' ? slot.minute : parseInt(slot.minute as unknown as string) || 0;
-              const timeKey = `${hour}:${minute}`;
-              if (!seenTimes.has(timeKey)) {
-                seenTimes.add(timeKey);
-                timeSlots.push({
-                  id: `slot_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-                  hour: hour,
-                  minute: minute,
-                  capacity: slot.capacity || 20,
-                  signups: [],
-                });
-              }
-            });
-          }
-        });
-
-        // Sort time slots by time
-        timeSlots.sort((a, b) => a.hour * 60 + a.minute - (b.hour * 60 + b.minute));
-
-        // Create document with aiSessionId to track which session created it
-        await addDoc(collection(db, "scheduledWorkouts"), {
-          gymId: String(gymId),
-          wodTitle: String(`${day.dayOfWeek || "Day"} Programming`),
-          wodDescription: String(cleanComponents.map(c => c.title).join(", ")),
-          workoutType: "wod",
-          groupIds: selectedGroups.map(g => String(g)),
-          createdBy: String(userId),
-          recurrenceType: "none",
-          components: cleanComponents,
-          hideDetails: false,
+        // Create the workout on the athlete's personal calendar
+        await addDoc(collection(db, "personalWorkouts"), {
+          userId: String(userId),
           date: Timestamp.fromDate(workoutDate),
+          ...(dateString ? { dateString } : {}),
+          components: cleanComponents,
           createdAt: serverTimestamp(),
-          timeSlots,
           aiSessionId: activeSession.id, // Track which AI programming session created this workout
         });
       }
@@ -935,14 +814,13 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
       // Update session status
       await updateDoc(doc(db, "aiProgrammingSessions", activeSession.id), {
         status: "published",
-        targetGroupIds: selectedGroups,
         updatedAt: Timestamp.now(),
       });
 
       setActiveSession(prev => prev ? { ...prev, status: "published" } : null);
       setShowPreview(false);
       onPublish?.();
-      alert("Programming published successfully!");
+      alert("Programming added to your calendar!");
     } catch (err) {
       console.error("PUBLISH_ERROR_V2:", err);
       setError("Failed to publish programming");
@@ -965,7 +843,7 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
   if (!hasActiveSubscription) {
     return (
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <AITrainerPaywall userEmail={userEmail} variant="coach" />
+        <AITrainerPaywall userEmail={userEmail} />
       </div>
     );
   }
@@ -982,8 +860,8 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
               </svg>
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-white">AI Programming Assistant</h2>
-              <p className="text-white/80 text-sm">Generate months of workouts with AI</p>
+              <h2 className="text-lg font-semibold text-white">Your AI Coach</h2>
+              <p className="text-white/80 text-sm">Programming built for your garage gym</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -1005,40 +883,6 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
             </button>
           </div>
         </div>
-
-        {/* Subscription Status Bar */}
-        {subscription && (
-          <div className="px-4 py-2 bg-white/10 flex items-center justify-between text-xs">
-            <span className="text-white/80">
-              {subscription.scheduledEndDate ? (
-                // Has scheduled cancellation - show end date
-                <>Access ends {subscription.scheduledEndDate?.toDate?.().toLocaleDateString() || "soon"}</>
-              ) : subscription.status === "canceled" && subscription.endDate ? (
-                <>Access ended {subscription.endDate?.toDate?.().toLocaleDateString() || ""}</>
-              ) : subscription.status === "trialing" ? (
-                <>Trial ends {subscription.trialEndsAt?.toDate?.().toLocaleDateString() || "soon"}</>
-              ) : (
-                <>Subscription active</>
-              )}
-            </span>
-            {subscription.scheduledEndDate || subscription.status === "canceled" ? (
-              // Already cancelled or scheduled to cancel - show resubscribe
-              <button
-                onClick={() => window.location.href = `/gym/${gymId}/subscription`}
-                className="text-green-200 hover:text-green-100 hover:underline"
-              >
-                Resubscribe
-              </button>
-            ) : (
-              <button
-                onClick={() => setShowCancelModal(true)}
-                className="text-red-200 hover:text-red-100 hover:underline"
-              >
-                Cancel Subscription
-              </button>
-            )}
-          </div>
-        )}
       </div>
 
       {/* Session Tabs */}
@@ -1123,14 +967,14 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
                   </svg>
                 </div>
-                <h3 className="text-lg font-medium text-gray-900 mb-2">Start Your Programming</h3>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">Ask Your Coach for Programming</h3>
                 <p className="text-gray-500 text-sm max-w-md mx-auto mb-4">
-                  Tell me about your gym and what kind of programming you need. For example:
+                  Tell your AI coach about your goals, equipment, and schedule. For example:
                 </p>
                 <div className="space-y-2 text-sm text-gray-600">
-                  <p>"Generate 4 weeks of CrossFit programming for intermediate athletes"</p>
-                  <p>"Create a strength-focused program with Olympic lifting"</p>
-                  <p>"I need 8 weeks of programming with 2 rest days per week"</p>
+                  <p>&quot;Program my next week - I have a barbell, rings, and a rower&quot;</p>
+                  <p>&quot;Create a strength-focused month with Olympic lifting&quot;</p>
+                  <p>&quot;I can train 4 days a week, 45 minutes max, build me a plan&quot;</p>
                 </div>
               </div>
             ) : (
@@ -1227,14 +1071,14 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
             {activeSession.status === "published" && (
               <div className="flex items-center gap-3 mt-2">
                 <p className="text-sm text-gray-500">
-                  This program has been published.
+                  This program has been added to your calendar.
                 </p>
                 <button
                   onClick={() => deletePublishedWorkouts(activeSession.id)}
                   disabled={isDeleting}
                   className="px-3 py-1 text-xs font-medium text-red-600 hover:text-red-700 hover:bg-red-50 border border-red-200 rounded-lg transition-colors disabled:opacity-50"
                 >
-                  {isDeleting ? "Deleting..." : "Unpublish & Delete Workouts"}
+                  {isDeleting ? "Removing..." : "Unpublish & Remove Workouts"}
                 </button>
               </div>
             )}
@@ -1249,7 +1093,7 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
           </div>
           <h3 className="text-lg font-medium text-gray-900 mb-2">No Active Program</h3>
           <p className="text-gray-500 text-sm mb-4">
-            Start a new AI-powered programming session
+            Ask your AI coach to build your next training block
           </p>
           <button
             onClick={createNewSession}
@@ -1335,32 +1179,6 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
             </div>
 
             <div className="p-4 border-t border-gray-200 bg-gray-50">
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Publish to Groups
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  {groups.map(group => (
-                    <button
-                      key={group.id}
-                      onClick={() => {
-                        setSelectedGroups(prev =>
-                          prev.includes(group.id)
-                            ? prev.filter(id => id !== group.id)
-                            : [...prev, group.id]
-                        );
-                      }}
-                      className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
-                        selectedGroups.includes(group.id)
-                          ? "bg-purple-600 text-white"
-                          : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
-                      }`}
-                    >
-                      {group.name}
-                    </button>
-                  ))}
-                </div>
-              </div>
               <div className="flex justify-end gap-3">
                 <button
                   onClick={() => setShowPreview(false)}
@@ -1370,10 +1188,10 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
                 </button>
                 <button
                   onClick={publishToCalendar}
-                  disabled={selectedGroups.length === 0 || isPublishing}
+                  disabled={isPublishing}
                   className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {isPublishing ? "Publishing..." : `Publish ${generatedWorkouts.filter(d => !d.isRestDay).length} Workouts`}
+                  {isPublishing ? "Adding..." : `Add ${generatedWorkouts.filter(d => !d.isRestDay).length} Workouts to My Calendar`}
                 </button>
               </div>
             </div>
@@ -1387,22 +1205,37 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
           <div className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
             <div className="p-4 border-b border-gray-200 bg-gradient-to-r from-purple-600 to-indigo-600 rounded-t-xl">
               <h3 className="text-lg font-semibold text-white">AI Programming Preferences</h3>
-              <p className="text-white/80 text-sm">Set rules and philosophy for the AI to follow</p>
+              <p className="text-white/80 text-sm">Tell your coach about your setup and how you like to train</p>
             </div>
 
             <div className="p-4 space-y-4">
-              {/* Gym Philosophy */}
+              {/* Training Philosophy */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Gym Philosophy
+                  Training Philosophy & Goals
                 </label>
                 <textarea
                   value={preferences.philosophy}
                   onChange={(e) => setPreferences(prev => ({ ...prev, philosophy: e.target.value }))}
-                  placeholder="e.g., We focus on functional fitness for all levels. We emphasize proper form over heavy weights. Our members enjoy longer, challenging workouts..."
+                  placeholder="e.g., I want to build strength while keeping conditioning. Training for a local competition in the fall. Prefer quality over volume..."
                   rows={3}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
                 />
+              </div>
+
+              {/* Equipment */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Your Garage Gym Equipment
+                </label>
+                <textarea
+                  value={preferences.equipment}
+                  onChange={(e) => setPreferences(prev => ({ ...prev, equipment: e.target.value }))}
+                  placeholder="e.g., Barbell + 300lb plates, squat rack, pull-up bar, one 53lb kettlebell, jump rope, rower. No dumbbells, no rings..."
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
+                />
+                <p className="text-xs text-gray-500 mt-1">The AI will only program movements you can actually do</p>
               </div>
 
               {/* Workout Duration */}
@@ -1504,42 +1337,6 @@ export default function AIProgrammingChat({ gymId, userId, userEmail, groups, on
               >
                 {savingPreferences ? "Saving..." : "Save Preferences"}
               </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Cancel Subscription Modal */}
-      {showCancelModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full">
-            <div className="p-6">
-              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-              </div>
-              <h3 className="text-lg font-semibold text-gray-900 text-center mb-2">
-                Cancel AI Programming?
-              </h3>
-              <p className="text-gray-600 text-sm text-center mb-6">
-                Are you sure you want to cancel your AI Programming subscription? You&apos;ll lose access to the AI programming assistant at the end of your current billing period.
-              </p>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setShowCancelModal(false)}
-                  className="flex-1 px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
-                >
-                  Keep Subscription
-                </button>
-                <button
-                  onClick={handleCancelSubscription}
-                  disabled={isCanceling}
-                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isCanceling ? "Canceling..." : "Yes, Cancel"}
-                </button>
-              </div>
             </div>
           </div>
         </div>

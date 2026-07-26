@@ -231,7 +231,6 @@ function LeaderboardContent() {
                         </div>
                         <div className="text-sm text-gray-500">
                           {entry.completedDate?.toDate?.()?.toLocaleDateString()}
-                          {entry.gymName && ` • ${entry.gymName}`}
                         </div>
                       </div>
 
