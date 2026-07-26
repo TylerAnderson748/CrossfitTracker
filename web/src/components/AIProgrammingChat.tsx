@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { collection, addDoc, updateDoc, doc, query, where, getDocs, orderBy, Timestamp, serverTimestamp, deleteDoc } from "firebase/firestore";
+import { collection, addDoc, updateDoc, doc, query, where, getDocs, Timestamp, serverTimestamp, deleteDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { AIProgrammingSession, AIChatMessage, AIGeneratedDay, AIProgrammingPreferences, AITrainerSubscription } from "@/lib/types";
 import { getAllSkills, getAllLifts, getAllWods } from "@/lib/workoutData";
@@ -370,16 +370,20 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
   useEffect(() => {
     const loadSessions = async () => {
       try {
+        // Query by userId only and sort client-side to avoid a composite index requirement
         const sessionsQuery = query(
           collection(db, "aiProgrammingSessions"),
-          where("userId", "==", userId),
-          orderBy("updatedAt", "desc")
+          where("userId", "==", userId)
         );
         const snapshot = await getDocs(sessionsQuery);
-        const loadedSessions = snapshot.docs.map(doc => ({
+        const loadedSessions = (snapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
-        })) as AIProgrammingSession[];
+        })) as AIProgrammingSession[]).sort((a, b) => {
+          const dateA = a.updatedAt?.toDate?.()?.getTime() || 0;
+          const dateB = b.updatedAt?.toDate?.()?.getTime() || 0;
+          return dateB - dateA;
+        });
         setSessions(loadedSessions);
 
         // Auto-select first active session
