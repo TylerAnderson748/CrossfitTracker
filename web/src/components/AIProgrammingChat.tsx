@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { collection, addDoc, updateDoc, doc, query, where, getDocs, Timestamp, serverTimestamp, deleteDoc } from "firebase/firestore";
+import { collection, addDoc, updateDoc, doc, query, where, getDocs, Timestamp, serverTimestamp, deleteDoc, writeBatch } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { AIProgrammingSession, AIChatMessage, AIGeneratedDay, AIProgrammingPreferences, AITrainerSubscription } from "@/lib/types";
 import { getAllSkills, getAllLifts, getAllWods } from "@/lib/workoutData";
@@ -23,6 +23,41 @@ const defaultPreferences: Omit<AIProgrammingPreferences, "userId" | "updatedAt">
   additionalRules: "",
 };
 
+// Outline of a long-range training plan (generated week by week)
+interface ProgramOutlineWeek {
+  weekNumber: number;
+  startDate: string;
+  focus: string;
+  details?: string;
+}
+
+interface ProgramOutline {
+  startDate: string;
+  endDate: string;
+  weeks: ProgramOutlineWeek[];
+}
+
+// Strip markdown code fences from an AI JSON response
+function cleanJsonText(text: string): string {
+  let t = text.trim();
+  if (t.startsWith("```json")) t = t.slice(7);
+  else if (t.startsWith("```")) t = t.slice(3);
+  if (t.endsWith("```")) t = t.slice(0, -3);
+  return t.trim();
+}
+
+// Keep only the most recent generated program in the saved session so long
+// programs stay well under Firestore's 1MB document limit
+function stripOldWorkouts(messages: AIChatMessage[]): AIChatMessage[] {
+  const lastWithWorkouts = [...messages].reverse().find(m => m.generatedWorkouts && m.generatedWorkouts.length > 0);
+  return messages.map(m => {
+    if (m === lastWithWorkouts || !m.generatedWorkouts) return m;
+    const rest = { ...m };
+    delete rest.generatedWorkouts;
+    return rest;
+  });
+}
+
 interface AIProgrammingChatProps {
   userId: string;
   userEmail?: string;
@@ -30,44 +65,7 @@ interface AIProgrammingChatProps {
   subscription?: AITrainerSubscription;
 }
 
-const getSystemPrompt = (preferences?: Omit<AIProgrammingPreferences, "userId" | "updatedAt">, recentlyUsedWorkouts?: string[]) => {
-  const today = new Date();
-  const todayStr = today.toISOString().split('T')[0]; // YYYY-MM-DD format
-  const dayOfWeek = today.toLocaleDateString('en-US', { weekday: 'long' });
-  const monthName = today.toLocaleDateString('en-US', { month: 'long' });
-
-  // Calculate upcoming dates for each day of the week
-  const getNextDayDate = (targetDay: number) => {
-    const date = new Date(today);
-    const currentDay = date.getDay();
-    let daysUntil = targetDay - currentDay;
-    if (daysUntil < 0) daysUntil += 7; // If the day has passed this week, get next week's
-    date.setDate(date.getDate() + daysUntil);
-    return date.toISOString().split('T')[0];
-  };
-
-  const upcomingDates = {
-    Sunday: getNextDayDate(0),
-    Monday: getNextDayDate(1),
-    Tuesday: getNextDayDate(2),
-    Wednesday: getNextDayDate(3),
-    Thursday: getNextDayDate(4),
-    Friday: getNextDayDate(5),
-    Saturday: getNextDayDate(6),
-  };
-
-  // Determine current season
-  const month = today.getMonth();
-  let season = "Winter";
-  if (month >= 2 && month <= 4) season = "Spring";
-  else if (month >= 5 && month <= 7) season = "Summer";
-  else if (month >= 8 && month <= 10) season = "Fall";
-
-  // Get preset workout names
-  const skillNames = getPresetSkillNames();
-  const liftNames = getPresetLiftNames();
-  const wodNames = getPresetWodNames();
-
+function buildPreferencesSection(preferences?: Omit<AIProgrammingPreferences, "userId" | "updatedAt">): string {
   // Build athlete preferences section
   let athletePreferencesSection = "";
   if (preferences) {
@@ -116,6 +114,48 @@ ${prefParts.join("\n")}
 `;
     }
   }
+  return athletePreferencesSection;
+}
+
+const getSystemPrompt = (preferences?: Omit<AIProgrammingPreferences, "userId" | "updatedAt">, recentlyUsedWorkouts?: string[]) => {
+  const today = new Date();
+  const todayStr = today.toISOString().split('T')[0]; // YYYY-MM-DD format
+  const dayOfWeek = today.toLocaleDateString('en-US', { weekday: 'long' });
+  const monthName = today.toLocaleDateString('en-US', { month: 'long' });
+
+  // Calculate upcoming dates for each day of the week
+  const getNextDayDate = (targetDay: number) => {
+    const date = new Date(today);
+    const currentDay = date.getDay();
+    let daysUntil = targetDay - currentDay;
+    if (daysUntil < 0) daysUntil += 7; // If the day has passed this week, get next week's
+    date.setDate(date.getDate() + daysUntil);
+    return date.toISOString().split('T')[0];
+  };
+
+  const upcomingDates = {
+    Sunday: getNextDayDate(0),
+    Monday: getNextDayDate(1),
+    Tuesday: getNextDayDate(2),
+    Wednesday: getNextDayDate(3),
+    Thursday: getNextDayDate(4),
+    Friday: getNextDayDate(5),
+    Saturday: getNextDayDate(6),
+  };
+
+  // Determine current season
+  const month = today.getMonth();
+  let season = "Winter";
+  if (month >= 2 && month <= 4) season = "Spring";
+  else if (month >= 5 && month <= 7) season = "Summer";
+  else if (month >= 8 && month <= 10) season = "Fall";
+
+  // Get preset workout names
+  const skillNames = getPresetSkillNames();
+  const liftNames = getPresetLiftNames();
+  const wodNames = getPresetWodNames();
+
+  const athletePreferencesSection = buildPreferencesSection(preferences);
 
   // Build recently used workouts section
   let recentlyUsedSection = "";
@@ -248,6 +288,7 @@ The notes field for skills MUST include:
 - For skills and lifts, ONLY use the preset names listed above
 - For WODs, use benchmark WODs when appropriate, but get CREATIVE with custom WOD names using themes!
 - Pay attention to any themes, preferences, or special requests from the user
+- If the athlete attends a class elsewhere on fixed days (e.g., an Olympic lifting class at their gym), do NOT program a workout for that day - include ONE component describing the class (e.g., type "lift", title "Olympic Lifting Class") with brief notes; class components are exempt from the preset-name rule
 
 IMPORTANT - STIMULUS, GOALS, AND SCALING:
 Every workout component MUST have detailed notes with:
@@ -286,6 +327,29 @@ SCALING MOVEMENT EXAMPLES:
 - Double-Unders: "Rx: DUs, Scaled: 2:1 Singles, Foundations: 3:1 Singles or Penguin Jumps"
 - Toes-to-Bar: "Rx: TTB, Scaled: Knees-to-Elbows, Foundations: Hanging Knee Raises or V-ups"
 
+LONG-RANGE PROGRAMS (more than 2 weeks):
+If the user asks for programming spanning MORE than 14 days (e.g., "program every day until my marathon", "12 weeks of training"), DO NOT generate the days directly. Instead respond with a week-by-week training plan outline in this exact JSON format:
+{
+  "message": "Explain the overall plan: the phases, the standard weekly structure, how you're building toward their events, and where the rest days are",
+  "outline": {
+    "startDate": "YYYY-MM-DD",
+    "endDate": "YYYY-MM-DD",
+    "weeks": [
+      {
+        "weekNumber": 1,
+        "startDate": "YYYY-MM-DD",
+        "focus": "Base building",
+        "details": "Which days run/lift/WOD/rest, key sessions, volume targets, fixed commitments like gym classes, and any event that falls in this week"
+      }
+    ]
+  }
+}
+- startDate is the first training day (today unless they say otherwise); endDate is the final day of the plan (e.g., race day).
+- Include one entry per week covering the ENTIRE requested date range - never stop early.
+- Build proper phases around any events the user mentions (base -> build -> peak -> taper -> event -> recovery).
+- Restate the athlete's fixed weekly commitments (classes on specific days) and their rest days in EVERY week's details.
+The app will then ask you for each week's daily workouts one at a time.
+
 If the user is just chatting or asking questions (not requesting workouts), respond with just:
 {
   "message": "Your response here",
@@ -319,6 +383,9 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
 
   // Recently used workouts (last 6 months) - to avoid repetition
   const [recentlyUsedWorkouts, setRecentlyUsedWorkouts] = useState<string[]>([]);
+
+  // Progress while generating a multi-week program
+  const [generationProgress, setGenerationProgress] = useState<{ current: number; total: number } | null>(null);
 
   // Load recently used workouts from the last 6 months of the athlete's calendar
   useEffect(() => {
@@ -642,19 +709,20 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
       // Parse the JSON response
       let parsedResponse: { message: string; workouts: AIGeneratedDay[] };
       try {
-        // Clean up the response - remove any markdown code blocks if present
-        let cleanedText = text.trim();
-        if (cleanedText.startsWith("```json")) {
-          cleanedText = cleanedText.slice(7);
-        } else if (cleanedText.startsWith("```")) {
-          cleanedText = cleanedText.slice(3);
-        }
-        if (cleanedText.endsWith("```")) {
-          cleanedText = cleanedText.slice(0, -3);
-        }
-        cleanedText = cleanedText.trim();
+        const parsed = JSON.parse(cleanJsonText(text));
 
-        const parsed = JSON.parse(cleanedText);
+        // Long-range program: the AI returned a week-by-week outline.
+        // Generate the actual days one week at a time so nothing gets cut short.
+        if (parsed.outline && Array.isArray(parsed.outline.weeks) && parsed.outline.weeks.length > 0) {
+          await generateFullProgram(
+            activeSession.id,
+            parsed.message || "Here's your training plan.",
+            parsed.outline as ProgramOutline,
+            conversationHistory,
+            updatedMessages
+          );
+          return;
+        }
 
         // Handle different response formats from AI
         if (Array.isArray(parsed)) {
@@ -706,7 +774,7 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
 
       // Prepare update data - filter out any undefined values
       const updateData: Record<string, unknown> = {
-        messages: finalMessages,
+        messages: stripOldWorkouts(finalMessages),
         updatedAt: Timestamp.now(),
       };
 
@@ -724,6 +792,143 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Build the prompt that generates one specific week of a long-range plan
+  const buildWeekPrompt = (
+    outline: ProgramOutline,
+    week: ProgramOutlineWeek,
+    conversationHistory: string,
+    previousDays: AIGeneratedDay[]
+  ): string => {
+    const skillNames = getPresetSkillNames();
+    const liftNames = getPresetLiftNames();
+
+    const usedWodTitles = new Set<string>(recentlyUsedWorkouts);
+    previousDays.forEach(day => day.components?.forEach(c => {
+      if (c.type === "wod" && c.title) usedWodTitles.add(c.title);
+    }));
+
+    const outlineSummary = outline.weeks
+      .map(w => `Week ${w.weekNumber} (starting ${w.startDate}): ${w.focus}${w.details ? ` - ${w.details}` : ""}`)
+      .join("\n");
+
+    const lastDays = previousDays.slice(-7)
+      .map(d => `${d.date} (${d.dayOfWeek}): ${d.isRestDay ? "REST" : d.components?.map(c => c.title).join(", ")}`)
+      .join("\n");
+
+    return `You are a personal CrossFit + endurance coach generating ONE WEEK of daily workouts inside a longer training plan for an athlete in their garage/home gym.
+${buildPreferencesSection(preferences)}
+THE ATHLETE'S REQUEST AND CONTEXT (conversation so far):
+${conversationHistory}
+
+FULL PLAN OUTLINE (runs ${outline.startDate} to ${outline.endDate}):
+${outlineSummary}
+
+YOU ARE NOW GENERATING WEEK ${week.weekNumber}, which starts on ${week.startDate}.
+Focus for this week: ${week.focus}
+${week.details ? `Details: ${week.details}` : ""}
+${lastDays ? `\nDAYS ALREADY PROGRAMMED JUST BEFORE THIS WEEK (for continuity):\n${lastDays}` : ""}
+
+Respond with valid JSON in this exact format:
+{
+  "days": [
+    {
+      "date": "YYYY-MM-DD",
+      "dayOfWeek": "Monday",
+      "isRestDay": false,
+      "components": [
+        { "type": "wod", "title": "...", "description": "...", "scoringType": "fortime", "notes": "..." }
+      ]
+    }
+  ]
+}
+
+RULES:
+- Cover EVERY calendar day of this week starting ${week.startDate} (7 consecutive days, or fewer if the plan's end date ${outline.endDate} falls within this week). Use correct real dates and matching day names.
+- Rest days: set isRestDay to true with components [] (or one light "cooldown" mobility component if the plan calls for active recovery).
+- Days with an external class (e.g., Olympic lifting class at their gym): ONE component describing the class with brief notes - do not program extra work unless the plan says so.
+- Running sessions: use a "wod" component with the run as the description (distance, pace guidance, structure).
+- Component types: "warmup", "lift", "wod", "skill", "cooldown". WOD scoringType: "fortime", "amrap", "emom".
+- For prescribed SKILL components use only these names: ${skillNames.join(", ")}
+- For prescribed LIFT components use only these names (class-day components are exempt): ${liftNames.join(", ")}
+- DO NOT reuse these WOD names: ${Array.from(usedWodTitles).slice(-80).join(", ") || "none yet"}
+- Keep notes concise: under 60 words per component (stimulus, scaling, intent).
+- Only program equipment the athlete actually has.
+- Respond with pure JSON only - no markdown fences, no extra text.`;
+  };
+
+  // Generate a multi-week program: one API call per week, assembled into a single plan
+  const generateFullProgram = async (
+    sessionId: string,
+    planMessage: string,
+    outline: ProgramOutline,
+    conversationHistory: string,
+    updatedMessages: AIChatMessage[]
+  ) => {
+    const weeks = (outline.weeks || []).slice(0, 20);
+    const allDays: AIGeneratedDay[] = [];
+    const failedWeeks: number[] = [];
+
+    for (let i = 0; i < weeks.length; i++) {
+      setGenerationProgress({ current: i + 1, total: weeks.length });
+
+      let days: AIGeneratedDay[] | null = null;
+      for (let attempt = 0; attempt < 2 && !days; attempt++) {
+        try {
+          const text = await chatCompletion({
+            messages: [
+              { role: "system", content: "You are an expert CrossFit and endurance programming coach. Always respond with valid JSON only." },
+              { role: "user", content: buildWeekPrompt(outline, weeks[i], conversationHistory, allDays) }
+            ],
+            temperature: 0.6,
+          });
+          const parsed = JSON.parse(cleanJsonText(text));
+          const arr = Array.isArray(parsed) ? parsed : (parsed.days || parsed.workouts);
+          if (Array.isArray(arr) && arr.length > 0) {
+            days = arr as AIGeneratedDay[];
+          }
+        } catch (err) {
+          console.error(`Error generating week ${weeks[i].weekNumber} (attempt ${attempt + 1}):`, err);
+        }
+      }
+
+      if (days) {
+        allDays.push(...days);
+      } else {
+        failedWeeks.push(weeks[i].weekNumber);
+      }
+    }
+
+    setGenerationProgress(null);
+
+    let finalText = `${planMessage}\n\nI built out ${allDays.length} days of programming across ${weeks.length} weeks. Hit "Preview & Publish" to review the full plan and add it to your calendar.`;
+    if (outline.weeks.length > 20) {
+      finalText += `\n\n(I capped this at the first 20 weeks - ask me to continue from week 21 when you get there.)`;
+    }
+    if (failedWeeks.length > 0) {
+      finalText += `\n\n(Heads up: week${failedWeeks.length > 1 ? "s" : ""} ${failedWeeks.join(", ")} failed to generate - ask me to fill ${failedWeeks.length > 1 ? "them" : "it"} in.)`;
+    }
+
+    const assistantMessage: AIChatMessage = {
+      id: `msg-${Date.now()}-assistant`,
+      role: "assistant",
+      content: finalText,
+      timestamp: Timestamp.now(),
+    };
+    if (allDays.length > 0) {
+      assistantMessage.generatedWorkouts = allDays;
+    }
+
+    const finalMessages = [...updatedMessages, assistantMessage];
+
+    await updateDoc(doc(db, "aiProgrammingSessions", sessionId), {
+      messages: stripOldWorkouts(finalMessages),
+      programWeeks: weeks.length,
+      updatedAt: Timestamp.now(),
+    });
+
+    setActiveSession(prev => prev ? { ...prev, messages: finalMessages } : null);
   };
 
   const getAllGeneratedWorkouts = (): AIGeneratedDay[] => {
@@ -754,6 +959,10 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
     setError(null);
 
     try {
+      // Write in batches so long programs (60-90+ days) publish in seconds
+      let batch = writeBatch(db);
+      let pending = 0;
+
       // Create a personal workout for each day
       for (const day of workouts) {
         if (day.isRestDay) continue;
@@ -805,7 +1014,8 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
         if (isNaN(workoutDate.getTime())) continue; // Skip invalid dates
 
         // Create the workout on the athlete's personal calendar
-        await addDoc(collection(db, "personalWorkouts"), {
+        const workoutRef = doc(collection(db, "personalWorkouts"));
+        batch.set(workoutRef, {
           userId: String(userId),
           date: Timestamp.fromDate(workoutDate),
           ...(dateString ? { dateString } : {}),
@@ -813,6 +1023,16 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
           createdAt: serverTimestamp(),
           aiSessionId: activeSession.id, // Track which AI programming session created this workout
         });
+        pending++;
+        if (pending >= 400) {
+          await batch.commit();
+          batch = writeBatch(db);
+          pending = 0;
+        }
+      }
+
+      if (pending > 0) {
+        await batch.commit();
       }
 
       // Update session status
@@ -977,7 +1197,7 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
                 </p>
                 <div className="space-y-2 text-sm text-gray-600">
                   <p>&quot;Program my next week - I have a barbell, rings, and a rower&quot;</p>
-                  <p>&quot;Create a strength-focused month with Olympic lifting&quot;</p>
+                  <p>&quot;Program every day until my marathon on October 25 - I also have a comp on the 7th&quot;</p>
                   <p>&quot;I can train 4 days a week, 45 minutes max, build me a plan&quot;</p>
                 </div>
               </div>
@@ -1020,10 +1240,15 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
                                   : "bg-purple-100 text-purple-700"
                               }`}
                             >
-                              {day.dayOfWeek.slice(0, 3)}
+                              {(day.dayOfWeek || "").slice(0, 3)}
                             </div>
                           ))}
                         </div>
+                        {message.generatedWorkouts.length > 14 && (
+                          <p className="text-xs text-gray-500 mt-2">
+                            + {message.generatedWorkouts.length - 14} more days - open Preview to see the full plan
+                          </p>
+                        )}
                       </div>
                     )}
                   </div>
@@ -1034,11 +1259,23 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
             {isLoading && (
               <div className="flex justify-start">
                 <div className="bg-white border border-gray-200 rounded-lg p-4">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 bg-purple-600 rounded-full animate-bounce" />
-                    <div className="w-2 h-2 bg-purple-600 rounded-full animate-bounce" style={{ animationDelay: "0.1s" }} />
-                    <div className="w-2 h-2 bg-purple-600 rounded-full animate-bounce" style={{ animationDelay: "0.2s" }} />
-                  </div>
+                  {generationProgress ? (
+                    <div className="flex items-center gap-3">
+                      <div className="w-4 h-4 border-2 border-purple-200 border-t-purple-600 rounded-full animate-spin" />
+                      <div>
+                        <p className="text-sm font-medium text-gray-700">
+                          Building week {generationProgress.current} of {generationProgress.total}...
+                        </p>
+                        <p className="text-xs text-gray-400">Long programs are written one week at a time - hang tight</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-purple-600 rounded-full animate-bounce" />
+                      <div className="w-2 h-2 bg-purple-600 rounded-full animate-bounce" style={{ animationDelay: "0.1s" }} />
+                      <div className="w-2 h-2 bg-purple-600 rounded-full animate-bounce" style={{ animationDelay: "0.2s" }} />
+                    </div>
+                  )}
                 </div>
               </div>
             )}
