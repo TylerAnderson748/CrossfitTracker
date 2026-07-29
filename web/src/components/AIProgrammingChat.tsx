@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { collection, addDoc, updateDoc, doc, query, where, getDocs, Timestamp, serverTimestamp, deleteDoc, writeBatch } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { AIProgrammingSession, AIChatMessage, AIGeneratedDay, AIProgrammingPreferences, AITrainerSubscription } from "@/lib/types";
+import { AIProgrammingSession, AIChatMessage, AIGeneratedDay, AIProgrammingPreferences, AITrainerSubscription, TrainingEvent, TrainingEventType, WeekdayKey } from "@/lib/types";
 import { getAllSkills, getAllLifts, getAllWods } from "@/lib/workoutData";
 import { chatCompletion } from "@/lib/ai";
 import AITrainerPaywall from "./AITrainerPaywall";
@@ -17,11 +17,25 @@ const getPresetWodNames = () => getAllWods().map(w => w.name);
 const defaultPreferences: Omit<AIProgrammingPreferences, "userId" | "updatedAt"> = {
   philosophy: "",
   equipment: "",
+  events: [],
+  weeklySchedule: {},
   workoutDuration: "varied",
   benchmarkFrequency: "sometimes",
   programmingStyle: "",
   additionalRules: "",
 };
+
+const WEEKDAYS: { key: WeekdayKey; label: string; full: string }[] = [
+  { key: "monday", label: "Mon", full: "Monday" },
+  { key: "tuesday", label: "Tue", full: "Tuesday" },
+  { key: "wednesday", label: "Wed", full: "Wednesday" },
+  { key: "thursday", label: "Thu", full: "Thursday" },
+  { key: "friday", label: "Fri", full: "Friday" },
+  { key: "saturday", label: "Sat", full: "Saturday" },
+  { key: "sunday", label: "Sun", full: "Sunday" },
+];
+
+const RACE_DISTANCES = ["5K", "10K", "Half Marathon", "Marathon", "Ultra", "Other distance"];
 
 // Outline of a long-range training plan (generated week by week)
 interface ProgramOutlineWeek {
@@ -77,6 +91,36 @@ function buildPreferencesSection(preferences?: Omit<AIProgrammingPreferences, "u
 
     if (preferences.equipment) {
       prefParts.push(`Available Equipment (garage/home gym): ${preferences.equipment}\nIMPORTANT: ONLY program movements that can be done with this equipment. Substitute anything that requires equipment they don't have.`);
+    }
+
+    const eventsWithDates = (preferences.events || []).filter(e => e.date);
+    if (eventsWithDates.length > 0) {
+      const eventLines = eventsWithDates.map(e => {
+        const label = e.type === "running_race"
+          ? `Running race${e.detail ? ` (${e.detail})` : ""}`
+          : e.type === "crossfit_comp"
+          ? "CrossFit competition"
+          : `Event${e.detail ? ` (${e.detail})` : ""}`;
+        return `- ${label}${e.name ? `: "${e.name}"` : ""} on ${e.date}`;
+      });
+      const hasRace = eventsWithDates.some(e => e.type === "running_race");
+      prefParts.push(`EVENTS THE ATHLETE IS TRAINING FOR (CRITICAL - build the entire plan around these):\n${eventLines.join("\n")}\n- Structure phases (base -> build -> peak -> taper) around each event and put the event day itself on the calendar.${hasRace ? "\n- The running race REQUIRES real run training as standalone workouts: a weekly long run that builds progressively, easy runs, and race-pace work, each with distance and pacing guidance." : ""}`);
+    }
+
+    const schedule = preferences.weeklySchedule || {};
+    const scheduleLines: string[] = [];
+    const dayNames: Record<string, string> = { monday: "Monday", tuesday: "Tuesday", wednesday: "Wednesday", thursday: "Thursday", friday: "Friday", saturday: "Saturday", sunday: "Sunday" };
+    for (const key of Object.keys(dayNames)) {
+      const setting = schedule[key as keyof typeof schedule];
+      if (!setting || setting.mode === "open") continue;
+      if (setting.mode === "rest") {
+        scheduleLines.push(`- ${dayNames[key]}: COMPLETE REST DAY every week - always program rest`);
+      } else {
+        scheduleLines.push(`- ${dayNames[key]}: FIXED CLASS every week - ${setting.classDescription || "a class at their gym"}. Do NOT program a workout for this day; add ONE component noting the class (with intensity guidance during taper weeks).`);
+      }
+    }
+    if (scheduleLines.length > 0) {
+      prefParts.push(`WEEKLY SCHEDULE (NON-NEGOTIABLE - applies to every single week):\n${scheduleLines.join("\n")}`);
     }
 
     if (preferences.workoutDuration && preferences.workoutDuration !== "varied") {
@@ -483,6 +527,8 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
           setPreferences({
             philosophy: prefData.philosophy || "",
             equipment: prefData.equipment || "",
+            events: prefData.events || [],
+            weeklySchedule: prefData.weeklySchedule || {},
             workoutDuration: prefData.workoutDuration || "varied",
             benchmarkFrequency: prefData.benchmarkFrequency || "sometimes",
             programmingStyle: prefData.programmingStyle || "",
@@ -503,6 +549,19 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
       const prefData = {
         userId,
         ...preferences,
+        events: (preferences.events || []).map(e => ({
+          id: e.id,
+          type: e.type,
+          name: e.name || "",
+          date: e.date || "",
+          detail: e.detail || "",
+        })),
+        weeklySchedule: Object.fromEntries(
+          Object.entries(preferences.weeklySchedule || {}).map(([day, setting]) => [
+            day,
+            { mode: setting.mode, classDescription: setting.classDescription || "" },
+          ])
+        ),
         updatedAt: serverTimestamp(),
       };
 
@@ -519,6 +578,52 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
     } finally {
       setSavingPreferences(false);
     }
+  };
+
+  // Training event helpers
+  const addEvent = () => {
+    setPreferences(prev => ({
+      ...prev,
+      events: [
+        ...(prev.events || []),
+        { id: `ev_${Date.now()}`, type: "running_race" as TrainingEventType, name: "", date: "", detail: "Marathon" },
+      ],
+    }));
+  };
+
+  const updateEvent = (id: string, field: "type" | "name" | "date" | "detail", value: string) => {
+    setPreferences(prev => ({
+      ...prev,
+      events: (prev.events || []).map(e => e.id === id ? { ...e, [field]: value } as TrainingEvent : e),
+    }));
+  };
+
+  const removeEvent = (id: string) => {
+    setPreferences(prev => ({
+      ...prev,
+      events: (prev.events || []).filter(e => e.id !== id),
+    }));
+  };
+
+  // Weekly schedule helpers
+  const updateScheduleDay = (day: WeekdayKey, mode: "open" | "class" | "rest") => {
+    setPreferences(prev => ({
+      ...prev,
+      weeklySchedule: {
+        ...(prev.weeklySchedule || {}),
+        [day]: { mode, classDescription: prev.weeklySchedule?.[day]?.classDescription || "" },
+      },
+    }));
+  };
+
+  const updateScheduleClass = (day: WeekdayKey, classDescription: string) => {
+    setPreferences(prev => ({
+      ...prev,
+      weeklySchedule: {
+        ...(prev.weeklySchedule || {}),
+        [day]: { mode: "class" as const, classDescription },
+      },
+    }));
   };
 
   const createNewSession = async () => {
@@ -1450,6 +1555,140 @@ RULES:
             </div>
 
             <div className="p-4 space-y-4">
+              {/* Training Events */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  What are you training for?
+                </label>
+                <p className="text-xs text-gray-500 mb-2">Add races and competitions - the AI builds phases and tapers around them and puts event day on your calendar</p>
+                <div className="space-y-2">
+                  {(preferences.events || []).map((ev) => (
+                    <div key={ev.id} className="border border-gray-200 rounded-lg p-3 bg-gray-50 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <select
+                          value={ev.type}
+                          onChange={(e) => updateEvent(ev.id, "type", e.target.value)}
+                          className="flex-1 px-2 py-1.5 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white"
+                        >
+                          <option value="running_race">🏃 Running race</option>
+                          <option value="crossfit_comp">🏋️ CrossFit competition</option>
+                          <option value="other">🎯 Other event</option>
+                        </select>
+                        <input
+                          type="date"
+                          value={ev.date}
+                          onChange={(e) => updateEvent(ev.id, "date", e.target.value)}
+                          className="px-2 py-1.5 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white"
+                        />
+                        <button
+                          onClick={() => removeEvent(ev.id)}
+                          className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
+                          title="Remove event"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={ev.name}
+                          onChange={(e) => updateEvent(ev.id, "name", e.target.value)}
+                          placeholder={ev.type === "running_race" ? "Race name (optional)" : "Event name (optional)"}
+                          className="flex-1 px-2 py-1.5 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white"
+                        />
+                        {ev.type === "running_race" ? (
+                          <select
+                            value={ev.detail || "Marathon"}
+                            onChange={(e) => updateEvent(ev.id, "detail", e.target.value)}
+                            className="px-2 py-1.5 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white"
+                          >
+                            {RACE_DISTANCES.map(d => (
+                              <option key={d} value={d}>{d}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <input
+                            type="text"
+                            value={ev.detail || ""}
+                            onChange={(e) => updateEvent(ev.id, "detail", e.target.value)}
+                            placeholder="Details (optional)"
+                            className="w-36 px-2 py-1.5 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white"
+                          />
+                        )}
+                      </div>
+                      {ev.date && (
+                        <p className="text-xs text-purple-600">
+                          {(() => {
+                            const days = Math.ceil((new Date(ev.date + "T12:00:00").getTime() - Date.now()) / (24 * 60 * 60 * 1000));
+                            if (days < 0) return "This event has passed";
+                            if (days === 0) return "Today!";
+                            return `${days} days away (${Math.floor(days / 7)} weeks)`;
+                          })()}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <button
+                  onClick={addEvent}
+                  className="mt-2 text-sm text-purple-600 hover:text-purple-700 font-medium"
+                >
+                  + Add race or competition
+                </button>
+              </div>
+
+              {/* Weekly Schedule */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Your Weekly Schedule
+                </label>
+                <p className="text-xs text-gray-500 mb-2">Lock in class days and rest days - the AI respects these in every week it writes</p>
+                <div className="space-y-1.5">
+                  {WEEKDAYS.map(({ key, label }) => {
+                    const setting = preferences.weeklySchedule?.[key] || { mode: "open" as const };
+                    return (
+                      <div key={key} className="flex items-center gap-2">
+                        <span className="w-10 text-sm font-medium text-gray-600 shrink-0">{label}</span>
+                        <div className="flex rounded-lg overflow-hidden border border-gray-200 text-xs shrink-0">
+                          {([
+                            { mode: "open" as const, text: "Train" },
+                            { mode: "class" as const, text: "Class" },
+                            { mode: "rest" as const, text: "Rest" },
+                          ]).map(({ mode, text }) => (
+                            <button
+                              key={mode}
+                              onClick={() => updateScheduleDay(key, mode)}
+                              className={`px-2.5 py-1 font-medium transition-colors ${
+                                setting.mode === mode
+                                  ? mode === "rest"
+                                    ? "bg-gray-600 text-white"
+                                    : mode === "class"
+                                    ? "bg-blue-600 text-white"
+                                    : "bg-purple-600 text-white"
+                                  : "bg-white text-gray-600 hover:bg-gray-50"
+                              }`}
+                            >
+                              {text}
+                            </button>
+                          ))}
+                        </div>
+                        {setting.mode === "class" && (
+                          <input
+                            type="text"
+                            value={setting.classDescription || ""}
+                            onChange={(e) => updateScheduleClass(key, e.target.value)}
+                            placeholder="e.g., Oly class - snatch + back squat"
+                            className="flex-1 min-w-0 px-2 py-1 border border-gray-300 rounded text-xs text-gray-900 bg-white"
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
               {/* Training Philosophy */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">

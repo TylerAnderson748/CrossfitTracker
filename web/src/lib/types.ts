@@ -252,10 +252,33 @@ export interface AIGeneratedDay {
   components: AIGeneratedWorkout[];
 }
 
+// A race or competition the athlete is training toward
+export type TrainingEventType = "running_race" | "crossfit_comp" | "other";
+
+export interface TrainingEvent {
+  id: string;
+  type: TrainingEventType;
+  name: string;
+  date: string; // YYYY-MM-DD
+  detail?: string; // e.g., race distance ("Marathon", "5K") or notes
+}
+
+export type WeekdayKey = "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday";
+
+// How a given weekday is handled every week
+export interface ScheduleDaySetting {
+  mode: "open" | "class" | "rest";
+  classDescription?: string; // when mode === "class"
+}
+
 export interface AIProgrammingPreferences {
   userId: string;
   philosophy: string; // Free-form text describing the athlete's training philosophy
   equipment: string; // Available equipment in the athlete's garage/home gym
+  // Races/competitions the plan should build toward
+  events?: TrainingEvent[];
+  // Fixed weekly structure (class days, rest days)
+  weeklySchedule?: Partial<Record<WeekdayKey, ScheduleDaySetting>>;
   workoutDuration: "short" | "medium" | "long" | "varied"; // Preferred workout length
   benchmarkFrequency: "often" | "sometimes" | "rarely"; // How often to program benchmarks
   programmingStyle: string; // e.g., "Mayhem", "CompTrain", "HWPO", "Custom"
