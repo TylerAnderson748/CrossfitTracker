@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { collection, addDoc, updateDoc, doc, query, where, getDocs, Timestamp, serverTimestamp, deleteDoc, writeBatch } from "firebase/firestore";
+import { collection, addDoc, updateDoc, doc, query, where, getDocs, limit, Timestamp, serverTimestamp, deleteDoc, writeBatch } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { AIProgrammingSession, AIChatMessage, AIGeneratedDay, AIProgrammingPreferences, AITrainerSubscription, TrainingEvent, TrainingEventType, WeekdayKey } from "@/lib/types";
+import { AIProgrammingSession, AIChatMessage, AIGeneratedDay, AIProgrammingPreferences, AITrainerSubscription, TrainingEvent, TrainingEventType, WeekdayKey, AICoachPreferences } from "@/lib/types";
 import { getAllSkills, getAllLifts, getAllWods } from "@/lib/workoutData";
 import { chatCompletion } from "@/lib/ai";
 import AITrainerPaywall from "./AITrainerPaywall";
@@ -19,6 +19,7 @@ const defaultPreferences: Omit<AIProgrammingPreferences, "userId" | "updatedAt">
   equipment: "",
   events: [],
   weeklySchedule: {},
+  longRunDay: "",
   workoutDuration: "varied",
   benchmarkFrequency: "sometimes",
   programmingStyle: "",
@@ -77,6 +78,22 @@ interface AIProgrammingChatProps {
   userEmail?: string;
   onPublish?: () => void;
   subscription?: AITrainerSubscription;
+  // The athlete's profile from their AI Coach settings (goals, injuries, experience)
+  athleteProfile?: AICoachPreferences;
+  // Deep-link support: open a specific session with a pre-filled request (e.g., regenerate a day)
+  initialSessionId?: string;
+  initialPrompt?: string;
+}
+
+// Build the athlete-profile prompt section (goals, injuries, experience)
+function buildProfileSection(athleteProfile?: AICoachPreferences): string {
+  if (!athleteProfile) return "";
+  const lines: string[] = [];
+  if (athleteProfile.goals) lines.push(`- Goals: ${athleteProfile.goals}`);
+  if (athleteProfile.injuries) lines.push(`- INJURIES/LIMITATIONS (CRITICAL - NEVER program movements that could aggravate these; always substitute safe alternatives): ${athleteProfile.injuries}`);
+  if (athleteProfile.experienceLevel) lines.push(`- Experience level: ${athleteProfile.experienceLevel}`);
+  if (athleteProfile.focusAreas && athleteProfile.focusAreas.length > 0) lines.push(`- Focus areas: ${athleteProfile.focusAreas.join(", ")}`);
+  return lines.length > 0 ? `\nATHLETE PROFILE:\n${lines.join("\n")}\n` : "";
 }
 
 function buildPreferencesSection(preferences?: Omit<AIProgrammingPreferences, "userId" | "updatedAt">): string {
@@ -104,7 +121,10 @@ function buildPreferencesSection(preferences?: Omit<AIProgrammingPreferences, "u
         return `- ${label}${e.name ? `: "${e.name}"` : ""} on ${e.date}`;
       });
       const hasRace = eventsWithDates.some(e => e.type === "running_race");
-      prefParts.push(`EVENTS THE ATHLETE IS TRAINING FOR (CRITICAL - build the entire plan around these):\n${eventLines.join("\n")}\n- Structure phases (base -> build -> peak -> taper) around each event and put the event day itself on the calendar.${hasRace ? "\n- The running race REQUIRES real run training as standalone workouts: a weekly long run that builds progressively, easy runs, and race-pace work, each with distance and pacing guidance." : ""}`);
+      const longRunLine = hasRace && preferences.longRunDay
+        ? `\n- Schedule the weekly LONG RUN on ${preferences.longRunDay.charAt(0).toUpperCase() + preferences.longRunDay.slice(1)} every week.`
+        : "";
+      prefParts.push(`EVENTS THE ATHLETE IS TRAINING FOR (CRITICAL - build the entire plan around these):\n${eventLines.join("\n")}\n- Structure phases (base -> build -> peak -> taper) around each event and put the event day itself on the calendar.${hasRace ? "\n- The running race REQUIRES real run training as standalone workouts: a weekly long run that builds progressively, easy runs, and race-pace work, each with distance and pacing guidance." : ""}${longRunLine}`);
     }
 
     const schedule = preferences.weeklySchedule || {};
@@ -112,7 +132,13 @@ function buildPreferencesSection(preferences?: Omit<AIProgrammingPreferences, "u
     const dayNames: Record<string, string> = { monday: "Monday", tuesday: "Tuesday", wednesday: "Wednesday", thursday: "Thursday", friday: "Friday", saturday: "Saturday", sunday: "Sunday" };
     for (const key of Object.keys(dayNames)) {
       const setting = schedule[key as keyof typeof schedule];
-      if (!setting || setting.mode === "open") continue;
+      if (!setting) continue;
+      if (setting.mode === "open") {
+        if (setting.maxMinutes && setting.maxMinutes > 0) {
+          scheduleLines.push(`- ${dayNames[key]}: total training time (including warmup) must stay under ${setting.maxMinutes} minutes`);
+        }
+        continue;
+      }
       if (setting.mode === "rest") {
         scheduleLines.push(`- ${dayNames[key]}: COMPLETE REST DAY every week - always program rest`);
       } else {
@@ -403,7 +429,7 @@ If the user is just chatting or asking questions (not requesting workouts), resp
 IMPORTANT: Always respond with valid JSON only. No markdown, no code blocks, just pure JSON.`;
 };
 
-export default function AIProgrammingChat({ userId, userEmail, onPublish, subscription }: AIProgrammingChatProps) {
+export default function AIProgrammingChat({ userId, userEmail, onPublish, subscription, athleteProfile, initialSessionId, initialPrompt }: AIProgrammingChatProps) {
   // Check if user has an active AI subscription
   const hasActiveSubscription = subscription &&
     (subscription.status === "active" || subscription.status === "trialing");
@@ -430,6 +456,90 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
 
   // Progress while generating a multi-week program
   const [generationProgress, setGenerationProgress] = useState<{ current: number; total: number } | null>(null);
+
+  // Athlete data pulled from their training log (PRs, recent results, existing calendar)
+  const [athleteContext, setAthleteContext] = useState<string>("");
+
+  useEffect(() => {
+    const loadAthleteContext = async () => {
+      if (!userId) return;
+      try {
+        const parts: string[] = [];
+
+        // Lift PRs (best weight per lift + rep count)
+        const liftSnap = await getDocs(query(collection(db, "liftResults"), where("userId", "==", userId), limit(150)));
+        const bests = new Map<string, number>();
+        liftSnap.docs.forEach(d => {
+          const x = d.data();
+          if (x.liftTitle && x.weight) {
+            const k = `${x.liftTitle}|${x.reps || 1}`;
+            if ((bests.get(k) || 0) < x.weight) bests.set(k, x.weight);
+          }
+        });
+        if (bests.size > 0) {
+          const lines = Array.from(bests.entries())
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 20)
+            .map(([k, w]) => {
+              const [title, reps] = k.split("|");
+              return `- ${title}: ${w}lb (${reps}RM)`;
+            });
+          parts.push(`LIFT PRs - use these to prescribe REAL weights for percentage work (e.g., "165lb - that's 70% of your 235lb 1RM"):\n${lines.join("\n")}`);
+        }
+
+        // Recent WOD results
+        const wodSnap = await getDocs(query(collection(db, "workoutLogs"), where("userId", "==", userId), limit(100)));
+        const logs = wodSnap.docs.map(d => d.data())
+          .filter(x => x.wodTitle)
+          .sort((a, b) => (b.completedDate?.toMillis?.() || 0) - (a.completedDate?.toMillis?.() || 0))
+          .slice(0, 10);
+        if (logs.length > 0) {
+          const lines = logs.map(x => {
+            let res = "";
+            if (x.timeInSeconds) {
+              const m = Math.floor(x.timeInSeconds / 60);
+              const sec = x.timeInSeconds % 60;
+              res = `${m}:${String(sec).padStart(2, "0")}`;
+            } else if (x.rounds !== undefined && x.rounds !== null) {
+              res = `${x.rounds}+${x.reps || 0} rounds`;
+            }
+            return `- ${x.wodTitle}${res ? `: ${res}` : ""}`;
+          });
+          parts.push(`RECENT WOD RESULTS - calibrate intensity, pacing targets, and volume to this athlete:\n${lines.join("\n")}`);
+        }
+
+        // Workouts already on the calendar (next ~60 days)
+        const pwSnap = await getDocs(query(collection(db, "personalWorkouts"), where("userId", "==", userId)));
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const horizon = new Date(today);
+        horizon.setDate(horizon.getDate() + 60);
+        const upcoming = pwSnap.docs.map(d => d.data())
+          .filter(x => {
+            const dt = x.date?.toDate?.();
+            return dt && dt >= today && dt <= horizon;
+          })
+          .sort((a, b) => (a.date?.toMillis?.() || 0) - (b.date?.toMillis?.() || 0))
+          .slice(0, 45);
+        if (upcoming.length > 0) {
+          const lines = upcoming.map(x => {
+            const ds = x.dateString || x.date?.toDate?.()?.toISOString?.().split("T")[0];
+            const titles = (x.components || []).map((c: { title?: string }) => c.title).filter(Boolean).join(", ");
+            return `- ${ds}: ${titles || "workout"}${x.aiSessionId ? " (AI plan)" : ""}`;
+          });
+          parts.push(`WORKOUTS ALREADY ON THE ATHLETE'S CALENDAR - account for these when planning; publishing a new AI plan REPLACES AI-planned workouts on the same dates, but manually-added workouts stay:\n${lines.join("\n")}`);
+        }
+
+        setAthleteContext(parts.length > 0 ? `\nATHLETE DATA (from their training log):\n\n${parts.join("\n\n")}\n` : "");
+      } catch (err) {
+        console.error("Error loading athlete context:", err);
+      }
+    };
+    loadAthleteContext();
+  }, [userId]);
+
+  // Combined athlete block injected into every prompt
+  const athleteBlock = buildProfileSection(athleteProfile) + athleteContext;
 
   // Load recently used workouts from the last 6 months of the athlete's calendar
   useEffect(() => {
@@ -497,8 +607,9 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
         });
         setSessions(loadedSessions);
 
-        // Auto-select first active session
-        const activeOne = loadedSessions.find(s => s.status === "active");
+        // Deep link: open the requested session, otherwise the first active one
+        const requested = initialSessionId ? loadedSessions.find(s => s.id === initialSessionId) : undefined;
+        const activeOne = requested || loadedSessions.find(s => s.status === "active");
         if (activeOne) {
           setActiveSession(activeOne);
         }
@@ -509,7 +620,16 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
       }
     };
     loadSessions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
+
+  // Pre-fill the input when deep-linked (e.g., regenerate a day from the calendar)
+  useEffect(() => {
+    if (initialPrompt) {
+      setInput(initialPrompt);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Load programming preferences
   useEffect(() => {
@@ -529,6 +649,7 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
             equipment: prefData.equipment || "",
             events: prefData.events || [],
             weeklySchedule: prefData.weeklySchedule || {},
+            longRunDay: prefData.longRunDay || "",
             workoutDuration: prefData.workoutDuration || "varied",
             benchmarkFrequency: prefData.benchmarkFrequency || "sometimes",
             programmingStyle: prefData.programmingStyle || "",
@@ -559,7 +680,7 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
         weeklySchedule: Object.fromEntries(
           Object.entries(preferences.weeklySchedule || {}).map(([day, setting]) => [
             day,
-            { mode: setting.mode, classDescription: setting.classDescription || "" },
+            { mode: setting.mode, classDescription: setting.classDescription || "", maxMinutes: setting.maxMinutes || 0 },
           ])
         ),
         updatedAt: serverTimestamp(),
@@ -611,7 +732,25 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
       ...prev,
       weeklySchedule: {
         ...(prev.weeklySchedule || {}),
-        [day]: { mode, classDescription: prev.weeklySchedule?.[day]?.classDescription || "" },
+        [day]: {
+          mode,
+          classDescription: prev.weeklySchedule?.[day]?.classDescription || "",
+          maxMinutes: prev.weeklySchedule?.[day]?.maxMinutes || 0,
+        },
+      },
+    }));
+  };
+
+  const updateScheduleMinutes = (day: WeekdayKey, maxMinutes: number) => {
+    setPreferences(prev => ({
+      ...prev,
+      weeklySchedule: {
+        ...(prev.weeklySchedule || {}),
+        [day]: {
+          mode: prev.weeklySchedule?.[day]?.mode || "open",
+          classDescription: prev.weeklySchedule?.[day]?.classDescription || "",
+          maxMinutes,
+        },
       },
     }));
   };
@@ -796,7 +935,7 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
         `${msg.role === "user" ? "User" : "Assistant"}: ${msg.content}`
       ).join("\n\n");
 
-      const prompt = `${getSystemPrompt(preferences, recentlyUsedWorkouts)}\n\nConversation so far:\n${conversationHistory}\n\nRespond to the user's latest message. Remember to output valid JSON only.`;
+      const prompt = `${getSystemPrompt(preferences, recentlyUsedWorkouts)}\n${athleteBlock}\nConversation so far:\n${conversationHistory}\n\nRespond to the user's latest message. Remember to output valid JSON only.`;
 
       // Call xAI/Grok API (fast model with automatic fallback)
       const text = await chatCompletion({
@@ -923,7 +1062,7 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
       .join("\n");
 
     return `You are a personal CrossFit + endurance coach generating ONE WEEK of daily workouts inside a longer training plan for an athlete in their garage/home gym.
-${buildPreferencesSection(preferences)}
+${buildPreferencesSection(preferences)}${athleteBlock}
 THE ATHLETE'S REQUEST AND CONTEXT (conversation so far):
 ${conversationHistory}
 
@@ -1064,6 +1203,38 @@ RULES:
     setError(null);
 
     try {
+      // Replace any AI-planned workouts already sitting on the dates being published
+      // (covers regenerating a day/week and re-publishing a program without duplicates)
+      const targetDates = new Set<string>();
+      workouts.forEach(day => {
+        if (day.date && day.date.includes("-")) targetDates.add(day.date);
+      });
+      if (targetDates.size > 0) {
+        const existingSnap = await getDocs(query(
+          collection(db, "personalWorkouts"),
+          where("userId", "==", userId)
+        ));
+        const toDelete = existingSnap.docs.filter(d => {
+          const x = d.data();
+          const ds = x.dateString || x.date?.toDate?.()?.toISOString?.().split("T")[0];
+          return x.aiSessionId && ds && targetDates.has(ds);
+        });
+        let delBatch = writeBatch(db);
+        let delPending = 0;
+        for (const d of toDelete) {
+          delBatch.delete(d.ref);
+          delPending++;
+          if (delPending >= 400) {
+            await delBatch.commit();
+            delBatch = writeBatch(db);
+            delPending = 0;
+          }
+        }
+        if (delPending > 0) {
+          await delBatch.commit();
+        }
+      }
+
       // Write in batches so long programs (60-90+ days) publish in seconds
       let batch = writeBatch(db);
       let pending = 0;
@@ -1644,7 +1815,7 @@ RULES:
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Your Weekly Schedule
                 </label>
-                <p className="text-xs text-gray-500 mb-2">Lock in class days and rest days - the AI respects these in every week it writes</p>
+                <p className="text-xs text-gray-500 mb-2">Lock in class days, rest days, and optional time limits for training days - the AI respects these in every week it writes</p>
                 <div className="space-y-1.5">
                   {WEEKDAYS.map(({ key, label }) => {
                     const setting = preferences.weeklySchedule?.[key] || { mode: "open" as const };
@@ -1683,10 +1854,43 @@ RULES:
                             className="flex-1 min-w-0 px-2 py-1 border border-gray-300 rounded text-xs text-gray-900 bg-white"
                           />
                         )}
+                        {setting.mode === "open" && (
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="number"
+                              min={0}
+                              max={240}
+                              value={setting.maxMinutes || ""}
+                              onChange={(e) => updateScheduleMinutes(key, parseInt(e.target.value) || 0)}
+                              placeholder="—"
+                              title="Max session length in minutes (optional)"
+                              className="w-14 px-2 py-1 border border-gray-300 rounded text-xs text-gray-900 bg-white"
+                            />
+                            <span className="text-xs text-gray-400">min max</span>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
                 </div>
+              </div>
+
+              {/* Long Run Day */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Long Run Day
+                </label>
+                <select
+                  value={preferences.longRunDay || ""}
+                  onChange={(e) => setPreferences(prev => ({ ...prev, longRunDay: e.target.value as AIProgrammingPreferences["longRunDay"] }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 text-sm bg-white focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                >
+                  <option value="">Let the AI decide</option>
+                  {WEEKDAYS.map(d => (
+                    <option key={d.key} value={d.key}>{d.full}</option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-500 mt-1">Used when you&apos;re training for a running race - the weekly long run always lands here</p>
               </div>
 
               {/* Training Philosophy */}

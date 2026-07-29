@@ -1,16 +1,21 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { doc, updateDoc } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
 import Navigation from "@/components/Navigation";
 import AIProgrammingChat from "@/components/AIProgrammingChat";
 
-export default function ProgrammingPage() {
+function ProgrammingContent() {
   const { user, loading, switching, refreshUser } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // Deep link from the calendar: regenerate a specific day in a specific session
+  const regenDate = searchParams.get("regen");
+  const regenSession = searchParams.get("session");
 
   // Cancel subscription state
   const [showCancelModal, setShowCancelModal] = useState(false);
@@ -68,6 +73,11 @@ export default function ProgrammingPage() {
             userId={user.id}
             userEmail={user.email}
             subscription={aiCoachSubscription}
+            athleteProfile={user.aiCoachPreferences}
+            initialSessionId={regenSession || undefined}
+            initialPrompt={regenDate
+              ? `Regenerate my workout for ${regenDate}. Give me a fresh alternative for just that day that still fits the overall plan and my schedule.`
+              : undefined}
             onPublish={() => router.push("/weekly")}
           />
         </div>
@@ -198,5 +208,17 @@ export default function ProgrammingPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function ProgrammingPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <p className="text-gray-500">Loading...</p>
+      </div>
+    }>
+      <ProgrammingContent />
+    </Suspense>
   );
 }
