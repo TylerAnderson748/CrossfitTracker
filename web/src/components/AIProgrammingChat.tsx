@@ -145,7 +145,10 @@ function buildPreferencesSection(preferences?: Omit<AIProgrammingPreferences, "u
       } else {
         const desc = setting.classDescription || "a class at their gym";
         if ((setting.classAttendance || "always") === "optional") {
-          scheduleLines.push(`- ${dayNames[key]}: CLASS AVAILABLE - ${desc}. Attendance is YOUR call week by week: schedule it when it fits the plan (add ONE component noting the class instead of programming a workout), or make the day rest/training when that serves the athlete better (tapers, needed recovery, conflicting priorities).`);
+          const timeBudget = setting.maxMinutes && setting.maxMinutes > 0
+            ? ` If you program training instead of the class, the full session (including warmup) must stay under ${setting.maxMinutes} minutes.`
+            : "";
+          scheduleLines.push(`- ${dayNames[key]}: CLASS AVAILABLE - ${desc}. Attendance is YOUR call week by week: schedule it when it fits the plan (add ONE component noting the class instead of programming a workout), or make the day rest/training when that serves the athlete better (tapers, needed recovery, conflicting priorities).${timeBudget}`);
         } else {
           scheduleLines.push(`- ${dayNames[key]}: FIXED CLASS every week - ${desc}. Do NOT program a workout for this day; add ONE component noting the class (with intensity guidance during taper weeks).`);
         }
@@ -1903,7 +1906,7 @@ RULES:
                             </select>
                           </>
                         )}
-                        {setting.mode === "open" && (
+                        {(setting.mode === "open" || (setting.mode === "class" && (setting.classAttendance || "always") === "optional")) && (
                           <div className="flex items-center gap-1">
                             <input
                               type="number"
