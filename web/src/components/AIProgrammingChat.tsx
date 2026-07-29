@@ -63,6 +63,56 @@ function cleanJsonText(text: string): string {
   return t.trim();
 }
 
+// Parse an AI JSON response, repairing truncated output when possible.
+// Returns null only if the text can't be salvaged at all.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function tryParseJson(text: string): any | null {
+  const cleaned = cleanJsonText(text);
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    // fall through to repair
+  }
+
+  const start = cleaned.indexOf("{");
+  if (start === -1) return null;
+  const body = cleaned.slice(start);
+
+  // Walk back through candidate cut points (each closing brace), balance the
+  // brackets from the start, close whatever is still open, and try to parse.
+  let attempts = 0;
+  for (let end = body.lastIndexOf("}"); end > 0 && attempts < 120; end = body.lastIndexOf("}", end - 1), attempts++) {
+    const candidate = body.slice(0, end + 1);
+    let inStr = false;
+    let esc = false;
+    let broken = false;
+    const stack: string[] = [];
+    for (let i = 0; i < candidate.length; i++) {
+      const c = candidate[i];
+      if (inStr) {
+        if (esc) esc = false;
+        else if (c === "\\") esc = true;
+        else if (c === '"') inStr = false;
+        continue;
+      }
+      if (c === '"') inStr = true;
+      else if (c === "{") stack.push("}");
+      else if (c === "[") stack.push("]");
+      else if (c === "}" || c === "]") {
+        const need = stack.pop();
+        if (need !== c) { broken = true; break; }
+      }
+    }
+    if (broken || inStr) continue;
+    try {
+      return JSON.parse(candidate + stack.reverse().join(""));
+    } catch {
+      // keep trimming back
+    }
+  }
+  return null;
+}
+
 // Keep only the most recent generated program in the saved session so long
 // programs stay well under Firestore's 1MB document limit
 function stripOldWorkouts(messages: AIChatMessage[]): AIChatMessage[] {
@@ -462,7 +512,7 @@ If the user asks for programming spanning MORE than 14 days (e.g., "program ever
 - Include one entry per week covering the ENTIRE requested date range - never stop early.
 - Build proper phases around any events the user mentions (base -> build -> peak -> taper -> event -> recovery).
 - Restate the athlete's fixed weekly commitments (classes on specific days) and their rest days in EVERY week's details.
-The app will then ask you to fill in a day-by-day plan TABLE (one detailed row per day) one week at a time.
+Keep each week's details under 40 words - day-level detail comes later, week by week.\nThe app will then ask you to fill in a day-by-day plan TABLE (one detailed row per day) one week at a time.
 
 If the user is just chatting or asking questions (not requesting workouts), respond with just:
 {
@@ -1041,6 +1091,7 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
           { role: "user", content: prompt }
         ],
         temperature: 0.7,
+        maxTokens: 30000,
       });
 
       if (!text) {
@@ -1050,7 +1101,8 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
       // Parse the JSON response
       let parsedResponse: { message: string; workouts: AIGeneratedDay[] };
       try {
-        const parsed = JSON.parse(cleanJsonText(text));
+        const parsed = tryParseJson(text);
+        if (!parsed) throw new SyntaxError("Unparseable AI response");
 
         // Revision mode: targeted changes to the existing plan table
         if (plan && Array.isArray(parsed.patchRows) && parsed.patchRows.length > 0) {
@@ -1098,9 +1150,12 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
           };
         }
       } catch {
-        // If JSON parsing fails, treat as plain message
+        // If parsing (and repair) fails, never dump raw JSON into the chat
+        const looksLikeJson = cleanJsonText(text).startsWith("{");
         parsedResponse = {
-          message: text,
+          message: looksLikeJson
+            ? "My response got cut off before I could finish it. Say \"try again\" and I'll rebuild it."
+            : text,
           workouts: []
         };
       }
@@ -1245,9 +1300,10 @@ PATCH RULES:
               { role: "user", content: buildWeekRowsPrompt(outline, weeks[i], conversationHistory, allRows) }
             ],
             temperature: 0.6,
+            maxTokens: 16000,
           });
-          const parsed = JSON.parse(cleanJsonText(text));
-          const arr = Array.isArray(parsed) ? parsed : parsed.rows;
+          const parsed = tryParseJson(text);
+          const arr = !parsed ? null : Array.isArray(parsed) ? parsed : parsed.rows;
           if (Array.isArray(arr) && arr.length > 0) {
             rows = arr.map((r: Partial<PlanRow>) => sanitizePlanRow(r, weeks[i].weekNumber, weeks[i].focus));
           }
