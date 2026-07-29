@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { collection, addDoc, updateDoc, doc, query, where, getDocs, getDoc, setDoc, limit, Timestamp, serverTimestamp, deleteDoc, writeBatch } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { AIProgrammingSession, AIChatMessage, AIGeneratedDay, AIProgrammingPreferences, AITrainerSubscription, TrainingEvent, TrainingEventType, WeekdayKey, AICoachPreferences, PlanRow, TrainingPlan } from "@/lib/types";
+import { AIProgrammingSession, AIChatMessage, AIGeneratedDay, AIProgrammingPreferences, AITrainerSubscription, TrainingEvent, TrainingEventType, WeekdayKey, AICoachPreferences, PlanRow, PlanRowComponent, TrainingPlan } from "@/lib/types";
 import { getAllSkills, getAllLifts, getAllWods } from "@/lib/workoutData";
 import { chatCompletion } from "@/lib/ai";
 import AITrainerPaywall from "./AITrainerPaywall";
@@ -151,8 +151,10 @@ function stripOldWorkouts(messages: AIChatMessage[]): AIChatMessage[] {
 }
 
 // Coerce an AI-produced row into a clean PlanRow (Firestore rejects undefined)
+const VALID_COMPONENT_TYPES = ["warmup", "wod", "lift", "skill", "cooldown"];
+
 function sanitizePlanRow(r: Partial<PlanRow>, fallbackWeek: number, fallbackPhase: string): PlanRow {
-  return {
+  const row: PlanRow = {
     date: String(r.date || ""),
     day: String(r.day || ""),
     week: Number(r.week) || fallbackWeek,
@@ -163,6 +165,15 @@ function sanitizePlanRow(r: Partial<PlanRow>, fallbackWeek: number, fallbackPhas
     targetRPE: String(r.targetRPE || ""),
     estMinutes: Number(r.estMinutes) || 0,
   };
+  if (r.reason) row.reason = String(r.reason);
+  if (Array.isArray(r.components) && r.components.length > 0) {
+    row.components = r.components.map(c => ({
+      type: (VALID_COMPONENT_TYPES.includes(String(c?.type)) ? String(c?.type) : "wod") as PlanRowComponent["type"],
+      title: String(c?.title || "Training").slice(0, 60),
+      description: String(c?.description || ""),
+    }));
+  }
+  return row;
 }
 
 // Compact text form of the plan table for prompts
@@ -1426,6 +1437,78 @@ PATCH RULES:
     setActiveSession(prev => prev ? { ...prev, messages: finalMessages } : null);
   };
 
+  // Import a plan pasted as JSON (e.g., converted from a spreadsheet)
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importText, setImportText] = useState("");
+  const [isImporting, setIsImporting] = useState(false);
+
+  const handleImportPlan = async () => {
+    if (isImporting) return;
+    setIsImporting(true);
+    setError(null);
+    try {
+      const parsed = tryParseJson(importText);
+      const rawRows = Array.isArray(parsed) ? parsed : parsed?.rows;
+      if (!Array.isArray(rawRows) || rawRows.length === 0) {
+        throw new Error("Couldn't find plan rows in the pasted text - paste the plan JSON exactly as provided.");
+      }
+      const rows = rawRows
+        .map((r: Partial<PlanRow>) => sanitizePlanRow(r, Number(r.week) || 1, String(r.phase || "Training")))
+        .filter(r => /^\d{4}-\d{2}-\d{2}$/.test(r.date))
+        .sort((a, b) => a.date.localeCompare(b.date));
+      if (rows.length === 0) {
+        throw new Error("No rows had valid dates (expected YYYY-MM-DD).");
+      }
+
+      const title = (parsed && !Array.isArray(parsed) && parsed.title)
+        ? String(parsed.title).slice(0, 80)
+        : `Imported Plan ${rows[0].date}`;
+
+      // Create a session to own this plan
+      const newSession: Omit<AIProgrammingSession, "id"> = {
+        userId,
+        createdBy: userId,
+        title,
+        status: "active",
+        messages: [{
+          id: `msg-${Date.now()}-assistant`,
+          role: "assistant",
+          content: `Imported your plan: ${rows.length} days from ${rows[0].date} to ${rows[rows.length - 1].date}. Open "View Plan Table" to review it, then Lock & Add to Calendar. You can still ask me to change any day.`,
+          timestamp: Timestamp.now(),
+        }],
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now(),
+      };
+      const docRef = await addDoc(collection(db, "aiProgrammingSessions"), newSession);
+
+      const now = Timestamp.now();
+      const planDoc: Omit<TrainingPlan, "id"> = {
+        userId,
+        sessionId: docRef.id,
+        title,
+        status: "draft",
+        startDate: rows[0].date,
+        endDate: rows[rows.length - 1].date,
+        rows,
+        createdAt: now,
+        updatedAt: now,
+      };
+      await setDoc(doc(db, "trainingPlans", docRef.id), planDoc);
+
+      const session = { id: docRef.id, ...newSession };
+      setSessions(prev => [session, ...prev]);
+      setActiveSession(session);
+      setPlan({ id: docRef.id, ...planDoc });
+      setImportText("");
+      setShowImportModal(false);
+      setShowPlanModal(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Import failed");
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
   // Lock the plan and publish every row to the athlete's calendar
   const lockAndPublishPlan = async () => {
     if (!plan || isPublishingPlan) return;
@@ -1468,22 +1551,31 @@ PATCH RULES:
           row.targetRPE ? `Target RPE ${row.targetRPE}` : "",
           row.estMinutes ? `~${row.estMinutes} min` : "",
           row.runMiles ? `${row.runMiles} mi planned` : "",
+          row.reason ? `Why: ${row.reason}` : "",
         ].filter(Boolean).join(" • ");
 
-        const componentType = row.session.toLowerCase().includes("class") ? "lift" : "wod";
+        const components = (row.components && row.components.length > 0)
+          ? row.components.map((c, idx) => ({
+              id: `comp-${idx}`,
+              type: c.type,
+              title: c.title,
+              description: c.description,
+              notes: idx === 0 ? noteBits : "",
+            }))
+          : [{
+              id: "comp-0",
+              type: row.session.toLowerCase().includes("class") ? "lift" : "wod",
+              title: row.session,
+              description: row.detail,
+              notes: noteBits,
+            }];
 
         const workoutRef = doc(collection(db, "personalWorkouts"));
         batch.set(workoutRef, {
           userId: String(userId),
           date: Timestamp.fromDate(workoutDate),
           dateString: row.date,
-          components: [{
-            id: "comp-0",
-            type: componentType,
-            title: row.session,
-            description: row.detail,
-            notes: noteBits,
-          }],
+          components,
           createdAt: serverTimestamp(),
           aiSessionId: plan.sessionId,
         });
@@ -1705,6 +1797,13 @@ PATCH RULES:
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
+            </button>
+            <button
+              onClick={() => setShowImportModal(true)}
+              className="px-3 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg text-sm font-medium transition-colors"
+              title="Import a plan from JSON (e.g., converted from a spreadsheet)"
+            >
+              ⬆ Import
             </button>
             <button
               onClick={createNewSession}
@@ -2064,6 +2163,45 @@ PATCH RULES:
                   {isPublishing ? "Adding..." : `Add ${generatedWorkouts.filter(d => !d.isRestDay).length} Workouts to My Calendar`}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Import Plan Modal */}
+      {showImportModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="p-4 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">Import a Training Plan</h3>
+              <p className="text-sm text-gray-500">Paste plan JSON (one row per day). It loads exactly as written - no AI involved - and becomes a draft plan table you can review, revise, and lock onto your calendar.</p>
+            </div>
+            <div className="flex-1 overflow-auto p-4">
+              <textarea
+                value={importText}
+                onChange={(e) => setImportText(e.target.value)}
+                placeholder='{"title": "My Plan", "rows": [{"date": "2026-07-29", "day": "Wednesday", "week": 1, "phase": "Base", "session": "Run + CrossFit", "detail": "...", "runMiles": 2.5, "components": [...] }]}'
+                rows={12}
+                className="w-full h-full min-h-[260px] px-3 py-2 border border-gray-300 rounded-lg text-gray-900 text-xs font-mono focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              />
+            </div>
+            {error && (
+              <div className="mx-4 mb-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{error}</div>
+            )}
+            <div className="p-4 border-t border-gray-200 bg-gray-50 flex justify-end gap-3">
+              <button
+                onClick={() => { setShowImportModal(false); setError(null); }}
+                className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleImportPlan}
+                disabled={isImporting || !importText.trim()}
+                className="px-6 py-2 bg-purple-600 text-white font-semibold rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isImporting ? "Importing..." : "Import Plan"}
+              </button>
             </div>
           </div>
         </div>

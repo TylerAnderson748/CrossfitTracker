@@ -296,6 +296,13 @@ export interface AIProgrammingPreferences {
 // TRAINING PLAN TABLE
 // =====================
 
+// A typed sub-component of a plan day (used by imported plans)
+export interface PlanRowComponent {
+  type: WorkoutComponentType;
+  title: string;
+  description: string;
+}
+
 // One row of the day-by-day training plan table
 export interface PlanRow {
   date: string;        // YYYY-MM-DD
@@ -307,6 +314,8 @@ export interface PlanRow {
   runMiles?: number;   // planned run miles (0 = none)
   targetRPE?: string;  // e.g., "3-7"
   estMinutes?: number; // estimated total session minutes
+  reason?: string;     // why this day is programmed this way
+  components?: PlanRowComponent[]; // typed components (imported plans)
 }
 
 // The full plan document (one per AI programming session, doc id = session id)
