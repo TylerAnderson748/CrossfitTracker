@@ -20,6 +20,7 @@ const defaultPreferences: Omit<AIProgrammingPreferences, "userId" | "updatedAt">
   events: [],
   weeklySchedule: {},
   longRunDay: "",
+  restDaysPerWeek: 0,
   workoutDuration: "varied",
   benchmarkFrequency: "sometimes",
   programmingStyle: "",
@@ -142,11 +143,25 @@ function buildPreferencesSection(preferences?: Omit<AIProgrammingPreferences, "u
       if (setting.mode === "rest") {
         scheduleLines.push(`- ${dayNames[key]}: COMPLETE REST DAY every week - always program rest`);
       } else {
-        scheduleLines.push(`- ${dayNames[key]}: FIXED CLASS every week - ${setting.classDescription || "a class at their gym"}. Do NOT program a workout for this day; add ONE component noting the class (with intensity guidance during taper weeks).`);
+        const desc = setting.classDescription || "a class at their gym";
+        if ((setting.classAttendance || "always") === "optional") {
+          scheduleLines.push(`- ${dayNames[key]}: CLASS AVAILABLE - ${desc}. Attendance is YOUR call week by week: schedule it when it fits the plan (add ONE component noting the class instead of programming a workout), or make the day rest/training when that serves the athlete better (tapers, needed recovery, conflicting priorities).`);
+        } else {
+          scheduleLines.push(`- ${dayNames[key]}: FIXED CLASS every week - ${desc}. Do NOT program a workout for this day; add ONE component noting the class (with intensity guidance during taper weeks).`);
+        }
       }
     }
     if (scheduleLines.length > 0) {
-      prefParts.push(`WEEKLY SCHEDULE (NON-NEGOTIABLE - applies to every single week):\n${scheduleLines.join("\n")}`);
+      prefParts.push(`WEEKLY SCHEDULE (NON-NEGOTIABLE - applies to every single week):\n${scheduleLines.join("\n")}\nDays not listed above (and days marked "Train") are AVAILABLE for training - they are NOT all mandatory training days.`);
+    }
+
+    const explicitRestDays = Object.values(schedule).filter(d => d?.mode === "rest").length;
+    const restTarget = preferences.restDaysPerWeek || 0;
+    if (restTarget > 0) {
+      const remainder = Math.max(0, restTarget - explicitRestDays);
+      prefParts.push(`REST DAYS: The athlete wants ${restTarget} full rest day${restTarget > 1 ? "s" : ""} EVERY week.${explicitRestDays > 0 ? ` ${explicitRestDays} ${explicitRestDays > 1 ? "are" : "is"} fixed in the weekly schedule above.` : ""}${remainder > 0 ? ` Place the other ${remainder} on whichever available day${remainder > 1 ? "s" : ""} best support${remainder > 1 ? "" : "s"} recovery (typically after the hardest sessions).` : ""}`);
+    } else {
+      prefParts.push(`REST DAYS: Include at least 1 (usually 2) FULL rest days every week unless the athlete explicitly asks for more training. Never program 7 straight training days.`);
     }
 
     if (preferences.workoutDuration && preferences.workoutDuration !== "varied") {
@@ -650,6 +665,7 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
             events: prefData.events || [],
             weeklySchedule: prefData.weeklySchedule || {},
             longRunDay: prefData.longRunDay || "",
+            restDaysPerWeek: prefData.restDaysPerWeek || 0,
             workoutDuration: prefData.workoutDuration || "varied",
             benchmarkFrequency: prefData.benchmarkFrequency || "sometimes",
             programmingStyle: prefData.programmingStyle || "",
@@ -680,7 +696,7 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
         weeklySchedule: Object.fromEntries(
           Object.entries(preferences.weeklySchedule || {}).map(([day, setting]) => [
             day,
-            { mode: setting.mode, classDescription: setting.classDescription || "", maxMinutes: setting.maxMinutes || 0 },
+            { mode: setting.mode, classDescription: setting.classDescription || "", classAttendance: setting.classAttendance || "always", maxMinutes: setting.maxMinutes || 0 },
           ])
         ),
         updatedAt: serverTimestamp(),
@@ -735,6 +751,7 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
         [day]: {
           mode,
           classDescription: prev.weeklySchedule?.[day]?.classDescription || "",
+          classAttendance: prev.weeklySchedule?.[day]?.classAttendance || "always",
           maxMinutes: prev.weeklySchedule?.[day]?.maxMinutes || 0,
         },
       },
@@ -749,7 +766,23 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
         [day]: {
           mode: prev.weeklySchedule?.[day]?.mode || "open",
           classDescription: prev.weeklySchedule?.[day]?.classDescription || "",
+          classAttendance: prev.weeklySchedule?.[day]?.classAttendance || "always",
           maxMinutes,
+        },
+      },
+    }));
+  };
+
+  const updateScheduleAttendance = (day: WeekdayKey, classAttendance: "always" | "optional") => {
+    setPreferences(prev => ({
+      ...prev,
+      weeklySchedule: {
+        ...(prev.weeklySchedule || {}),
+        [day]: {
+          mode: "class" as const,
+          classDescription: prev.weeklySchedule?.[day]?.classDescription || "",
+          classAttendance,
+          maxMinutes: prev.weeklySchedule?.[day]?.maxMinutes || 0,
         },
       },
     }));
@@ -760,7 +793,12 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
       ...prev,
       weeklySchedule: {
         ...(prev.weeklySchedule || {}),
-        [day]: { mode: "class" as const, classDescription },
+        [day]: {
+          mode: "class" as const,
+          classDescription,
+          classAttendance: prev.weeklySchedule?.[day]?.classAttendance || "always",
+          maxMinutes: prev.weeklySchedule?.[day]?.maxMinutes || 0,
+        },
       },
     }));
   };
@@ -1815,7 +1853,7 @@ RULES:
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Your Weekly Schedule
                 </label>
-                <p className="text-xs text-gray-500 mb-2">Lock in class days, rest days, and optional time limits for training days - the AI respects these in every week it writes</p>
+                <p className="text-xs text-gray-500 mb-2">Train = available to train (not required). Lock in class days, rest days, and optional time limits - the AI respects these in every week it writes</p>
                 <div className="space-y-1.5">
                   {WEEKDAYS.map(({ key, label }) => {
                     const setting = preferences.weeklySchedule?.[key] || { mode: "open" as const };
@@ -1846,13 +1884,24 @@ RULES:
                           ))}
                         </div>
                         {setting.mode === "class" && (
-                          <input
-                            type="text"
-                            value={setting.classDescription || ""}
-                            onChange={(e) => updateScheduleClass(key, e.target.value)}
-                            placeholder="e.g., Oly class - snatch + back squat"
-                            className="flex-1 min-w-0 px-2 py-1 border border-gray-300 rounded text-xs text-gray-900 bg-white"
-                          />
+                          <>
+                            <input
+                              type="text"
+                              value={setting.classDescription || ""}
+                              onChange={(e) => updateScheduleClass(key, e.target.value)}
+                              placeholder="e.g., Oly class - snatch + back squat"
+                              className="flex-1 min-w-0 px-2 py-1 border border-gray-300 rounded text-xs text-gray-900 bg-white"
+                            />
+                            <select
+                              value={setting.classAttendance || "always"}
+                              onChange={(e) => updateScheduleAttendance(key, e.target.value as "always" | "optional")}
+                              title="Attend every week, or let the AI decide when it fits the plan"
+                              className="px-1.5 py-1 border border-gray-300 rounded text-xs text-gray-900 bg-white shrink-0"
+                            >
+                              <option value="always">Every week</option>
+                              <option value="optional">AI decides</option>
+                            </select>
+                          </>
                         )}
                         {setting.mode === "open" && (
                           <div className="flex items-center gap-1">
@@ -1873,6 +1922,24 @@ RULES:
                     );
                   })}
                 </div>
+              </div>
+
+              {/* Rest days per week */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Full Rest Days Each Week
+                </label>
+                <select
+                  value={preferences.restDaysPerWeek || 0}
+                  onChange={(e) => setPreferences(prev => ({ ...prev, restDaysPerWeek: parseInt(e.target.value) || 0 }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 text-sm bg-white focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                >
+                  <option value={0}>Let the AI decide (1-2 per week)</option>
+                  <option value={1}>1 per week</option>
+                  <option value={2}>2 per week</option>
+                  <option value={3}>3 per week</option>
+                </select>
+                <p className="text-xs text-gray-500 mt-1">Days you marked Rest above count toward this; the AI places any extras on the smartest days</p>
               </div>
 
               {/* Long Run Day */}

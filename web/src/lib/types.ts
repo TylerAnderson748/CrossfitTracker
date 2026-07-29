@@ -269,6 +269,7 @@ export type WeekdayKey = "monday" | "tuesday" | "wednesday" | "thursday" | "frid
 export interface ScheduleDaySetting {
   mode: "open" | "class" | "rest";
   classDescription?: string; // when mode === "class"
+  classAttendance?: "always" | "optional"; // attend every week, or let the AI decide
   maxMinutes?: number; // optional time budget for training days (0 = no limit)
 }
 
@@ -282,6 +283,8 @@ export interface AIProgrammingPreferences {
   weeklySchedule?: Partial<Record<WeekdayKey, ScheduleDaySetting>>;
   // Which day the weekly long run lands on (empty = AI decides); used for running races
   longRunDay?: WeekdayKey | "";
+  // Full rest days per week (0 = AI decides, defaults to 1-2)
+  restDaysPerWeek?: number;
   workoutDuration: "short" | "medium" | "long" | "varied"; // Preferred workout length
   benchmarkFrequency: "often" | "sometimes" | "rarely"; // How often to program benchmarks
   programmingStyle: string; // e.g., "Mayhem", "CompTrain", "HWPO", "Custom"
