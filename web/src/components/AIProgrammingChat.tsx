@@ -63,11 +63,36 @@ function cleanJsonText(text: string): string {
   return t.trim();
 }
 
+// Models sometimes emit raw newlines/tabs inside JSON strings (invalid JSON)
+// and trailing commas - escape/strip them so JSON.parse can succeed
+function normalizeJsonText(text: string): string {
+  let out = "";
+  let inStr = false;
+  let esc = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inStr) {
+      if (esc) { out += c; esc = false; continue; }
+      if (c === "\\") { out += c; esc = true; continue; }
+      if (c === '"') { inStr = false; out += c; continue; }
+      if (c === "\n") { out += "\\n"; continue; }
+      if (c === "\r") { continue; }
+      if (c === "\t") { out += "\\t"; continue; }
+      out += c;
+      continue;
+    }
+    if (c === '"') inStr = true;
+    out += c;
+  }
+  // Remove trailing commas before } or ]
+  return out.replace(/,\s*([}\]])/g, "$1");
+}
+
 // Parse an AI JSON response, repairing truncated output when possible.
 // Returns null only if the text can't be salvaged at all.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function tryParseJson(text: string): any | null {
-  const cleaned = cleanJsonText(text);
+  const cleaned = normalizeJsonText(cleanJsonText(text));
   try {
     return JSON.parse(cleaned);
   } catch {
@@ -1091,7 +1116,7 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
           { role: "user", content: prompt }
         ],
         temperature: 0.7,
-        maxTokens: 30000,
+        maxTokens: 16000,
       });
 
       if (!text) {
@@ -1102,7 +1127,13 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
       let parsedResponse: { message: string; workouts: AIGeneratedDay[] };
       try {
         const parsed = tryParseJson(text);
-        if (!parsed) throw new SyntaxError("Unparseable AI response");
+        if (!parsed) {
+          console.error(
+            "Unparseable AI response. First 400 chars:", text.slice(0, 400),
+            "... Last 400 chars:", text.slice(-400)
+          );
+          throw new SyntaxError("Unparseable AI response");
+        }
 
         // Revision mode: targeted changes to the existing plan table
         if (plan && Array.isArray(parsed.patchRows) && parsed.patchRows.length > 0) {
@@ -1149,7 +1180,11 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
             workouts: []
           };
         }
-      } catch {
+      } catch (parseErr) {
+        // Real errors (e.g., Firestore permissions while saving the plan) must
+        // surface truthfully in the error box, not masquerade as a parse issue
+        if (!(parseErr instanceof SyntaxError)) throw parseErr;
+
         // If parsing (and repair) fails, never dump raw JSON into the chat
         const looksLikeJson = cleanJsonText(text).startsWith("{");
         parsedResponse = {
@@ -1300,7 +1335,7 @@ PATCH RULES:
               { role: "user", content: buildWeekRowsPrompt(outline, weeks[i], conversationHistory, allRows) }
             ],
             temperature: 0.6,
-            maxTokens: 16000,
+            maxTokens: 12000,
           });
           const parsed = tryParseJson(text);
           const arr = !parsed ? null : Array.isArray(parsed) ? parsed : parsed.rows;
