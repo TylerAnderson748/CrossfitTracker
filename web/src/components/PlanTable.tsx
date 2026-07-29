@@ -106,6 +106,9 @@ export default function PlanTable({ rows, statusByDate }: PlanTableProps) {
                 </td>
                 <td className={`px-2 py-2 text-xs leading-relaxed ${rest ? "text-gray-400" : "text-gray-700"}`}>
                   {row.detail}
+                  {row.reason && (
+                    <div className="text-[11px] text-gray-400 italic mt-1">Why: {row.reason}</div>
+                  )}
                 </td>
                 <td className="px-2 py-2 text-right text-gray-700 font-mono text-xs">
                   {row.runMiles ? row.runMiles : ""}

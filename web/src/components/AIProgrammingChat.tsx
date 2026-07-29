@@ -172,6 +172,9 @@ function sanitizePlanRow(r: Partial<PlanRow>, fallbackWeek: number, fallbackPhas
       title: String(c?.title || "Training").slice(0, 60),
       description: String(c?.description || ""),
     }));
+    if (!row.detail) {
+      row.detail = row.components.map(c => `${c.title}: ${c.description}`).join(" • ");
+    }
   }
   return row;
 }
@@ -1279,22 +1282,28 @@ Respond with valid JSON in this exact format:
       "week": ${week.weekNumber},
       "phase": "${week.focus.split(" - ")[0]}",
       "session": "Run + CrossFit",
-      "detail": "4 mi easy conversational run, finish with 4x20-sec strides. Then 12-min AMRAP: 8 DB floor presses (50s), 12 KB swings (53), 10 sit-ups.",
       "runMiles": 4,
       "targetRPE": "3-7",
-      "estMinutes": 60
+      "estMinutes": 60,
+      "reason": "Easy aerobic volume plus an upper-body-biased WOD keeps the legs fresh for Tuesday's lifting class while building the weekly base.",
+      "components": [
+        { "type": "warmup", "title": "Warm-up", "description": "3 min easy movement; 10 air squats + 10 glute bridges; wrist/ankle/hip mobility." },
+        { "type": "wod", "title": "DB Upper Circuit", "description": "12-min AMRAP: 8 DB floor presses (50s), 12 KB swings (53), 10 sit-ups." },
+        { "type": "wod", "title": "Run", "description": "4 mi easy at conversational RPE 3-4; finish with 4x20-sec relaxed strides." }
+      ]
     }
   ]
 }
 
 RULES:
 - ONE row per calendar day from ${week.startDate} through the end of this week (or through ${outline.endDate} if it falls inside this week). Use correct real dates with matching day names.
-- Rest days: session "Rest", short recovery detail (e.g., "Complete rest. Optional 20-30 min easy walk."), runMiles 0.
-- Event days (competition, race): session in CAPS (e.g., "MARATHON", "CROSSFIT COMPETITION") with race-day execution guidance in detail.
-- "session" is a short 2-4 word label. "detail" is the COMPLETE prescription: exact distances, paces, movements, reps, and loads (use the athlete's PRs for percentage work) - specific enough to train from with no other information.
+- "components" is the day's prescription broken into typed pieces: "warmup", "wod" (metcons AND runs/cardio), "lift", "skill", "cooldown". Each component's description is COMPLETE: exact distances, paces, movements, reps, and loads (use the athlete's PRs for percentage work) - specific enough to train from with no other information.
+- "reason" (1-2 sentences): WHY this day is programmed this way given the phase, the surrounding days, and the athlete's goals. Every non-rest day gets one.
+- Rest days: session "Rest", components [] (or one light "cooldown" mobility component), runMiles 0, reason explaining what the rest protects.
+- Event days (competition, race): session in CAPS (e.g., "MARATHON", "CROSSFIT COMPETITION") with one component of race-day execution guidance.
+- "session" is a short 2-4 word label summarizing the day. "phase" is a consistent short label across the plan (e.g., "Base", "Build", "Comp Taper", "Marathon Taper", "Recovery").
 - EVERY row is ONE definitive prescription. Never "optional", never "attend or rest - your call".
-- Class days: session names the class (e.g., "Oly Class"); detail says to follow the coach's programming plus intensity guidance.
-- "phase" is a consistent short label across the plan (e.g., "Base", "Build", "Comp Taper", "Marathon Taper", "Recovery").
+- Class days: ONE "lift" component naming the class and saying to follow the coach's programming plus intensity guidance.
 - runMiles = total planned run miles that day (0 if none). targetRPE like "3-7". estMinutes = total session time including warmup.
 - Respect every schedule rule, time budget, and rest-day requirement above. Only equipment the athlete has.
 - Pure JSON only - no markdown fences, no extra text.`;
@@ -1313,7 +1322,7 @@ ${conversationHistory}
 
 Respond to the athlete's latest message with valid JSON in EXACTLY ONE of these forms:
 1. Just answering a question / discussing: {"message": "..."}
-2. Targeted plan changes: {"message": "summary of what you changed and why", "patchRows": [complete replacement rows for ONLY the days that change, using the same row schema as the table: date, day, week, phase, session, detail, runMiles, targetRPE, estMinutes]}
+2. Targeted plan changes: {"message": "summary of what you changed and why", "patchRows": [complete replacement rows for ONLY the days that change, using the full row schema: date, day, week, phase, session, runMiles, targetRPE, estMinutes, reason, and components (typed pieces: warmup/wod/lift/skill/cooldown, each with title and a complete description)]}
 3. The request changes the plan's fundamental structure (different weekly pattern, new/changed events, different phases): {"message": "...", "outline": {"startDate": "YYYY-MM-DD", "endDate": "YYYY-MM-DD", "weeks": [{"weekNumber": 1, "startDate": "YYYY-MM-DD", "focus": "...", "details": "..."}]}} - the app will rebuild the whole table from it.
 
 PATCH RULES:
