@@ -148,7 +148,7 @@ function buildPreferencesSection(preferences?: Omit<AIProgrammingPreferences, "u
           const timeBudget = setting.maxMinutes && setting.maxMinutes > 0
             ? ` If you program training instead of the class, the full session (including warmup) must stay under ${setting.maxMinutes} minutes.`
             : "";
-          scheduleLines.push(`- ${dayNames[key]}: CLASS AVAILABLE - ${desc}. Attendance is YOUR call week by week: schedule it when it fits the plan (add ONE component noting the class instead of programming a workout), or make the day rest/training when that serves the athlete better (tapers, needed recovery, conflicting priorities).${timeBudget}`);
+          scheduleLines.push(`- ${dayNames[key]}: CLASS AVAILABLE - ${desc}. YOU decide each week and COMMIT to exactly one prescription for this day: the class, a specific programmed workout, or rest. NEVER write "optional" or "attend or rest - your call" - the athlete wants to be told exactly what to do. When prescribing the class, add ONE component noting it.${timeBudget}`);
         } else {
           scheduleLines.push(`- ${dayNames[key]}: FIXED CLASS every week - ${desc}. Do NOT program a workout for this day; add ONE component noting the class (with intensity guidance during taper weeks).`);
         }
@@ -347,6 +347,9 @@ Examples of creative names: "December Destroyer", "Frostbite", "Firebreather", "
 
 Guidelines:
 - Create varied, balanced programming
+- EVERY day gets ONE definitive prescription: a workout, a class, or rest. NEVER program "optional" sessions or attend-or-skip choices - decide for the athlete
+- "skill" components are ONLY for low-fatigue technique development (e.g., double-under practice, handstand/muscle-up progressions, kipping drills). Conditioning EMOMs/AMRAPs are "wod" even when built around one movement - an EMOM of wall balls is a WOD, not skill work
+- Train the athlete's stated weaknesses 1-2x per week using VARIED approaches - do NOT insert the same movement into every session
 - Include proper warm-ups and skill work
 - Program appropriate rest days (typically 2 per week)
 - Scale difficulty based on the athlete's level
@@ -1132,6 +1135,10 @@ Respond with valid JSON in this exact format:
 RULES:
 - Cover EVERY calendar day of this week starting ${week.startDate} (7 consecutive days, or fewer if the plan's end date ${outline.endDate} falls within this week). Use correct real dates and matching day names.
 - Rest days: set isRestDay to true with components [] (or one light "cooldown" mobility component if the plan calls for active recovery).
+- EVERY day gets ONE definitive prescription: a workout, a class, or rest. NEVER write "optional" sessions or attend-or-skip choices - decide for the athlete.
+- "skill" components are ONLY low-fatigue technique work (progressions, drills). Conditioning EMOMs/AMRAPs are "wod" even when built around one movement.
+- Train the athlete's stated weaknesses 1-2x per week with varied approaches - never the same movement in every session.
+- Class-day components: use the most fitting type (usually "lift" for a lifting class) and omit scoringType.
 - Days with an external class (e.g., Olympic lifting class at their gym): ONE component describing the class with brief notes - do not program extra work unless the plan says so.
 - Running sessions: use a "wod" component with the run as the description (distance, pace guidance, structure).
 - Component types: "warmup", "lift", "wod", "skill", "cooldown". WOD scoringType: "fortime", "amrap", "emom".
