@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { collection, addDoc, updateDoc, doc, query, where, getDocs, limit, Timestamp, serverTimestamp, deleteDoc, writeBatch } from "firebase/firestore";
+import { collection, addDoc, updateDoc, doc, query, where, getDocs, getDoc, setDoc, limit, Timestamp, serverTimestamp, deleteDoc, writeBatch } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { AIProgrammingSession, AIChatMessage, AIGeneratedDay, AIProgrammingPreferences, AITrainerSubscription, TrainingEvent, TrainingEventType, WeekdayKey, AICoachPreferences } from "@/lib/types";
+import { AIProgrammingSession, AIChatMessage, AIGeneratedDay, AIProgrammingPreferences, AITrainerSubscription, TrainingEvent, TrainingEventType, WeekdayKey, AICoachPreferences, PlanRow, TrainingPlan } from "@/lib/types";
 import { getAllSkills, getAllLifts, getAllWods } from "@/lib/workoutData";
 import { chatCompletion } from "@/lib/ai";
 import AITrainerPaywall from "./AITrainerPaywall";
+import PlanTable from "./PlanTable";
 
 // Get preset workout names for the AI prompt
 const getPresetSkillNames = () => getAllSkills().map(s => s.name);
@@ -72,6 +73,28 @@ function stripOldWorkouts(messages: AIChatMessage[]): AIChatMessage[] {
     delete rest.generatedWorkouts;
     return rest;
   });
+}
+
+// Coerce an AI-produced row into a clean PlanRow (Firestore rejects undefined)
+function sanitizePlanRow(r: Partial<PlanRow>, fallbackWeek: number, fallbackPhase: string): PlanRow {
+  return {
+    date: String(r.date || ""),
+    day: String(r.day || ""),
+    week: Number(r.week) || fallbackWeek,
+    phase: String(r.phase || fallbackPhase),
+    session: String(r.session || "Training"),
+    detail: String(r.detail || ""),
+    runMiles: Number(r.runMiles) || 0,
+    targetRPE: String(r.targetRPE || ""),
+    estMinutes: Number(r.estMinutes) || 0,
+  };
+}
+
+// Compact text form of the plan table for prompts
+function serializePlanRows(rows: PlanRow[]): string {
+  return rows
+    .map(r => [r.date, r.day, `wk${r.week}`, r.phase, r.session, r.runMiles || 0, r.targetRPE || "-", r.estMinutes || 0, (r.detail || "").replace(/\n/g, " / ")].join("|"))
+    .join("\n");
 }
 
 interface AIProgrammingChatProps {
@@ -439,7 +462,7 @@ If the user asks for programming spanning MORE than 14 days (e.g., "program ever
 - Include one entry per week covering the ENTIRE requested date range - never stop early.
 - Build proper phases around any events the user mentions (base -> build -> peak -> taper -> event -> recovery).
 - Restate the athlete's fixed weekly commitments (classes on specific days) and their rest days in EVERY week's details.
-The app will then ask you for each week's daily workouts one at a time.
+The app will then ask you to fill in a day-by-day plan TABLE (one detailed row per day) one week at a time.
 
 If the user is just chatting or asking questions (not requesting workouts), respond with just:
 {
@@ -561,6 +584,28 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
 
   // Combined athlete block injected into every prompt
   const athleteBlock = buildProfileSection(athleteProfile) + athleteContext;
+
+  // The day-by-day training plan table for the active session
+  const [plan, setPlan] = useState<TrainingPlan | null>(null);
+  const [showPlanModal, setShowPlanModal] = useState(false);
+  const [isPublishingPlan, setIsPublishingPlan] = useState(false);
+
+  useEffect(() => {
+    const loadPlan = async () => {
+      if (!activeSession?.id) {
+        setPlan(null);
+        return;
+      }
+      try {
+        const snap = await getDoc(doc(db, "trainingPlans", activeSession.id));
+        setPlan(snap.exists() ? ({ id: snap.id, ...snap.data() } as TrainingPlan) : null);
+      } catch (err) {
+        console.error("Error loading plan:", err);
+        setPlan(null);
+      }
+    };
+    loadPlan();
+  }, [activeSession?.id]);
 
   // Load recently used workouts from the last 6 months of the athlete's calendar
   useEffect(() => {
@@ -937,8 +982,13 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
         }
       }
 
-      // Delete the session itself
+      // Delete the session itself and its plan table
       await deleteDoc(doc(db, "aiProgrammingSessions", sessionId));
+      try {
+        await deleteDoc(doc(db, "trainingPlans", sessionId));
+      } catch {
+        // No plan for this session - fine
+      }
 
       // Update local state
       setSessions(prev => prev.filter(s => s.id !== sessionId));
@@ -979,7 +1029,10 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
         `${msg.role === "user" ? "User" : "Assistant"}: ${msg.content}`
       ).join("\n\n");
 
-      const prompt = `${getSystemPrompt(preferences, recentlyUsedWorkouts)}\n${athleteBlock}\nConversation so far:\n${conversationHistory}\n\nRespond to the user's latest message. Remember to output valid JSON only.`;
+      // If this session already has a plan table, converse in revision mode
+      const prompt = plan
+        ? buildRevisionPrompt(plan, conversationHistory)
+        : `${getSystemPrompt(preferences, recentlyUsedWorkouts)}\n${athleteBlock}\nConversation so far:\n${conversationHistory}\n\nRespond to the user's latest message. Remember to output valid JSON only.`;
 
       // Call xAI/Grok API (fast model with automatic fallback)
       const text = await chatCompletion({
@@ -999,10 +1052,16 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
       try {
         const parsed = JSON.parse(cleanJsonText(text));
 
-        // Long-range program: the AI returned a week-by-week outline.
-        // Generate the actual days one week at a time so nothing gets cut short.
+        // Revision mode: targeted changes to the existing plan table
+        if (plan && Array.isArray(parsed.patchRows) && parsed.patchRows.length > 0) {
+          await applyPlanPatch(parsed.patchRows, parsed.message || "Plan updated.", updatedMessages);
+          return;
+        }
+
+        // Long-range program (or full rebuild): the AI returned a week-by-week
+        // outline - fill in the plan table one week at a time.
         if (parsed.outline && Array.isArray(parsed.outline.weeks) && parsed.outline.weeks.length > 0) {
-          await generateFullProgram(
+          await generatePlanTable(
             activeSession.id,
             parsed.message || "Here's your training plan.",
             parsed.outline as ProgramOutline,
@@ -1082,30 +1141,22 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
     }
   };
 
-  // Build the prompt that generates one specific week of a long-range plan
-  const buildWeekPrompt = (
+  // Build the prompt that fills in one week of the plan table
+  const buildWeekRowsPrompt = (
     outline: ProgramOutline,
     week: ProgramOutlineWeek,
     conversationHistory: string,
-    previousDays: AIGeneratedDay[]
+    previousRows: PlanRow[]
   ): string => {
-    const skillNames = getPresetSkillNames();
-    const liftNames = getPresetLiftNames();
-
-    const usedWodTitles = new Set<string>(recentlyUsedWorkouts);
-    previousDays.forEach(day => day.components?.forEach(c => {
-      if (c.type === "wod" && c.title) usedWodTitles.add(c.title);
-    }));
-
     const outlineSummary = outline.weeks
       .map(w => `Week ${w.weekNumber} (starting ${w.startDate}): ${w.focus}${w.details ? ` - ${w.details}` : ""}`)
       .join("\n");
 
-    const lastDays = previousDays.slice(-7)
-      .map(d => `${d.date} (${d.dayOfWeek}): ${d.isRestDay ? "REST" : d.components?.map(c => c.title).join(", ")}`)
+    const lastRows = previousRows.slice(-10)
+      .map(r => `${r.date} (${r.day}): ${r.session}${r.runMiles ? ` ${r.runMiles}mi` : ""} - ${(r.detail || "").slice(0, 80)}`)
       .join("\n");
 
-    return `You are a personal CrossFit + endurance coach generating ONE WEEK of daily workouts inside a longer training plan for an athlete in their garage/home gym.
+    return `You are a personal CrossFit + endurance coach filling in ONE WEEK of a day-by-day training plan TABLE for an athlete in their garage/home gym.
 ${buildPreferencesSection(preferences)}${athleteBlock}
 THE ATHLETE'S REQUEST AND CONTEXT (conversation so far):
 ${conversationHistory}
@@ -1113,45 +1164,65 @@ ${conversationHistory}
 FULL PLAN OUTLINE (runs ${outline.startDate} to ${outline.endDate}):
 ${outlineSummary}
 
-YOU ARE NOW GENERATING WEEK ${week.weekNumber}, which starts on ${week.startDate}.
+YOU ARE NOW FILLING IN WEEK ${week.weekNumber}, which starts on ${week.startDate}.
 Focus for this week: ${week.focus}
 ${week.details ? `Details: ${week.details}` : ""}
-${lastDays ? `\nDAYS ALREADY PROGRAMMED JUST BEFORE THIS WEEK (for continuity):\n${lastDays}` : ""}
+${lastRows ? `\nDAYS ALREADY IN THE TABLE JUST BEFORE THIS WEEK (for continuity - do not repeat workouts):\n${lastRows}` : ""}
 
 Respond with valid JSON in this exact format:
 {
-  "days": [
+  "rows": [
     {
       "date": "YYYY-MM-DD",
-      "dayOfWeek": "Monday",
-      "isRestDay": false,
-      "components": [
-        { "type": "wod", "title": "...", "description": "...", "scoringType": "fortime", "notes": "..." }
-      ]
+      "day": "Monday",
+      "week": ${week.weekNumber},
+      "phase": "${week.focus.split(" - ")[0]}",
+      "session": "Run + CrossFit",
+      "detail": "4 mi easy conversational run, finish with 4x20-sec strides. Then 12-min AMRAP: 8 DB floor presses (50s), 12 KB swings (53), 10 sit-ups.",
+      "runMiles": 4,
+      "targetRPE": "3-7",
+      "estMinutes": 60
     }
   ]
 }
 
 RULES:
-- Cover EVERY calendar day of this week starting ${week.startDate} (7 consecutive days, or fewer if the plan's end date ${outline.endDate} falls within this week). Use correct real dates and matching day names.
-- Rest days: set isRestDay to true with components [] (or one light "cooldown" mobility component if the plan calls for active recovery).
-- EVERY day gets ONE definitive prescription: a workout, a class, or rest. NEVER write "optional" sessions or attend-or-skip choices - decide for the athlete.
-- "skill" components are ONLY low-fatigue technique work (progressions, drills). Conditioning EMOMs/AMRAPs are "wod" even when built around one movement.
-- Train the athlete's stated weaknesses 1-2x per week with varied approaches - never the same movement in every session.
-- Class-day components: use the most fitting type (usually "lift" for a lifting class) and omit scoringType.
-- Days with an external class (e.g., Olympic lifting class at their gym): ONE component describing the class with brief notes - do not program extra work unless the plan says so.
-- Running sessions: use a "wod" component with the run as the description (distance, pace guidance, structure).
-- Component types: "warmup", "lift", "wod", "skill", "cooldown". WOD scoringType: "fortime", "amrap", "emom".
-- For prescribed SKILL components use only these names: ${skillNames.join(", ")}
-- For prescribed LIFT components use only these names (class-day components are exempt): ${liftNames.join(", ")}
-- DO NOT reuse these WOD names: ${Array.from(usedWodTitles).slice(-80).join(", ") || "none yet"}
-- Keep notes concise: under 60 words per component (stimulus, scaling, intent).
-- Only program equipment the athlete actually has.
-- Respond with pure JSON only - no markdown fences, no extra text.`;
+- ONE row per calendar day from ${week.startDate} through the end of this week (or through ${outline.endDate} if it falls inside this week). Use correct real dates with matching day names.
+- Rest days: session "Rest", short recovery detail (e.g., "Complete rest. Optional 20-30 min easy walk."), runMiles 0.
+- Event days (competition, race): session in CAPS (e.g., "MARATHON", "CROSSFIT COMPETITION") with race-day execution guidance in detail.
+- "session" is a short 2-4 word label. "detail" is the COMPLETE prescription: exact distances, paces, movements, reps, and loads (use the athlete's PRs for percentage work) - specific enough to train from with no other information.
+- EVERY row is ONE definitive prescription. Never "optional", never "attend or rest - your call".
+- Class days: session names the class (e.g., "Oly Class"); detail says to follow the coach's programming plus intensity guidance.
+- "phase" is a consistent short label across the plan (e.g., "Base", "Build", "Comp Taper", "Marathon Taper", "Recovery").
+- runMiles = total planned run miles that day (0 if none). targetRPE like "3-7". estMinutes = total session time including warmup.
+- Respect every schedule rule, time budget, and rest-day requirement above. Only equipment the athlete has.
+- Pure JSON only - no markdown fences, no extra text.`;
   };
 
-  // Generate a multi-week program: one API call per week, assembled into a single plan
-  const generateFullProgram = async (
+  // Build the prompt for revising an existing plan table conversationally
+  const buildRevisionPrompt = (currentPlan: TrainingPlan, conversationHistory: string): string => {
+    return `You are the athlete's coach maintaining their day-by-day training plan TABLE.
+${buildPreferencesSection(preferences)}${athleteBlock}
+CURRENT PLAN TABLE (${currentPlan.startDate} to ${currentPlan.endDate}, ${currentPlan.rows.length} days).
+Format: date|day|week|phase|session|runMiles|RPE|minutes|detail
+${serializePlanRows(currentPlan.rows)}
+
+CONVERSATION:
+${conversationHistory}
+
+Respond to the athlete's latest message with valid JSON in EXACTLY ONE of these forms:
+1. Just answering a question / discussing: {"message": "..."}
+2. Targeted plan changes: {"message": "summary of what you changed and why", "patchRows": [complete replacement rows for ONLY the days that change, using the same row schema as the table: date, day, week, phase, session, detail, runMiles, targetRPE, estMinutes]}
+3. The request changes the plan's fundamental structure (different weekly pattern, new/changed events, different phases): {"message": "...", "outline": {"startDate": "YYYY-MM-DD", "endDate": "YYYY-MM-DD", "weeks": [{"weekNumber": 1, "startDate": "YYYY-MM-DD", "focus": "...", "details": "..."}]}} - the app will rebuild the whole table from it.
+
+PATCH RULES:
+- patchRows contains ONLY changed days; every unchanged day stays out of it.
+- Each patched row is complete and definitive (no "optional") and respects the athlete's schedule rules, time budgets, rest-day requirements, equipment, and injuries above.
+- Pure JSON only - no markdown fences.`;
+  };
+
+  // Generate the full plan table: one API call per week, assembled and saved as a draft
+  const generatePlanTable = async (
     sessionId: string,
     planMessage: string,
     outline: ProgramOutline,
@@ -1159,34 +1230,34 @@ RULES:
     updatedMessages: AIChatMessage[]
   ) => {
     const weeks = (outline.weeks || []).slice(0, 20);
-    const allDays: AIGeneratedDay[] = [];
+    const allRows: PlanRow[] = [];
     const failedWeeks: number[] = [];
 
     for (let i = 0; i < weeks.length; i++) {
       setGenerationProgress({ current: i + 1, total: weeks.length });
 
-      let days: AIGeneratedDay[] | null = null;
-      for (let attempt = 0; attempt < 2 && !days; attempt++) {
+      let rows: PlanRow[] | null = null;
+      for (let attempt = 0; attempt < 2 && !rows; attempt++) {
         try {
           const text = await chatCompletion({
             messages: [
               { role: "system", content: "You are an expert CrossFit and endurance programming coach. Always respond with valid JSON only." },
-              { role: "user", content: buildWeekPrompt(outline, weeks[i], conversationHistory, allDays) }
+              { role: "user", content: buildWeekRowsPrompt(outline, weeks[i], conversationHistory, allRows) }
             ],
             temperature: 0.6,
           });
           const parsed = JSON.parse(cleanJsonText(text));
-          const arr = Array.isArray(parsed) ? parsed : (parsed.days || parsed.workouts);
+          const arr = Array.isArray(parsed) ? parsed : parsed.rows;
           if (Array.isArray(arr) && arr.length > 0) {
-            days = arr as AIGeneratedDay[];
+            rows = arr.map((r: Partial<PlanRow>) => sanitizePlanRow(r, weeks[i].weekNumber, weeks[i].focus));
           }
         } catch (err) {
           console.error(`Error generating week ${weeks[i].weekNumber} (attempt ${attempt + 1}):`, err);
         }
       }
 
-      if (days) {
-        allDays.push(...days);
+      if (rows) {
+        allRows.push(...rows.filter(r => r.date));
       } else {
         failedWeeks.push(weeks[i].weekNumber);
       }
@@ -1194,10 +1265,23 @@ RULES:
 
     setGenerationProgress(null);
 
-    let finalText = `${planMessage}\n\nI built out ${allDays.length} days of programming across ${weeks.length} weeks. Hit "Preview & Publish" to review the full plan and add it to your calendar.`;
-    if (outline.weeks.length > 20) {
-      finalText += `\n\n(I capped this at the first 20 weeks - ask me to continue from week 21 when you get there.)`;
-    }
+    // Save the table as a draft plan (doc id = session id)
+    const now = Timestamp.now();
+    const planDoc: Omit<TrainingPlan, "id"> = {
+      userId,
+      sessionId,
+      title: activeSession?.title || "Training Plan",
+      status: "draft",
+      startDate: outline.startDate || allRows[0]?.date || "",
+      endDate: outline.endDate || allRows[allRows.length - 1]?.date || "",
+      rows: allRows,
+      createdAt: plan?.createdAt || now,
+      updatedAt: now,
+    };
+    await setDoc(doc(db, "trainingPlans", sessionId), planDoc);
+    setPlan({ id: sessionId, ...planDoc });
+
+    let finalText = `${planMessage}\n\nYour plan table is ready: ${allRows.length} days (${planDoc.startDate} to ${planDoc.endDate}). Open "View Plan Table" above to review every row. Tell me what to change - or lock it in and I'll put it on your calendar.`;
     if (failedWeeks.length > 0) {
       finalText += `\n\n(Heads up: week${failedWeeks.length > 1 ? "s" : ""} ${failedWeeks.join(", ")} failed to generate - ask me to fill ${failedWeeks.length > 1 ? "them" : "it"} in.)`;
     }
@@ -1208,19 +1292,127 @@ RULES:
       content: finalText,
       timestamp: Timestamp.now(),
     };
-    if (allDays.length > 0) {
-      assistantMessage.generatedWorkouts = allDays;
-    }
-
     const finalMessages = [...updatedMessages, assistantMessage];
-
     await updateDoc(doc(db, "aiProgrammingSessions", sessionId), {
       messages: stripOldWorkouts(finalMessages),
       programWeeks: weeks.length,
       updatedAt: Timestamp.now(),
     });
-
     setActiveSession(prev => prev ? { ...prev, messages: finalMessages } : null);
+    setShowPlanModal(true);
+  };
+
+  // Apply targeted row changes from a revision
+  const applyPlanPatch = async (
+    patchRows: Partial<PlanRow>[],
+    message: string,
+    updatedMessages: AIChatMessage[]
+  ) => {
+    if (!plan || !activeSession) return;
+
+    const byDate = new Map(plan.rows.map(r => [r.date, r]));
+    patchRows.forEach(r => {
+      const clean = sanitizePlanRow(r, Number(r.week) || 1, String(r.phase || ""));
+      if (clean.date) byDate.set(clean.date, clean);
+    });
+    const newRows = Array.from(byDate.values()).sort((a, b) => a.date.localeCompare(b.date));
+
+    const updatedPlan: TrainingPlan = { ...plan, rows: newRows, status: "draft", updatedAt: Timestamp.now() };
+    await setDoc(doc(db, "trainingPlans", plan.id), { rows: newRows, status: "draft", updatedAt: Timestamp.now() }, { merge: true });
+    setPlan(updatedPlan);
+
+    const assistantMessage: AIChatMessage = {
+      id: `msg-${Date.now()}-assistant`,
+      role: "assistant",
+      content: `${message}\n\n(${patchRows.length} day${patchRows.length > 1 ? "s" : ""} updated in the plan table - review and lock when ready.)`,
+      timestamp: Timestamp.now(),
+    };
+    const finalMessages = [...updatedMessages, assistantMessage];
+    await updateDoc(doc(db, "aiProgrammingSessions", activeSession.id), {
+      messages: stripOldWorkouts(finalMessages),
+      updatedAt: Timestamp.now(),
+    });
+    setActiveSession(prev => prev ? { ...prev, messages: finalMessages } : null);
+  };
+
+  // Lock the plan and publish every row to the athlete's calendar
+  const lockAndPublishPlan = async () => {
+    if (!plan || isPublishingPlan) return;
+    setIsPublishingPlan(true);
+    setError(null);
+
+    try {
+      // Replace any AI-planned workouts already on the plan's dates
+      const targetDates = new Set(plan.rows.map(r => r.date).filter(Boolean));
+      const existingSnap = await getDocs(query(
+        collection(db, "personalWorkouts"),
+        where("userId", "==", userId)
+      ));
+      const toDelete = existingSnap.docs.filter(d => {
+        const x = d.data();
+        const ds = x.dateString || x.date?.toDate?.()?.toISOString?.().split("T")[0];
+        return x.aiSessionId && ds && targetDates.has(ds);
+      });
+      let delBatch = writeBatch(db);
+      let delPending = 0;
+      for (const d of toDelete) {
+        delBatch.delete(d.ref);
+        delPending++;
+        if (delPending >= 400) { await delBatch.commit(); delBatch = writeBatch(db); delPending = 0; }
+      }
+      if (delPending > 0) await delBatch.commit();
+
+      // Write one calendar workout per non-rest row
+      let batch = writeBatch(db);
+      let pending = 0;
+      let written = 0;
+      for (const row of plan.rows) {
+        if (!row.date || row.session.toLowerCase().includes("rest")) continue;
+        const [y, m, d] = row.date.split("-").map(Number);
+        const workoutDate = new Date(y, m - 1, d, 12, 0, 0);
+        if (isNaN(workoutDate.getTime())) continue;
+
+        const noteBits = [
+          `Phase: ${row.phase}`,
+          row.targetRPE ? `Target RPE ${row.targetRPE}` : "",
+          row.estMinutes ? `~${row.estMinutes} min` : "",
+          row.runMiles ? `${row.runMiles} mi planned` : "",
+        ].filter(Boolean).join(" • ");
+
+        const componentType = row.session.toLowerCase().includes("class") ? "lift" : "wod";
+
+        const workoutRef = doc(collection(db, "personalWorkouts"));
+        batch.set(workoutRef, {
+          userId: String(userId),
+          date: Timestamp.fromDate(workoutDate),
+          dateString: row.date,
+          components: [{
+            id: "comp-0",
+            type: componentType,
+            title: row.session,
+            description: row.detail,
+            notes: noteBits,
+          }],
+          createdAt: serverTimestamp(),
+          aiSessionId: plan.sessionId,
+        });
+        pending++;
+        written++;
+        if (pending >= 400) { await batch.commit(); batch = writeBatch(db); pending = 0; }
+      }
+      if (pending > 0) await batch.commit();
+
+      await setDoc(doc(db, "trainingPlans", plan.id), { status: "locked", updatedAt: Timestamp.now() }, { merge: true });
+      setPlan(prev => prev ? { ...prev, status: "locked" } : null);
+      setShowPlanModal(false);
+      onPublish?.();
+      alert(`Plan locked! ${written} workouts added to your calendar.`);
+    } catch (err) {
+      console.error("Error publishing plan:", err);
+      setError("Failed to publish the plan to your calendar");
+    } finally {
+      setIsPublishingPlan(false);
+    }
   };
 
   const getAllGeneratedWorkouts = (): AIGeneratedDay[] => {
@@ -1504,6 +1696,28 @@ RULES:
         </div>
       )}
 
+      {/* Plan table bar */}
+      {activeSession && plan && (
+        <div className="px-4 py-2.5 bg-purple-50 border-b border-purple-100 flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex items-center gap-2 text-sm flex-wrap">
+            <span>📋</span>
+            <span className="font-medium text-purple-900">Training Plan</span>
+            <span className="text-purple-700 text-xs">{plan.startDate} → {plan.endDate} • {plan.rows.length} days</span>
+            <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+              plan.status === "locked" ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"
+            }`}>
+              {plan.status === "locked" ? "Locked ✓" : "Draft"}
+            </span>
+          </div>
+          <button
+            onClick={() => setShowPlanModal(true)}
+            className="px-3 py-1.5 bg-purple-600 text-white text-xs font-semibold rounded-lg hover:bg-purple-700 transition-colors"
+          >
+            View Plan Table
+          </button>
+        </div>
+      )}
+
       {/* Chat Area */}
       {activeSession ? (
         <>
@@ -1757,6 +1971,56 @@ RULES:
                   className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isPublishing ? "Adding..." : `Add ${generatedWorkouts.filter(d => !d.isRestDay).length} Workouts to My Calendar`}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Plan Table Modal */}
+      {showPlanModal && plan && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-6xl w-full max-h-[92vh] overflow-hidden flex flex-col">
+            <div className="p-4 border-b border-gray-200 flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Your Training Plan</h3>
+                <p className="text-sm text-gray-500">
+                  {plan.startDate} → {plan.endDate} • {plan.rows.length} days • {plan.status === "locked" ? "Locked - on your calendar" : "Draft - not on your calendar yet"}
+                </p>
+              </div>
+              <button onClick={() => setShowPlanModal(false)} className="text-gray-500 hover:text-gray-700">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-auto p-4">
+              <PlanTable rows={plan.rows} />
+            </div>
+
+            <div className="p-4 border-t border-gray-200 bg-gray-50 flex items-center justify-between gap-3 flex-wrap">
+              <p className="text-xs text-gray-500">
+                Want changes? Close this and tell your coach in the chat (e.g., &quot;week 3 is too much&quot;, &quot;no Friday runs&quot;) - only the affected days get rewritten.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowPlanModal(false)}
+                  className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+                >
+                  Close
+                </button>
+                <button
+                  onClick={lockAndPublishPlan}
+                  disabled={isPublishingPlan}
+                  className="px-6 py-2 bg-purple-600 text-white font-semibold rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isPublishingPlan
+                    ? "Publishing..."
+                    : plan.status === "locked"
+                    ? "Republish to Calendar"
+                    : "Lock & Add to Calendar"}
                 </button>
               </div>
             </div>

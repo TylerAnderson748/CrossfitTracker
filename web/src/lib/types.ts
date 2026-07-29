@@ -292,6 +292,37 @@ export interface AIProgrammingPreferences {
   updatedAt: Timestamp;
 }
 
+// =====================
+// TRAINING PLAN TABLE
+// =====================
+
+// One row of the day-by-day training plan table
+export interface PlanRow {
+  date: string;        // YYYY-MM-DD
+  day: string;         // "Monday"
+  week: number;        // 1-based week number
+  phase: string;       // e.g., "Base", "Build", "Comp Taper", "Marathon Taper"
+  session: string;     // short label, e.g., "Run + CrossFit", "Oly Class", "Rest", "MARATHON"
+  detail: string;      // the complete prescription for the day
+  runMiles?: number;   // planned run miles (0 = none)
+  targetRPE?: string;  // e.g., "3-7"
+  estMinutes?: number; // estimated total session minutes
+}
+
+// The full plan document (one per AI programming session, doc id = session id)
+export interface TrainingPlan {
+  id: string;
+  userId: string;
+  sessionId: string;
+  title: string;
+  status: "draft" | "locked";
+  startDate: string; // YYYY-MM-DD
+  endDate: string;   // YYYY-MM-DD
+  rows: PlanRow[];
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
 // =========================
 // PRICING
 // =========================
