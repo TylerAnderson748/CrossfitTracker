@@ -155,7 +155,7 @@ function buildPreferencesSection(preferences?: Omit<AIProgrammingPreferences, "u
       }
     }
     if (scheduleLines.length > 0) {
-      prefParts.push(`WEEKLY SCHEDULE (NON-NEGOTIABLE - applies to every single week):\n${scheduleLines.join("\n")}\nDays not listed above (and days marked "Train") are AVAILABLE for training - they are NOT all mandatory training days.`);
+      prefParts.push(`WEEKLY SCHEDULE (NON-NEGOTIABLE - applies to every single week):\n${scheduleLines.join("\n")}\nDays not listed above (and days marked "Train") are AVAILABLE for training - they are NOT all mandatory training days.\nPRECEDENCE: These structured schedule settings are the athlete's CURRENT choices. If anything in the free-text preferences, athlete profile, or earlier conversation conflicts with them (e.g., older statements about which days to train or attend classes), the structured settings above WIN.`);
     }
 
     const explicitRestDays = Object.values(schedule).filter(d => d?.mode === "rest").length;
