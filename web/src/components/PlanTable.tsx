@@ -21,7 +21,7 @@ const PHASE_STYLES = [
   "bg-indigo-50 text-indigo-700",
 ];
 
-// Runs/cardio are stored as "wod" components; give them their own label like the spreadsheet's Cardio column
+// Legacy plans stored runs/cardio as "wod" components; still give those the Cardio badge
 const CARDIO_RE = /\b(run|jog|bike|row(?:ing)?|swim|ruck|cardio|shuttle)\b/i;
 
 function componentBadge(c: PlanRowComponent) {

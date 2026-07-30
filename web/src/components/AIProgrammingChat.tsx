@@ -151,7 +151,7 @@ function stripOldWorkouts(messages: AIChatMessage[]): AIChatMessage[] {
 }
 
 // Coerce an AI-produced row into a clean PlanRow (Firestore rejects undefined)
-const VALID_COMPONENT_TYPES = ["warmup", "wod", "lift", "skill", "cooldown"];
+const VALID_COMPONENT_TYPES = ["warmup", "wod", "lift", "skill", "cardio", "cooldown"];
 
 function sanitizePlanRow(r: Partial<PlanRow>, fallbackWeek: number, fallbackPhase: string): PlanRow {
   const row: PlanRow = {
@@ -167,11 +167,13 @@ function sanitizePlanRow(r: Partial<PlanRow>, fallbackWeek: number, fallbackPhas
   };
   if (r.reason) row.reason = String(r.reason);
   if (Array.isArray(r.components) && r.components.length > 0) {
-    row.components = r.components.map(c => ({
-      type: (VALID_COMPONENT_TYPES.includes(String(c?.type)) ? String(c?.type) : "wod") as PlanRowComponent["type"],
-      title: String(c?.title || "Training").slice(0, 60),
-      description: String(c?.description || ""),
-    }));
+    row.components = r.components.map(c => {
+      let type = (VALID_COMPONENT_TYPES.includes(String(c?.type)) ? String(c?.type) : "wod") as PlanRowComponent["type"];
+      const title = String(c?.title || "Training").slice(0, 60);
+      // Older plans stored runs/cardio as "wod" components titled "Run"/"Cardio" etc.
+      if (type === "wod" && /^(run|cardio|swim|bike|row|ruck)$/i.test(title.trim())) type = "cardio";
+      return { type, title, description: String(c?.description || "") };
+    });
     if (!row.detail) {
       row.detail = row.components.map(c => `${c.title}: ${c.description}`).join(" • ");
     }
@@ -433,8 +435,9 @@ When generating workouts, you MUST respond with valid JSON in this exact format:
   ]
 }
 
-Component types: "warmup", "lift", "wod", "skill", "cooldown"
+Component types: "warmup", "lift", "wod", "skill", "cardio", "cooldown"
 Scoring types for WODs: "fortime", "amrap", "emom"
+Use "cardio" for pure aerobic work: runs, rowing, biking, swimming, rucking - steady-state or intervals - with exact distance/time and pace or RPE. Mixed-modal conditioning pieces (AMRAPs, EMOMs, For Time) stay "wod". Cardio components are exempt from the preset-name rule.
 
 IMPORTANT - PRESET WORKOUTS:
 For SKILL components, you MUST ONLY use these preset skill names (do not make up new skills):
@@ -1289,7 +1292,7 @@ Respond with valid JSON in this exact format:
       "components": [
         { "type": "warmup", "title": "Warm-up", "description": "3 min easy movement; 10 air squats + 10 glute bridges; wrist/ankle/hip mobility." },
         { "type": "wod", "title": "DB Upper Circuit", "description": "12-min AMRAP: 8 DB floor presses (50s), 12 KB swings (53), 10 sit-ups." },
-        { "type": "wod", "title": "Run", "description": "4 mi easy at conversational RPE 3-4; finish with 4x20-sec relaxed strides." }
+        { "type": "cardio", "title": "Run", "description": "4 mi easy at conversational RPE 3-4; finish with 4x20-sec relaxed strides." }
       ]
     }
   ]
@@ -1297,7 +1300,7 @@ Respond with valid JSON in this exact format:
 
 RULES:
 - ONE row per calendar day from ${week.startDate} through the end of this week (or through ${outline.endDate} if it falls inside this week). Use correct real dates with matching day names.
-- "components" is the day's prescription broken into typed pieces: "warmup", "wod" (metcons AND runs/cardio), "lift", "skill", "cooldown". Each component's description is COMPLETE: exact distances, paces, movements, reps, and loads (use the athlete's PRs for percentage work) - specific enough to train from with no other information.
+- "components" is the day's prescription broken into typed pieces: "warmup", "wod" (mixed-modal metcons), "lift", "skill", "cardio" (ALL pure aerobic work: runs, rowing, biking, swimming, rucking - steady-state or intervals), "cooldown". Each component's description is COMPLETE: exact distances, paces, movements, reps, and loads (use the athlete's PRs for percentage work) - specific enough to train from with no other information.
 - "reason" (1-2 sentences): WHY this day is programmed this way given the phase, the surrounding days, and the athlete's goals. Every non-rest day gets one.
 - Rest days: session "Rest", components [] (or one light "cooldown" mobility component), runMiles 0, reason explaining what the rest protects.
 - Event days (competition, race): session in CAPS (e.g., "MARATHON", "CROSSFIT COMPETITION") with one component of race-day execution guidance.
@@ -1322,7 +1325,7 @@ ${conversationHistory}
 
 Respond to the athlete's latest message with valid JSON in EXACTLY ONE of these forms:
 1. Just answering a question / discussing: {"message": "..."}
-2. Targeted plan changes: {"message": "summary of what you changed and why", "patchRows": [complete replacement rows for ONLY the days that change, using the full row schema: date, day, week, phase, session, runMiles, targetRPE, estMinutes, reason, and components (typed pieces: warmup/wod/lift/skill/cooldown, each with title and a complete description)]}
+2. Targeted plan changes: {"message": "summary of what you changed and why", "patchRows": [complete replacement rows for ONLY the days that change, using the full row schema: date, day, week, phase, session, runMiles, targetRPE, estMinutes, reason, and components (typed pieces: warmup/wod/lift/skill/cardio/cooldown - runs and other pure aerobic work are "cardio" - each with title and a complete description)]}
 3. The request changes the plan's fundamental structure (different weekly pattern, new/changed events, different phases): {"message": "...", "outline": {"startDate": "YYYY-MM-DD", "endDate": "YYYY-MM-DD", "weeks": [{"weekNumber": 1, "startDate": "YYYY-MM-DD", "focus": "...", "details": "..."}]}} - the app will rebuild the whole table from it.
 
 PATCH RULES:
@@ -2125,6 +2128,7 @@ PATCH RULES:
                                 comp.type === "wod" ? "bg-orange-100 text-orange-700" :
                                 comp.type === "lift" ? "bg-purple-100 text-purple-700" :
                                 comp.type === "skill" ? "bg-green-100 text-green-700" :
+                                comp.type === "cardio" ? "bg-red-100 text-red-700" :
                                 "bg-blue-100 text-blue-700"
                               }`}>
                                 {comp.type.toUpperCase()}

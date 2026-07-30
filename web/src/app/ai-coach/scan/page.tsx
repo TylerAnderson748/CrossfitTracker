@@ -17,7 +17,7 @@ interface GeneratedWorkout {
   notes?: string;
 }
 
-const COMPONENT_TYPES: WorkoutComponentType[] = ["warmup", "lift", "wod", "skill", "cooldown"];
+const COMPONENT_TYPES: WorkoutComponentType[] = ["warmup", "lift", "wod", "skill", "cardio", "cooldown"];
 
 export default function AIScanPage() {
   const { user, loading } = useAuth();
@@ -83,13 +83,14 @@ export default function AIScanPage() {
 Look at this image and extract any workout programming you can see. Classify each component into ONE of these types:
 - "warmup" - Warm-up exercises, mobility, activation
 - "lift" - Strength work (squats, deadlifts, presses, Olympic lifts, etc.)
-- "wod" - WOD/Metcon (AMRAP, EMOM, For Time, conditioning pieces)
+- "wod" - WOD/Metcon (AMRAP, EMOM, For Time, mixed-modal conditioning pieces)
 - "skill" - Skill work (gymnastics movements, technique practice, drills)
+- "cardio" - Pure aerobic work (running, rowing, biking, swimming, rucking)
 - "cooldown" - Cool-down, stretching, recovery
 
 For each workout or component you identify, provide:
 1. A title/name for the workout
-2. The type (MUST be one of: warmup, lift, wod, skill, cooldown)
+2. The type (MUST be one of: warmup, lift, wod, skill, cardio, cooldown)
 3. A clear, formatted description of the workout
 4. Any additional notes (scaling options, intended stimulus, etc.)
 
@@ -113,7 +114,7 @@ If you cannot read the handwriting or the image doesn't contain workout programm
 
 IMPORTANT:
 - Only respond with valid JSON. No additional text before or after the JSON.
-- The "type" field MUST be exactly one of: warmup, lift, wod, skill, cooldown (lowercase)`;
+- The "type" field MUST be exactly one of: warmup, lift, wod, skill, cardio, cooldown (lowercase)`;
 
       // Call the fast vision model (with automatic fallback)
       const text = await chatCompletion({
@@ -158,6 +159,7 @@ IMPORTANT:
             else if (typeLower.includes("lift") || typeLower.includes("strength")) mappedType = "lift";
             else if (typeLower.includes("skill") || typeLower.includes("gymnastics")) mappedType = "skill";
             else if (typeLower.includes("cooldown") || typeLower.includes("cool")) mappedType = "cooldown";
+            else if (typeLower.includes("cardio") || typeLower.includes("run") || typeLower.includes("row") || typeLower.includes("bike") || typeLower.includes("swim") || typeLower.includes("ruck")) mappedType = "cardio";
             else if (typeLower.includes("wod") || typeLower.includes("metcon") || typeLower.includes("conditioning")) mappedType = "wod";
 
             return {
