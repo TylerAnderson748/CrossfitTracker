@@ -1,6 +1,6 @@
 "use client";
 
-import { PlanRow, PlanRowComponent, workoutComponentLabels, workoutComponentColors } from "@/lib/types";
+import { PlanRow, PlanRowComponent, workoutComponentLabels, workoutComponentColors, cardioActivityForComponent, cardioActivityLabels } from "@/lib/types";
 
 export type PlanDayStatus = "done" | "missed" | "today" | "upcoming";
 
@@ -21,12 +21,14 @@ const PHASE_STYLES = [
   "bg-indigo-50 text-indigo-700",
 ];
 
-// Legacy plans stored runs/cardio as "wod" components; still give those the Cardio badge
+// Legacy plans stored runs/cardio as "wod"/"cardio" components; map them to the specific activity badge
 const CARDIO_RE = /\b(run|jog|bike|row(?:ing)?|swim|ruck|cardio|shuttle)\b/i;
 
 function componentBadge(c: PlanRowComponent) {
-  if (c.type === "wod" && CARDIO_RE.test(c.title)) {
-    return { label: "Cardio", bg: "bg-red-100", text: "text-red-700" };
+  if (c.type === "cardio" || (c.type === "wod" && CARDIO_RE.test(c.title))) {
+    const activity = cardioActivityForComponent("cardio", c.title) || "run";
+    const colors = workoutComponentColors[activity];
+    return { label: cardioActivityLabels[activity], bg: colors.bg, text: colors.text };
   }
   if ((c.type === "wod" || c.type === "lift") && /\bclass\b/i.test(c.title)) {
     return { label: "Class", bg: "bg-indigo-100", text: "text-indigo-700" };

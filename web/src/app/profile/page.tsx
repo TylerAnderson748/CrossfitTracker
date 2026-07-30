@@ -318,7 +318,7 @@ export default function ProfilePage() {
                   {user.aiTrainerSubscription.status === "trialing" ? "Free Trial" : "Active"}
                 </span>
                 <span className="text-purple-200 text-sm">
-                  {user.aiTrainerSubscription.tier === "pro" ? "Pro Plan" : "Elite Plan"}
+                  {user.aiTrainerSubscription.tier === "elite" ? "AI Coach + Programming" : "AI Coach"}
                 </span>
               </div>
 

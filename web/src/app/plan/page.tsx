@@ -47,22 +47,24 @@ export default function PlanPage() {
           // Build the set of dates with any logged training
           const loggedDates = new Set<string>();
 
-          const [wodSnap, liftSnap, skillSnap] = await Promise.all([
+          const [wodSnap, liftSnap, skillSnap, cardioSnap, classSnap] = await Promise.all([
             getDocs(query(collection(db, "workoutLogs"), where("userId", "==", user.id))),
             getDocs(query(collection(db, "liftResults"), where("userId", "==", user.id))),
             getDocs(query(collection(db, "skillResults"), where("userId", "==", user.id))),
+            getDocs(query(collection(db, "cardioLogs"), where("userId", "==", user.id))),
+            getDocs(query(collection(db, "classLogs"), where("userId", "==", user.id))),
           ]);
           wodSnap.docs.forEach(d => {
             const dt = d.data().workoutDate?.toDate?.() || d.data().completedDate?.toDate?.();
             if (dt) loggedDates.add(toLocalDateString(dt));
           });
-          liftSnap.docs.forEach(d => {
-            const dt = d.data().date?.toDate?.();
-            if (dt) loggedDates.add(toLocalDateString(dt));
-          });
-          skillSnap.docs.forEach(d => {
-            const dt = d.data().date?.toDate?.();
-            if (dt) loggedDates.add(toLocalDateString(dt));
+          [liftSnap, skillSnap, cardioSnap, classSnap].forEach(snap => {
+            snap.docs.forEach(d => {
+              const ds = d.data().dateString;
+              if (ds) { loggedDates.add(ds); return; }
+              const dt = d.data().date?.toDate?.();
+              if (dt) loggedDates.add(toLocalDateString(dt));
+            });
           });
 
           const today = toLocalDateString(new Date());

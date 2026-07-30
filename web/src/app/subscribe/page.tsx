@@ -6,13 +6,15 @@ import { doc, updateDoc, Timestamp } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
 import Navigation from "@/components/Navigation";
-import { AITrainerSubscription, AICoachPreferences } from "@/lib/types";
+import { AITrainerSubscription, AICoachPreferences, PRICING } from "@/lib/types";
 
 function SubscribeContent() {
   const { user, loading, refreshUser } = useAuth();
   const router = useRouter();
   const [selectedPlan, setSelectedPlan] = useState<"monthly" | "yearly">("monthly");
+  const [selectedTier, setSelectedTier] = useState<"coach" | "programming">("programming");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isUpgrading, setIsUpgrading] = useState(false);
   const [showGoalsStep, setShowGoalsStep] = useState(false);
   const [savingGoals, setSavingGoals] = useState(false);
   const [goalsForm, setGoalsForm] = useState<AICoachPreferences>({
@@ -22,29 +24,26 @@ function SubscribeContent() {
     focusAreas: [],
   });
 
-  const plans = {
-    monthly: {
-      price: 9.99,
-      period: "month",
-      savings: null,
-      trialDays: 7,
-    },
-    yearly: {
-      price: 79.99,
-      period: "year",
-      savings: "Save 33%",
-      monthlyEquivalent: 6.67,
-      trialDays: 7,
-    },
-  };
+  const tierPrices = {
+    coach: { monthly: PRICING.AI_COACH_MONTHLY, yearly: PRICING.AI_COACH_YEARLY },
+    programming: { monthly: PRICING.AI_PROGRAMMING_MONTHLY, yearly: PRICING.AI_PROGRAMMING_YEARLY },
+  } as const;
+  const currentPrice = tierPrices[selectedTier][selectedPlan];
+  const currentPeriod = selectedPlan === "monthly" ? "month" : "year";
 
-  const features = [
-    { icon: "🤖", text: "AI-generated programming built for your garage gym and equipment" },
+  const coachFeatures = [
     { icon: "🎯", text: "Personalized weight recommendations based on YOUR lift history" },
     { icon: "📊", text: "AI analyzes your past WOD performances for smart scaling" },
-    { icon: "📸", text: "Scan handwritten workouts with your camera" },
+    { icon: "📸", text: "Scan class whiteboards and handwritten workouts with your camera" },
+    { icon: "🏃", text: "Log runs, swims, and rides - mileage, time, and pace" },
     { icon: "💪", text: "Progress-aware coaching cues and advice" },
-    { icon: "📈", text: "Track your progress with intelligent insights" },
+  ];
+
+  const programmingFeatures = [
+    { icon: "📋", text: "Full day-by-day training plans: phases, runs, lifts, WODs, and rest days" },
+    { icon: "💬", text: "Revise the plan in chat - only the affected days get rewritten" },
+    { icon: "📅", text: "Lock the plan onto your calendar with one click" },
+    { icon: "🔄", text: "Regenerate any single day when life gets in the way" },
   ];
 
   const handleStartTrial = async () => {
@@ -58,8 +57,9 @@ function SubscribeContent() {
       const now = new Date();
       const trialEndsAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000); // 7 days from now
 
+      // Trials get the full experience (programming included)
       const subscription: AITrainerSubscription = {
-        tier: "pro",
+        tier: "elite",
         status: "trialing",
         startDate: Timestamp.fromDate(now),
         trialEndsAt: Timestamp.fromDate(trialEndsAt),
@@ -92,7 +92,7 @@ function SubscribeContent() {
         : new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
 
       const subscription: AITrainerSubscription = {
-        tier: "pro",
+        tier: selectedTier === "programming" ? "elite" : "pro",
         status: "active",
         startDate: Timestamp.fromDate(now),
         endDate: Timestamp.fromDate(endDate),
@@ -108,6 +108,24 @@ function SubscribeContent() {
       alert("Failed to subscribe. Please try again.");
     } finally {
       setIsProcessing(false);
+    }
+  };
+
+  // Base subscriber adds the programming tier
+  const handleUpgradeToProgramming = async () => {
+    if (!user) return;
+    setIsUpgrading(true);
+    try {
+      await updateDoc(doc(db, "users", user.id), {
+        "aiTrainerSubscription.tier": "elite",
+      });
+      await refreshUser();
+      router.push("/programming");
+    } catch (error) {
+      console.error("Error upgrading subscription:", error);
+      alert("Failed to upgrade. Please try again.");
+    } finally {
+      setIsUpgrading(false);
     }
   };
 
@@ -312,13 +330,31 @@ function SubscribeContent() {
             <h2 className="text-2xl font-bold text-gray-900 mb-2">You&apos;re Already Subscribed!</h2>
             <p className="text-gray-600 mb-4">
               {relevantSubscription?.status === "trialing"
-                ? "You're currently on a free trial. Enjoy your AI Coach!"
-                : "You have an active AI Coach subscription."}
+                ? "You're currently on a free trial with full access - AI Coach and AI Programming."
+                : relevantSubscription?.tier === "elite"
+                ? "You have AI Coach + Programming - the full experience."
+                : "You have the base AI Coach: advice, scaling, scanning, and logging."}
             </p>
-            {relevantSubscription?.trialEndsAt && (
+            {relevantSubscription?.trialEndsAt && relevantSubscription?.status === "trialing" && (
               <p className="text-sm text-purple-600 mb-4">
                 Trial ends: {relevantSubscription.trialEndsAt.toDate().toLocaleDateString()}
               </p>
+            )}
+            {relevantSubscription?.status === "active" && relevantSubscription?.tier !== "elite" && (
+              <div className="max-w-md mx-auto mb-6 p-4 bg-gradient-to-br from-purple-50 to-indigo-50 rounded-lg border border-purple-200 text-left">
+                <p className="font-semibold text-purple-900 mb-1">📋 Add AI Programming</p>
+                <p className="text-sm text-purple-800 mb-3">
+                  Let your AI Coach build full day-by-day training plans you can revise in chat and lock onto
+                  your calendar - ${PRICING.AI_PROGRAMMING_MONTHLY}/mo total.
+                </p>
+                <button
+                  onClick={handleUpgradeToProgramming}
+                  disabled={isUpgrading}
+                  className="w-full py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold rounded-lg hover:from-purple-700 hover:to-indigo-700 transition-colors disabled:opacity-50"
+                >
+                  {isUpgrading ? "Upgrading..." : "Upgrade to AI Coach + Programming"}
+                </button>
+              </div>
             )}
             <button
               onClick={() => router.push("/weekly")}
@@ -331,9 +367,18 @@ function SubscribeContent() {
           <div className="grid md:grid-cols-2 gap-8">
             {/* Features Section */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <h2 className="text-xl font-bold text-gray-900 mb-4">What You Get</h2>
-              <div className="space-y-4">
-                {features.map((feature, idx) => (
+              <h2 className="text-xl font-bold text-gray-900 mb-4">AI Coach <span className="text-sm font-normal text-gray-500">(base - ${PRICING.AI_COACH_MONTHLY}/mo)</span></h2>
+              <div className="space-y-3">
+                {coachFeatures.map((feature, idx) => (
+                  <div key={idx} className="flex items-start gap-3">
+                    <span className="text-2xl">{feature.icon}</span>
+                    <p className="text-gray-700">{feature.text}</p>
+                  </div>
+                ))}
+              </div>
+              <h2 className="text-xl font-bold text-gray-900 mt-6 mb-4">+ AI Programming <span className="text-sm font-normal text-gray-500">(add-on - ${PRICING.AI_PROGRAMMING_MONTHLY}/mo total)</span></h2>
+              <div className="space-y-3">
+                {programmingFeatures.map((feature, idx) => (
                   <div key={idx} className="flex items-start gap-3">
                     <span className="text-2xl">{feature.icon}</span>
                     <p className="text-gray-700">{feature.text}</p>
@@ -451,6 +496,38 @@ function SubscribeContent() {
             <div className="bg-gradient-to-br from-purple-900 via-purple-800 to-indigo-900 rounded-xl p-6 text-white">
               <h2 className="text-xl font-bold mb-6 text-center">Choose Your Plan</h2>
 
+              {/* Tier selector */}
+              <div className="space-y-2 mb-6">
+                <button
+                  onClick={() => setSelectedTier("programming")}
+                  className={`w-full p-3 rounded-lg border text-left transition-colors ${
+                    selectedTier === "programming"
+                      ? "bg-white/15 border-yellow-400 ring-1 ring-yellow-400"
+                      : "bg-white/5 border-purple-600 hover:bg-white/10"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold">AI Coach + Programming</span>
+                    <span className="text-sm">${tierPrices.programming[selectedPlan]}/{currentPeriod}</span>
+                  </div>
+                  <p className="text-xs text-purple-200 mt-0.5">Everything, including full day-by-day training plans</p>
+                </button>
+                <button
+                  onClick={() => setSelectedTier("coach")}
+                  className={`w-full p-3 rounded-lg border text-left transition-colors ${
+                    selectedTier === "coach"
+                      ? "bg-white/15 border-yellow-400 ring-1 ring-yellow-400"
+                      : "bg-white/5 border-purple-600 hover:bg-white/10"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold">AI Coach</span>
+                    <span className="text-sm">${tierPrices.coach[selectedPlan]}/{currentPeriod}</span>
+                  </div>
+                  <p className="text-xs text-purple-200 mt-0.5">Advice, scaling, workout scan, and logging</p>
+                </button>
+              </div>
+
               {/* Plan Toggle */}
               <div className="flex justify-center mb-6">
                 <div className="bg-white/10 rounded-lg p-1 flex gap-1">
@@ -483,12 +560,12 @@ function SubscribeContent() {
               {/* Price Display */}
               <div className="text-center mb-6">
                 <div className="text-5xl font-bold">
-                  ${plans[selectedPlan].price}
-                  <span className="text-lg font-normal text-purple-200">/{plans[selectedPlan].period}</span>
+                  ${currentPrice}
+                  <span className="text-lg font-normal text-purple-200">/{currentPeriod}</span>
                 </div>
                 {selectedPlan === "yearly" && (
                   <p className="text-sm text-purple-200 mt-1">
-                    That&apos;s just ${plans.yearly.monthlyEquivalent}/month
+                    That&apos;s just ${(tierPrices[selectedTier].yearly / 12).toFixed(2)}/month
                   </p>
                 )}
               </div>
@@ -531,7 +608,7 @@ function SubscribeContent() {
                   disabled={isProcessing}
                   className="w-full py-3 bg-white/10 hover:bg-white/20 text-white font-medium rounded-lg transition-colors disabled:opacity-50"
                 >
-                  Subscribe Now - ${plans[selectedPlan].price}/{plans[selectedPlan].period}
+                  Subscribe Now - ${currentPrice}/{currentPeriod}
                 </button>
               </div>
 

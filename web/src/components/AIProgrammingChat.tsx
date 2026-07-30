@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { collection, addDoc, updateDoc, doc, query, where, getDocs, getDoc, setDoc, limit, Timestamp, serverTimestamp, deleteDoc, writeBatch } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { AIProgrammingSession, AIChatMessage, AIGeneratedDay, AIProgrammingPreferences, AITrainerSubscription, TrainingEvent, TrainingEventType, WeekdayKey, AICoachPreferences, PlanRow, PlanRowComponent, TrainingPlan } from "@/lib/types";
+import { AIProgrammingSession, AIChatMessage, AIGeneratedDay, AIProgrammingPreferences, AITrainerSubscription, TrainingEvent, TrainingEventType, WeekdayKey, AICoachPreferences, PlanRow, PlanRowComponent, TrainingPlan, workoutComponentColors, workoutComponentLabels, cardioActivityForComponent, hasAIProgramming, PRICING } from "@/lib/types";
 import { getAllSkills, getAllLifts, getAllWods } from "@/lib/workoutData";
 import { chatCompletion } from "@/lib/ai";
 import AITrainerPaywall from "./AITrainerPaywall";
@@ -151,7 +151,7 @@ function stripOldWorkouts(messages: AIChatMessage[]): AIChatMessage[] {
 }
 
 // Coerce an AI-produced row into a clean PlanRow (Firestore rejects undefined)
-const VALID_COMPONENT_TYPES = ["warmup", "wod", "lift", "skill", "cardio", "class", "cooldown"];
+const VALID_COMPONENT_TYPES = ["warmup", "wod", "lift", "skill", "run", "swim", "bike_mtb", "bike_road", "cardio", "class", "cooldown"];
 
 function sanitizePlanRow(r: Partial<PlanRow>, fallbackWeek: number, fallbackPhase: string): PlanRow {
   const row: PlanRow = {
@@ -170,9 +170,11 @@ function sanitizePlanRow(r: Partial<PlanRow>, fallbackWeek: number, fallbackPhas
     row.components = r.components.map(c => {
       let type = (VALID_COMPONENT_TYPES.includes(String(c?.type)) ? String(c?.type) : "wod") as PlanRowComponent["type"];
       const title = String(c?.title || "Training").slice(0, 60);
-      // Older plans stored runs/cardio as "wod" components titled "Run"/"Cardio" etc.,
+      // Older plans stored runs/cardio as "wod"/"cardio" components titled "Run"/"Cardio" etc.,
       // and gym classes as "lift"/"wod" components titled "... Class"
-      if (type === "wod" && /^(run|cardio|swim|bike|row|ruck)$/i.test(title.trim())) type = "cardio";
+      if (type === "cardio" || (type === "wod" && /^(run|cardio|swim|bike|row|ruck)$/i.test(title.trim()))) {
+        type = cardioActivityForComponent("cardio", title) || "run";
+      }
       if ((type === "wod" || type === "lift") && /\bclass\b/i.test(title)) type = "class";
       return { type, title, description: String(c?.description || "") };
     });
@@ -437,9 +439,9 @@ When generating workouts, you MUST respond with valid JSON in this exact format:
   ]
 }
 
-Component types: "warmup", "lift", "wod", "skill", "cardio", "class", "cooldown"
+Component types: "warmup", "lift", "wod", "skill", "run", "swim", "bike_mtb", "bike_road", "class", "cooldown"
 Scoring types for WODs: "fortime", "amrap", "emom"
-Use "cardio" for pure aerobic work: runs, rowing, biking, swimming, rucking - steady-state or intervals - with exact distance/time and pace or RPE. Mixed-modal conditioning pieces (AMRAPs, EMOMs, For Time) stay "wod". Cardio components are exempt from the preset-name rule.
+Use the specific cardio types for pure aerobic work - "run" (also jogging/rucking), "swim", "bike_mtb" (mountain biking), "bike_road" (road/stationary cycling) - steady-state or intervals, with exact distance/time and pace or RPE. Only program swimming or biking when the athlete has said they do those. Mixed-modal conditioning pieces (AMRAPs, EMOMs, For Time) stay "wod". Cardio components are exempt from the preset-name rule.
 Use "class" when the athlete attends a coached class elsewhere (e.g., "Olympic Lifting Class", "CrossFit Class"): name the class and give intensity/focus guidance for it. Class components are exempt from the preset-name rule.
 
 IMPORTANT - PRESET WORKOUTS:
@@ -1295,7 +1297,7 @@ Respond with valid JSON in this exact format:
       "components": [
         { "type": "warmup", "title": "Warm-up", "description": "3 min easy movement; 10 air squats + 10 glute bridges; wrist/ankle/hip mobility." },
         { "type": "wod", "title": "DB Upper Circuit", "description": "12-min AMRAP: 8 DB floor presses (50s), 12 KB swings (53), 10 sit-ups." },
-        { "type": "cardio", "title": "Run", "description": "4 mi easy at conversational RPE 3-4; finish with 4x20-sec relaxed strides." }
+        { "type": "run", "title": "Easy Run", "description": "4 mi easy at conversational RPE 3-4; finish with 4x20-sec relaxed strides." }
       ]
     }
   ]
@@ -1303,7 +1305,7 @@ Respond with valid JSON in this exact format:
 
 RULES:
 - ONE row per calendar day from ${week.startDate} through the end of this week (or through ${outline.endDate} if it falls inside this week). Use correct real dates with matching day names.
-- "components" is the day's prescription broken into typed pieces: "warmup", "wod" (mixed-modal metcons), "lift", "skill", "cardio" (ALL pure aerobic work: runs, rowing, biking, swimming, rucking - steady-state or intervals), "class" (coached classes the athlete attends elsewhere), "cooldown". Each component's description is COMPLETE: exact distances, paces, movements, reps, and loads (use the athlete's PRs for percentage work) - specific enough to train from with no other information.
+- "components" is the day's prescription broken into typed pieces: "warmup", "wod" (mixed-modal metcons), "lift", "skill", "run"/"swim"/"bike_mtb"/"bike_road" (pure aerobic work - steady-state or intervals; only program swim/bike if the athlete does those), "class" (coached classes the athlete attends elsewhere), "cooldown". Each component's description is COMPLETE: exact distances, paces, movements, reps, and loads (use the athlete's PRs for percentage work) - specific enough to train from with no other information.
 - "reason" (1-2 sentences): WHY this day is programmed this way given the phase, the surrounding days, and the athlete's goals. Every non-rest day gets one.
 - Rest days: session "Rest", components [] (or one light "cooldown" mobility component), runMiles 0, reason explaining what the rest protects.
 - Event days (competition, race): session in CAPS (e.g., "MARATHON", "CROSSFIT COMPETITION") with one component of race-day execution guidance.
@@ -1328,7 +1330,7 @@ ${conversationHistory}
 
 Respond to the athlete's latest message with valid JSON in EXACTLY ONE of these forms:
 1. Just answering a question / discussing: {"message": "..."}
-2. Targeted plan changes: {"message": "summary of what you changed and why", "patchRows": [complete replacement rows for ONLY the days that change, using the full row schema: date, day, week, phase, session, runMiles, targetRPE, estMinutes, reason, and components (typed pieces: warmup/wod/lift/skill/cardio/class/cooldown - runs and other pure aerobic work are "cardio", coached classes attended elsewhere are "class" - each with title and a complete description)]}
+2. Targeted plan changes: {"message": "summary of what you changed and why", "patchRows": [complete replacement rows for ONLY the days that change, using the full row schema: date, day, week, phase, session, runMiles, targetRPE, estMinutes, reason, and components (typed pieces: warmup/wod/lift/skill/run/swim/bike_mtb/bike_road/class/cooldown - pure aerobic work uses the specific cardio type, coached classes attended elsewhere are "class" - each with title and a complete description)]}
 3. The request changes the plan's fundamental structure (different weekly pattern, new/changed events, different phases): {"message": "...", "outline": {"startDate": "YYYY-MM-DD", "endDate": "YYYY-MM-DD", "weeks": [{"weekNumber": 1, "startDate": "YYYY-MM-DD", "focus": "...", "details": "..."}]}} - the app will rebuild the whole table from it.
 
 PATCH RULES:
@@ -1786,6 +1788,32 @@ PATCH RULES:
     );
   }
 
+  // Base AI Coach subscribers see an upsell - AI programming is an add-on
+  if (!hasAIProgramming(subscription)) {
+    return (
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="p-8 text-center bg-gradient-to-br from-purple-50 to-indigo-50">
+          <div className="text-4xl mb-3">📋</div>
+          <h2 className="text-xl font-bold text-gray-900 mb-2">AI Programming is an Add-On</h2>
+          <p className="text-gray-600 max-w-md mx-auto mb-1">
+            Your AI Coach subscription covers advice, scaling, workout scanning, and logging.
+          </p>
+          <p className="text-gray-600 max-w-md mx-auto mb-5">
+            Upgrade to <span className="font-semibold">AI Coach + Programming</span> (${PRICING.AI_PROGRAMMING_MONTHLY}/mo)
+            and it will also build your full day-by-day training plan - phases, runs, lifts, WODs, and rest days -
+            that you can revise in chat and lock onto your calendar.
+          </p>
+          <a
+            href="/subscribe"
+            className="inline-block px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold rounded-lg hover:from-purple-700 hover:to-indigo-700 transition-colors"
+          >
+            Add AI Programming
+          </a>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
       {/* Header */}
@@ -2126,16 +2154,8 @@ PATCH RULES:
                         {day.components.map((comp, compIdx) => (
                           <div key={compIdx} className="text-sm">
                             <div className="flex items-center gap-1 mb-1">
-                              <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${
-                                comp.type === "warmup" ? "bg-yellow-100 text-yellow-700" :
-                                comp.type === "wod" ? "bg-orange-100 text-orange-700" :
-                                comp.type === "lift" ? "bg-purple-100 text-purple-700" :
-                                comp.type === "skill" ? "bg-green-100 text-green-700" :
-                                comp.type === "cardio" ? "bg-red-100 text-red-700" :
-                                comp.type === "class" ? "bg-indigo-100 text-indigo-700" :
-                                "bg-blue-100 text-blue-700"
-                              }`}>
-                                {comp.type.toUpperCase()}
+                              <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${workoutComponentColors[comp.type]?.bg || "bg-gray-100"} ${workoutComponentColors[comp.type]?.text || "text-gray-700"}`}>
+                                {(workoutComponentLabels[comp.type] || comp.type).toUpperCase()}
                               </span>
                               {comp.type === "wod" && comp.scoringType && (
                                 <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${

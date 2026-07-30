@@ -71,7 +71,52 @@ export const wodScoringTypeColors: Record<WODScoringType, { bg: string; text: st
 };
 
 // Workout component types for programming
-export type WorkoutComponentType = "warmup" | "wod" | "lift" | "skill" | "cardio" | "class" | "cooldown";
+// ("cardio" is legacy - new programming uses the specific run/swim/bike types)
+export type WorkoutComponentType =
+  | "warmup" | "wod" | "lift" | "skill"
+  | "run" | "swim" | "bike_mtb" | "bike_road"
+  | "cardio" | "class" | "cooldown";
+
+// The loggable cardio activities (miles + time)
+export type CardioActivity = "run" | "swim" | "bike_mtb" | "bike_road";
+
+export const cardioActivityLabels: Record<CardioActivity, string> = {
+  run: "Run",
+  swim: "Swim",
+  bike_mtb: "MTB",
+  bike_road: "Road Bike",
+};
+
+export const cardioActivityIcons: Record<CardioActivity, string> = {
+  run: "🏃",
+  swim: "🏊",
+  bike_mtb: "🚵",
+  bike_road: "🚴",
+};
+
+// A logged cardio session (mileage and time for now)
+export interface CardioLog {
+  id: string;
+  userId: string;
+  activity: CardioActivity;
+  miles: number;
+  timeInSeconds: number;
+  date: Timestamp;
+  dateString?: string; // YYYY-MM-DD
+  notes?: string;
+  createdAt: Timestamp;
+}
+
+// A logged class attendance ("I did it")
+export interface ClassLog {
+  id: string;
+  userId: string;
+  title: string; // e.g., "Olympic Lifting Class"
+  date: Timestamp;
+  dateString: string; // YYYY-MM-DD
+  notes?: string;
+  createdAt: Timestamp;
+}
 
 export interface WorkoutComponent {
   id: string;
@@ -88,6 +133,10 @@ export const workoutComponentLabels: Record<WorkoutComponentType, string> = {
   wod: "WOD",
   lift: "Lift",
   skill: "Skill Work",
+  run: "Run",
+  swim: "Swim",
+  bike_mtb: "MTB",
+  bike_road: "Road Bike",
   cardio: "Cardio",
   class: "Class",
   cooldown: "Cool Down",
@@ -98,10 +147,26 @@ export const workoutComponentColors: Record<WorkoutComponentType, { bg: string; 
   wod: { bg: "bg-orange-100", text: "text-orange-700" },
   lift: { bg: "bg-purple-100", text: "text-purple-700" },
   skill: { bg: "bg-green-100", text: "text-green-700" },
+  run: { bg: "bg-red-100", text: "text-red-700" },
+  swim: { bg: "bg-sky-100", text: "text-sky-700" },
+  bike_mtb: { bg: "bg-lime-100", text: "text-lime-700" },
+  bike_road: { bg: "bg-teal-100", text: "text-teal-700" },
   cardio: { bg: "bg-red-100", text: "text-red-700" },
   class: { bg: "bg-indigo-100", text: "text-indigo-700" },
   cooldown: { bg: "bg-blue-100", text: "text-blue-700" },
 };
+
+// Component types that log as a cardio session (with legacy "cardio" mapping to run)
+export function cardioActivityForComponent(type: WorkoutComponentType, title?: string): CardioActivity | null {
+  if (type === "run" || type === "swim" || type === "bike_mtb" || type === "bike_road") return type;
+  if (type === "cardio" || (type === "wod" && title && /\b(run|jog|ruck)\b/i.test(title))) {
+    if (title && /\bswim\b/i.test(title)) return "swim";
+    if (title && /\b(mtb|mountain)\b/i.test(title)) return "bike_mtb";
+    if (title && /\b(bike|cycle|cycling)\b/i.test(title)) return "bike_road";
+    return "run";
+  }
+  return null;
+}
 
 // WOD Categories
 export type WODCategory = "RX" | "Scaled" | "Just For Fun";
@@ -341,9 +406,28 @@ export interface TrainingPlan {
 // =========================
 
 export const PRICING = {
-  // Individual pricing (FREE tier = tracking only)
-  INDIVIDUAL_AI_COACH: 9.99, // $9.99/mo personal AI Coach (advice + programming)
+  // FREE tier = tracking only
+  // Base AI Coach: advice, scaling, workout scan, cardio/class logging
+  AI_COACH_MONTHLY: 9.99,
+  AI_COACH_YEARLY: 79.99,
+  // AI Coach + Programming: adds the AI plan builder (day-by-day training plans)
+  AI_PROGRAMMING_MONTHLY: 19.99,
+  AI_PROGRAMMING_YEARLY: 159.99,
 } as const;
+
+// Subscription tier semantics:
+//   "pro"   = base AI Coach (advice, scaling, scan, logging)
+//   "elite" = AI Coach + Programming (adds the AI plan builder)
+// Trials get full access so users can try everything.
+export function hasActiveAICoach(sub?: AITrainerSubscription): boolean {
+  return sub?.status === "active" || sub?.status === "trialing";
+}
+
+export function hasAIProgramming(sub?: AITrainerSubscription): boolean {
+  if (!sub) return false;
+  if (sub.status === "trialing") return true;
+  return sub.status === "active" && sub.tier === "elite";
+}
 
 // =========================
 // AI COACH SUGGESTION CACHE

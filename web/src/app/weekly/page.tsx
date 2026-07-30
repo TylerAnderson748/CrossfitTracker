@@ -6,7 +6,7 @@ import Link from "next/link";
 import { collection, query, where, getDocs, updateDoc, doc, Timestamp, addDoc, deleteDoc } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
-import { workoutComponentLabels, workoutComponentColors, WorkoutComponent, WorkoutComponentType, WODScoringType, wodScoringTypeLabels, wodScoringTypeColors, PersonalWorkout } from "@/lib/types";
+import { workoutComponentLabels, workoutComponentColors, WorkoutComponent, WorkoutComponentType, WODScoringType, wodScoringTypeLabels, wodScoringTypeColors, PersonalWorkout, ClassLog, cardioActivityForComponent } from "@/lib/types";
 import { getAllWods, getAllLifts } from "@/lib/workoutData";
 import Navigation from "@/components/Navigation";
 import PersonalAITrainer from "@/components/PersonalAITrainer";
@@ -19,6 +19,9 @@ export default function WeeklyPlanPage() {
 
   // Personal workouts state
   const [personalWorkouts, setPersonalWorkouts] = useState<PersonalWorkout[]>([]);
+  // Class attendance logs, keyed by `${dateString}|${title}`
+  const [classLogKeys, setClassLogKeys] = useState<Record<string, string>>({});
+  const [loggingClassKey, setLoggingClassKey] = useState<string | null>(null);
   const [showAddWorkoutModal, setShowAddWorkoutModal] = useState(false);
   const [newWorkoutDate, setNewWorkoutDate] = useState("");
   const [workoutComponents, setWorkoutComponents] = useState<WorkoutComponent[]>([]);
@@ -227,12 +230,57 @@ export default function WeeklyPlanPage() {
       });
 
       setPersonalWorkouts(filteredWorkouts);
+
+      // Load class attendance logs so class cards can show "Attended"
+      const classSnap = await getDocs(query(
+        collection(db, "classLogs"),
+        where("userId", "==", user.id)
+      ));
+      const keys: Record<string, string> = {};
+      classSnap.docs.forEach(d => {
+        const data = d.data() as ClassLog;
+        if (data.dateString) keys[`${data.dateString}|${data.title || ""}`] = d.id;
+      });
+      setClassLogKeys(keys);
     } catch (error) {
       console.error("Error fetching personal workouts:", error);
     } finally {
       setLoadingData(false);
     }
   }, [user, getDateRange]);
+
+  // One-tap class attendance log ("I did it")
+  const handleLogClassAttendance = async (dateString: string, title: string) => {
+    if (!user) return;
+    const key = `${dateString}|${title}`;
+    setLoggingClassKey(key);
+    try {
+      const existingId = classLogKeys[key];
+      if (existingId) {
+        // Tapping again un-logs it
+        await deleteDoc(doc(db, "classLogs", existingId));
+        setClassLogKeys(prev => {
+          const next = { ...prev };
+          delete next[key];
+          return next;
+        });
+      } else {
+        const [y, m, d] = dateString.split("-").map(Number);
+        const ref = await addDoc(collection(db, "classLogs"), {
+          userId: user.id,
+          title,
+          date: Timestamp.fromDate(new Date(y, m - 1, d, 12, 0, 0)),
+          dateString,
+          createdAt: Timestamp.now(),
+        });
+        setClassLogKeys(prev => ({ ...prev, [key]: ref.id }));
+      }
+    } catch (error) {
+      console.error("Error logging class attendance:", error);
+    } finally {
+      setLoggingClassKey(null);
+    }
+  };
 
   // Get personal workouts for a specific date
   const getPersonalWorkoutsForDate = (date: Date) => {
@@ -456,14 +504,50 @@ export default function WeeklyPlanPage() {
 
                               {/* Action buttons */}
                               <div className="flex items-center gap-1">
-                                {/* Log button - find first WOD component */}
+                                {/* Log buttons - one per loggable component kind */}
                                 {(() => {
-                                  const wodComponent = personalWorkout.components.find(c => c.type === "wod");
+                                  const cardDateString = personalWorkout.dateString || formatDateLocal(personalWorkout.date.toDate());
+                                  const wodComponent = personalWorkout.components.find(c => c.type === "wod" && !cardioActivityForComponent(c.type, c.title));
                                   const liftComponent = personalWorkout.components.find(c => c.type === "lift");
+                                  const cardioComponent = personalWorkout.components
+                                    .map(c => ({ c, activity: cardioActivityForComponent(c.type, c.title) }))
+                                    .find(x => x.activity);
+                                  const classComponent = personalWorkout.components.find(c => c.type === "class");
+                                  const classKey = classComponent ? `${cardDateString}|${classComponent.title}` : "";
+                                  const classLogged = classKey ? !!classLogKeys[classKey] : false;
+                                  const buttons = [];
+                                  if (classComponent) {
+                                    buttons.push(
+                                      <button
+                                        key="class"
+                                        onClick={() => handleLogClassAttendance(cardDateString, classComponent.title)}
+                                        disabled={loggingClassKey === classKey}
+                                        className={`px-2 py-1 text-xs font-semibold rounded-lg transition-colors flex items-center gap-1 ${
+                                          classLogged
+                                            ? "bg-green-100 text-green-700 hover:bg-green-200"
+                                            : "bg-indigo-600 hover:bg-indigo-700 text-white"
+                                        }`}
+                                        title={classLogged ? "Logged - tap to undo" : "Log that you attended this class"}
+                                      >
+                                        {classLogged ? "✓ Attended" : "Did It"}
+                                      </button>
+                                    );
+                                    buttons.push(
+                                      <Link
+                                        key="scan"
+                                        href="/ai-coach/scan"
+                                        className="p-1 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                                        title="Scan the class whiteboard to log the specific workout"
+                                      >
+                                        📸
+                                      </Link>
+                                    );
+                                  }
                                   if (wodComponent) {
                                     const scoringType = wodComponent.scoringType || "fortime";
-                                    return (
+                                    buttons.push(
                                       <Link
+                                        key="wod"
                                         href={`/workouts/new?name=${encodeURIComponent(wodComponent.title)}&description=${encodeURIComponent(wodComponent.description || "")}&scoringType=${scoringType}`}
                                         className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1"
                                       >
@@ -473,9 +557,10 @@ export default function WeeklyPlanPage() {
                                         Log
                                       </Link>
                                     );
-                                  } else if (liftComponent) {
-                                    return (
+                                  } else if (liftComponent && !classComponent) {
+                                    buttons.push(
                                       <Link
+                                        key="lift"
                                         href={`/workouts/lift?name=${encodeURIComponent(liftComponent.title)}&description=${encodeURIComponent(liftComponent.description || "")}`}
                                         className="px-2 py-1 bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1"
                                       >
@@ -486,7 +571,21 @@ export default function WeeklyPlanPage() {
                                       </Link>
                                     );
                                   }
-                                  return null;
+                                  if (cardioComponent && cardioComponent.activity) {
+                                    buttons.push(
+                                      <Link
+                                        key="cardio"
+                                        href={`/workouts/cardio?activity=${cardioComponent.activity}&date=${cardDateString}&name=${encodeURIComponent(cardioComponent.c.title)}`}
+                                        className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1"
+                                      >
+                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                        </svg>
+                                        Log Cardio
+                                      </Link>
+                                    );
+                                  }
+                                  return buttons.length > 0 ? <>{buttons}</> : null;
                                 })()}
                                 {personalWorkout.aiSessionId && (
                                   <Link
@@ -601,7 +700,7 @@ export default function WeeklyPlanPage() {
 
                 {/* Add Component Buttons */}
                 <div className="flex flex-wrap gap-2 mb-4">
-                  {(["warmup", "wod", "lift", "skill", "cardio", "class", "cooldown"] as WorkoutComponentType[]).map((type) => {
+                  {(["warmup", "wod", "lift", "skill", "run", "swim", "bike_mtb", "bike_road", "class", "cooldown"] as WorkoutComponentType[]).map((type) => {
                     const hasType = workoutComponents.some(c => c.type === type);
                     return (
                       <button
