@@ -1,6 +1,6 @@
 "use client";
 
-import { PlanRow } from "@/lib/types";
+import { PlanRow, PlanRowComponent, workoutComponentLabels, workoutComponentColors } from "@/lib/types";
 
 export type PlanDayStatus = "done" | "missed" | "today" | "upcoming";
 
@@ -20,6 +20,17 @@ const PHASE_STYLES = [
   "bg-cyan-50 text-cyan-700",
   "bg-indigo-50 text-indigo-700",
 ];
+
+// Runs/cardio are stored as "wod" components; give them their own label like the spreadsheet's Cardio column
+const CARDIO_RE = /\b(run|jog|bike|row(?:ing)?|swim|ruck|cardio|shuttle)\b/i;
+
+function componentBadge(c: PlanRowComponent) {
+  if (c.type === "wod" && CARDIO_RE.test(c.title)) {
+    return { label: "Cardio", bg: "bg-red-100", text: "text-red-700" };
+  }
+  const colors = workoutComponentColors[c.type] || { bg: "bg-gray-100", text: "text-gray-600" };
+  return { label: workoutComponentLabels[c.type] || c.type, bg: colors.bg, text: colors.text };
+}
 
 function localToday(): string {
   const d = new Date();
@@ -105,9 +116,26 @@ export default function PlanTable({ rows, statusByDate }: PlanTableProps) {
                   {row.session}
                 </td>
                 <td className={`px-2 py-2 text-xs leading-relaxed ${rest ? "text-gray-400" : "text-gray-700"}`}>
-                  {row.detail}
+                  {row.components && row.components.length > 0 ? (
+                    <div className="space-y-1.5">
+                      {row.components.map((c, i) => {
+                        const badge = componentBadge(c);
+                        return (
+                          <div key={i}>
+                            <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide mr-1.5 align-middle ${badge.bg} ${badge.text}`}>
+                              {badge.label}
+                            </span>
+                            <span className="font-medium text-gray-900">{c.title}</span>
+                            {c.description && <span className="text-gray-600"> — {c.description}</span>}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    row.detail
+                  )}
                   {row.reason && (
-                    <div className="text-[11px] text-gray-400 italic mt-1">Why: {row.reason}</div>
+                    <div className="text-[11px] text-gray-400 italic mt-1.5">Why: {row.reason}</div>
                   )}
                 </td>
                 <td className="px-2 py-2 text-right text-gray-700 font-mono text-xs">
