@@ -28,6 +28,9 @@ function componentBadge(c: PlanRowComponent) {
   if (c.type === "wod" && CARDIO_RE.test(c.title)) {
     return { label: "Cardio", bg: "bg-red-100", text: "text-red-700" };
   }
+  if ((c.type === "wod" || c.type === "lift") && /\bclass\b/i.test(c.title)) {
+    return { label: "Class", bg: "bg-indigo-100", text: "text-indigo-700" };
+  }
   const colors = workoutComponentColors[c.type] || { bg: "bg-gray-100", text: "text-gray-600" };
   return { label: workoutComponentLabels[c.type] || c.type, bg: colors.bg, text: colors.text };
 }

@@ -151,7 +151,7 @@ function stripOldWorkouts(messages: AIChatMessage[]): AIChatMessage[] {
 }
 
 // Coerce an AI-produced row into a clean PlanRow (Firestore rejects undefined)
-const VALID_COMPONENT_TYPES = ["warmup", "wod", "lift", "skill", "cardio", "cooldown"];
+const VALID_COMPONENT_TYPES = ["warmup", "wod", "lift", "skill", "cardio", "class", "cooldown"];
 
 function sanitizePlanRow(r: Partial<PlanRow>, fallbackWeek: number, fallbackPhase: string): PlanRow {
   const row: PlanRow = {
@@ -170,8 +170,10 @@ function sanitizePlanRow(r: Partial<PlanRow>, fallbackWeek: number, fallbackPhas
     row.components = r.components.map(c => {
       let type = (VALID_COMPONENT_TYPES.includes(String(c?.type)) ? String(c?.type) : "wod") as PlanRowComponent["type"];
       const title = String(c?.title || "Training").slice(0, 60);
-      // Older plans stored runs/cardio as "wod" components titled "Run"/"Cardio" etc.
+      // Older plans stored runs/cardio as "wod" components titled "Run"/"Cardio" etc.,
+      // and gym classes as "lift"/"wod" components titled "... Class"
       if (type === "wod" && /^(run|cardio|swim|bike|row|ruck)$/i.test(title.trim())) type = "cardio";
+      if ((type === "wod" || type === "lift") && /\bclass\b/i.test(title)) type = "class";
       return { type, title, description: String(c?.description || "") };
     });
     if (!row.detail) {
@@ -435,9 +437,10 @@ When generating workouts, you MUST respond with valid JSON in this exact format:
   ]
 }
 
-Component types: "warmup", "lift", "wod", "skill", "cardio", "cooldown"
+Component types: "warmup", "lift", "wod", "skill", "cardio", "class", "cooldown"
 Scoring types for WODs: "fortime", "amrap", "emom"
 Use "cardio" for pure aerobic work: runs, rowing, biking, swimming, rucking - steady-state or intervals - with exact distance/time and pace or RPE. Mixed-modal conditioning pieces (AMRAPs, EMOMs, For Time) stay "wod". Cardio components are exempt from the preset-name rule.
+Use "class" when the athlete attends a coached class elsewhere (e.g., "Olympic Lifting Class", "CrossFit Class"): name the class and give intensity/focus guidance for it. Class components are exempt from the preset-name rule.
 
 IMPORTANT - PRESET WORKOUTS:
 For SKILL components, you MUST ONLY use these preset skill names (do not make up new skills):
@@ -494,7 +497,7 @@ The notes field for skills MUST include:
 - For skills and lifts, ONLY use the preset names listed above
 - For WODs, use benchmark WODs when appropriate, but get CREATIVE with custom WOD names using themes!
 - Pay attention to any themes, preferences, or special requests from the user
-- If the athlete attends a class elsewhere on fixed days (e.g., an Olympic lifting class at their gym), do NOT program a workout for that day - include ONE component describing the class (e.g., type "lift", title "Olympic Lifting Class") with brief notes; class components are exempt from the preset-name rule
+- If the athlete attends a class elsewhere on fixed days (e.g., an Olympic lifting class at their gym), do NOT program a workout for that day - include ONE component describing the class (type "class", title e.g. "Olympic Lifting Class") with brief notes; class components are exempt from the preset-name rule
 
 IMPORTANT - STIMULUS, GOALS, AND SCALING:
 Every workout component MUST have detailed notes with:
@@ -1300,13 +1303,13 @@ Respond with valid JSON in this exact format:
 
 RULES:
 - ONE row per calendar day from ${week.startDate} through the end of this week (or through ${outline.endDate} if it falls inside this week). Use correct real dates with matching day names.
-- "components" is the day's prescription broken into typed pieces: "warmup", "wod" (mixed-modal metcons), "lift", "skill", "cardio" (ALL pure aerobic work: runs, rowing, biking, swimming, rucking - steady-state or intervals), "cooldown". Each component's description is COMPLETE: exact distances, paces, movements, reps, and loads (use the athlete's PRs for percentage work) - specific enough to train from with no other information.
+- "components" is the day's prescription broken into typed pieces: "warmup", "wod" (mixed-modal metcons), "lift", "skill", "cardio" (ALL pure aerobic work: runs, rowing, biking, swimming, rucking - steady-state or intervals), "class" (coached classes the athlete attends elsewhere), "cooldown". Each component's description is COMPLETE: exact distances, paces, movements, reps, and loads (use the athlete's PRs for percentage work) - specific enough to train from with no other information.
 - "reason" (1-2 sentences): WHY this day is programmed this way given the phase, the surrounding days, and the athlete's goals. Every non-rest day gets one.
 - Rest days: session "Rest", components [] (or one light "cooldown" mobility component), runMiles 0, reason explaining what the rest protects.
 - Event days (competition, race): session in CAPS (e.g., "MARATHON", "CROSSFIT COMPETITION") with one component of race-day execution guidance.
 - "session" is a short 2-4 word label summarizing the day. "phase" is a consistent short label across the plan (e.g., "Base", "Build", "Comp Taper", "Marathon Taper", "Recovery").
 - EVERY row is ONE definitive prescription. Never "optional", never "attend or rest - your call".
-- Class days: ONE "lift" component naming the class and saying to follow the coach's programming plus intensity guidance.
+- Class days: ONE "class" component naming the class and saying to follow the coach's programming plus intensity guidance.
 - runMiles = total planned run miles that day (0 if none). targetRPE like "3-7". estMinutes = total session time including warmup.
 - Respect every schedule rule, time budget, and rest-day requirement above. Only equipment the athlete has.
 - Pure JSON only - no markdown fences, no extra text.`;
@@ -1325,7 +1328,7 @@ ${conversationHistory}
 
 Respond to the athlete's latest message with valid JSON in EXACTLY ONE of these forms:
 1. Just answering a question / discussing: {"message": "..."}
-2. Targeted plan changes: {"message": "summary of what you changed and why", "patchRows": [complete replacement rows for ONLY the days that change, using the full row schema: date, day, week, phase, session, runMiles, targetRPE, estMinutes, reason, and components (typed pieces: warmup/wod/lift/skill/cardio/cooldown - runs and other pure aerobic work are "cardio" - each with title and a complete description)]}
+2. Targeted plan changes: {"message": "summary of what you changed and why", "patchRows": [complete replacement rows for ONLY the days that change, using the full row schema: date, day, week, phase, session, runMiles, targetRPE, estMinutes, reason, and components (typed pieces: warmup/wod/lift/skill/cardio/class/cooldown - runs and other pure aerobic work are "cardio", coached classes attended elsewhere are "class" - each with title and a complete description)]}
 3. The request changes the plan's fundamental structure (different weekly pattern, new/changed events, different phases): {"message": "...", "outline": {"startDate": "YYYY-MM-DD", "endDate": "YYYY-MM-DD", "weeks": [{"weekNumber": 1, "startDate": "YYYY-MM-DD", "focus": "...", "details": "..."}]}} - the app will rebuild the whole table from it.
 
 PATCH RULES:
@@ -1576,7 +1579,7 @@ PATCH RULES:
             }))
           : [{
               id: "comp-0",
-              type: row.session.toLowerCase().includes("class") ? "lift" : "wod",
+              type: row.session.toLowerCase().includes("class") ? "class" : "wod",
               title: row.session,
               description: row.detail,
               notes: noteBits,
@@ -2129,6 +2132,7 @@ PATCH RULES:
                                 comp.type === "lift" ? "bg-purple-100 text-purple-700" :
                                 comp.type === "skill" ? "bg-green-100 text-green-700" :
                                 comp.type === "cardio" ? "bg-red-100 text-red-700" :
+                                comp.type === "class" ? "bg-indigo-100 text-indigo-700" :
                                 "bg-blue-100 text-blue-700"
                               }`}>
                                 {comp.type.toUpperCase()}

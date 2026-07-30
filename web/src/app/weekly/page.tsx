@@ -601,7 +601,7 @@ export default function WeeklyPlanPage() {
 
                 {/* Add Component Buttons */}
                 <div className="flex flex-wrap gap-2 mb-4">
-                  {(["warmup", "wod", "lift", "skill", "cardio", "cooldown"] as WorkoutComponentType[]).map((type) => {
+                  {(["warmup", "wod", "lift", "skill", "cardio", "class", "cooldown"] as WorkoutComponentType[]).map((type) => {
                     const hasType = workoutComponents.some(c => c.type === type);
                     return (
                       <button

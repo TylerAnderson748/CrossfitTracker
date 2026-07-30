@@ -71,7 +71,7 @@ export const wodScoringTypeColors: Record<WODScoringType, { bg: string; text: st
 };
 
 // Workout component types for programming
-export type WorkoutComponentType = "warmup" | "wod" | "lift" | "skill" | "cardio" | "cooldown";
+export type WorkoutComponentType = "warmup" | "wod" | "lift" | "skill" | "cardio" | "class" | "cooldown";
 
 export interface WorkoutComponent {
   id: string;
@@ -89,6 +89,7 @@ export const workoutComponentLabels: Record<WorkoutComponentType, string> = {
   lift: "Lift",
   skill: "Skill Work",
   cardio: "Cardio",
+  class: "Class",
   cooldown: "Cool Down",
 };
 
@@ -98,6 +99,7 @@ export const workoutComponentColors: Record<WorkoutComponentType, { bg: string; 
   lift: { bg: "bg-purple-100", text: "text-purple-700" },
   skill: { bg: "bg-green-100", text: "text-green-700" },
   cardio: { bg: "bg-red-100", text: "text-red-700" },
+  class: { bg: "bg-indigo-100", text: "text-indigo-700" },
   cooldown: { bg: "bg-blue-100", text: "text-blue-700" },
 };
 
