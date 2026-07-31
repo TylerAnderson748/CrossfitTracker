@@ -165,6 +165,25 @@ function addDaysToDateString(dateStr: string, days: number): string {
   return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
 }
 
+const WEEKDAY_KEY_BY_NAME: Record<string, WeekdayKey> = {
+  Monday: "monday", Tuesday: "tuesday", Wednesday: "wednesday", Thursday: "thursday",
+  Friday: "friday", Saturday: "saturday", Sunday: "sunday",
+};
+
+// The exact calendar dates a given outline week covers (shared by the prompt
+// builder and the week validator so they can never disagree)
+function datesForWeek(outline: ProgramOutline, week: ProgramOutlineWeek): string[] {
+  const nextWeek = outline.weeks.find(w => w.weekNumber === week.weekNumber + 1);
+  const dates: string[] = [];
+  for (let i = 0; i < 7; i++) {
+    const ds = addDaysToDateString(week.startDate, i);
+    if (ds > outline.endDate) break;
+    if (nextWeek && ds >= nextWeek.startDate) break;
+    dates.push(ds);
+  }
+  return dates;
+}
+
 // Coerce an AI-produced row into a clean PlanRow (Firestore rejects undefined)
 const VALID_COMPONENT_TYPES = ["warmup", "wod", "lift", "skill", "run", "swim", "bike_mtb", "bike_road", "cardio", "class", "cooldown"];
 
@@ -1302,14 +1321,19 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
     // Enumerate this week's exact dates with their true weekday names - the model
     // must not do calendar math itself (it gets weekdays wrong and then places
     // class/rest days on the wrong real days)
-    const nextWeek = outline.weeks.find(w => w.weekNumber === week.weekNumber + 1);
-    const weekDateLines: string[] = [];
-    for (let i = 0; i < 7; i++) {
-      const ds = addDaysToDateString(week.startDate, i);
-      if (ds > outline.endDate) break;
-      if (nextWeek && ds >= nextWeek.startDate) break;
-      weekDateLines.push(`${ds} = ${dayNameForDate(ds)}`);
-    }
+    const weekDates = datesForWeek(outline, week);
+    const weekDateLines = weekDates.map(ds => `${ds} = ${dayNameForDate(ds)}`);
+
+    // Spell out exactly which of this week's dates are class days
+    const schedule = preferences.weeklySchedule || {};
+    const classDateLines = weekDates
+      .map(ds => {
+        const setting = schedule[WEEKDAY_KEY_BY_NAME[dayNameForDate(ds)]];
+        if (setting?.mode !== "class") return "";
+        const optional = setting.classAttendance === "optional";
+        return `- ${ds} (${dayNameForDate(ds)}): ${setting.classDescription || "class"}${optional ? " - attendance is YOUR call this week; if skipping, program a workout or rest instead" : " - ATTENDS EVERY WEEK; this date MUST be the class"}`;
+      })
+      .filter(Boolean);
 
     return `You are a personal CrossFit + endurance coach filling in ONE WEEK of a day-by-day training plan TABLE for an athlete in their garage/home gym.
 ${buildPreferencesSection(preferences)}${athleteBlock}
@@ -1326,6 +1350,9 @@ ${week.details ? `Details: ${week.details}` : ""}
 THE EXACT CALENDAR DATES FOR THIS WEEK - produce ONE row per date below, in this order, using EXACTLY these day names (this mapping is authoritative; do NOT recompute weekdays yourself):
 ${weekDateLines.join("\n")}
 Weekly-schedule rules (class days, rest days, long-run day) apply to the TRUE day names above - e.g. a Tuesday class goes on the date marked "= Tuesday".
+${classDateLines.length > 0
+  ? `CLASS DAYS THIS WEEK - class components go on EXACTLY these dates and NO other date:\n${classDateLines.join("\n")}`
+  : "NO CLASS DAYS THIS WEEK - do not program any class component."}
 ${(preferences.restDaysPerWeek || 0) > 0 && weekDateLines.length >= 7
   ? `REST DAY REQUIREMENT: EXACTLY ${preferences.restDaysPerWeek} of the ${weekDateLines.length} days above must be full Rest days (session "Rest"). Count your Rest rows before answering - this is a hard requirement.`
   : ""}
@@ -1392,6 +1419,36 @@ PATCH RULES:
 - Pure JSON only - no markdown fences.`;
   };
 
+  // Deterministic checks a generated week must pass (rest-day count, class placement)
+  const validateWeekRows = (candidate: PlanRow[], weekDates: string[]): string[] => {
+    const problems: string[] = [];
+
+    const restTarget = preferences.restDaysPerWeek || 0;
+    if (restTarget > 0 && weekDates.length >= 7) {
+      const restCount = candidate.filter(r => r.session.toLowerCase().includes("rest")).length;
+      if (restCount < restTarget) {
+        problems.push(`only ${restCount} Rest day${restCount === 1 ? "" : "s"} - the athlete requires EXACTLY ${restTarget} full Rest days this week (session "Rest", components [])`);
+      }
+    }
+
+    const schedule = preferences.weeklySchedule || {};
+    const rowHasClass = (r?: PlanRow) =>
+      !!r && ((r.components || []).some(c => c.type === "class") || r.session.toLowerCase().includes("class"));
+    for (const ds of weekDates) {
+      const dayName = dayNameForDate(ds);
+      const setting = schedule[WEEKDAY_KEY_BY_NAME[dayName]];
+      const row = candidate.find(r => r.date === ds);
+      if (setting?.mode === "class" && setting.classAttendance !== "optional" && !rowHasClass(row)) {
+        problems.push(`${ds} is a ${dayName} - the athlete's fixed class day (${setting.classDescription || "class"}) - but that date's row is not the class`);
+      }
+      if (rowHasClass(row) && setting?.mode !== "class") {
+        problems.push(`${ds} (${dayName}) contains a class, but the athlete has NO class on ${dayName}s - classes go only on their scheduled weekdays`);
+      }
+    }
+
+    return problems;
+  };
+
   // Generate the full plan table: one API call per week, assembled and saved as a draft
   const generatePlanTable = async (
     sessionId: string,
@@ -1423,12 +1480,11 @@ PATCH RULES:
           const arr = !parsed ? null : Array.isArray(parsed) ? parsed : parsed.rows;
           if (Array.isArray(arr) && arr.length > 0) {
             const candidate = arr.map((r: Partial<PlanRow>) => sanitizePlanRow(r, weeks[i].weekNumber, weeks[i].focus));
-            // Enforce the rest-day requirement: retry once with an explicit
-            // correction instead of accepting a week that shorts the athlete
-            const restTarget = preferences.restDaysPerWeek || 0;
-            const restCount = candidate.filter(r => r.session.toLowerCase().includes("rest")).length;
-            if (attempt < 2 && restTarget > 0 && candidate.length >= 7 && restCount < restTarget) {
-              correction = `CORRECTION - YOUR PREVIOUS ATTEMPT WAS REJECTED: it contained only ${restCount} Rest day${restCount === 1 ? "" : "s"}. The athlete requires EXACTLY ${restTarget} full Rest days this week (session "Rest", components []). Regenerate the ENTIRE week with exactly ${restTarget} Rest rows.`;
+            // Enforce hard schedule rules (rest-day count, class placement):
+            // retry with an explicit correction instead of accepting a bad week
+            const problems = validateWeekRows(candidate, datesForWeek(outline, weeks[i]));
+            if (attempt < 2 && problems.length > 0) {
+              correction = `CORRECTION - YOUR PREVIOUS ATTEMPT WAS REJECTED for these violations:\n${problems.map(p => `- ${p}`).join("\n")}\nRegenerate the ENTIRE week and fix every violation.`;
               continue;
             }
             rows = candidate;
