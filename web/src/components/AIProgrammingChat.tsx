@@ -537,6 +537,8 @@ Guidelines:
 - Train the athlete's stated weaknesses 1-2x per week using VARIED approaches - do NOT insert the same movement into every session
 - Include proper warm-ups and skill work
 - Program appropriate rest days (typically 2 per week)
+- Time budgets are CAPS, not targets - do not fill every available minute; distribute load across the week and never schedule two maximal days back-to-back
+- If the athlete is training for a running race: 3-4 run days per week (one long run + easy midweek runs). The long run is its OWN session on its own day - never stacked after a class or metcon
 - Scale difficulty based on the athlete's level
 - Assume a garage/home gym setup: no fancy machines unless the athlete lists them
 - Use standard CrossFit movements and terminology
@@ -1445,6 +1447,10 @@ RULES:
 - EVERY row is ONE definitive prescription. Never "optional", never "attend or rest - your call".
 - Class days: ONE "class" component naming the class and saying to follow the coach's programming plus intensity guidance.
 - runMiles = total planned run miles that day (0 if none). targetRPE like "3-7". estMinutes = total session time including warmup.
+- Time budgets are CAPS, not targets: do NOT fill every available minute. Distribute training load across the whole week - never schedule two maximal days back-to-back, and keep most sessions comfortably under their cap.
+- If the athlete is training for a running race: program 3-4 run days per week - ONE long run plus easy midweek runs (easy runs fit inside weekday caps). Weekly total mileage progresses roughly 10% week over week with a lighter cutback week every 3rd-4th week; the long run builds toward the race distance, then tapers.
+- The LONG RUN is its own session on the athlete's long-run day: nothing else that day beyond a short warm-up and cool-down. NEVER stack the long run after a class or metcon.
+- Conditioning pieces stay in the 8-20 minute range (base phase toward the lower end). No 30-minute heavy-implement EMOMs.
 - Respect every schedule rule, time budget, and rest-day requirement above. Only equipment the athlete has.
 - Pure JSON only - no markdown fences, no extra text.`;
   };
@@ -1472,25 +1478,51 @@ PATCH RULES:
 - A patch must leave EVERY affected week fully valid: the exact required number of rest days, classes only on their scheduled weekdays. If your change costs a week a rest day (e.g., turning a rest day into a class), the SAME patchRows must restore that rest day on another day of that same week - and apply the same correction to EVERY week the change touches (a recurring change like "add the Tuesday class" touches every week). Never leave a week broken for a later turn.
 - When the athlete asks for a recurring change, patch it in ALL weeks at once, consistently.
 - Make the MINIMAL change that satisfies the request. "Make today a rest day" means swapping that ONE day with the most sensible training day in the same week - NOT reshuffling the whole week or padding it with extra rest days. Never add more rest days than the athlete's weekly requirement.
+- Endurance rules still apply to patched weeks: the long run stays its own session on the athlete's long-run day (never stacked with a class or metcon), and race-prep weeks keep their run days.
 - Copy each patched row's "week" and "phase" from the current table for that date.
 - Component typing is strict: "lift" is ONLY dedicated strength work on a single named lift (sets x reps @ load). ANY multi-movement circuit, rounds-based piece, EMOM, or AMRAP is a "wod" regardless of session length or strength bias. If the athlete points out a mistyped component, fix it with a patchRow - do not argue about session length.
 - Each patched row is complete and definitive (no "optional") and respects the athlete's schedule rules, time budgets, rest-day requirements, equipment, and injuries above.
 - Pure JSON only - no markdown fences.`;
   };
 
-  // Deterministic checks a generated week must pass (rest-day count, class placement)
+  // Deterministic checks a generated week must pass (rest-day count, class
+  // placement, endurance structure when a race is on the calendar)
   const validateWeekRows = (candidate: PlanRow[], weekDates: string[]): string[] => {
     const problems: string[] = [];
+    // Weeks containing a competition/race get looser structural rules
+    const isEventWeek = candidate.some(r => /competition|marathon|race/i.test(r.session));
 
     const restTarget = preferences.restDaysPerWeek || 0;
     if (restTarget > 0 && weekDates.length >= 7) {
       const restCount = candidate.filter(r => r.session.toLowerCase().includes("rest")).length;
       // Extra rest is legitimate coaching around competitions/races; too little never is
-      const isEventWeek = candidate.some(r => /competition|marathon|race/i.test(r.session));
       if (restCount < restTarget) {
         problems.push(`only ${restCount} Rest day${restCount === 1 ? "" : "s"} - the athlete requires EXACTLY ${restTarget} full Rest days this week (session "Rest", components [])`);
       } else if (restCount > restTarget && !isEventWeek) {
         problems.push(`${restCount} Rest days - the athlete asked for EXACTLY ${restTarget} per week; replace the extra rest day${restCount - restTarget > 1 ? "s" : ""} with training`);
+      }
+    }
+
+    // Endurance structure: applies to full non-event weeks while training for a running race
+    const hasRunningRace = (preferences.events || []).some(e => e.type === "running_race");
+    if (hasRunningRace && weekDates.length >= 7 && !isEventWeek) {
+      const runDays = candidate.filter(r => (r.runMiles || 0) > 0 || (r.components || []).some(c => c.type === "run"));
+      if (runDays.length < 2) {
+        problems.push(`only ${runDays.length} running day${runDays.length === 1 ? "" : "s"} - marathon prep needs at least 2 run days per week (ideally 3-4): one long run plus easy midweek runs`);
+      }
+      const longRunRow = candidate.reduce<PlanRow | undefined>(
+        (best, r) => ((r.runMiles || 0) > (best?.runMiles || 0) ? r : best),
+        undefined
+      );
+      if (longRunRow && (longRunRow.runMiles || 0) >= 5) {
+        const stacked = (longRunRow.components || []).some(c => c.type === "class" || c.type === "wod" || c.type === "lift");
+        if (stacked) {
+          problems.push(`${longRunRow.date} stacks the week's long run (${longRunRow.runMiles} mi) with a class/workout - the long run must be its OWN session with only a warm-up and cool-down around it`);
+        }
+        const preferredDay = preferences.longRunDay || "";
+        if (preferredDay && dayNameForDate(longRunRow.date).toLowerCase() !== preferredDay) {
+          problems.push(`the long run (${longRunRow.runMiles} mi) is on ${dayNameForDate(longRunRow.date)} but the athlete's long-run day is ${preferredDay.charAt(0).toUpperCase() + preferredDay.slice(1)}`);
+        }
       }
     }
 
