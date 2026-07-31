@@ -165,6 +165,16 @@ function addDaysToDateString(dateStr: string, days: number): string {
   return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
 }
 
+// Week number of a date within a plan: 7-day windows anchored at the plan's first day
+function weekNumberForDate(startDate: string, date: string): number {
+  const [sy, sm, sd] = String(startDate).split("-").map(Number);
+  const [y, m, d] = String(date).split("-").map(Number);
+  if (!sy || !y) return 1;
+  const s = new Date(sy, sm - 1, sd, 12).getTime();
+  const t = new Date(y, m - 1, d, 12).getTime();
+  return Math.max(1, Math.floor(Math.round((t - s) / 86400000) / 7) + 1);
+}
+
 const WEEKDAY_KEY_BY_NAME: Record<string, WeekdayKey> = {
   Monday: "monday", Tuesday: "tuesday", Wednesday: "wednesday", Thursday: "thursday",
   Friday: "friday", Saturday: "saturday", Sunday: "sunday",
@@ -1454,13 +1464,18 @@ PATCH RULES:
     return problems;
   };
 
-  // Validate every week of a full plan; returns human-readable violations
+  // Validate every week of a full plan; returns human-readable violations.
+  // Weeks are 7-day windows from the plan's first date (the stored week field
+  // can carry stale numbers from old patches).
   const planWeekViolations = (rows: PlanRow[]): string[] => {
+    if (rows.length === 0) return [];
+    const start = rows[0].date;
     const byWeek = new Map<number, PlanRow[]>();
     rows.forEach(r => {
-      const g = byWeek.get(r.week) || [];
+      const wk = weekNumberForDate(start, r.date);
+      const g = byWeek.get(wk) || [];
       g.push(r);
-      byWeek.set(r.week, g);
+      byWeek.set(wk, g);
     });
     const out: string[] = [];
     Array.from(byWeek.entries()).sort((a, b) => a[0] - b[0]).forEach(([weekNum, weekRows]) => {
@@ -1576,12 +1591,15 @@ PATCH RULES:
       const prev = r.date ? byDate.get(String(r.date)) : undefined;
       const clean = sanitizePlanRow(r, prev?.week || Number(r.week) || 1, String(prev?.phase || r.phase || ""));
       if (!clean.date) return;
-      // The table's week number for a date is authoritative - patched rows
-      // routinely arrive with a wrong or missing week
-      if (prev) clean.week = prev.week;
       byDate.set(clean.date, clean);
     });
     const newRows = Array.from(byDate.values()).sort((a, b) => a.date.localeCompare(b.date));
+    // Repair every row's week number deterministically - patched rows routinely
+    // arrive with wrong or missing weeks, and older plans may carry stale ones
+    if (newRows.length > 0) {
+      const start = newRows[0].date;
+      newRows.forEach(r => { r.week = weekNumberForDate(start, r.date); });
+    }
 
     const updatedPlan: TrainingPlan = { ...plan, rows: newRows, status: "draft", updatedAt: Timestamp.now() };
     await setDoc(doc(db, "trainingPlans", plan.id), { rows: newRows, status: "draft", updatedAt: Timestamp.now() }, { merge: true });
