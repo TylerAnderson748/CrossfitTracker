@@ -1222,6 +1222,37 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
           return;
         }
 
+        // Revision-mode guard: the model sometimes CLAIMS it changed the plan
+        // while returning message-only JSON, which changes nothing. Catch the
+        // false claim and force it to either produce the patch or retract.
+        if (plan && parsed.message && !(Array.isArray(parsed.patchRows) && parsed.patchRows.length > 0) && !parsed.outline &&
+            /\b(updated|patched|moved|shifted|swapped|rescheduled|adjusted|changed|replaced)\b/i.test(parsed.message)) {
+          try {
+            const redoText = await chatCompletion({
+              messages: [
+                { role: "system", content: "You are Oddo, an expert CrossFit programming coach. Always respond with valid JSON." },
+                { role: "user", content: prompt },
+                { role: "assistant", content: text },
+                { role: "user", content: 'Your response claimed to change the plan, but it contained NO "patchRows" - so NOTHING was actually changed in the table. If you intended to change the plan, respond NOW with {"message": "...", "patchRows": [...]} containing every changed day in the full row schema. If you did not intend to change anything, respond with {"message": "..."} that does NOT claim any change was made.' },
+              ],
+              temperature: 0.5,
+              maxTokens: 16000,
+            });
+            const redo = tryParseJson(redoText);
+            if (redo && Array.isArray(redo.patchRows) && redo.patchRows.length > 0) {
+              await applyPlanPatch(redo.patchRows, redo.message || "Plan updated.", updatedMessages);
+              return;
+            }
+            if (redo?.message) {
+              parsed.message = redo.message;
+            } else {
+              parsed.message = `${parsed.message}\n\n(Correction: no days were actually changed. Tell me again exactly what to change and I'll patch the table.)`;
+            }
+          } catch {
+            parsed.message = `${parsed.message}\n\n(Correction: no days were actually changed. Tell me again exactly what to change and I'll patch the table.)`;
+          }
+        }
+
         // Long-range program (or full rebuild): the AI returned a week-by-week
         // outline - fill in the plan table one week at a time.
         if (parsed.outline && Array.isArray(parsed.outline.weeks) && parsed.outline.weeks.length > 0) {
@@ -1420,7 +1451,7 @@ CONVERSATION:
 ${conversationHistory}
 
 Respond to the athlete's latest message with valid JSON in EXACTLY ONE of these forms:
-1. Just answering a question / discussing: {"message": "..."}
+1. Just answering a question / discussing: {"message": "..."} - this form changes NOTHING in the table. NEVER use it to say you updated/moved/changed anything: without patchRows, no change happens. ANY requested change REQUIRES form 2 or 3.
 2. Targeted plan changes: {"message": "summary of what you changed and why", "patchRows": [complete replacement rows for ONLY the days that change, using the full row schema: date, day, week, phase, session, runMiles, targetRPE, estMinutes, reason, and components (typed pieces: warmup/wod/lift/skill/run/swim/bike_mtb/bike_road/class/cooldown - pure aerobic work uses the specific cardio type, coached classes attended elsewhere are "class" - each with title and a complete description)]}
 3. The request changes the plan's fundamental structure (different weekly pattern, new/changed events, different phases): {"message": "...", "outline": {"startDate": "YYYY-MM-DD", "endDate": "YYYY-MM-DD", "weeks": [{"weekNumber": 1, "startDate": "YYYY-MM-DD", "focus": "...", "details": "..."}]}} - the app will rebuild the whole table from it.
 
