@@ -277,6 +277,12 @@ export default function WeeklyPlanPage() {
       }
     } catch (error) {
       console.error("Error logging class attendance:", error);
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.toLowerCase().includes("permission")) {
+        alert("Couldn't save: Firestore rules are out of date. Run `firebase deploy --only firestore:rules` from the project folder, then try again.");
+      } else {
+        alert(`Couldn't save the class log: ${message}`);
+      }
     } finally {
       setLoggingClassKey(null);
     }
