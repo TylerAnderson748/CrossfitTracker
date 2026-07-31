@@ -1699,9 +1699,16 @@ PATCH RULES:
     await setDoc(doc(db, "trainingPlans", sessionId), planDoc);
     setPlan({ id: sessionId, ...planDoc });
 
+    // Anything that slipped through the per-week retries gets auto-corrected
+    // on the assembled plan, same as chat patches
+    const generationViolations = planWeekViolations(allRows);
+
     let finalText = `${planMessage}\n\nYour plan table is ready: ${allRows.length} days (${planDoc.startDate} to ${planDoc.endDate}). Open "View Plan Table" above to review every row. Tell me what to change - or lock it in and I'll put it on your calendar.\n\nWeekly structure:\n${planWeekSummary(allRows)}`;
     if (failedWeeks.length > 0) {
       finalText += `\n\n(Heads up: week${failedWeeks.length > 1 ? "s" : ""} ${failedWeeks.join(", ")} failed to generate - ask me to fill ${failedWeeks.length > 1 ? "them" : "it"} in.)`;
+    }
+    if (generationViolations.length > 0) {
+      finalText += `\n\n⚠️ ${generationViolations.length} schedule issue${generationViolations.length > 1 ? "s" : ""} detected - auto-correcting now...`;
     }
 
     const assistantMessage: AIChatMessage = {
@@ -1718,6 +1725,10 @@ PATCH RULES:
     });
     setActiveSession(prev => prev ? { ...prev, messages: finalMessages } : null);
     setShowPlanModal(true);
+
+    if (generationViolations.length > 0) {
+      await correctPlanViolations({ id: sessionId, ...planDoc }, finalMessages, conversationHistory);
+    }
   };
 
   // Apply targeted row changes from a revision. Returns the updated plan,
@@ -1771,22 +1782,25 @@ PATCH RULES:
     return { updatedPlan, violations, finalMessages };
   };
 
-  // Apply a patch, then run automatic correction rounds until the plan passes
-  // the schedule checks (capped - each round sees the fresh violation list)
-  const applyPatchWithCorrections = async (
-    patchRows: Partial<PlanRow>[],
-    message: string,
-    updatedMessages: AIChatMessage[],
+  // Run automatic correction rounds on a plan until it passes the schedule
+  // checks (capped - each round sees the fresh violation list)
+  const correctPlanViolations = async (
+    startPlan: TrainingPlan,
+    startMessages: AIChatMessage[],
     conversationHistory: string
   ) => {
-    let result = await applyPlanPatch(patchRows, message, updatedMessages);
-    for (let round = 0; round < 3 && result && result.violations.length > 0; round++) {
+    let current = {
+      updatedPlan: startPlan,
+      violations: planWeekViolations(startPlan.rows),
+      finalMessages: startMessages,
+    };
+    for (let round = 0; round < 3 && current.violations.length > 0; round++) {
       try {
         const fixText = await chatCompletion({
           model: REVISION_MODEL,
           messages: [
             { role: "system", content: "You are Oddo, an expert CrossFit programming coach. Always respond with valid JSON." },
-            { role: "user", content: `${buildRevisionPrompt(result.updatedPlan, conversationHistory)}\n\nDo NOT discuss. Respond ONLY with {"message": "...", "patchRows": [...]} that fixes EVERY schedule violation listed above in ONE patch. Fix them in the direction of the athlete's LATEST request: if they asked for a recurring structure change (e.g., "rest on Fridays"), apply it to EVERY week and convert the displaced day to training - do not undo what they asked for, and keep the weekly structure identical across all full weeks.` },
+            { role: "user", content: `${buildRevisionPrompt(current.updatedPlan, conversationHistory)}\n\nDo NOT discuss. Respond ONLY with {"message": "...", "patchRows": [...]} that fixes EVERY schedule violation listed above in ONE patch. Fix them in the direction of the athlete's LATEST request: if they asked for a recurring structure change (e.g., "rest on Fridays"), apply it to EVERY week and convert the displaced day to training - do not undo what they asked for, and keep the weekly structure identical across all full weeks.` },
           ],
           temperature: 0.5,
           maxTokens: 16000,
@@ -1796,15 +1810,28 @@ PATCH RULES:
         const next = await applyPlanPatch(
           fix.patchRows,
           `Auto-correction: ${fix.message || "restored your schedule rules."}`,
-          result.finalMessages,
-          result.updatedPlan
+          current.finalMessages,
+          current.updatedPlan
         );
         if (!next) break;
-        result = next;
+        current = next;
       } catch (fixErr) {
         console.error("Auto-correction round failed:", fixErr);
         break;
       }
+    }
+  };
+
+  // Apply a patch, then auto-correct any schedule violations it leaves behind
+  const applyPatchWithCorrections = async (
+    patchRows: Partial<PlanRow>[],
+    message: string,
+    updatedMessages: AIChatMessage[],
+    conversationHistory: string
+  ) => {
+    const result = await applyPlanPatch(patchRows, message, updatedMessages);
+    if (result && result.violations.length > 0) {
+      await correctPlanViolations(result.updatedPlan, result.finalMessages, conversationHistory);
     }
   };
 
