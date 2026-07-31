@@ -150,13 +150,29 @@ function stripOldWorkouts(messages: AIChatMessage[]): AIChatMessage[] {
   });
 }
 
+// Deterministic calendar math - never trust the model with date -> weekday conversions
+const WEEKDAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+function dayNameForDate(dateStr: string): string {
+  const [y, m, d] = String(dateStr).split("-").map(Number);
+  if (!y || !m || !d) return "";
+  return WEEKDAY_NAMES[new Date(y, m - 1, d, 12).getDay()];
+}
+
+function addDaysToDateString(dateStr: string, days: number): string {
+  const [y, m, d] = String(dateStr).split("-").map(Number);
+  const dt = new Date(y, m - 1, d + days, 12);
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+}
+
 // Coerce an AI-produced row into a clean PlanRow (Firestore rejects undefined)
 const VALID_COMPONENT_TYPES = ["warmup", "wod", "lift", "skill", "run", "swim", "bike_mtb", "bike_road", "cardio", "class", "cooldown"];
 
 function sanitizePlanRow(r: Partial<PlanRow>, fallbackWeek: number, fallbackPhase: string): PlanRow {
   const row: PlanRow = {
     date: String(r.date || ""),
-    day: String(r.day || ""),
+    // Always derive the day name from the date - models get weekday math wrong
+    day: dayNameForDate(String(r.date || "")) || String(r.day || ""),
     week: Number(r.week) || fallbackWeek,
     phase: String(r.phase || fallbackPhase),
     session: String(r.session || "Training"),
@@ -1268,6 +1284,18 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
       .map(r => `${r.date} (${r.day}): ${r.session}${r.runMiles ? ` ${r.runMiles}mi` : ""} - ${(r.detail || "").slice(0, 80)}`)
       .join("\n");
 
+    // Enumerate this week's exact dates with their true weekday names - the model
+    // must not do calendar math itself (it gets weekdays wrong and then places
+    // class/rest days on the wrong real days)
+    const nextWeek = outline.weeks.find(w => w.weekNumber === week.weekNumber + 1);
+    const weekDateLines: string[] = [];
+    for (let i = 0; i < 7; i++) {
+      const ds = addDaysToDateString(week.startDate, i);
+      if (ds > outline.endDate) break;
+      if (nextWeek && ds >= nextWeek.startDate) break;
+      weekDateLines.push(`${ds} = ${dayNameForDate(ds)}`);
+    }
+
     return `You are a personal CrossFit + endurance coach filling in ONE WEEK of a day-by-day training plan TABLE for an athlete in their garage/home gym.
 ${buildPreferencesSection(preferences)}${athleteBlock}
 THE ATHLETE'S REQUEST AND CONTEXT (conversation so far):
@@ -1279,6 +1307,10 @@ ${outlineSummary}
 YOU ARE NOW FILLING IN WEEK ${week.weekNumber}, which starts on ${week.startDate}.
 Focus for this week: ${week.focus}
 ${week.details ? `Details: ${week.details}` : ""}
+
+THE EXACT CALENDAR DATES FOR THIS WEEK - produce ONE row per date below, in this order, using EXACTLY these day names (this mapping is authoritative; do NOT recompute weekdays yourself):
+${weekDateLines.join("\n")}
+Weekly-schedule rules (class days, rest days, long-run day) apply to the TRUE day names above - e.g. a Tuesday class goes on the date marked "= Tuesday".
 ${lastRows ? `\nDAYS ALREADY IN THE TABLE JUST BEFORE THIS WEEK (for continuity - do not repeat workouts):\n${lastRows}` : ""}
 
 Respond with valid JSON in this exact format:
@@ -1304,7 +1336,7 @@ Respond with valid JSON in this exact format:
 }
 
 RULES:
-- ONE row per calendar day from ${week.startDate} through the end of this week (or through ${outline.endDate} if it falls inside this week). Use correct real dates with matching day names.
+- ONE row per date listed above - no other dates, no skipped dates, day names copied exactly from the list.
 - "components" is the day's prescription broken into typed pieces: "warmup", "wod" (mixed-modal metcons), "lift", "skill", "run"/"swim"/"bike_mtb"/"bike_road" (pure aerobic work - steady-state or intervals; only program swim/bike if the athlete does those), "class" (coached classes the athlete attends elsewhere), "cooldown". Each component's description is COMPLETE: exact distances, paces, movements, reps, and loads (use the athlete's PRs for percentage work) - specific enough to train from with no other information.
 - Component typing is strict: "lift" is ONLY dedicated strength work on a single named lift (sets x reps @ load, e.g. "Back Squat 5x5 @ 75%"). ANY multi-movement circuit, rounds-based piece, EMOM, or AMRAP is a "wod" - even when strength-biased and even on short time-capped days (a 4-round DB/sandbag circuit is a wod, not a lift). "wod" says nothing about session length - a 15-minute piece is still a wod.
 - "reason" (1-2 sentences): WHY this day is programmed this way given the phase, the surrounding days, and the athlete's goals. Every non-rest day gets one.
