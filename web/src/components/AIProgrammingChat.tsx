@@ -226,7 +226,7 @@ function buildPreferencesSection(preferences?: Omit<AIProgrammingPreferences, "u
     }
 
     if (preferences.equipment) {
-      prefParts.push(`Available Equipment (garage/home gym): ${preferences.equipment}\nIMPORTANT: ONLY program movements that can be done with this equipment. Substitute anything that requires equipment they don't have.`);
+      prefParts.push(`Available Equipment (garage/home gym): ${preferences.equipment}\nHARD CONSTRAINT for every home training day: ONLY program movements this equipment supports. If no barbell/rack/plates are listed, NEVER program barbell lifts at home (back squat, deadlift, bench, barbell cleans/snatches, etc.) - not even with the athlete's PRs as justification; PRs from a gym do not mean the equipment exists at home. Substitute dumbbell/kettlebell/sandbag versions instead. Barbell work belongs only on class days.`);
     }
 
     const eventsWithDates = (preferences.events || []).filter(e => e.date);
@@ -625,7 +625,7 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
               const [title, reps] = k.split("|");
               return `- ${title}: ${w}lb (${reps}RM)`;
             });
-          parts.push(`LIFT PRs - use these to prescribe REAL weights for percentage work (e.g., "165lb - that's 70% of your 235lb 1RM"):\n${lines.join("\n")}`);
+          parts.push(`LIFT PRs - use these to prescribe REAL weights for percentage work (e.g., "165lb - that's 70% of your 235lb 1RM"):\n${lines.join("\n")}\nCAUTION: barbell PRs were likely set at the athlete's gym/class. They do NOT mean the athlete has a barbell at home - the equipment list decides what can be programmed on home days.`);
         }
 
         // Recent WOD results
