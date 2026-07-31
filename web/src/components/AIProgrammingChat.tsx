@@ -1288,7 +1288,8 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
     outline: ProgramOutline,
     week: ProgramOutlineWeek,
     conversationHistory: string,
-    previousRows: PlanRow[]
+    previousRows: PlanRow[],
+    correction?: string
   ): string => {
     const outlineSummary = outline.weeks
       .map(w => `Week ${w.weekNumber} (starting ${w.startDate}): ${w.focus}${w.details ? ` - ${w.details}` : ""}`)
@@ -1325,6 +1326,10 @@ ${week.details ? `Details: ${week.details}` : ""}
 THE EXACT CALENDAR DATES FOR THIS WEEK - produce ONE row per date below, in this order, using EXACTLY these day names (this mapping is authoritative; do NOT recompute weekdays yourself):
 ${weekDateLines.join("\n")}
 Weekly-schedule rules (class days, rest days, long-run day) apply to the TRUE day names above - e.g. a Tuesday class goes on the date marked "= Tuesday".
+${(preferences.restDaysPerWeek || 0) > 0 && weekDateLines.length >= 7
+  ? `REST DAY REQUIREMENT: EXACTLY ${preferences.restDaysPerWeek} of the ${weekDateLines.length} days above must be full Rest days (session "Rest"). Count your Rest rows before answering - this is a hard requirement.`
+  : ""}
+${correction ? `\n${correction}` : ""}
 ${lastRows ? `\nDAYS ALREADY IN THE TABLE JUST BEFORE THIS WEEK (for continuity - do not repeat workouts):\n${lastRows}` : ""}
 
 Respond with valid JSON in this exact format:
@@ -1403,12 +1408,13 @@ PATCH RULES:
       setGenerationProgress({ current: i + 1, total: weeks.length });
 
       let rows: PlanRow[] | null = null;
-      for (let attempt = 0; attempt < 2 && !rows; attempt++) {
+      let correction = "";
+      for (let attempt = 0; attempt < 3 && !rows; attempt++) {
         try {
           const text = await chatCompletion({
             messages: [
               { role: "system", content: "You are an expert CrossFit and endurance programming coach. Always respond with valid JSON only." },
-              { role: "user", content: buildWeekRowsPrompt(outline, weeks[i], conversationHistory, allRows) }
+              { role: "user", content: buildWeekRowsPrompt(outline, weeks[i], conversationHistory, allRows, correction) }
             ],
             temperature: 0.6,
             maxTokens: 12000,
@@ -1416,7 +1422,16 @@ PATCH RULES:
           const parsed = tryParseJson(text);
           const arr = !parsed ? null : Array.isArray(parsed) ? parsed : parsed.rows;
           if (Array.isArray(arr) && arr.length > 0) {
-            rows = arr.map((r: Partial<PlanRow>) => sanitizePlanRow(r, weeks[i].weekNumber, weeks[i].focus));
+            const candidate = arr.map((r: Partial<PlanRow>) => sanitizePlanRow(r, weeks[i].weekNumber, weeks[i].focus));
+            // Enforce the rest-day requirement: retry once with an explicit
+            // correction instead of accepting a week that shorts the athlete
+            const restTarget = preferences.restDaysPerWeek || 0;
+            const restCount = candidate.filter(r => r.session.toLowerCase().includes("rest")).length;
+            if (attempt < 2 && restTarget > 0 && candidate.length >= 7 && restCount < restTarget) {
+              correction = `CORRECTION - YOUR PREVIOUS ATTEMPT WAS REJECTED: it contained only ${restCount} Rest day${restCount === 1 ? "" : "s"}. The athlete requires EXACTLY ${restTarget} full Rest days this week (session "Rest", components []). Regenerate the ENTIRE week with exactly ${restTarget} Rest rows.`;
+              continue;
+            }
+            rows = candidate;
           }
         } catch (err) {
           console.error(`Error generating week ${weeks[i].weekNumber} (attempt ${attempt + 1}):`, err);
