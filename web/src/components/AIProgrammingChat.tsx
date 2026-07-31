@@ -211,6 +211,12 @@ function sanitizePlanRow(r: Partial<PlanRow>, fallbackWeek: number, fallbackPhas
     estMinutes: Number(r.estMinutes) || 0,
   };
   if (r.reason) row.reason = String(r.reason);
+  // Rest days carry no training components (light mobility/cooldown is fine) -
+  // the model sometimes emits a "Full Rest Day" WOD component
+  if (/\brest\b/i.test(row.session) && Array.isArray(r.components)) {
+    r = { ...r, components: r.components.filter(c => String(c?.type) === "cooldown") };
+    if (!row.detail) row.detail = "Full rest day";
+  }
   if (Array.isArray(r.components) && r.components.length > 0) {
     row.components = r.components.map(c => {
       let type = (VALID_COMPONENT_TYPES.includes(String(c?.type)) ? String(c?.type) : "wod") as PlanRowComponent["type"];
@@ -1218,7 +1224,32 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
 
         // Revision mode: targeted changes to the existing plan table
         if (plan && Array.isArray(parsed.patchRows) && parsed.patchRows.length > 0) {
-          await applyPlanPatch(parsed.patchRows, parsed.message || "Plan updated.", updatedMessages);
+          const result = await applyPlanPatch(parsed.patchRows, parsed.message || "Plan updated.", updatedMessages);
+          // If the patch left schedule violations, run ONE automatic correction
+          // round instead of making the athlete play referee
+          if (result && result.violations.length > 0) {
+            try {
+              const fixText = await chatCompletion({
+                messages: [
+                  { role: "system", content: "You are Oddo, an expert CrossFit programming coach. Always respond with valid JSON." },
+                  { role: "user", content: `${buildRevisionPrompt(result.updatedPlan, conversationHistory)}\n\nDo NOT discuss. Respond ONLY with {"message": "...", "patchRows": [...]} that fixes EVERY schedule violation listed above in one patch.` },
+                ],
+                temperature: 0.5,
+                maxTokens: 16000,
+              });
+              const fix = tryParseJson(fixText);
+              if (fix && Array.isArray(fix.patchRows) && fix.patchRows.length > 0) {
+                await applyPlanPatch(
+                  fix.patchRows,
+                  `Auto-correction: ${fix.message || "restored your schedule rules."}`,
+                  result.finalMessages,
+                  result.updatedPlan
+                );
+              }
+            } catch (fixErr) {
+              console.error("Auto-correction round failed:", fixErr);
+            }
+          }
           return;
         }
 
@@ -1459,6 +1490,7 @@ PATCH RULES:
 - patchRows contains ONLY changed days; every unchanged day stays out of it.
 - A patch must leave EVERY affected week fully valid: the exact required number of rest days, classes only on their scheduled weekdays. If your change costs a week a rest day (e.g., turning a rest day into a class), the SAME patchRows must restore that rest day on another day of that same week - and apply the same correction to EVERY week the change touches (a recurring change like "add the Tuesday class" touches every week). Never leave a week broken for a later turn.
 - When the athlete asks for a recurring change, patch it in ALL weeks at once, consistently.
+- Make the MINIMAL change that satisfies the request. "Make today a rest day" means swapping that ONE day with the most sensible training day in the same week - NOT reshuffling the whole week or padding it with extra rest days. Never add more rest days than the athlete's weekly requirement.
 - Copy each patched row's "week" and "phase" from the current table for that date.
 - Component typing is strict: "lift" is ONLY dedicated strength work on a single named lift (sets x reps @ load). ANY multi-movement circuit, rounds-based piece, EMOM, or AMRAP is a "wod" regardless of session length or strength bias. If the athlete points out a mistyped component, fix it with a patchRow - do not argue about session length.
 - Each patched row is complete and definitive (no "optional") and respects the athlete's schedule rules, time budgets, rest-day requirements, equipment, and injuries above.
@@ -1472,8 +1504,12 @@ PATCH RULES:
     const restTarget = preferences.restDaysPerWeek || 0;
     if (restTarget > 0 && weekDates.length >= 7) {
       const restCount = candidate.filter(r => r.session.toLowerCase().includes("rest")).length;
+      // Extra rest is legitimate coaching around competitions/races; too little never is
+      const isEventWeek = candidate.some(r => /competition|marathon|race/i.test(r.session));
       if (restCount < restTarget) {
         problems.push(`only ${restCount} Rest day${restCount === 1 ? "" : "s"} - the athlete requires EXACTLY ${restTarget} full Rest days this week (session "Rest", components [])`);
+      } else if (restCount > restTarget && !isEventWeek) {
+        problems.push(`${restCount} Rest days - the athlete asked for EXACTLY ${restTarget} per week; replace the extra rest day${restCount - restTarget > 1 ? "s" : ""} with training`);
       }
     }
 
@@ -1609,15 +1645,18 @@ PATCH RULES:
     setShowPlanModal(true);
   };
 
-  // Apply targeted row changes from a revision
+  // Apply targeted row changes from a revision. Returns the updated plan,
+  // remaining schedule violations, and the message list (for auto-correction).
   const applyPlanPatch = async (
     patchRows: Partial<PlanRow>[],
     message: string,
-    updatedMessages: AIChatMessage[]
-  ) => {
-    if (!plan || !activeSession) return;
+    updatedMessages: AIChatMessage[],
+    basePlan?: TrainingPlan
+  ): Promise<{ updatedPlan: TrainingPlan; violations: string[]; finalMessages: AIChatMessage[] } | undefined> => {
+    const target = basePlan || plan;
+    if (!target || !activeSession) return undefined;
 
-    const byDate = new Map(plan.rows.map(r => [r.date, r]));
+    const byDate = new Map(target.rows.map(r => [r.date, r]));
     patchRows.forEach(r => {
       const prev = r.date ? byDate.get(String(r.date)) : undefined;
       const clean = sanitizePlanRow(r, prev?.week || Number(r.week) || 1, String(prev?.phase || r.phase || ""));
@@ -1632,14 +1671,14 @@ PATCH RULES:
       newRows.forEach(r => { r.week = weekNumberForDate(start, r.date); });
     }
 
-    const updatedPlan: TrainingPlan = { ...plan, rows: newRows, status: "draft", updatedAt: Timestamp.now() };
-    await setDoc(doc(db, "trainingPlans", plan.id), { rows: newRows, status: "draft", updatedAt: Timestamp.now() }, { merge: true });
+    const updatedPlan: TrainingPlan = { ...target, rows: newRows, status: "draft", updatedAt: Timestamp.now() };
+    await setDoc(doc(db, "trainingPlans", target.id), { rows: newRows, status: "draft", updatedAt: Timestamp.now() }, { merge: true });
     setPlan(updatedPlan);
 
     // A patch must never silently break the athlete's schedule rules
     const violations = planWeekViolations(newRows);
     const violationNote = violations.length > 0
-      ? `\n\n⚠️ Schedule check after this change:\n${violations.map(v => `- ${v}`).join("\n")}\nSay "fix those weeks" and I'll patch them.`
+      ? `\n\n⚠️ Schedule check after this change:\n${violations.map(v => `- ${v}`).join("\n")}`
       : "";
 
     const assistantMessage: AIChatMessage = {
@@ -1654,6 +1693,7 @@ PATCH RULES:
       updatedAt: Timestamp.now(),
     });
     setActiveSession(prev => prev ? { ...prev, messages: finalMessages } : null);
+    return { updatedPlan, violations, finalMessages };
   };
 
   // Import a plan pasted as JSON (e.g., converted from a spreadsheet)
