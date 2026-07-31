@@ -340,8 +340,12 @@ ${prefParts.join("\n")}
 }
 
 const getSystemPrompt = (preferences?: Omit<AIProgrammingPreferences, "userId" | "updatedAt">, recentlyUsedWorkouts?: string[]) => {
+  // All date strings in LOCAL time - mixing toISOString (UTC) with local weekdays
+  // produced day/date mismatches in the evenings
   const today = new Date();
-  const todayStr = today.toISOString().split('T')[0]; // YYYY-MM-DD format
+  const localDateString = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const todayStr = localDateString(today);
   const dayOfWeek = today.toLocaleDateString('en-US', { weekday: 'long' });
   const monthName = today.toLocaleDateString('en-US', { month: 'long' });
 
@@ -352,7 +356,7 @@ const getSystemPrompt = (preferences?: Omit<AIProgrammingPreferences, "userId" |
     let daysUntil = targetDay - currentDay;
     if (daysUntil < 0) daysUntil += 7; // If the day has passed this week, get next week's
     date.setDate(date.getDate() + daysUntil);
-    return date.toISOString().split('T')[0];
+    return localDateString(date);
   };
 
   const upcomingDates = {
@@ -364,6 +368,13 @@ const getSystemPrompt = (preferences?: Omit<AIProgrammingPreferences, "userId" |
     Friday: getNextDayDate(5),
     Saturday: getNextDayDate(6),
   };
+
+  // Authoritative date -> weekday mapping for the next 14 days
+  const calendarReference = Array.from({ length: 14 }, (_, i) => {
+    const d = new Date(today);
+    d.setDate(d.getDate() + i);
+    return `${localDateString(d)} = ${d.toLocaleDateString('en-US', { weekday: 'long' })}`;
+  }).join("\n");
 
   // Determine current season
   const month = today.getMonth();
@@ -397,6 +408,9 @@ ${athletePreferencesSection}${recentlyUsedSection}IMPORTANT DATE INFORMATION:
 - Today's date is ${todayStr} (${dayOfWeek})
 - Current month: ${monthName}
 - Current season: ${season}
+
+CALENDAR REFERENCE - the next 14 days (this date = weekday mapping is authoritative; do NOT recompute weekdays yourself):
+${calendarReference}
 
 UPCOMING DATES FOR EACH DAY OF THE WEEK (use these EXACT dates):
 - Sunday: ${upcomingDates.Sunday}
@@ -2053,7 +2067,7 @@ PATCH RULES:
                                   : "bg-purple-100 text-purple-700"
                               }`}
                             >
-                              {(day.dayOfWeek || "").slice(0, 3)}
+                              {(dayNameForDate(day.date) || day.dayOfWeek || "").slice(0, 3)}
                             </div>
                           ))}
                         </div>
@@ -2186,7 +2200,7 @@ PATCH RULES:
                     }`}
                   >
                     <div className="flex items-center justify-between mb-3">
-                      <span className="font-medium text-gray-900">{day.dayOfWeek}</span>
+                      <span className="font-medium text-gray-900">{dayNameForDate(day.date) || day.dayOfWeek}</span>
                       <span className="text-sm text-gray-500">{day.date}</span>
                     </div>
                     {day.isRestDay ? (
