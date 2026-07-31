@@ -1440,7 +1440,7 @@ RULES:
 - ONE row per date listed above - no other dates, no skipped dates, day names copied exactly from the list.
 - "components" is the day's prescription broken into typed pieces: "warmup", "wod" (mixed-modal metcons), "lift", "skill", "run"/"swim"/"bike_mtb"/"bike_road" (pure aerobic work - steady-state or intervals; only program swim/bike if the athlete does those), "class" (coached classes the athlete attends elsewhere), "cooldown". Each component's description is COMPLETE: exact distances, paces, movements, reps, and loads (use the athlete's PRs for percentage work) - specific enough to train from with no other information.
 - Component typing is strict: "lift" is ONLY dedicated strength work on a single named lift (sets x reps @ load, e.g. "Back Squat 5x5 @ 75%"). ANY multi-movement circuit, rounds-based piece, EMOM, or AMRAP is a "wod" - even when strength-biased and even on short time-capped days (a 4-round DB/sandbag circuit is a wod, not a lift). "wod" says nothing about session length - a 15-minute piece is still a wod.
-- "reason" (1-2 sentences): WHY this day is programmed this way given the phase, the surrounding days, and the athlete's goals. Every non-rest day gets one.
+- "reason" (1-2 sentences): WHY this day is programmed this way given the phase, the surrounding days, and the athlete's goals. Every non-rest day gets one. The reason speaks to the ATHLETE about training intent - NEVER write rule bookkeeping ("to maintain exactly 2 rest days", "to satisfy the weekly cap") as a reason.
 - Rest days: session "Rest", components [] (or one light "cooldown" mobility component), runMiles 0, reason explaining what the rest protects.
 - Event days (competition, race): session in CAPS (e.g., "MARATHON", "CROSSFIT COMPETITION") with one component of race-day execution guidance.
 - "session" is a short 2-4 word label summarizing the day. "phase" is a consistent short label across the plan (e.g., "Base", "Build", "Comp Taper", "Marathon Taper", "Recovery").
@@ -1468,6 +1468,10 @@ ${violations.length > 0 ? `\nSCHEDULE VIOLATIONS CURRENTLY IN THE TABLE - these 
 CONVERSATION:
 ${conversationHistory}
 
+READING THE ATHLETE:
+- Observations and shared context ("Saturdays are pretty hard", "I ran 13 miles two weeks ago", "my legs are tired") are NOT change requests. Acknowledge them, factor them into future programming decisions, and explain how - but do NOT add, remove, or replace sessions unless the athlete explicitly asks for a change. If you genuinely cannot tell whether they want a change, ask ONE short clarifying question (form 1) instead of guessing.
+- SANITY-CHECK every number the athlete reports (distance, time, pace, load). If it is implausible (e.g., "3 miles in 2.5 hours" is a 50-minute mile), question it in a message-only response BEFORE rebuilding anything around it.
+
 Respond to the athlete's latest message with valid JSON in EXACTLY ONE of these forms:
 1. Just answering a question / discussing: {"message": "..."} - this form changes NOTHING in the table. NEVER use it to say you updated/moved/changed anything: without patchRows, no change happens. ANY requested change REQUIRES form 2 or 3.
 2. Targeted plan changes: {"message": "summary of what you changed and why", "patchRows": [complete replacement rows for ONLY the days that change, using the full row schema: date, day, week, phase, session, runMiles, targetRPE, estMinutes, reason, and components (typed pieces: warmup/wod/lift/skill/run/swim/bike_mtb/bike_road/class/cooldown - pure aerobic work uses the specific cardio type, coached classes attended elsewhere are "class" - each with title and a complete description)]}
@@ -1479,6 +1483,8 @@ PATCH RULES:
 - When the athlete asks for a recurring change, patch it in ALL weeks at once, consistently.
 - Make the MINIMAL change that satisfies the request. "Make today a rest day" means swapping that ONE day with the most sensible training day in the same week - NOT reshuffling the whole week or padding it with extra rest days. Never add more rest days than the athlete's weekly requirement.
 - Endurance rules still apply to patched weeks: the long run stays its own session on the athlete's long-run day (never stacked with a class or metcon), and race-prep weeks keep their run days.
+- Patched rows' "reason" speaks to the athlete about training intent - never rule bookkeeping ("to maintain exactly 2 rest days").
+- Class components describe THAT day's class only (its actual focus per the schedule) - never copy another weekday's class text.
 - Copy each patched row's "week" and "phase" from the current table for that date.
 - Component typing is strict: "lift" is ONLY dedicated strength work on a single named lift (sets x reps @ load). ANY multi-movement circuit, rounds-based piece, EMOM, or AMRAP is a "wod" regardless of session length or strength bias. If the athlete points out a mistyped component, fix it with a patchRow - do not argue about session length.
 - Each patched row is complete and definitive (no "optional") and respects the athlete's schedule rules, time budgets, rest-day requirements, equipment, and injuries above.
@@ -1539,9 +1545,46 @@ PATCH RULES:
       if (rowHasClass(row) && setting?.mode !== "class") {
         problems.push(`${ds} (${dayName}) contains a class, but the athlete has NO class on ${dayName}s - classes go only on their scheduled weekdays`);
       }
+      // Class text must describe THIS day's class, not another weekday's
+      // (e.g., "Attend Tuesday Oly class" on a Thursday row)
+      const classComp = row ? (row.components || []).find(c => c.type === "class") : undefined;
+      if (classComp) {
+        const wrongDay = WEEKDAY_NAMES.find(n =>
+          n !== dayName &&
+          (new RegExp(`\\b${n}\\b`, "i").test(classComp.title) ||
+           new RegExp(`attend(?:\\s+the)?\\s+${n}\\b`, "i").test(classComp.description))
+        );
+        if (wrongDay) {
+          problems.push(`${ds} is a ${dayName} but its class component says "${wrongDay}" - describe ${dayName}'s actual class${setting?.classDescription ? ` (${setting.classDescription})` : ""}`);
+        }
+      }
     }
 
     return problems;
+  };
+
+  // App-computed per-week structure summary - settles "how many rest days do I
+  // actually have" with facts instead of the model's word
+  const planWeekSummary = (rows: PlanRow[]): string => {
+    if (rows.length === 0) return "";
+    const start = rows[0].date;
+    const byWeek = new Map<number, PlanRow[]>();
+    rows.forEach(r => {
+      const wk = weekNumberForDate(start, r.date);
+      const g = byWeek.get(wk) || [];
+      g.push(r);
+      byWeek.set(wk, g);
+    });
+    return Array.from(byWeek.entries())
+      .sort((a, b) => a[0] - b[0])
+      .map(([wk, wr]) => {
+        const rest = wr.filter(r => r.session.toLowerCase().includes("rest")).map(r => r.day.slice(0, 3));
+        const runs = wr.filter(r => (r.runMiles || 0) > 0 || (r.components || []).some(c => c.type === "run"));
+        const miles = Math.round(wr.reduce((s, r) => s + (r.runMiles || 0), 0) * 10) / 10;
+        const classes = wr.filter(r => (r.components || []).some(c => c.type === "class"));
+        return `Wk ${wk}: ${rest.length} rest${rest.length ? ` (${rest.join("+")})` : ""} • ${runs.length} run${runs.length === 1 ? "" : "s"} (${miles} mi) • ${classes.length} class${classes.length === 1 ? "" : "es"}`;
+      })
+      .join("\n");
   };
 
   // Validate every week of a full plan; returns human-readable violations.
@@ -1564,6 +1607,25 @@ PATCH RULES:
         out.push(`Week ${weekNum} (${weekRows[0].date} to ${weekRows[weekRows.length - 1].date}): ${probs.join("; ")}`);
       }
     });
+
+    // Copy-paste programming: identical workout text on different dates
+    const seenDescriptions = new Map<string, string>();
+    const dupes: string[] = [];
+    rows.forEach(r => {
+      (r.components || []).forEach(c => {
+        if (c.type !== "wod" && c.type !== "lift") return;
+        const norm = c.description.toLowerCase().replace(/\s+/g, " ").trim();
+        if (norm.length < 60) return;
+        const prevDate = seenDescriptions.get(norm);
+        if (prevDate && prevDate !== r.date) {
+          dupes.push(`${prevDate} and ${r.date} prescribe an IDENTICAL workout ("${c.title}") - rewrite one with different movements or rep schemes; vary the programming`);
+        } else if (!prevDate) {
+          seenDescriptions.set(norm, r.date);
+        }
+      });
+    });
+    out.push(...dupes.slice(0, 5));
+
     return out;
   };
 
@@ -1637,7 +1699,7 @@ PATCH RULES:
     await setDoc(doc(db, "trainingPlans", sessionId), planDoc);
     setPlan({ id: sessionId, ...planDoc });
 
-    let finalText = `${planMessage}\n\nYour plan table is ready: ${allRows.length} days (${planDoc.startDate} to ${planDoc.endDate}). Open "View Plan Table" above to review every row. Tell me what to change - or lock it in and I'll put it on your calendar.`;
+    let finalText = `${planMessage}\n\nYour plan table is ready: ${allRows.length} days (${planDoc.startDate} to ${planDoc.endDate}). Open "View Plan Table" above to review every row. Tell me what to change - or lock it in and I'll put it on your calendar.\n\nWeekly structure:\n${planWeekSummary(allRows)}`;
     if (failedWeeks.length > 0) {
       finalText += `\n\n(Heads up: week${failedWeeks.length > 1 ? "s" : ""} ${failedWeeks.join(", ")} failed to generate - ask me to fill ${failedWeeks.length > 1 ? "them" : "it"} in.)`;
     }
@@ -1697,7 +1759,7 @@ PATCH RULES:
     const assistantMessage: AIChatMessage = {
       id: `msg-${Date.now()}-assistant`,
       role: "assistant",
-      content: `${message}\n\n(${patchRows.length} day${patchRows.length > 1 ? "s" : ""} updated in the plan table - review and lock when ready.)${violationNote}`,
+      content: `${message}\n\n(${patchRows.length} day${patchRows.length > 1 ? "s" : ""} updated in the plan table - review and lock when ready.)\n\nWeekly structure:\n${planWeekSummary(newRows)}${violationNote}`,
       timestamp: Timestamp.now(),
     };
     const finalMessages = [...updatedMessages, assistantMessage];
