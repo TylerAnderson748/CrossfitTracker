@@ -1572,13 +1572,21 @@ PATCH RULES:
         ].filter(Boolean).join(" • ");
 
         const components = (row.components && row.components.length > 0)
-          ? row.components.map((c, idx) => ({
-              id: `comp-${idx}`,
-              type: c.type,
-              title: c.title,
-              description: c.description,
-              notes: idx === 0 ? noteBits : "",
-            }))
+          ? row.components.map((c, idx) => {
+              // Upgrade legacy component types (plans locked before the type split)
+              let type = c.type;
+              if (type === "cardio" || (type === "wod" && /^(run|cardio|swim|bike|row|ruck)$/i.test(c.title.trim()))) {
+                type = cardioActivityForComponent("cardio", c.title) || "run";
+              }
+              if ((type === "wod" || type === "lift") && /\bclass\b/i.test(c.title)) type = "class";
+              return {
+                id: `comp-${idx}`,
+                type,
+                title: c.title,
+                description: c.description,
+                notes: idx === 0 ? noteBits : "",
+              };
+            })
           : [{
               id: "comp-0",
               type: row.session.toLowerCase().includes("class") ? "class" : "wod",
