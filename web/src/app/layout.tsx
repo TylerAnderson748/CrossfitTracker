@@ -3,8 +3,8 @@ import "./globals.css";
 import { AuthProvider } from "@/lib/AuthContext";
 
 export const metadata: Metadata = {
-  title: "CrossFit Tracker",
-  description: "Track your WODs, lifts, and compete on leaderboards",
+  title: "CoachODDO",
+  description: "Oddo, your AI garage-gym coach: personalized programming, training plans, and workout tracking",
 };
 
 export default function RootLayout({

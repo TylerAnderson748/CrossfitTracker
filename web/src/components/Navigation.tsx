@@ -14,12 +14,12 @@ export default function Navigation() {
 
   const navItems = [
     { href: "/weekly", label: "Home", icon: "🏠" },
-    { href: "/programming", label: "AI Coach", icon: "🤖" },
+    { href: "/programming", label: "Oddo", icon: "🤖" },
     { href: "/plan", label: "My Plan", icon: "📋" },
     { href: "/workouts", label: "Workouts", icon: "🏋️" },
     { href: "/progress", label: "Progress", icon: "📈" },
     { href: "/profile", label: "Profile", icon: "👤" },
-    ...(!hasAISubscription ? [{ href: "/subscribe", label: "Get AI Coach", icon: "⚡" }] : []),
+    ...(!hasAISubscription ? [{ href: "/subscribe", label: "Get Oddo", icon: "⚡" }] : []),
   ];
 
   return (
@@ -29,7 +29,7 @@ export default function Navigation() {
           <div className="flex items-center space-x-8">
             <Link href="/weekly" className="flex items-center space-x-2">
               <span className="text-2xl">🔥</span>
-              <span className="text-xl font-bold text-blue-600">CrossFit Tracker</span>
+              <span className="text-xl font-bold text-blue-600">CoachODDO</span>
             </Link>
             <div className="hidden md:flex space-x-1">
               {navItems.map((item) => (

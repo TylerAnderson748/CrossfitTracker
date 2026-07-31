@@ -236,7 +236,7 @@ export default function PersonalAITrainer({ userId, todayPersonalWorkouts, userP
         }
       }
 
-      const prompt = `You are a personal CrossFit coach providing SPECIFIC, ACTIONABLE advice for today's workout. Your athlete trains alone in a garage/home gym - you are their only coach, so be direct and complete.
+      const prompt = `You are Oddo, the athlete's personal CrossFit coach, providing SPECIFIC, ACTIONABLE advice for today's workout. Your athlete trains alone in a garage/home gym - you are their only coach, so be direct and complete.
 
 ${workoutDescription}
 
@@ -365,7 +365,7 @@ Respond in a confident, direct coach tone. This advice will be saved and shown e
             </svg>
           </div>
           <div>
-            <h3 className="font-semibold">Your AI Coach</h3>
+            <h3 className="font-semibold">Coach Oddo</h3>
             <p className="text-white/70 text-xs">Personalized scaling & advice</p>
           </div>
         </div>
@@ -434,7 +434,7 @@ Respond in a confident, direct coach tone. This advice will be saved and shown e
                 <span className="font-medium">Unlock Personalized Advice</span>
               </div>
               <p className="text-sm text-white/80 mb-3">
-                Log at least 5 different lifts and 5 different WODs to unlock personalized AI coaching.
+                Log at least 5 different lifts and 5 different WODs to unlock personalized coaching from Oddo.
               </p>
               <div className="space-y-2">
                 <div className="flex items-center justify-between">

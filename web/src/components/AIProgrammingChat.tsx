@@ -232,7 +232,7 @@ interface AIProgrammingChatProps {
   userEmail?: string;
   onPublish?: () => void;
   subscription?: AITrainerSubscription;
-  // The athlete's profile from their AI Coach settings (goals, injuries, experience)
+  // The athlete's profile from their Oddo settings (goals, injuries, experience)
   athleteProfile?: AICoachPreferences;
   // Deep-link support: open a specific session with a pre-filled request (e.g., regenerate a day)
   initialSessionId?: string;
@@ -422,7 +422,7 @@ DO NOT use any of the above workout names. Create NEW, unique workouts instead. 
 `;
   }
 
-  return `You are a personal CrossFit coach creating workout programming for an individual athlete training in their garage or home gym. You ARE their coach - be direct, encouraging, and specific.
+  return `You are Oddo, the athlete's personal CrossFit coach, creating workout programming for an individual athlete training in their garage or home gym. You ARE their coach - be direct, encouraging, and specific.
 ${athletePreferencesSection}${recentlyUsedSection}IMPORTANT DATE INFORMATION:
 - Today's date is ${todayStr} (${dayOfWeek})
 - Current month: ${monthName}
@@ -1183,7 +1183,7 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
       // Call xAI/Grok API (fast model with automatic fallback)
       const text = await chatCompletion({
         messages: [
-          { role: "system", content: "You are an expert CrossFit programming coach. Always respond with valid JSON." },
+          { role: "system", content: "You are Oddo, an expert CrossFit programming coach. Always respond with valid JSON." },
           { role: "user", content: prompt }
         ],
         temperature: 0.7,
@@ -1335,7 +1335,7 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
       })
       .filter(Boolean);
 
-    return `You are a personal CrossFit + endurance coach filling in ONE WEEK of a day-by-day training plan TABLE for an athlete in their garage/home gym.
+    return `You are Oddo, the athlete's personal CrossFit + endurance coach, filling in ONE WEEK of a day-by-day training plan TABLE for an athlete in their garage/home gym.
 ${buildPreferencesSection(preferences)}${athleteBlock}
 THE ATHLETE'S REQUEST AND CONTEXT (conversation so far):
 ${conversationHistory}
@@ -1398,7 +1398,7 @@ RULES:
 
   // Build the prompt for revising an existing plan table conversationally
   const buildRevisionPrompt = (currentPlan: TrainingPlan, conversationHistory: string): string => {
-    return `You are the athlete's coach maintaining their day-by-day training plan TABLE.
+    return `You are Oddo, the athlete's coach, maintaining their day-by-day training plan TABLE.
 ${buildPreferencesSection(preferences)}${athleteBlock}
 CURRENT PLAN TABLE (${currentPlan.startDate} to ${currentPlan.endDate}, ${currentPlan.rows.length} days).
 Format: date|day|week|phase|session|runMiles|RPE|minutes|detail
@@ -1470,7 +1470,7 @@ PATCH RULES:
         try {
           const text = await chatCompletion({
             messages: [
-              { role: "system", content: "You are an expert CrossFit and endurance programming coach. Always respond with valid JSON only." },
+              { role: "system", content: "You are Oddo, an expert CrossFit and endurance programming coach. Always respond with valid JSON only." },
               { role: "user", content: buildWeekRowsPrompt(outline, weeks[i], conversationHistory, allRows, correction) }
             ],
             temperature: 0.6,
@@ -1915,7 +1915,7 @@ PATCH RULES:
     );
   }
 
-  // Base AI Coach subscribers see an upsell - AI programming is an add-on
+  // Base Oddo subscribers see an upsell - AI programming is an add-on
   if (!hasAIProgramming(subscription)) {
     return (
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -1923,10 +1923,10 @@ PATCH RULES:
           <div className="text-4xl mb-3">📋</div>
           <h2 className="text-xl font-bold text-gray-900 mb-2">AI Programming is an Add-On</h2>
           <p className="text-gray-600 max-w-md mx-auto mb-1">
-            Your AI Coach subscription covers advice, scaling, workout scanning, and logging.
+            Coach Oddo subscription covers advice, scaling, workout scanning, and logging.
           </p>
           <p className="text-gray-600 max-w-md mx-auto mb-5">
-            Upgrade to <span className="font-semibold">AI Coach + Programming</span> (${PRICING.AI_PROGRAMMING_MONTHLY}/mo)
+            Upgrade to <span className="font-semibold">Oddo + Programming</span> (${PRICING.AI_PROGRAMMING_MONTHLY}/mo)
             and it will also build your full day-by-day training plan - phases, runs, lifts, WODs, and rest days -
             that you can revise in chat and lock onto your calendar.
           </p>
@@ -1953,7 +1953,7 @@ PATCH RULES:
               </svg>
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-white">Your AI Coach</h2>
+              <h2 className="text-lg font-semibold text-white">Coach Oddo</h2>
               <p className="text-white/80 text-sm">Programming built for your garage gym</p>
             </div>
           </div>
@@ -2091,7 +2091,7 @@ PATCH RULES:
                 </div>
                 <h3 className="text-lg font-medium text-gray-900 mb-2">Ask Your Coach for Programming</h3>
                 <p className="text-gray-500 text-sm max-w-md mx-auto mb-4">
-                  Tell your AI coach about your goals, equipment, and schedule. For example:
+                  Tell your Oddo about your goals, equipment, and schedule. For example:
                 </p>
                 <div className="space-y-2 text-sm text-gray-600">
                   <p>&quot;Program my next week - I have a barbell, rings, and a rower&quot;</p>
@@ -2232,7 +2232,7 @@ PATCH RULES:
           </div>
           <h3 className="text-lg font-medium text-gray-900 mb-2">No Active Program</h3>
           <p className="text-gray-500 text-sm mb-4">
-            Ask your AI coach to build your next training block
+            Ask your Oddo to build your next training block
           </p>
           <button
             onClick={createNewSession}

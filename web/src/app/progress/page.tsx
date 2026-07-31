@@ -86,7 +86,7 @@ export default function ProgressPage() {
   const [isLoadingAI, setIsLoadingAI] = useState(false);
   const [selectedTimeRange, setSelectedTimeRange] = useState<"7" | "30" | "90" | "180" | "365">("90");
 
-  // Check if user has AI Coach access
+  // Check if user has Oddo access
   const hasAICoach = user?.aiTrainerSubscription?.status === "active" ||
                      user?.aiTrainerSubscription?.status === "trialing";
 
@@ -910,8 +910,8 @@ Be specific, use their actual numbers, and be encouraging but honest. Keep it co
                       </svg>
                     </div>
                     <div>
-                      <h3 className="font-semibold">AI Coach Analysis</h3>
-                      <p className="text-white/70 text-sm">Personalized insights from your AI coach</p>
+                      <h3 className="font-semibold">Oddo Analysis</h3>
+                      <p className="text-white/70 text-sm">Personalized insights from your Oddo</p>
                     </div>
                   </div>
                 </div>
@@ -965,7 +965,7 @@ Be specific, use their actual numbers, and be encouraging but honest. Keep it co
               </div>
             )}
 
-            {/* Upgrade CTA for non-AI Coach users */}
+            {/* Upgrade CTA for non-Oddo users */}
             {!hasAICoach && (lifts.length > 0 || wods.length > 0 || skills.length > 0) && (
               <div className="bg-gray-100 rounded-xl p-6 text-center">
                 <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-3">
@@ -975,7 +975,7 @@ Be specific, use their actual numbers, and be encouraging but honest. Keep it co
                 </div>
                 <h3 className="font-semibold text-gray-900 mb-1">Want AI-Powered Insights?</h3>
                 <p className="text-sm text-gray-600 mb-3">
-                  Upgrade to AI Coach for personalized analysis of your progress and recommendations.
+                  Upgrade to Oddo for personalized analysis of your progress and recommendations.
                 </p>
                 <button
                   onClick={() => router.push("/subscribe")}

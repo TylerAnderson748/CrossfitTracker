@@ -27,7 +27,7 @@ function ProgrammingContent() {
     }
   }, [user, loading, switching, router]);
 
-  // AI Coach subscription (personal scaling, advice, and programming)
+  // Oddo subscription (personal scaling, advice, and programming)
   const aiCoachSubscription = user?.aiTrainerSubscription;
   const hasActiveAICoach = aiCoachSubscription?.status === "active" || aiCoachSubscription?.status === "trialing";
 
@@ -63,7 +63,7 @@ function ProgrammingContent() {
       <main className="max-w-4xl mx-auto px-4 py-8">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-2xl font-bold text-gray-900">Your AI Coach</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Coach Oddo</h1>
           <p className="text-gray-500">Programming, scaling, and advice - built for your garage gym</p>
         </div>
 
@@ -82,7 +82,7 @@ function ProgrammingContent() {
           />
         </div>
 
-        {/* AI Coach toolkit */}
+        {/* Oddo toolkit */}
         {hasActiveAICoach && (
           <div className="mb-8 grid grid-cols-1 md:grid-cols-2 gap-4">
             <button
@@ -134,7 +134,7 @@ function ProgrammingContent() {
               <span className="text-white">✓</span> Log results and track PRs across every workout
             </li>
             <li className="flex items-center gap-2">
-              <span className="text-white">✓</span> Your AI Coach can still give scaling advice on imported workouts
+              <span className="text-white">✓</span> Coach Oddo can still give scaling advice on imported workouts
             </li>
           </ul>
 
@@ -155,7 +155,7 @@ function ProgrammingContent() {
                   {aiCoachSubscription.status === "trialing" ? "Free Trial" : "Active"}
                 </span>
                 <span className="text-gray-600">
-                  AI Coach {aiCoachSubscription.status === "trialing" ? "trial ends" : "renews"}{" "}
+                  Oddo {aiCoachSubscription.status === "trialing" ? "trial ends" : "renews"}{" "}
                   {(aiCoachSubscription.status === "trialing"
                     ? aiCoachSubscription.trialEndsAt?.toDate?.().toLocaleDateString()
                     : aiCoachSubscription.endDate?.toDate?.().toLocaleDateString()) || "N/A"}
@@ -184,7 +184,7 @@ function ProgrammingContent() {
               </div>
               <h2 className="text-xl font-bold text-gray-900 mb-2">Cancel Subscription?</h2>
               <p className="text-gray-600">
-                Are you sure you want to cancel your AI Coach subscription?
+                Are you sure you want to cancel Oddo subscription?
                 You&apos;ll lose access to AI programming, scaling, and coaching advice immediately.
               </p>
             </div>

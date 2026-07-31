@@ -39,7 +39,7 @@ export default function AIScanPage() {
     new Date().toISOString().split("T")[0]
   );
 
-  // Check AI Coach subscription
+  // Check Oddo subscription
   const hasSubscription = user?.aiTrainerSubscription?.status === "active" ||
     user?.aiTrainerSubscription?.status === "trialing";
 
@@ -335,16 +335,16 @@ IMPORTANT:
               </svg>
             </div>
             <h2 className="text-xl font-bold text-gray-900 mb-2">
-              AI Coach Feature
+              Oddo Feature
             </h2>
             <p className="text-gray-600 mb-4">
-              Photo scanning is available for AI Coach subscribers.
+              Photo scanning is available for Oddo subscribers.
             </p>
             <button
               onClick={() => router.push("/subscribe")}
               className="px-6 py-3 bg-purple-600 text-white font-medium rounded-lg hover:bg-purple-700 transition-colors"
             >
-              Subscribe to AI Coach
+              Subscribe to Oddo
             </button>
           </div>
         </main>

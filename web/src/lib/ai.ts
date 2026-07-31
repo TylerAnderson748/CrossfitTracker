@@ -1,4 +1,4 @@
-// Centralized xAI/Grok client for all AI Coach features.
+// Centralized xAI/Grok client for all Oddo features.
 //
 // Speed strategy:
 // - Default to grok-4-fast-non-reasoning: responses start in ~1s instead of the

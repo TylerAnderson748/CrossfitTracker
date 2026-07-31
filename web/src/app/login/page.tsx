@@ -57,7 +57,7 @@ export default function LoginPage() {
             {isSignUp ? "Create Account" : "Welcome Back"}
           </h1>
           <p className="text-gray-500">
-            {isSignUp ? "Join CrossFit Tracker today" : "Sign in to continue"}
+            {isSignUp ? "Join CoachODDO today" : "Sign in to continue"}
           </p>
         </div>
 

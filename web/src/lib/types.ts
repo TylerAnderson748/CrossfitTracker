@@ -15,13 +15,13 @@ export interface AppUser {
   gender?: Gender;
   createdAt: Timestamp;
   hideFromLeaderboards: boolean;
-  // AI Coach subscription (personalized scaling, advice, and programming)
+  // Oddo subscription (personalized scaling, advice, and programming)
   aiTrainerSubscription?: AITrainerSubscription;
-  // AI Coach preferences and goals
+  // Oddo preferences and goals
   aiCoachPreferences?: AICoachPreferences;
 }
 
-// AI Coach user preferences
+// Oddo user preferences
 export interface AICoachPreferences {
   goals?: string; // User's fitness goals (free text)
   injuries?: string; // Current injuries or limitations
@@ -407,17 +407,17 @@ export interface TrainingPlan {
 
 export const PRICING = {
   // FREE tier = tracking only
-  // Base AI Coach: advice, scaling, workout scan, cardio/class logging
+  // Base Oddo: advice, scaling, workout scan, cardio/class logging
   AI_COACH_MONTHLY: 9.99,
   AI_COACH_YEARLY: 79.99,
-  // AI Coach + Programming: adds the AI plan builder (day-by-day training plans)
+  // Oddo + Programming: adds the AI plan builder (day-by-day training plans)
   AI_PROGRAMMING_MONTHLY: 19.99,
   AI_PROGRAMMING_YEARLY: 159.99,
 } as const;
 
 // Subscription tier semantics:
-//   "pro"   = base AI Coach (advice, scaling, scan, logging)
-//   "elite" = AI Coach + Programming (adds the AI plan builder)
+//   "pro"   = base Oddo (advice, scaling, scan, logging)
+//   "elite" = Oddo + Programming (adds the AI plan builder)
 // Trials get full access so users can try everything.
 export function hasActiveAICoach(sub?: AITrainerSubscription): boolean {
   return sub?.status === "active" || sub?.status === "trialing";

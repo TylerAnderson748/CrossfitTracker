@@ -136,7 +136,7 @@ export default function PlanPage() {
             <div className="text-4xl mb-3">📋</div>
             <h2 className="font-bold text-gray-900 mb-2">No training plan yet</h2>
             <p className="text-gray-500 text-sm mb-4">
-              Ask your AI Coach to build one - it creates a day-by-day plan table you can review, revise, and lock onto your calendar.
+              Ask Oddo to build one - it creates a day-by-day plan table you can review, revise, and lock onto your calendar.
             </p>
             <Link
               href="/programming"
@@ -150,7 +150,7 @@ export default function PlanPage() {
             <PlanTable rows={plan.rows} statusByDate={statusByDate} />
             <p className="text-xs text-gray-400 mt-3">
               ✓ logged • ✗ past day with no log • ● today. Want changes? Open your{" "}
-              <Link href="/programming" className="text-purple-600 hover:underline">AI Coach chat</Link>{" "}
+              <Link href="/programming" className="text-purple-600 hover:underline">Oddo chat</Link>{" "}
               and tell it what to adjust - only the affected days get rewritten.
             </p>
           </>

@@ -49,7 +49,7 @@ export default function AITrainerPaywall({ onClose }: AITrainerPaywallProps) {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
           </svg>
         </div>
-        <h2 className="text-2xl font-bold mb-2">Unlock Your Personal AI Coach</h2>
+        <h2 className="text-2xl font-bold mb-2">Meet Oddo, Your Personal Coach</h2>
         <p className="text-purple-200 text-sm">
           Your garage gym coach: custom programming, scaling, and advice built from your actual workout history
         </p>
@@ -144,7 +144,7 @@ export default function AITrainerPaywall({ onClose }: AITrainerPaywallProps) {
             Processing...
           </span>
         ) : (
-          "Start Your AI Coaching"
+          "Meet Oddo - Start Free Trial"
         )}
       </button>
 

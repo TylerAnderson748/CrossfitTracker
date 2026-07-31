@@ -48,7 +48,7 @@ export default function ProfilePage() {
         gender: user.gender || "Male",
         hideFromLeaderboards: user.hideFromLeaderboards || false,
       });
-      // Load AI Coach preferences
+      // Load Oddo preferences
       if (user.aiCoachPreferences) {
         setAiPrefsForm({
           goals: user.aiCoachPreferences.goals || "",
@@ -140,7 +140,7 @@ export default function ProfilePage() {
       await refreshUser();
       setShowCancelAICoachModal(false);
     } catch (error) {
-      console.error("Error canceling AI Coach:", error);
+      console.error("Error canceling Oddo:", error);
       alert("Failed to cancel subscription. Please try again.");
     } finally {
       setCancelingAICoach(false);
@@ -296,7 +296,7 @@ export default function ProfilePage() {
           )}
         </div>
 
-        {/* AI Coach Subscription */}
+        {/* Oddo Subscription */}
         <div className="bg-gradient-to-br from-purple-900 via-purple-800 to-indigo-900 rounded-xl p-6 mb-6 text-white">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-10 h-10 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full flex items-center justify-center">
@@ -304,7 +304,7 @@ export default function ProfilePage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
             </div>
-            <h3 className="text-lg font-semibold">AI Coach</h3>
+            <h3 className="text-lg font-semibold">Oddo</h3>
           </div>
 
           {user.aiTrainerSubscription?.status === "active" || user.aiTrainerSubscription?.status === "trialing" ? (
@@ -318,7 +318,7 @@ export default function ProfilePage() {
                   {user.aiTrainerSubscription.status === "trialing" ? "Free Trial" : "Active"}
                 </span>
                 <span className="text-purple-200 text-sm">
-                  {user.aiTrainerSubscription.tier === "elite" ? "AI Coach + Programming" : "AI Coach"}
+                  {user.aiTrainerSubscription.tier === "elite" ? "Oddo + Programming" : "Oddo"}
                 </span>
               </div>
 
@@ -381,13 +381,13 @@ export default function ProfilePage() {
           )}
         </div>
 
-        {/* AI Coach Goals & Preferences - Only show if subscribed */}
+        {/* Oddo Goals & Preferences - Only show if subscribed */}
         {(user.aiTrainerSubscription?.status === "active" || user.aiTrainerSubscription?.status === "trialing") && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <span className="text-xl">🎯</span>
-                <h3 className="text-lg font-semibold text-gray-900">AI Coach Goals</h3>
+                <h3 className="text-lg font-semibold text-gray-900">Oddo Goals</h3>
               </div>
               {!editingAIPrefs && (
                 <button
@@ -399,7 +399,7 @@ export default function ProfilePage() {
               )}
             </div>
             <p className="text-sm text-gray-500 mb-4">
-              Tell your AI Coach about your goals so it can give you better personalized advice.
+              Tell Oddo about your goals so it can give you better personalized advice.
             </p>
 
             {editingAIPrefs ? (
@@ -561,7 +561,7 @@ export default function ProfilePage() {
         </button>
       </main>
 
-      {/* Cancel AI Coach Modal */}
+      {/* Cancel Oddo Modal */}
       {showCancelAICoachModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl p-6 w-full max-w-md">
@@ -571,9 +571,9 @@ export default function ProfilePage() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                 </svg>
               </div>
-              <h2 className="text-xl font-bold text-gray-900 mb-2">Cancel AI Coach?</h2>
+              <h2 className="text-xl font-bold text-gray-900 mb-2">Cancel Oddo?</h2>
               <p className="text-gray-600 text-sm">
-                Are you sure you want to cancel your AI Coach subscription?
+                Are you sure you want to cancel Oddo subscription?
               </p>
             </div>
 
@@ -592,7 +592,7 @@ export default function ProfilePage() {
                 onClick={() => setShowCancelAICoachModal(false)}
                 className="flex-1 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium"
               >
-                Keep AI Coach
+                Keep Oddo
               </button>
               <button
                 onClick={handleCancelAICoach}

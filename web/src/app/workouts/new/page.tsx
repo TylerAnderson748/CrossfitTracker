@@ -1486,7 +1486,7 @@ function NewWorkoutContent() {
                 )}
               </div>
 
-              {/* AI Coach Feedback - Only show for premium users */}
+              {/* Oddo Feedback - Only show for premium users */}
               {user?.aiTrainerSubscription?.status === "active" || user?.aiTrainerSubscription?.status === "trialing" ? (
                 <div className="mt-4 pt-4 border-t border-gray-200">
                   <button
@@ -1496,7 +1496,7 @@ function NewWorkoutContent() {
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                     </svg>
-                    {showAiFeedback ? "Hide AI Coach Feedback" : "Add Feedback for AI Coach"}
+                    {showAiFeedback ? "Hide Oddo Feedback" : "Add Feedback for Oddo"}
                     <svg className={`w-4 h-4 transition-transform ${showAiFeedback ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                     </svg>
@@ -1505,7 +1505,7 @@ function NewWorkoutContent() {
                   {showAiFeedback && (
                     <div className="mt-3">
                       <p className="text-xs text-gray-500 mb-2">
-                        Tell your AI Coach how the workout went - this helps improve future recommendations.
+                        Tell Oddo how the workout went - this helps improve future recommendations.
                       </p>
                       <textarea
                         value={aiCoachFeedback}
@@ -1518,7 +1518,7 @@ function NewWorkoutContent() {
                         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
-                        This feedback is saved with your workout and helps personalize your AI coaching.
+                        This feedback is saved with your workout and helps Oddo personalize your coaching.
                       </div>
                     </div>
                   )}

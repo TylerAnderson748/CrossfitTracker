@@ -191,7 +191,7 @@ function SubscribeContent() {
               </svg>
             </div>
             <h1 className="text-3xl font-bold text-white mb-2">
-              Welcome to AI Coach!
+              Welcome to Oddo!
             </h1>
             <p className="text-purple-200">
               Let&apos;s personalize your experience
@@ -205,7 +205,7 @@ function SubscribeContent() {
               <h2 className="text-xl font-bold text-gray-900">Tell us about your goals</h2>
             </div>
             <p className="text-sm text-gray-500 mb-6">
-              This helps your AI Coach give you better personalized advice. You can always update this later in your profile.
+              This helps Oddo give you better personalized advice. You can always update this later in your profile.
             </p>
 
             <div className="space-y-5">
@@ -312,7 +312,7 @@ function SubscribeContent() {
             </svg>
           </div>
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            AI Coach Subscription
+            Oddo Subscription
           </h1>
           <p className="text-gray-600 max-w-xl mx-auto">
             Your garage gym coach: AI programming, scaling, and weight recommendations that learn from your workout history
@@ -330,10 +330,10 @@ function SubscribeContent() {
             <h2 className="text-2xl font-bold text-gray-900 mb-2">You&apos;re Already Subscribed!</h2>
             <p className="text-gray-600 mb-4">
               {relevantSubscription?.status === "trialing"
-                ? "You're currently on a free trial with full access - AI Coach and AI Programming."
+                ? "You're currently on a free trial with full access - Oddo and AI Programming."
                 : relevantSubscription?.tier === "elite"
-                ? "You have AI Coach + Programming - the full experience."
-                : "You have the base AI Coach: advice, scaling, scanning, and logging."}
+                ? "You have Oddo + Programming - the full experience."
+                : "You have the base Oddo: advice, scaling, scanning, and logging."}
             </p>
             {relevantSubscription?.trialEndsAt && relevantSubscription?.status === "trialing" && (
               <p className="text-sm text-purple-600 mb-4">
@@ -344,7 +344,7 @@ function SubscribeContent() {
               <div className="max-w-md mx-auto mb-6 p-4 bg-gradient-to-br from-purple-50 to-indigo-50 rounded-lg border border-purple-200 text-left">
                 <p className="font-semibold text-purple-900 mb-1">📋 Add AI Programming</p>
                 <p className="text-sm text-purple-800 mb-3">
-                  Let your AI Coach build full day-by-day training plans you can revise in chat and lock onto
+                  Let Oddo build full day-by-day training plans you can revise in chat and lock onto
                   your calendar - ${PRICING.AI_PROGRAMMING_MONTHLY}/mo total.
                 </p>
                 <button
@@ -352,7 +352,7 @@ function SubscribeContent() {
                   disabled={isUpgrading}
                   className="w-full py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold rounded-lg hover:from-purple-700 hover:to-indigo-700 transition-colors disabled:opacity-50"
                 >
-                  {isUpgrading ? "Upgrading..." : "Upgrade to AI Coach + Programming"}
+                  {isUpgrading ? "Upgrading..." : "Upgrade to Oddo + Programming"}
                 </button>
               </div>
             )}
@@ -367,7 +367,7 @@ function SubscribeContent() {
           <div className="grid md:grid-cols-2 gap-8">
             {/* Features Section */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <h2 className="text-xl font-bold text-gray-900 mb-4">AI Coach <span className="text-sm font-normal text-gray-500">(base - ${PRICING.AI_COACH_MONTHLY}/mo)</span></h2>
+              <h2 className="text-xl font-bold text-gray-900 mb-4">Oddo <span className="text-sm font-normal text-gray-500">(base - ${PRICING.AI_COACH_MONTHLY}/mo)</span></h2>
               <div className="space-y-3">
                 {coachFeatures.map((feature, idx) => (
                   <div key={idx} className="flex items-start gap-3">
@@ -507,7 +507,7 @@ function SubscribeContent() {
                   }`}
                 >
                   <div className="flex items-center justify-between">
-                    <span className="font-bold">AI Coach + Programming</span>
+                    <span className="font-bold">Oddo + Programming</span>
                     <span className="text-sm">${tierPrices.programming[selectedPlan]}/{currentPeriod}</span>
                   </div>
                   <p className="text-xs text-purple-200 mt-0.5">Everything, including full day-by-day training plans</p>
@@ -521,7 +521,7 @@ function SubscribeContent() {
                   }`}
                 >
                   <div className="flex items-center justify-between">
-                    <span className="font-bold">AI Coach</span>
+                    <span className="font-bold">Oddo</span>
                     <span className="text-sm">${tierPrices.coach[selectedPlan]}/{currentPeriod}</span>
                   </div>
                   <p className="text-xs text-purple-200 mt-0.5">Advice, scaling, workout scan, and logging</p>
@@ -630,9 +630,9 @@ function SubscribeContent() {
           <h2 className="text-xl font-bold text-gray-900 mb-6">Frequently Asked Questions</h2>
           <div className="space-y-4">
             <div>
-              <h3 className="font-semibold text-gray-900 mb-1">How does the AI Coach work?</h3>
+              <h3 className="font-semibold text-gray-900 mb-1">How does Oddo work?</h3>
               <p className="text-gray-600 text-sm">
-                The AI Coach analyzes your workout history, lift PRs, and WOD performances to provide personalized recommendations. It considers your strength levels, recent performance trends, and the specific demands of each workout.
+                Oddo analyzes your workout history, lift PRs, and WOD performances to provide personalized recommendations. It considers your strength levels, recent performance trends, and the specific demands of each workout.
               </p>
             </div>
             <div>
@@ -650,7 +650,7 @@ function SubscribeContent() {
             <div>
               <h3 className="font-semibold text-gray-900 mb-1">What happens after my free trial?</h3>
               <p className="text-gray-600 text-sm">
-                After your 7-day free trial, you&apos;ll be asked to subscribe to continue using the AI Coach features. You won&apos;t be charged automatically.
+                After your 7-day free trial, you&apos;ll be asked to subscribe to continue using Oddo features. You won&apos;t be charged automatically.
               </p>
             </div>
             <div>
