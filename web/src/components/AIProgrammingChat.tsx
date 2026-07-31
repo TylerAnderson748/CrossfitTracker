@@ -1224,30 +1224,34 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
 
         // Revision mode: targeted changes to the existing plan table
         if (plan && Array.isArray(parsed.patchRows) && parsed.patchRows.length > 0) {
-          const result = await applyPlanPatch(parsed.patchRows, parsed.message || "Plan updated.", updatedMessages);
-          // If the patch left schedule violations, run ONE automatic correction
-          // round instead of making the athlete play referee
-          if (result && result.violations.length > 0) {
+          let result = await applyPlanPatch(parsed.patchRows, parsed.message || "Plan updated.", updatedMessages);
+          // If the patch left schedule violations, run automatic correction
+          // rounds until the plan is clean (capped - each round sees the fresh
+          // violation list, so a correction that creates new violations gets
+          // cleaned up by the next round instead of stranding a broken plan)
+          for (let round = 0; round < 3 && result && result.violations.length > 0; round++) {
             try {
               const fixText = await chatCompletion({
                 messages: [
                   { role: "system", content: "You are Oddo, an expert CrossFit programming coach. Always respond with valid JSON." },
-                  { role: "user", content: `${buildRevisionPrompt(result.updatedPlan, conversationHistory)}\n\nDo NOT discuss. Respond ONLY with {"message": "...", "patchRows": [...]} that fixes EVERY schedule violation listed above in one patch.` },
+                  { role: "user", content: `${buildRevisionPrompt(result.updatedPlan, conversationHistory)}\n\nDo NOT discuss. Respond ONLY with {"message": "...", "patchRows": [...]} that fixes EVERY schedule violation listed above in ONE patch. Fix them in the direction of the athlete's LATEST request: if they asked for a recurring structure change (e.g., "rest on Fridays"), apply it to EVERY week and convert the displaced day to training - do not undo what they asked for, and keep the weekly structure identical across all full weeks.` },
                 ],
                 temperature: 0.5,
                 maxTokens: 16000,
               });
               const fix = tryParseJson(fixText);
-              if (fix && Array.isArray(fix.patchRows) && fix.patchRows.length > 0) {
-                await applyPlanPatch(
-                  fix.patchRows,
-                  `Auto-correction: ${fix.message || "restored your schedule rules."}`,
-                  result.finalMessages,
-                  result.updatedPlan
-                );
-              }
+              if (!fix || !Array.isArray(fix.patchRows) || fix.patchRows.length === 0) break;
+              const next = await applyPlanPatch(
+                fix.patchRows,
+                `Auto-correction: ${fix.message || "restored your schedule rules."}`,
+                result.finalMessages,
+                result.updatedPlan
+              );
+              if (!next) break;
+              result = next;
             } catch (fixErr) {
               console.error("Auto-correction round failed:", fixErr);
+              break;
             }
           }
           return;
