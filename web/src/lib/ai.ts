@@ -12,6 +12,9 @@ export const XAI_API_URL = "https://api.x.ai/v1/chat/completions";
 // Fast model for chat/coaching text (and vision - grok-4-fast is multimodal)
 export const FAST_MODEL = process.env.NEXT_PUBLIC_XAI_MODEL || "grok-4-fast-non-reasoning";
 export const FALLBACK_MODEL = process.env.NEXT_PUBLIC_XAI_FALLBACK_MODEL || "grok-4-latest";
+// Stronger (reasoning) model for plan revisions - patching an existing table
+// correctly needs more care than speed; override with NEXT_PUBLIC_XAI_REVISION_MODEL
+export const REVISION_MODEL = process.env.NEXT_PUBLIC_XAI_REVISION_MODEL || FALLBACK_MODEL;
 
 export function getApiKey(): string | undefined {
   return process.env.NEXT_PUBLIC_XAI_API_KEY;
@@ -36,6 +39,8 @@ export interface ChatOptions {
   /** Streaming callback - receives each new chunk of text as it arrives. */
   onDelta?: (textSoFar: string, delta: string) => void;
   signal?: AbortSignal;
+  /** Override the model for this call (defaults to FAST_MODEL). */
+  model?: string;
 }
 
 async function requestCompletion(
@@ -125,11 +130,12 @@ export async function chatCompletion(options: ChatOptions): Promise<string> {
     throw new Error("AI service not configured. Please add NEXT_PUBLIC_XAI_API_KEY to your environment.");
   }
 
-  const result = await requestCompletion(FAST_MODEL, options, apiKey);
+  const primaryModel = options.model || FAST_MODEL;
+  const result = await requestCompletion(primaryModel, options, apiKey);
   if (result.ok) return result.text;
 
   // 400/404 usually means the model name isn't available - retry on fallback
-  if ((result.status === 400 || result.status === 404) && FAST_MODEL !== FALLBACK_MODEL) {
+  if ((result.status === 400 || result.status === 404) && primaryModel !== FALLBACK_MODEL) {
     const retry = await requestCompletion(FALLBACK_MODEL, options, apiKey);
     if (retry.ok) return retry.text;
     throw new Error(retry.errorMessage || "AI request failed");

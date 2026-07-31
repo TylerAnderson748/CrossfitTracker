@@ -5,7 +5,7 @@ import { collection, addDoc, updateDoc, doc, query, where, getDocs, getDoc, setD
 import { db } from "@/lib/firebase";
 import { AIProgrammingSession, AIChatMessage, AIGeneratedDay, AIProgrammingPreferences, AITrainerSubscription, TrainingEvent, TrainingEventType, WeekdayKey, AICoachPreferences, PlanRow, PlanRowComponent, TrainingPlan, workoutComponentColors, workoutComponentLabels, cardioActivityForComponent, hasAIProgramming, PRICING } from "@/lib/types";
 import { getAllSkills, getAllLifts, getAllWods } from "@/lib/workoutData";
-import { chatCompletion } from "@/lib/ai";
+import { chatCompletion, REVISION_MODEL } from "@/lib/ai";
 import AITrainerPaywall from "./AITrainerPaywall";
 import PlanTable from "./PlanTable";
 
@@ -1196,8 +1196,10 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
         ? buildRevisionPrompt(plan, conversationHistory)
         : `${getSystemPrompt(preferences, recentlyUsedWorkouts)}\n${athleteBlock}\nConversation so far:\n${conversationHistory}\n\nRespond to the user's latest message. Remember to output valid JSON only.`;
 
-      // Call xAI/Grok API (fast model with automatic fallback)
+      // Call xAI/Grok API. Plan revisions use the stronger reasoning model -
+      // patching an existing table correctly matters more than speed there.
       const text = await chatCompletion({
+        ...(plan ? { model: REVISION_MODEL } : {}),
         messages: [
           { role: "system", content: "You are Oddo, an expert CrossFit programming coach. Always respond with valid JSON." },
           { role: "user", content: prompt }
@@ -1224,67 +1226,42 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
 
         // Revision mode: targeted changes to the existing plan table
         if (plan && Array.isArray(parsed.patchRows) && parsed.patchRows.length > 0) {
-          let result = await applyPlanPatch(parsed.patchRows, parsed.message || "Plan updated.", updatedMessages);
-          // If the patch left schedule violations, run automatic correction
-          // rounds until the plan is clean (capped - each round sees the fresh
-          // violation list, so a correction that creates new violations gets
-          // cleaned up by the next round instead of stranding a broken plan)
-          for (let round = 0; round < 3 && result && result.violations.length > 0; round++) {
+          await applyPatchWithCorrections(parsed.patchRows, parsed.message || "Plan updated.", updatedMessages, conversationHistory);
+          return;
+        }
+
+        // Revision-mode guard: a message-only reply changes nothing. That is
+        // wrong both when the model CLAIMS it changed the plan and when the
+        // athlete clearly ASKED for a change - in either case, demand the patch.
+        if (plan && parsed.message && !(Array.isArray(parsed.patchRows) && parsed.patchRows.length > 0) && !parsed.outline) {
+          const lastUserText = String([...updatedMessages].reverse().find(m => m.role === "user")?.content || "");
+          const looksLikeQuestion = /^\s*(why|what|how|when|who|where|is|are|does|did|will|would|should)\b/i.test(lastUserText);
+          const looksLikeChangeRequest = !looksLikeQuestion &&
+            /\b(make|move|swap|switch|change|replace|shift|drop|remove|add|reschedule|cancel|skip|rest day|as rest|to rest)\b/i.test(lastUserText);
+          const claimsChange = /\b(updated|patched|moved|shifted|swapped|rescheduled|adjusted|changed|replaced)\b/i.test(parsed.message);
+
+          if (claimsChange || looksLikeChangeRequest) {
             try {
-              const fixText = await chatCompletion({
+              const redoText = await chatCompletion({
+                model: REVISION_MODEL,
                 messages: [
                   { role: "system", content: "You are Oddo, an expert CrossFit programming coach. Always respond with valid JSON." },
-                  { role: "user", content: `${buildRevisionPrompt(result.updatedPlan, conversationHistory)}\n\nDo NOT discuss. Respond ONLY with {"message": "...", "patchRows": [...]} that fixes EVERY schedule violation listed above in ONE patch. Fix them in the direction of the athlete's LATEST request: if they asked for a recurring structure change (e.g., "rest on Fridays"), apply it to EVERY week and convert the displaced day to training - do not undo what they asked for, and keep the weekly structure identical across all full weeks.` },
+                  { role: "user", content: prompt },
+                  { role: "assistant", content: text },
+                  { role: "user", content: `Your response contained NO "patchRows", so NOTHING changed in the table. The athlete's latest message was: "${lastUserText.slice(0, 300)}". This is a request to change the plan. You MUST respond NOW with {"message": "...", "patchRows": [...]} containing every changed day in the full row schema - applied to EVERY week the request affects. A message without patchRows is NOT an acceptable response.` },
                 ],
                 temperature: 0.5,
                 maxTokens: 16000,
               });
-              const fix = tryParseJson(fixText);
-              if (!fix || !Array.isArray(fix.patchRows) || fix.patchRows.length === 0) break;
-              const next = await applyPlanPatch(
-                fix.patchRows,
-                `Auto-correction: ${fix.message || "restored your schedule rules."}`,
-                result.finalMessages,
-                result.updatedPlan
-              );
-              if (!next) break;
-              result = next;
-            } catch (fixErr) {
-              console.error("Auto-correction round failed:", fixErr);
-              break;
+              const redo = tryParseJson(redoText);
+              if (redo && Array.isArray(redo.patchRows) && redo.patchRows.length > 0) {
+                await applyPatchWithCorrections(redo.patchRows, redo.message || "Plan updated.", updatedMessages, conversationHistory);
+                return;
+              }
+              parsed.message = `I wasn't able to produce that change automatically. Nothing in the plan was modified - tell me exactly which day(s) to change (e.g., "make every Friday a rest day and move that workout to Wednesday") and I'll patch the table.`;
+            } catch {
+              parsed.message = `I wasn't able to produce that change automatically. Nothing in the plan was modified - tell me exactly which day(s) to change (e.g., "make every Friday a rest day and move that workout to Wednesday") and I'll patch the table.`;
             }
-          }
-          return;
-        }
-
-        // Revision-mode guard: the model sometimes CLAIMS it changed the plan
-        // while returning message-only JSON, which changes nothing. Catch the
-        // false claim and force it to either produce the patch or retract.
-        if (plan && parsed.message && !(Array.isArray(parsed.patchRows) && parsed.patchRows.length > 0) && !parsed.outline &&
-            /\b(updated|patched|moved|shifted|swapped|rescheduled|adjusted|changed|replaced)\b/i.test(parsed.message)) {
-          try {
-            const redoText = await chatCompletion({
-              messages: [
-                { role: "system", content: "You are Oddo, an expert CrossFit programming coach. Always respond with valid JSON." },
-                { role: "user", content: prompt },
-                { role: "assistant", content: text },
-                { role: "user", content: 'Your response claimed to change the plan, but it contained NO "patchRows" - so NOTHING was actually changed in the table. If you intended to change the plan, respond NOW with {"message": "...", "patchRows": [...]} containing every changed day in the full row schema. If you did not intend to change anything, respond with {"message": "..."} that does NOT claim any change was made.' },
-              ],
-              temperature: 0.5,
-              maxTokens: 16000,
-            });
-            const redo = tryParseJson(redoText);
-            if (redo && Array.isArray(redo.patchRows) && redo.patchRows.length > 0) {
-              await applyPlanPatch(redo.patchRows, redo.message || "Plan updated.", updatedMessages);
-              return;
-            }
-            if (redo?.message) {
-              parsed.message = redo.message;
-            } else {
-              parsed.message = `${parsed.message}\n\n(Correction: no days were actually changed. Tell me again exactly what to change and I'll patch the table.)`;
-            }
-          } catch {
-            parsed.message = `${parsed.message}\n\n(Correction: no days were actually changed. Tell me again exactly what to change and I'll patch the table.)`;
           }
         }
 
@@ -1698,6 +1675,43 @@ PATCH RULES:
     });
     setActiveSession(prev => prev ? { ...prev, messages: finalMessages } : null);
     return { updatedPlan, violations, finalMessages };
+  };
+
+  // Apply a patch, then run automatic correction rounds until the plan passes
+  // the schedule checks (capped - each round sees the fresh violation list)
+  const applyPatchWithCorrections = async (
+    patchRows: Partial<PlanRow>[],
+    message: string,
+    updatedMessages: AIChatMessage[],
+    conversationHistory: string
+  ) => {
+    let result = await applyPlanPatch(patchRows, message, updatedMessages);
+    for (let round = 0; round < 3 && result && result.violations.length > 0; round++) {
+      try {
+        const fixText = await chatCompletion({
+          model: REVISION_MODEL,
+          messages: [
+            { role: "system", content: "You are Oddo, an expert CrossFit programming coach. Always respond with valid JSON." },
+            { role: "user", content: `${buildRevisionPrompt(result.updatedPlan, conversationHistory)}\n\nDo NOT discuss. Respond ONLY with {"message": "...", "patchRows": [...]} that fixes EVERY schedule violation listed above in ONE patch. Fix them in the direction of the athlete's LATEST request: if they asked for a recurring structure change (e.g., "rest on Fridays"), apply it to EVERY week and convert the displaced day to training - do not undo what they asked for, and keep the weekly structure identical across all full weeks.` },
+          ],
+          temperature: 0.5,
+          maxTokens: 16000,
+        });
+        const fix = tryParseJson(fixText);
+        if (!fix || !Array.isArray(fix.patchRows) || fix.patchRows.length === 0) break;
+        const next = await applyPlanPatch(
+          fix.patchRows,
+          `Auto-correction: ${fix.message || "restored your schedule rules."}`,
+          result.finalMessages,
+          result.updatedPlan
+        );
+        if (!next) break;
+        result = next;
+      } catch (fixErr) {
+        console.error("Auto-correction round failed:", fixErr);
+        break;
+      }
+    }
   };
 
   // Import a plan pasted as JSON (e.g., converted from a spreadsheet)
