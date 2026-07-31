@@ -301,7 +301,7 @@ function buildPreferencesSection(preferences?: Omit<AIProgrammingPreferences, "u
           const timeBudget = setting.maxMinutes && setting.maxMinutes > 0
             ? ` If you program training instead of the class, the full session (including warmup) must stay under ${setting.maxMinutes} minutes.`
             : "";
-          scheduleLines.push(`- ${dayNames[key]}: CLASS AVAILABLE - ${desc}. YOU decide each week and COMMIT to exactly one prescription for this day: the class, a specific programmed workout, or rest. NEVER write "optional" or "attend or rest - your call" - the athlete wants to be told exactly what to do. When prescribing the class, add ONE component noting it.${timeBudget}`);
+          scheduleLines.push(`- ${dayNames[key]}: CLASS AVAILABLE - ${desc}. YOU decide each week and COMMIT to exactly one prescription for this day: the class, a specific programmed workout, or rest. NEVER write "optional" or "attend or rest - your call" - the athlete wants to be told exactly what to do. When prescribing the class, add ONE component noting it. A class day is a TRAINING opportunity - do NOT default it to Rest week after week; prescribe rest here only when recovery genuinely demands it that week.${timeBudget}`);
         } else {
           scheduleLines.push(`- ${dayNames[key]}: FIXED CLASS every week - ${desc}. Do NOT program a workout for this day; add ONE component noting the class (with intensity guidance during taper weeks).`);
         }
@@ -1398,11 +1398,13 @@ RULES:
 
   // Build the prompt for revising an existing plan table conversationally
   const buildRevisionPrompt = (currentPlan: TrainingPlan, conversationHistory: string): string => {
+    const violations = planWeekViolations(currentPlan.rows);
     return `You are Oddo, the athlete's coach, maintaining their day-by-day training plan TABLE.
 ${buildPreferencesSection(preferences)}${athleteBlock}
 CURRENT PLAN TABLE (${currentPlan.startDate} to ${currentPlan.endDate}, ${currentPlan.rows.length} days).
 Format: date|day|week|phase|session|runMiles|RPE|minutes|detail
 ${serializePlanRows(currentPlan.rows)}
+${violations.length > 0 ? `\nSCHEDULE VIOLATIONS CURRENTLY IN THE TABLE - these break the athlete's hard rules and MUST be fixed by your next patch (fix ALL of them in one patchRows, across every listed week):\n${violations.map(v => `- ${v}`).join("\n")}` : ""}
 
 CONVERSATION:
 ${conversationHistory}
@@ -1414,6 +1416,9 @@ Respond to the athlete's latest message with valid JSON in EXACTLY ONE of these 
 
 PATCH RULES:
 - patchRows contains ONLY changed days; every unchanged day stays out of it.
+- A patch must leave EVERY affected week fully valid: the exact required number of rest days, classes only on their scheduled weekdays. If your change costs a week a rest day (e.g., turning a rest day into a class), the SAME patchRows must restore that rest day on another day of that same week - and apply the same correction to EVERY week the change touches (a recurring change like "add the Tuesday class" touches every week). Never leave a week broken for a later turn.
+- When the athlete asks for a recurring change, patch it in ALL weeks at once, consistently.
+- Copy each patched row's "week" and "phase" from the current table for that date.
 - Component typing is strict: "lift" is ONLY dedicated strength work on a single named lift (sets x reps @ load). ANY multi-movement circuit, rounds-based piece, EMOM, or AMRAP is a "wod" regardless of session length or strength bias. If the athlete points out a mistyped component, fix it with a patchRow - do not argue about session length.
 - Each patched row is complete and definitive (no "optional") and respects the athlete's schedule rules, time budgets, rest-day requirements, equipment, and injuries above.
 - Pure JSON only - no markdown fences.`;
@@ -1447,6 +1452,24 @@ PATCH RULES:
     }
 
     return problems;
+  };
+
+  // Validate every week of a full plan; returns human-readable violations
+  const planWeekViolations = (rows: PlanRow[]): string[] => {
+    const byWeek = new Map<number, PlanRow[]>();
+    rows.forEach(r => {
+      const g = byWeek.get(r.week) || [];
+      g.push(r);
+      byWeek.set(r.week, g);
+    });
+    const out: string[] = [];
+    Array.from(byWeek.entries()).sort((a, b) => a[0] - b[0]).forEach(([weekNum, weekRows]) => {
+      const probs = validateWeekRows(weekRows, weekRows.map(r => r.date));
+      if (probs.length > 0) {
+        out.push(`Week ${weekNum} (${weekRows[0].date} to ${weekRows[weekRows.length - 1].date}): ${probs.join("; ")}`);
+      }
+    });
+    return out;
   };
 
   // Generate the full plan table: one API call per week, assembled and saved as a draft
@@ -1550,8 +1573,13 @@ PATCH RULES:
 
     const byDate = new Map(plan.rows.map(r => [r.date, r]));
     patchRows.forEach(r => {
-      const clean = sanitizePlanRow(r, Number(r.week) || 1, String(r.phase || ""));
-      if (clean.date) byDate.set(clean.date, clean);
+      const prev = r.date ? byDate.get(String(r.date)) : undefined;
+      const clean = sanitizePlanRow(r, prev?.week || Number(r.week) || 1, String(prev?.phase || r.phase || ""));
+      if (!clean.date) return;
+      // The table's week number for a date is authoritative - patched rows
+      // routinely arrive with a wrong or missing week
+      if (prev) clean.week = prev.week;
+      byDate.set(clean.date, clean);
     });
     const newRows = Array.from(byDate.values()).sort((a, b) => a.date.localeCompare(b.date));
 
@@ -1559,10 +1587,16 @@ PATCH RULES:
     await setDoc(doc(db, "trainingPlans", plan.id), { rows: newRows, status: "draft", updatedAt: Timestamp.now() }, { merge: true });
     setPlan(updatedPlan);
 
+    // A patch must never silently break the athlete's schedule rules
+    const violations = planWeekViolations(newRows);
+    const violationNote = violations.length > 0
+      ? `\n\n⚠️ Schedule check after this change:\n${violations.map(v => `- ${v}`).join("\n")}\nSay "fix those weeks" and I'll patch them.`
+      : "";
+
     const assistantMessage: AIChatMessage = {
       id: `msg-${Date.now()}-assistant`,
       role: "assistant",
-      content: `${message}\n\n(${patchRows.length} day${patchRows.length > 1 ? "s" : ""} updated in the plan table - review and lock when ready.)`,
+      content: `${message}\n\n(${patchRows.length} day${patchRows.length > 1 ? "s" : ""} updated in the plan table - review and lock when ready.)${violationNote}`,
       timestamp: Timestamp.now(),
     };
     const finalMessages = [...updatedMessages, assistantMessage];
