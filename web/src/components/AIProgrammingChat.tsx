@@ -16,6 +16,8 @@ const getPresetWodNames = () => getAllWods().map(w => w.name);
 
 // Default preferences
 const defaultPreferences: Omit<AIProgrammingPreferences, "userId" | "updatedAt"> = {
+  trainingStyle: "crossfit",
+  trainingEnvironment: "home",
   philosophy: "",
   equipment: "",
   events: [],
@@ -272,11 +274,17 @@ function buildPreferencesSection(preferences?: Omit<AIProgrammingPreferences, "u
   if (preferences) {
     const prefParts: string[] = [];
 
+    if ((preferences.trainingStyle || "crossfit") === "general") {
+      prefParts.push(`TRAINING STYLE: GENERAL GYM TRAINING - this athlete does NOT do CrossFit. Program conventional strength training and cardio: structured sessions (e.g., upper/lower or push/pull/legs splits), straight sets x reps with prescribed rest, dumbbell/barbell/machine/cable work as available, plus cardio matched to their goals. Do NOT program CrossFit-style WODs, benchmark workouts (Fran etc.), AMRAPs/EMOMs, Olympic-lift complexes, or CrossFit jargon unless the athlete explicitly asks. Simple conditioning finishers/circuits are fine when they fit the athlete's goals. Ignore any CrossFit-specific conventions elsewhere in these instructions (benchmark lists, creative WOD naming).`);
+    }
+
     if (preferences.philosophy) {
       prefParts.push(`Training Philosophy/Goals: ${preferences.philosophy}`);
     }
 
-    if (preferences.equipment) {
+    if ((preferences.trainingEnvironment || "home") === "commercial") {
+      prefParts.push(`TRAINING LOCATION: COMMERCIAL GYM - assume full standard equipment is available: barbells, racks, benches, full dumbbell range, machines, cables, and cardio machines (treadmill, bike, rower).${preferences.equipment ? ` Notes about their gym: ${preferences.equipment}` : ""}`);
+    } else if (preferences.equipment) {
       prefParts.push(`Available Equipment (garage/home gym): ${preferences.equipment}\nHARD CONSTRAINT for every home training day: ONLY program movements this equipment supports. If no barbell/rack/plates are listed, NEVER program barbell lifts at home (back squat, deadlift, bench, barbell cleans/snatches, etc.) - not even with the athlete's PRs as justification; PRs from a gym do not mean the equipment exists at home. Substitute dumbbell/kettlebell/sandbag versions instead. Barbell work belongs only on class days.`);
     }
 
@@ -438,7 +446,10 @@ DO NOT use any of the above workout names. Create NEW, unique workouts instead. 
 `;
   }
 
-  return `You are Oddo, the athlete's personal CrossFit coach, creating workout programming for an individual athlete training in their garage or home gym. You ARE their coach - be direct, encouraging, and specific.
+  const coachStyle = (preferences?.trainingStyle || "crossfit") === "general" ? "strength & conditioning" : "CrossFit";
+  const trainingPlace = (preferences?.trainingEnvironment || "home") === "commercial" ? "a commercial gym" : "their garage or home gym";
+
+  return `You are Oddo, the athlete's personal ${coachStyle} coach, creating workout programming for an individual athlete training in ${trainingPlace}. You ARE their coach - be direct, encouraging, and specific.
 ${athletePreferencesSection}${recentlyUsedSection}IMPORTANT DATE INFORMATION:
 - Today's date is ${todayStr} (${dayOfWeek})
 - Current month: ${monthName}
@@ -875,6 +886,8 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
           const prefData = prefDoc.data();
           setPreferencesDocId(prefDoc.id);
           setPreferences({
+            trainingStyle: prefData.trainingStyle || "crossfit",
+            trainingEnvironment: prefData.trainingEnvironment || "home",
             philosophy: prefData.philosophy || "",
             equipment: prefData.equipment || "",
             events: prefData.events || [],
@@ -1390,7 +1403,7 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
       })
       .filter(Boolean);
 
-    return `You are Oddo, the athlete's personal CrossFit + endurance coach, filling in ONE WEEK of a day-by-day training plan TABLE for an athlete in their garage/home gym.
+    return `You are Oddo, the athlete's personal ${(preferences.trainingStyle || "crossfit") === "general" ? "strength & conditioning" : "CrossFit + endurance"} coach, filling in ONE WEEK of a day-by-day training plan TABLE for an athlete training in ${(preferences.trainingEnvironment || "home") === "commercial" ? "a commercial gym" : "their garage/home gym"}.
 ${buildPreferencesSection(preferences)}${athleteBlock}
 THE ATHLETE'S REQUEST AND CONTEXT (conversation so far):
 ${conversationHistory}
@@ -2903,19 +2916,79 @@ PATCH RULES:
                 />
               </div>
 
+              {/* Training style */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Training Style
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {([
+                    { value: "crossfit", label: "CrossFit / Mixed-Modal", desc: "WODs, lifts, skills, engine work" },
+                    { value: "general", label: "General Gym Training", desc: "Strength splits, machines, cardio - no WODs" },
+                  ] as const).map(opt => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setPreferences(prev => ({ ...prev, trainingStyle: opt.value }))}
+                      className={`p-2.5 rounded-lg border text-left transition-colors ${
+                        (preferences.trainingStyle || "crossfit") === opt.value
+                          ? "bg-purple-50 border-purple-400 ring-1 ring-purple-400"
+                          : "bg-white border-gray-200 hover:border-gray-300"
+                      }`}
+                    >
+                      <div className="text-sm font-semibold text-gray-900">{opt.label}</div>
+                      <div className="text-xs text-gray-500">{opt.desc}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Training environment */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Where You Train
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {([
+                    { value: "home", label: "Home / Garage Gym", desc: "Only the equipment you list below" },
+                    { value: "commercial", label: "Commercial Gym", desc: "Full equipment assumed" },
+                  ] as const).map(opt => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setPreferences(prev => ({ ...prev, trainingEnvironment: opt.value }))}
+                      className={`p-2.5 rounded-lg border text-left transition-colors ${
+                        (preferences.trainingEnvironment || "home") === opt.value
+                          ? "bg-purple-50 border-purple-400 ring-1 ring-purple-400"
+                          : "bg-white border-gray-200 hover:border-gray-300"
+                      }`}
+                    >
+                      <div className="text-sm font-semibold text-gray-900">{opt.label}</div>
+                      <div className="text-xs text-gray-500">{opt.desc}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               {/* Equipment */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Your Garage Gym Equipment
+                  {(preferences.trainingEnvironment || "home") === "commercial" ? "Anything Special About Your Gym? (optional)" : "Your Garage Gym Equipment"}
                 </label>
                 <textarea
                   value={preferences.equipment}
                   onChange={(e) => setPreferences(prev => ({ ...prev, equipment: e.target.value }))}
-                  placeholder="e.g., Barbell + 300lb plates, squat rack, pull-up bar, one 53lb kettlebell, jump rope, rower. No dumbbells, no rings..."
+                  placeholder={(preferences.trainingEnvironment || "home") === "commercial"
+                    ? "e.g., No squat rack at my gym, great cable setup, pool available..."
+                    : "e.g., Barbell + 300lb plates, squat rack, pull-up bar, one 53lb kettlebell, jump rope, rower. No dumbbells, no rings..."}
                   rows={3}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
                 />
-                <p className="text-xs text-gray-500 mt-1">The AI will only program movements you can actually do</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  {(preferences.trainingEnvironment || "home") === "commercial"
+                    ? "Full standard gym equipment is assumed - note anything missing or extra"
+                    : "The AI will only program movements you can actually do"}
+                </p>
               </div>
 
               {/* Workout Duration */}

@@ -342,10 +342,20 @@ export interface ScheduleDaySetting {
   maxMinutes?: number; // optional time budget for training days (0 = no limit)
 }
 
+// What kind of programming the athlete wants
+export type TrainingStyle = "crossfit" | "general";
+// Where the athlete trains (drives equipment assumptions)
+export type TrainingEnvironment = "home" | "commercial";
+
 export interface AIProgrammingPreferences {
   userId: string;
+  // CrossFit/mixed-modal vs conventional gym training (default crossfit)
+  trainingStyle?: TrainingStyle;
+  // Home/garage gym (equipment list is a hard constraint) vs commercial gym
+  // with full standard equipment (default home)
+  trainingEnvironment?: TrainingEnvironment;
   philosophy: string; // Free-form text describing the athlete's training philosophy
-  equipment: string; // Available equipment in the athlete's garage/home gym
+  equipment: string; // Available equipment (home) or notes about their gym (commercial)
   // Races/competitions the plan should build toward
   events?: TrainingEvent[];
   // Fixed weekly structure (class days, rest days)
