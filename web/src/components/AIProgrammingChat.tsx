@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { collection, addDoc, updateDoc, doc, query, where, getDocs, getDoc, setDoc, limit, Timestamp, serverTimestamp, deleteDoc, writeBatch } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { AIProgrammingSession, AIChatMessage, AIGeneratedDay, AIProgrammingPreferences, AITrainerSubscription, TrainingEvent, TrainingEventType, WeekdayKey, AICoachPreferences, PlanRow, PlanRowComponent, TrainingPlan, workoutComponentColors, workoutComponentLabels, cardioActivityForComponent, hasAIProgramming, PRICING } from "@/lib/types";
@@ -550,6 +550,7 @@ Guidelines:
 - Program appropriate rest days (typically 2 per week)
 - Time budgets are CAPS, not targets - do not fill every available minute; distribute load across the week and never schedule two maximal days back-to-back
 - If the athlete is training for a running race: 3-4 run days per week (one long run + easy midweek runs). The long run is its OWN session on its own day - never stacked after a class or metcon
+- If the athlete asks for a multi-week program but their weekly availability, goals, or schedule are unknown, ask for those essentials in ONE concise message BEFORE generating - do not guess a schedule for someone you know nothing about
 - Scale difficulty based on the athlete's level
 - Assume a garage/home gym setup: no fancy machines unless the athlete lists them
 - Use standard CrossFit movements and terminology
@@ -668,6 +669,9 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
   const [preferences, setPreferences] = useState<Omit<AIProgrammingPreferences, "userId" | "updatedAt">>(defaultPreferences);
   const [showSettings, setShowSettings] = useState(false);
   const [preferencesDocId, setPreferencesDocId] = useState<string | null>(null);
+  // True once we know whether this user has ever saved preferences
+  const [prefsChecked, setPrefsChecked] = useState(false);
+  const autoOpenedSetup = useRef(false);
   const [savingPreferences, setSavingPreferences] = useState(false);
 
   // Recently used workouts (last 6 months) - to avoid repetition
@@ -712,6 +716,16 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
           .filter(x => x.wodTitle)
           .sort((a, b) => (b.completedDate?.toMillis?.() || 0) - (a.completedDate?.toMillis?.() || 0))
           .slice(0, 10);
+
+        // Brand-new athlete with no logged performances: the AI must assess
+        // before it can prescribe real loads
+        if (bests.size === 0 && logs.length === 0) {
+          parts.push(`NO PERFORMANCE DATA YET - this athlete has never logged a lift, workout, or run in the app. This changes how you program:
+1. NEVER prescribe loads as percentages of maxes (there are none). Use RPE, "moderate/challenging" cues, and rep-quality standards instead.
+2. The FIRST WEEK of any new plan MUST include 2-3 short BASELINE ASSESSMENTS matched to the athlete's goals and training style, spread across different days. Pick from: build to a controlled 5-rep on one main lift (or its dumbbell version at home); a 1-mile run for time OR 12-min steady run for distance (if endurance matters to their goals); max strict push-ups + a plank hold; a simple 8-10 min conditioning piece for a repeatable score. Title each one "Baseline: ..." and tell the athlete to log the result.
+3. Keep everything else that week conservative (RPE 5-6) - week 1 is for calibration, not crushing.
+4. Once results are logged, future programming and revisions must use them for real numbers.`);
+        }
         if (logs.length > 0) {
           const lines = logs.map(x => {
             let res = "";
@@ -902,10 +916,20 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
         }
       } catch (err) {
         console.error("Error loading preferences:", err);
+      } finally {
+        setPrefsChecked(true);
       }
     };
     loadPreferences();
   }, [userId]);
+
+  // Brand-new users get walked into setup before asking for programming
+  useEffect(() => {
+    if (prefsChecked && !preferencesDocId && !initialSessionId && !autoOpenedSetup.current) {
+      autoOpenedSetup.current = true;
+      setShowSettings(true);
+    }
+  }, [prefsChecked, preferencesDocId, initialSessionId]);
 
   // Save preferences
   const savePreferences = async () => {
@@ -2259,6 +2283,27 @@ PATCH RULES:
           </div>
         </div>
       </div>
+
+      {/* New-user setup gate: no saved preferences yet */}
+      {prefsChecked && !preferencesDocId && (
+        <div className="p-4 bg-gradient-to-r from-amber-50 to-orange-50 border-b border-amber-200">
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div className="min-w-0">
+              <p className="font-semibold text-amber-900">👋 First things first - set up your training profile</p>
+              <p className="text-sm text-amber-800 mt-0.5">
+                Tell Oddo your training style, where you train, your weekly schedule, and any events you&apos;re training for.
+                Don&apos;t know your lift numbers or paces yet? No problem - Oddo builds baseline tests into your first week and programs from the results.
+              </p>
+            </div>
+            <button
+              onClick={() => setShowSettings(true)}
+              className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-sm font-bold rounded-lg transition-colors shrink-0"
+            >
+              Set Up My Training
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Session Tabs */}
       {sessions.length > 0 && (
