@@ -17,7 +17,7 @@ interface GeneratedWorkout {
   notes?: string;
 }
 
-const COMPONENT_TYPES: WorkoutComponentType[] = ["warmup", "lift", "wod", "skill", "run", "swim", "bike_mtb", "bike_road", "class", "cooldown"];
+const COMPONENT_TYPES: WorkoutComponentType[] = ["warmup", "lift", "wod", "skill", "run", "swim", "bike_mtb", "bike_road", "row", "class", "cooldown"];
 
 export default function AIScanPage() {
   const { user, loading } = useAuth();

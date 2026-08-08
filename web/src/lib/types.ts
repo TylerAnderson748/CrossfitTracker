@@ -74,17 +74,18 @@ export const wodScoringTypeColors: Record<WODScoringType, { bg: string; text: st
 // ("cardio" is legacy - new programming uses the specific run/swim/bike types)
 export type WorkoutComponentType =
   | "warmup" | "wod" | "lift" | "skill"
-  | "run" | "swim" | "bike_mtb" | "bike_road"
+  | "run" | "swim" | "bike_mtb" | "bike_road" | "row"
   | "cardio" | "class" | "cooldown";
 
 // The loggable cardio activities (miles + time)
-export type CardioActivity = "run" | "swim" | "bike_mtb" | "bike_road";
+export type CardioActivity = "run" | "swim" | "bike_mtb" | "bike_road" | "row";
 
 export const cardioActivityLabels: Record<CardioActivity, string> = {
   run: "Run",
   swim: "Swim",
   bike_mtb: "MTB",
-  bike_road: "Road Bike",
+  bike_road: "Bike",
+  row: "Row",
 };
 
 export const cardioActivityIcons: Record<CardioActivity, string> = {
@@ -92,6 +93,7 @@ export const cardioActivityIcons: Record<CardioActivity, string> = {
   swim: "🏊",
   bike_mtb: "🚵",
   bike_road: "🚴",
+  row: "🚣",
 };
 
 // A logged cardio session (mileage and time for now)
@@ -136,7 +138,8 @@ export const workoutComponentLabels: Record<WorkoutComponentType, string> = {
   run: "Run",
   swim: "Swim",
   bike_mtb: "MTB",
-  bike_road: "Road Bike",
+  bike_road: "Bike",
+  row: "Row",
   cardio: "Cardio",
   class: "Class",
   cooldown: "Cool Down",
@@ -151,6 +154,7 @@ export const workoutComponentColors: Record<WorkoutComponentType, { bg: string; 
   swim: { bg: "bg-sky-100", text: "text-sky-700" },
   bike_mtb: { bg: "bg-lime-100", text: "text-lime-700" },
   bike_road: { bg: "bg-teal-100", text: "text-teal-700" },
+  row: { bg: "bg-cyan-100", text: "text-cyan-700" },
   cardio: { bg: "bg-red-100", text: "text-red-700" },
   class: { bg: "bg-indigo-100", text: "text-indigo-700" },
   cooldown: { bg: "bg-blue-100", text: "text-blue-700" },
@@ -158,9 +162,10 @@ export const workoutComponentColors: Record<WorkoutComponentType, { bg: string; 
 
 // Component types that log as a cardio session (with legacy "cardio" mapping to run)
 export function cardioActivityForComponent(type: WorkoutComponentType, title?: string): CardioActivity | null {
-  if (type === "run" || type === "swim" || type === "bike_mtb" || type === "bike_road") return type;
+  if (type === "run" || type === "swim" || type === "bike_mtb" || type === "bike_road" || type === "row") return type;
   if (type === "cardio" || (type === "wod" && title && /\b(run|jog|ruck)\b/i.test(title))) {
     if (title && /\bswim\b/i.test(title)) return "swim";
+    if (title && /\brow(?:ing|er)?\b/i.test(title)) return "row";
     if (title && /\b(mtb|mountain)\b/i.test(title)) return "bike_mtb";
     if (title && /\b(bike|cycle|cycling)\b/i.test(title)) return "bike_road";
     return "run";

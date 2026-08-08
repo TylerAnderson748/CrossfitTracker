@@ -199,7 +199,7 @@ function datesForWeek(outline: ProgramOutline, week: ProgramOutlineWeek): string
 }
 
 // Coerce an AI-produced row into a clean PlanRow (Firestore rejects undefined)
-const VALID_COMPONENT_TYPES = ["warmup", "wod", "lift", "skill", "run", "swim", "bike_mtb", "bike_road", "cardio", "class", "cooldown"];
+const VALID_COMPONENT_TYPES = ["warmup", "wod", "lift", "skill", "run", "swim", "bike_mtb", "bike_road", "row", "cardio", "class", "cooldown"];
 
 function sanitizePlanRow(r: Partial<PlanRow>, fallbackWeek: number, fallbackPhase: string): PlanRow {
   const row: PlanRow = {
@@ -517,9 +517,9 @@ When generating workouts, you MUST respond with valid JSON in this exact format:
   ]
 }
 
-Component types: "warmup", "lift", "wod", "skill", "run", "swim", "bike_mtb", "bike_road", "class", "cooldown"
+Component types: "warmup", "lift", "wod", "skill", "run", "swim", "bike_mtb", "bike_road", "row", "class", "cooldown"
 Scoring types for WODs: "fortime", "amrap", "emom"
-Use the specific cardio types for pure aerobic work - "run" (also jogging/rucking), "swim", "bike_mtb" (mountain biking), "bike_road" (road/stationary cycling) - steady-state or intervals, with exact distance/time and pace or RPE. Only program swimming or biking when the athlete has said they do those. Mixed-modal conditioning pieces (AMRAPs, EMOMs, For Time) stay "wod". Cardio components are exempt from the preset-name rule.
+Use the specific cardio types for pure aerobic work - "run" (also jogging/rucking), "swim", "bike_mtb" (mountain biking), "bike_road" (road/stationary/fan bike), "row" (rowing erg) - steady-state or intervals, with exact distance/time and pace or RPE. Only program swimming, biking, or rowing when the athlete has said they do those or has the equipment. Mixed-modal conditioning pieces (AMRAPs, EMOMs, For Time) stay "wod". Cardio components are exempt from the preset-name rule.
 Use "class" when the athlete attends a coached class elsewhere (e.g., "Olympic Lifting Class", "CrossFit Class"): name the class and give intensity/focus guidance for it. Class components are exempt from the preset-name rule.
 
 IMPORTANT - PRESET WORKOUTS:
@@ -1498,7 +1498,7 @@ Respond with valid JSON in this exact format:
 
 RULES:
 - ONE row per date listed above - no other dates, no skipped dates, day names copied exactly from the list.
-- "components" is the day's prescription broken into typed pieces: "warmup", "wod" (mixed-modal metcons), "lift", "skill", "run"/"swim"/"bike_mtb"/"bike_road" (pure aerobic work - steady-state or intervals; only program swim/bike if the athlete does those), "class" (coached classes the athlete attends elsewhere), "cooldown". Each component's description is COMPLETE: exact distances, paces, movements, reps, and loads (use the athlete's PRs for percentage work) - specific enough to train from with no other information.
+- "components" is the day's prescription broken into typed pieces: "warmup", "wod" (mixed-modal metcons), "lift", "skill", "run"/"swim"/"bike_mtb"/"bike_road"/"row" (pure aerobic work - steady-state or intervals; only program swim/bike/row if the athlete does those or has the equipment), "class" (coached classes the athlete attends elsewhere), "cooldown". Each component's description is COMPLETE: exact distances, paces, movements, reps, and loads (use the athlete's PRs for percentage work) - specific enough to train from with no other information.
 - Component typing is strict: "lift" is ONLY dedicated strength work on a single named lift (sets x reps @ load, e.g. "Back Squat 5x5 @ 75%"). ANY multi-movement circuit, rounds-based piece, EMOM, or AMRAP is a "wod" - even when strength-biased and even on short time-capped days (a 4-round DB/sandbag circuit is a wod, not a lift). "wod" says nothing about session length - a 15-minute piece is still a wod.
 - "reason" (1-2 sentences): WHY this day is programmed this way given the phase, the surrounding days, and the athlete's goals. Every non-rest day gets one. The reason speaks to the ATHLETE about training intent - NEVER write rule bookkeeping ("to maintain exactly 2 rest days", "to satisfy the weekly cap") as a reason.
 - Rest days: session "Rest", components [] (or one light "cooldown" mobility component), runMiles 0, reason explaining what the rest protects.

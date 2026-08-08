@@ -32,7 +32,8 @@ export const BASELINE_CARDIO: BaselineItem[] = [
   { key: "mile_run", name: "1-Mile Run", category: "cardio", description: "1 mile for time on a flat course after a 5-min easy warm-up jog. Even pacing; log time." },
   { key: "run_5k", name: "5K Run", category: "cardio", description: "5K (3.1 mi) for time at a hard but sustainable effort. Log time." },
   { key: "run_10k", name: "10K Run", category: "cardio", description: "10K (6.2 mi) steady effort - a fitness check, not a race. Log time." },
-  { key: "bike", name: "Bike Session", category: "cardio", description: "20+ minute bike ride (road, MTB, or stationary) at steady effort. Log miles and time." },
+  { key: "fan_bike", name: "2-Mile Fan Bike", category: "cardio", description: "2 miles on a fan bike (Assault/Echo) for time - hard but repeatable pace, don't blow up in the first minute. Log time." },
+  { key: "row_2k", name: "2K Row", category: "cardio", description: "2,000m row for time on the erg - the classic test. Settle into a pace you can hold after a fast start. Log time." },
   { key: "swim", name: "Swim Session", category: "cardio", description: "Continuous swim session - as far as comfortable in 10-20 min. Log distance and time." },
 ];
 
@@ -105,7 +106,8 @@ function matchCardio(logs: { activity: string; miles?: number }[]): BaselineCate
     if (item.key === "mile_run") logged = has(l => l.activity === "run" && (l.miles || 0) >= 0.85 && (l.miles || 0) <= 1.3);
     else if (item.key === "run_5k") logged = has(l => l.activity === "run" && (l.miles || 0) >= 2.9 && (l.miles || 0) <= 3.5);
     else if (item.key === "run_10k") logged = has(l => l.activity === "run" && (l.miles || 0) >= 5.9 && (l.miles || 0) <= 6.7);
-    else if (item.key === "bike") logged = has(l => l.activity === "bike_mtb" || l.activity === "bike_road");
+    else if (item.key === "fan_bike") logged = has(l => (l.activity === "bike_mtb" || l.activity === "bike_road") && (l.miles || 0) >= 1.7 && (l.miles || 0) <= 2.4);
+    else if (item.key === "row_2k") logged = has(l => l.activity === "row" && (l.miles || 0) >= 1.1 && (l.miles || 0) <= 1.4);
     else if (item.key === "swim") logged = has(l => l.activity === "swim");
     (logged ? done : missing).push(item);
   });

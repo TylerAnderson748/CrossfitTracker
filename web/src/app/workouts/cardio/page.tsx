@@ -8,7 +8,7 @@ import { db } from "@/lib/firebase";
 import Navigation from "@/components/Navigation";
 import { CardioActivity, CardioLog, cardioActivityLabels, cardioActivityIcons } from "@/lib/types";
 
-const ACTIVITIES: CardioActivity[] = ["run", "swim", "bike_mtb", "bike_road"];
+const ACTIVITIES: CardioActivity[] = ["run", "swim", "bike_mtb", "bike_road", "row"];
 
 function formatDuration(totalSeconds: number): string {
   const h = Math.floor(totalSeconds / 3600);
@@ -150,7 +150,7 @@ function CardioPageContent() {
         </div>
 
         {/* Activity selector */}
-        <div className="grid grid-cols-4 gap-2 mb-6">
+        <div className="grid grid-cols-5 gap-2 mb-6">
           {ACTIVITIES.map(a => (
             <button
               key={a}

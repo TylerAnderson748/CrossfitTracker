@@ -31,7 +31,14 @@ interface BaselineWizardProps {
 
 const LOADABLE_RE = /(barbell|dumbbell|\bdbs?\b|kettlebell|\bkbs?\b|sandbag|plate|weight)/i;
 const TIME_BASED_KEYS = new Set(["wall_sit", "plank_hold", "handstand_hold"]);
-const RUN_MILES: Record<string, number> = { mile_run: 1, run_5k: 3.1, run_10k: 6.2 };
+// Fixed-distance cardio tests: log with mm:ss, distance and activity implied
+const FIXED_CARDIO: Record<string, { miles: number; activity: string }> = {
+  mile_run: { miles: 1, activity: "run" },
+  run_5k: { miles: 3.1, activity: "run" },
+  run_10k: { miles: 6.2, activity: "run" },
+  fan_bike: { miles: 2, activity: "bike_road" },
+  row_2k: { miles: 1.24, activity: "row" },
+};
 
 interface EntryState {
   a: string; // weight / reps / minutes / rounds / miles
@@ -54,7 +61,7 @@ export default function BaselineWizard({
   const general = trainingStyle === "general";
   const [equipmentAnswer, setEquipmentAnswer] = useState<string | null>(null);
   const [entries, setEntries] = useState<Record<string, EntryState>>({});
-  const [openSection, setOpenSection] = useState<string | null>("Strength");
+  const [openSection, setOpenSection] = useState<string | null>(null);
 
   const getEntry = (key: string): EntryState => entries[key] || { a: "", b: "", saving: false, saved: false };
   const patchEntry = (key: string, patch: Partial<EntryState>) =>
@@ -66,18 +73,16 @@ export default function BaselineWizard({
     (equipmentAnswer !== null && equipmentAnswer !== "none");
 
   const strengthDone = status.lifts.done.length + status.bodyweight.done.length;
-  const sections: { name: string; needed: number; done: number; cat: BaselineCategoryStatus }[] = [
-    {
-      name: "Strength",
-      needed: 2,
-      done: strengthDone,
-      cat: hasLoad ? status.lifts : status.bodyweight,
-    },
-    { name: "Cardio", needed: 1, done: status.cardio.done.length, cat: status.cardio },
+  const sections: { name: string; needText: string; met: boolean; cat: BaselineCategoryStatus }[] = [
+    ...(hasLoad
+      ? [{ name: "Lifts", needText: "need 2 strength total (lifts or bodyweight)", met: strengthDone >= 2, cat: status.lifts }]
+      : []),
+    { name: "Bodyweight", needText: hasLoad ? "also count toward the 2 strength tests" : "need 2 (these are your strength tests)", met: strengthDone >= 2, cat: status.bodyweight },
+    { name: "Cardio", needText: "need 1", met: status.cardio.done.length >= 1, cat: status.cardio },
     ...(!general
       ? [
-          { name: "Benchmark WODs", needed: 1, done: status.wods.done.length, cat: status.wods },
-          { name: "Skills", needed: 1, done: status.skills.done.length, cat: status.skills },
+          { name: "Benchmark WODs", needText: "need 1", met: status.wods.done.length >= 1, cat: status.wods },
+          { name: "Skills", needText: "need 1", met: status.skills.done.length >= 1, cat: status.skills },
         ]
       : []),
   ];
@@ -113,11 +118,11 @@ export default function BaselineWizard({
       } else if (item.category === "cardio") {
         const d = new Date();
         const dateString = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-        if (RUN_MILES[item.key]) {
+        if (FIXED_CARDIO[item.key]) {
           const totalSeconds = (parseInt(entry.a) || 0) * 60 + (parseInt(entry.b) || 0);
           if (totalSeconds <= 0) throw new Error("Enter your time");
           await addDoc(collection(db, "cardioLogs"), {
-            userId, activity: "run", miles: RUN_MILES[item.key], timeInSeconds: totalSeconds,
+            userId, activity: FIXED_CARDIO[item.key].activity, miles: FIXED_CARDIO[item.key].miles, timeInSeconds: totalSeconds,
             date: now(), dateString, notes: `Baseline: ${item.name}`, createdAt: now(),
           });
         } else {
@@ -184,7 +189,7 @@ export default function BaselineWizard({
       );
     }
     if (item.category === "cardio") {
-      if (RUN_MILES[item.key]) {
+      if (FIXED_CARDIO[item.key]) {
         return (
           <>
             <input type="number" inputMode="numeric" min="0" placeholder="min" value={entry.a}
@@ -262,7 +267,7 @@ export default function BaselineWizard({
           <div className="space-y-2">
             {sections.map(section => {
               const isOpen = openSection === section.name;
-              const met = section.done >= section.needed;
+              const met = section.met;
               return (
                 <div key={section.name} className="bg-white border border-purple-200 rounded-lg overflow-hidden">
                   <button
@@ -272,7 +277,7 @@ export default function BaselineWizard({
                     <span className="text-sm font-semibold text-gray-900">
                       {met ? "✅" : "⬜"} {section.name}
                       <span className="ml-2 text-xs font-normal text-gray-500">
-                        {section.cat.done.length}/{section.cat.done.length + section.cat.missing.length} logged • need {section.needed}
+                        {section.cat.done.length}/{section.cat.done.length + section.cat.missing.length} logged • {section.needText}
                       </span>
                     </span>
                     <span className="text-gray-400 text-xs">{isOpen ? "▲" : "▼"}</span>
