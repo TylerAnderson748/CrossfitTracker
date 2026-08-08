@@ -144,8 +144,7 @@ export default function WelcomeTour({ userId, onDone }: WelcomeTourProps) {
               <div className="space-y-3">
                 {[
                   { icon: "🏠", name: "Home", desc: "Your training calendar - every workout lives here. Log results right from each day's card." },
-                  { icon: "🤖", name: "Oddo", desc: "Your AI coach - baselines, full training plans, and workout scanning." },
-                  { icon: "📋", name: "My Plan", desc: "Your locked training plan as a day-by-day table with done/missed tracking." },
+                  { icon: "🤖", name: "Oddo", desc: "Your AI coach - baselines, full training plans (View Plan Table lives here), and workout scanning." },
                   { icon: "📖", name: "Records", desc: "Your logbook - WODs, lifts, skills, cardio, and the 🎯 Benchmarks Oddo coaches from." },
                   { icon: "📈", name: "Progress", desc: "Charts and trends built from everything you log." },
                 ].map(row => (

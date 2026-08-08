@@ -18,7 +18,6 @@ export default function Navigation() {
   const navItems = [
     { href: "/weekly", label: "Home", icon: "🏠" },
     { href: "/programming", label: "Oddo", icon: "🤖" },
-    { href: "/plan", label: "My Plan", icon: "📋" },
     { href: "/workouts", label: "Records", icon: "📖" },
     { href: "/progress", label: "Progress", icon: "📈" },
     { href: "/profile", label: "Profile", icon: "👤" },
