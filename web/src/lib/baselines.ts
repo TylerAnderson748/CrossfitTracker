@@ -41,7 +41,7 @@ export const BASELINE_CARDIO: BaselineItem[] = [
 export const BASELINE_BODYWEIGHT: BaselineItem[] = [
   { key: "air_squats_2min", name: "2-Min Air Squats", category: "bodyweight", description: "Max air squats in 2 minutes - full depth, full hip extension, steady pace. Log total reps." },
   { key: "max_lunges", name: "Max Walking Lunges", category: "bodyweight", description: "Max unbroken alternating walking lunges - knee gently touches the floor each rep. Log total steps." },
-  { key: "burpees_5min", name: "5-Min Burpees", category: "bodyweight", description: "Max burpees in 5 minutes at a sustainable pace - chest to floor, full stand with a small jump. Log total reps." },
+  { key: "burpees_1min", name: "1-Min Burpees", category: "bodyweight", description: "Max burpees in 1 minute - chest to floor, full stand with a small jump every rep. Log total reps." },
   { key: "wall_sit", name: "Wall Sit Hold", category: "bodyweight", description: "Max-duration wall sit at parallel, back flat against the wall. Log the time." },
   { key: "situps_2min", name: "2-Min Sit-ups", category: "bodyweight", description: "Max sit-ups in 2 minutes - shoulders touch the floor, sit fully up. Log total reps." },
 ];
