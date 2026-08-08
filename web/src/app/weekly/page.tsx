@@ -295,11 +295,27 @@ export default function WeeklyPlanPage() {
     }
   };
 
-  // Open the session logger with one row per lift component
+  // Pull the programmed rep count out of a lift prescription so the logger
+  // pre-fills it ("4 x 8-10 reps" -> 10, "3 x 8 @ 70%" -> 8, "5-rep max" -> 5)
+  const parseProgrammedReps = (text: string): string => {
+    const t = text.toLowerCase();
+    let m = t.match(/\d+\s*(?:x|×)\s*(\d+)(?:\s*-\s*(\d+))?/);
+    if (m) return m[2] || m[1];
+    m = t.match(/sets?\s+of\s+(\d+)(?:\s*-\s*(\d+))?/);
+    if (m) return m[2] || m[1];
+    m = t.match(/(\d+)(?:\s*-\s*(\d+))?\s*reps?\b/);
+    if (m) return m[2] || m[1];
+    m = t.match(/(\d+)\s*-\s*rep\b/);
+    if (m) return m[1];
+    return "";
+  };
+
+  // Open the session logger with one row per lift component, reps pre-filled
+  // from the prescription
   const openLogSession = (workout: PersonalWorkout) => {
     const entries: Record<string, { weight: string; reps: string }> = {};
     workout.components.filter(c => c.type === "lift").forEach(c => {
-      entries[c.id] = { weight: "", reps: "" };
+      entries[c.id] = { weight: "", reps: parseProgrammedReps(`${c.title} ${c.description}`) };
     });
     setSessionEntries(entries);
     setLogSessionWorkout(workout);
