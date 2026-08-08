@@ -6,6 +6,7 @@ import { db } from "@/lib/firebase";
 import { AIProgrammingSession, AIChatMessage, AIGeneratedDay, AIProgrammingPreferences, AITrainerSubscription, TrainingEvent, TrainingEventType, WeekdayKey, AICoachPreferences, PlanRow, PlanRowComponent, TrainingPlan, workoutComponentColors, workoutComponentLabels, cardioActivityForComponent, hasAIProgramming, PRICING } from "@/lib/types";
 import { getAllSkills, getAllLifts, getAllWods } from "@/lib/workoutData";
 import { chatCompletion, REVISION_MODEL } from "@/lib/ai";
+import { computeBaselineStatus, buildBaselinePromptBlock, buildBaselineWeek, BaselineStatusInput } from "@/lib/baselines";
 import AITrainerPaywall from "./AITrainerPaywall";
 import PlanTable from "./PlanTable";
 
@@ -682,6 +683,7 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
 
   // Athlete data pulled from their training log (PRs, recent results, existing calendar)
   const [athleteContext, setAthleteContext] = useState<string>("");
+  const [baselineRaw, setBaselineRaw] = useState<Omit<BaselineStatusInput, "trainingStyle"> | null>(null);
 
   useEffect(() => {
     const loadAthleteContext = async () => {
@@ -717,15 +719,16 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
           .sort((a, b) => (b.completedDate?.toMillis?.() || 0) - (a.completedDate?.toMillis?.() || 0))
           .slice(0, 10);
 
-        // Brand-new athlete with no logged performances: the AI must assess
-        // before it can prescribe real loads
-        if (bests.size === 0 && logs.length === 0) {
-          parts.push(`NO PERFORMANCE DATA YET - this athlete has never logged a lift, workout, or run in the app. This changes how you program:
-1. NEVER prescribe loads as percentages of maxes (there are none). Use RPE, "moderate/challenging" cues, and rep-quality standards instead.
-2. The FIRST WEEK of any new plan MUST include 2-3 short BASELINE ASSESSMENTS matched to the athlete's goals and training style, spread across different days. Pick from: build to a controlled 5-rep on one main lift (or its dumbbell version at home); a 1-mile run for time OR 12-min steady run for distance (if endurance matters to their goals); max strict push-ups + a plank hold; a simple 8-10 min conditioning piece for a repeatable score. Title each one "Baseline: ..." and tell the athlete to log the result.
-3. Keep everything else that week conservative (RPE 5-6) - week 1 is for calibration, not crushing.
-4. Once results are logged, future programming and revisions must use them for real numbers.`);
-        }
+        // Raw logged names for baseline-battery matching (the standard tests
+        // Oddo calibrates from - see lib/baselines.ts)
+        const skillSnap = await getDocs(query(collection(db, "skillResults"), where("userId", "==", userId), limit(150)));
+        const cardioSnap = await getDocs(query(collection(db, "cardioLogs"), where("userId", "==", userId), limit(150)));
+        setBaselineRaw({
+          liftTitles: Array.from(new Set(Array.from(bests.keys()).map(k => k.split("|")[0]))),
+          wodTitles: Array.from(new Set(wodSnap.docs.map(d => String(d.data().wodTitle || "")).filter(Boolean))),
+          skillNames: Array.from(new Set(skillSnap.docs.map(d => String(d.data().skillName || "")).filter(Boolean))),
+          cardioLogs: cardioSnap.docs.map(d => ({ activity: String(d.data().activity || ""), miles: Number(d.data().miles) || 0 })),
+        });
         if (logs.length > 0) {
           const lines = logs.map(x => {
             let res = "";
@@ -771,8 +774,14 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
     loadAthleteContext();
   }, [userId]);
 
+  // Standard-battery baseline status (recomputed when logs or style change)
+  const baselineStatus = baselineRaw
+    ? computeBaselineStatus({ ...baselineRaw, trainingStyle: preferences.trainingStyle })
+    : null;
+
   // Combined athlete block injected into every prompt
-  const athleteBlock = buildProfileSection(athleteProfile) + athleteContext;
+  const athleteBlock = buildProfileSection(athleteProfile) + athleteContext +
+    (baselineStatus ? buildBaselinePromptBlock(baselineStatus, preferences.trainingStyle) : "");
 
   // The day-by-day training plan table for the active session
   const [plan, setPlan] = useState<TrainingPlan | null>(null);
@@ -1885,6 +1894,48 @@ PATCH RULES:
     }
   };
 
+  // Deterministic baseline week (base-tier: programming ends after baselining)
+  const [addingBaseline, setAddingBaseline] = useState(false);
+  const handleAddBaselineWeek = async () => {
+    if (!baselineStatus || addingBaseline) return;
+    const daysPlan = buildBaselineWeek(baselineStatus, preferences.trainingStyle);
+    if (daysPlan.length === 0) {
+      alert("Your baseline minimums are already covered - nothing to schedule!");
+      return;
+    }
+    setAddingBaseline(true);
+    try {
+      const start = new Date();
+      start.setDate(start.getDate() + 1); // begin tomorrow
+      for (const day of daysPlan) {
+        const d = new Date(start);
+        d.setDate(d.getDate() + day.dayOffset);
+        const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+        await addDoc(collection(db, "personalWorkouts"), {
+          userId,
+          date: Timestamp.fromDate(new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0)),
+          dateString: ds,
+          components: day.components.map((c, i) => ({
+            id: `baseline-${i}`,
+            type: c.type,
+            title: c.title,
+            description: c.description,
+            ...(c.scoringType ? { scoringType: c.scoringType } : {}),
+          })),
+          createdAt: Timestamp.now(),
+        });
+      }
+      alert(`Baseline week added: ${daysPlan.length} test day${daysPlan.length > 1 ? "s" : ""} on your calendar starting tomorrow. Log each result - Oddo coaches from those numbers.`);
+      onPublish?.();
+    } catch (err) {
+      console.error("Error adding baseline week:", err);
+      const message = err instanceof Error ? err.message : String(err);
+      alert(`Couldn't add the baseline week: ${message}`);
+    } finally {
+      setAddingBaseline(false);
+    }
+  };
+
   // Import a plan pasted as JSON (e.g., converted from a spreadsheet)
   const [showImportModal, setShowImportModal] = useState(false);
   const [importText, setImportText] = useState("");
@@ -2227,15 +2278,38 @@ PATCH RULES:
     );
   }
 
-  // Base Oddo subscribers see an upsell - AI programming is an add-on
+  // Base Oddo subscribers: the baseline assessment is included (Oddo coaches
+  // from those numbers), but ongoing programming is the add-on
   if (!hasAIProgramming(subscription)) {
     return (
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        {baselineStatus && !baselineStatus.meetsMinimum && (
+          <div className="p-6 border-b border-gray-200 bg-gradient-to-br from-amber-50 to-orange-50">
+            <h2 className="text-lg font-bold text-gray-900 mb-1">🎯 Step 1: Baseline Assessment (included)</h2>
+            <p className="text-sm text-gray-700 mb-2">
+              Oddo coaches from your numbers. Log the bare minimum - {baselineStatus.minimumDescription} - and every
+              piece of advice gets calibrated to YOU.
+            </p>
+            <p className="text-xs text-gray-600 mb-3">
+              Progress: Lifts {baselineStatus.lifts.done.length}/5 • Cardio {baselineStatus.cardio.done.length}/5
+              {(preferences.trainingStyle || "crossfit") !== "general" && (
+                <> • WODs {baselineStatus.wods.done.length}/5 • Skills {baselineStatus.skills.done.length}/5</>
+              )}
+            </p>
+            <button
+              onClick={handleAddBaselineWeek}
+              disabled={addingBaseline}
+              className="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-sm font-bold rounded-lg transition-colors disabled:opacity-50"
+            >
+              {addingBaseline ? "Adding..." : "Put My Baseline Tests on the Calendar"}
+            </button>
+          </div>
+        )}
         <div className="p-8 text-center bg-gradient-to-br from-purple-50 to-indigo-50">
           <div className="text-4xl mb-3">📋</div>
-          <h2 className="text-xl font-bold text-gray-900 mb-2">AI Programming is an Add-On</h2>
+          <h2 className="text-xl font-bold text-gray-900 mb-2">Ongoing AI Programming is an Add-On</h2>
           <p className="text-gray-600 max-w-md mx-auto mb-1">
-            Coach Oddo subscription covers advice, scaling, workout scanning, and logging.
+            Coach Oddo subscription covers advice, scaling, workout scanning, logging - and the baseline assessment above.
           </p>
           <p className="text-gray-600 max-w-md mx-auto mb-5">
             Upgrade to <span className="font-semibold">Oddo + Programming</span> (${PRICING.AI_PROGRAMMING_MONTHLY}/mo)
@@ -2320,6 +2394,18 @@ PATCH RULES:
               Set Up My Training
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Baseline progress: which standard tests are still missing */}
+      {baselineStatus && !baselineStatus.meetsMinimum && (
+        <div className="px-4 py-2.5 bg-purple-50 border-b border-purple-100 text-xs text-purple-800">
+          🎯 <span className="font-semibold">Baseline data:</span>{" "}
+          Lifts {baselineStatus.lifts.done.length}/5 • Cardio {baselineStatus.cardio.done.length}/5
+          {(preferences.trainingStyle || "crossfit") !== "general" && (
+            <> • WODs {baselineStatus.wods.done.length}/5 • Skills {baselineStatus.skills.done.length}/5</>
+          )}
+          {" "}- minimum is {baselineStatus.minimumDescription}. Oddo schedules the missing tests in week 1 of any new plan.
         </div>
       )}
 
