@@ -6,7 +6,8 @@ import { db } from "@/lib/firebase";
 import { AIProgrammingSession, AIChatMessage, AIGeneratedDay, AIProgrammingPreferences, AITrainerSubscription, TrainingEvent, TrainingEventType, WeekdayKey, AICoachPreferences, PlanRow, PlanRowComponent, TrainingPlan, workoutComponentColors, workoutComponentLabels, cardioActivityForComponent, hasAIProgramming, PRICING } from "@/lib/types";
 import { getAllSkills, getAllLifts, getAllWods } from "@/lib/workoutData";
 import { chatCompletion, REVISION_MODEL } from "@/lib/ai";
-import { computeBaselineStatus, buildBaselinePromptBlock, buildBaselineWeek, BaselineStatusInput } from "@/lib/baselines";
+import { computeBaselineStatus, buildBaselinePromptBlock, buildBaselineWeek, BaselineStatusInput, BaselineCategory } from "@/lib/baselines";
+import BaselineWizard from "./BaselineWizard";
 import AITrainerPaywall from "./AITrainerPaywall";
 import PlanTable from "./PlanTable";
 
@@ -726,7 +727,7 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
         setBaselineRaw({
           liftTitles: Array.from(new Set(Array.from(bests.keys()).map(k => k.split("|")[0]))),
           wodTitles: Array.from(new Set(wodSnap.docs.map(d => String(d.data().wodTitle || "")).filter(Boolean))),
-          skillNames: Array.from(new Set(skillSnap.docs.map(d => String(d.data().skillName || "")).filter(Boolean))),
+          skillNames: Array.from(new Set(skillSnap.docs.map(d => String(d.data().skillTitle || d.data().skillName || "")).filter(Boolean))),
           cardioLogs: cardioSnap.docs.map(d => ({ activity: String(d.data().activity || ""), miles: Number(d.data().miles) || 0 })),
         });
         if (logs.length > 0) {
@@ -1940,6 +1941,45 @@ PATCH RULES:
     }
   };
 
+  // Wizard logged a test: update local baseline data so status recomputes
+  const handleBaselineLogged = (category: BaselineCategory, name: string) => {
+    setBaselineRaw(prev => prev ? {
+      ...prev,
+      liftTitles: category === "lift" ? [...prev.liftTitles, name] : prev.liftTitles,
+      skillNames: (category === "skill" || category === "bodyweight") ? [...prev.skillNames, name] : prev.skillNames,
+      wodTitles: category === "wod" ? [...prev.wodTitles, name] : prev.wodTitles,
+      cardioLogs: category === "cardio" ? [...prev.cardioLogs, { activity: "run", miles: 1 }] : prev.cardioLogs,
+    } : prev);
+  };
+
+  // Wizard learned what equipment the athlete has: persist it to preferences
+  const handleEquipmentNote = async (note: string) => {
+    const next = { ...preferences, equipment: preferences.equipment ? `${preferences.equipment}; ${note}` : note };
+    setPreferences(next);
+    try {
+      const prefData = {
+        userId,
+        ...next,
+        events: (next.events || []).map(e => ({ id: e.id, type: e.type, name: e.name || "", date: e.date || "", detail: e.detail || "" })),
+        weeklySchedule: Object.fromEntries(
+          Object.entries(next.weeklySchedule || {}).filter(([, s]) => s).map(([day, s]) => [
+            day,
+            { mode: s!.mode, classDescription: s!.classDescription || "", classAttendance: s!.classAttendance || "always", maxMinutes: s!.maxMinutes || 0 },
+          ])
+        ),
+        updatedAt: serverTimestamp(),
+      };
+      if (preferencesDocId) {
+        await updateDoc(doc(db, "aiProgrammingPreferences", preferencesDocId), prefData);
+      } else {
+        const ref = await addDoc(collection(db, "aiProgrammingPreferences"), prefData);
+        setPreferencesDocId(ref.id);
+      }
+    } catch (err) {
+      console.error("Error saving equipment note:", err);
+    }
+  };
+
   // Import a plan pasted as JSON (e.g., converted from a spreadsheet)
   const [showImportModal, setShowImportModal] = useState(false);
   const [importText, setImportText] = useState("");
@@ -2288,27 +2328,21 @@ PATCH RULES:
     return (
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         {baselineStatus && !baselineStatus.meetsMinimum && (
-          <div className="p-6 border-b border-gray-200 bg-gradient-to-br from-amber-50 to-orange-50">
-            <h2 className="text-lg font-bold text-gray-900 mb-1">🎯 Step 1: Baseline Assessment (included)</h2>
-            <p className="text-sm text-gray-700 mb-2">
-              Oddo coaches from your numbers. Log the bare minimum - {baselineStatus.minimumDescription} - and every
-              piece of advice gets calibrated to YOU.
-            </p>
-            <p className="text-xs text-gray-600 mb-3">
-              Progress: Lifts {baselineStatus.lifts.done.length}/5
-              {baselineStatus.bodyweight.done.length > 0 && <> • Bodyweight {baselineStatus.bodyweight.done.length}/5</>}
-              {" "}• Cardio {baselineStatus.cardio.done.length}/5
-              {(preferences.trainingStyle || "crossfit") !== "general" && (
-                <> • WODs {baselineStatus.wods.done.length}/5 • Skills {baselineStatus.skills.done.length}/5</>
-              )}
-            </p>
-            <button
-              onClick={handleAddBaselineWeek}
-              disabled={addingBaseline}
-              className="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-sm font-bold rounded-lg transition-colors disabled:opacity-50"
-            >
-              {addingBaseline ? "Adding..." : "Put My Baseline Tests on the Calendar"}
-            </button>
+          <div className="border-b border-gray-200">
+            <div className="px-4 pt-4">
+              <h2 className="text-lg font-bold text-gray-900">🎯 Step 1: Baseline Assessment (included with Coach Oddo)</h2>
+            </div>
+            <BaselineWizard
+              userId={userId}
+              status={baselineStatus}
+              trainingStyle={preferences.trainingStyle}
+              trainingEnvironment={preferences.trainingEnvironment}
+              equipment={preferences.equipment}
+              onEquipmentNote={handleEquipmentNote}
+              onLogged={handleBaselineLogged}
+              onScheduleRemaining={handleAddBaselineWeek}
+              scheduling={addingBaseline}
+            />
           </div>
         )}
         <div className="p-8 text-center bg-gradient-to-br from-purple-50 to-indigo-50">
@@ -2403,18 +2437,19 @@ PATCH RULES:
         </div>
       )}
 
-      {/* Baseline progress: which standard tests are still missing */}
+      {/* Baseline wizard: ask, quick-log, or program the missing standard tests */}
       {baselineStatus && !baselineStatus.meetsMinimum && (
-        <div className="px-4 py-2.5 bg-purple-50 border-b border-purple-100 text-xs text-purple-800">
-          🎯 <span className="font-semibold">Baseline data:</span>{" "}
-          Lifts {baselineStatus.lifts.done.length}/5
-          {baselineStatus.bodyweight.done.length > 0 && <> • Bodyweight {baselineStatus.bodyweight.done.length}/5</>}
-          {" "}• Cardio {baselineStatus.cardio.done.length}/5
-          {(preferences.trainingStyle || "crossfit") !== "general" && (
-            <> • WODs {baselineStatus.wods.done.length}/5 • Skills {baselineStatus.skills.done.length}/5</>
-          )}
-          {" "}- minimum is {baselineStatus.minimumDescription}. Oddo schedules the missing tests in week 1 of any new plan.
-        </div>
+        <BaselineWizard
+          userId={userId}
+          status={baselineStatus}
+          trainingStyle={preferences.trainingStyle}
+          trainingEnvironment={preferences.trainingEnvironment}
+          equipment={preferences.equipment}
+          onEquipmentNote={handleEquipmentNote}
+          onLogged={handleBaselineLogged}
+          onScheduleRemaining={handleAddBaselineWeek}
+          scheduling={addingBaseline}
+        />
       )}
 
       {/* Session Tabs */}

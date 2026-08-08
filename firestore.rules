@@ -182,9 +182,10 @@ service cloud.firestore {
 
     match /skillResults/{resultId} {
       allow read: if isAuthenticated();
+      // The app writes skillTitle (iOS-era field name)
       allow create: if isAuthenticated() &&
                        request.resource.data.userId == request.auth.uid &&
-                       hasRequiredFields(['userId', 'skillName']);
+                       hasRequiredFields(['userId', 'skillTitle']);
       allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
       allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
     }
