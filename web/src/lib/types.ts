@@ -15,6 +15,8 @@ export interface AppUser {
   gender?: Gender;
   createdAt: Timestamp;
   hideFromLeaderboards: boolean;
+  // Set once the first-run welcome tour has been completed or dismissed
+  onboardedAt?: Timestamp;
   // Oddo subscription (personalized scaling, advice, and programming)
   aiTrainerSubscription?: AITrainerSubscription;
   // Oddo preferences and goals

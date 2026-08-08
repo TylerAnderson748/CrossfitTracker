@@ -10,6 +10,7 @@ import { workoutComponentLabels, workoutComponentColors, WorkoutComponent, Worko
 import { getAllWods, getAllLifts } from "@/lib/workoutData";
 import Navigation from "@/components/Navigation";
 import PersonalAITrainer from "@/components/PersonalAITrainer";
+import WelcomeTour from "@/components/WelcomeTour";
 
 export default function WeeklyPlanPage() {
   const { user, loading, switching } = useAuth();
@@ -22,6 +23,8 @@ export default function WeeklyPlanPage() {
   // Class attendance logs, keyed by `${dateString}|${title}`
   const [classLogKeys, setClassLogKeys] = useState<Record<string, string>>({});
   const [loggingClassKey, setLoggingClassKey] = useState<string | null>(null);
+  // First-run welcome tour (dismissed state is local; completion persists on the user doc)
+  const [tourDone, setTourDone] = useState(false);
   // Clear-calendar modal state
   const [showClearModal, setShowClearModal] = useState(false);
   const [clearing, setClearing] = useState(false);
@@ -466,6 +469,9 @@ export default function WeeklyPlanPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <Navigation />
+      {user && !user.onboardedAt && !tourDone && (
+        <WelcomeTour userId={user.id} onDone={() => setTourDone(true)} />
+      )}
       <main className="max-w-lg mx-auto px-4 py-6">
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
