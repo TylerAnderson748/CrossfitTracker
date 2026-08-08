@@ -1,13 +1,16 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/AuthContext";
 import AccountSwitcher from "./AccountSwitcher";
+import WelcomeTour from "./WelcomeTour";
 
 export default function Navigation() {
   const pathname = usePathname();
   const { user } = useAuth();
+  const [showTour, setShowTour] = useState(false);
 
   const hasAISubscription = user?.aiTrainerSubscription?.status === "active" ||
     user?.aiTrainerSubscription?.status === "trialing";
@@ -48,7 +51,16 @@ export default function Navigation() {
               ))}
             </div>
           </div>
-          <div className="flex items-center">
+          <div className="flex items-center gap-2">
+            {user && (
+              <button
+                onClick={() => setShowTour(true)}
+                className="w-8 h-8 rounded-full bg-gray-100 hover:bg-purple-100 text-gray-500 hover:text-purple-700 font-bold text-sm transition-colors"
+                title="Help - what can I do here?"
+              >
+                ?
+              </button>
+            )}
             {user && <AccountSwitcher />}
           </div>
         </div>
@@ -70,6 +82,9 @@ export default function Navigation() {
           ))}
         </div>
       </div>
+      {showTour && user && (
+        <WelcomeTour userId={user.id} onDone={() => setShowTour(false)} />
+      )}
     </nav>
   );
 }
