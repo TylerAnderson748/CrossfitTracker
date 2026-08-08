@@ -416,6 +416,17 @@ export default function WeeklyPlanPage() {
     }
   }, [user, calendarRange, fetchPersonalWorkouts]);
 
+  // ?addWorkout=1 (from the welcome tour) opens the workout builder directly
+  useEffect(() => {
+    if (!user) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("addWorkout")) {
+      openAddWorkoutModal();
+      window.history.replaceState({}, "", "/weekly");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
+
   const { rangeStart, rangeEnd } = getDateRange();
 
   // Generate array of days for the selected range

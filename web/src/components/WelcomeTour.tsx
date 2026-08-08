@@ -33,6 +33,12 @@ export default function WelcomeTour({ userId, onDone }: WelcomeTourProps) {
     router.push("/programming");
   };
 
+  // Land on the calendar with the workout builder already open
+  const chooseDIY = async () => {
+    await markOnboarded();
+    router.push("/weekly?addWorkout=1");
+  };
+
   if (dismissed) return null;
 
   return (
@@ -115,7 +121,7 @@ export default function WelcomeTour({ userId, onDone }: WelcomeTourProps) {
                   ← Back
                 </button>
                 <button
-                  onClick={markOnboarded}
+                  onClick={chooseDIY}
                   className="flex-1 py-2.5 bg-gradient-to-r from-blue-600 to-cyan-600 text-white font-bold rounded-lg hover:from-blue-700 hover:to-cyan-700 transition-colors"
                 >
                   Add My First Workout
