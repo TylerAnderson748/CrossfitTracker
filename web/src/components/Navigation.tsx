@@ -55,10 +55,11 @@ export default function Navigation() {
             {user && (
               <button
                 onClick={() => setShowTour(true)}
-                className="w-8 h-8 rounded-full bg-gray-100 hover:bg-purple-100 text-gray-500 hover:text-purple-700 font-bold text-sm transition-colors"
-                title="Help - what can I do here?"
+                className="px-3 py-1.5 rounded-full bg-purple-100 hover:bg-purple-200 text-purple-700 text-sm font-semibold transition-colors flex items-center gap-1.5"
+                title="App tour - what can I do here?"
               >
-                ?
+                <span className="w-5 h-5 rounded-full bg-purple-600 text-white text-xs font-bold flex items-center justify-center">?</span>
+                <span className="hidden sm:inline">Help</span>
               </button>
             )}
             {user && <AccountSwitcher />}
