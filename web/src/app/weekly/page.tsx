@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState, useCallback, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { collection, query, where, getDocs, updateDoc, doc, Timestamp, addDoc, deleteDoc, writeBatch } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
@@ -12,9 +12,10 @@ import Navigation from "@/components/Navigation";
 import PersonalAITrainer from "@/components/PersonalAITrainer";
 import WelcomeTour from "@/components/WelcomeTour";
 
-export default function WeeklyPlanPage() {
+function WeeklyPlanContent() {
   const { user, loading, switching } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [calendarRange, setCalendarRange] = useState<"next7days" | "thisWeek" | "nextWeek" | "2weeks" | "month">("next7days");
   const [loadingData, setLoadingData] = useState(true);
 
@@ -416,16 +417,16 @@ export default function WeeklyPlanPage() {
     }
   }, [user, calendarRange, fetchPersonalWorkouts]);
 
-  // ?addWorkout=1 (from the welcome tour) opens the workout builder directly
+  // ?addWorkout=1 (from the welcome tour) opens the workout builder directly.
+  // useSearchParams reacts to in-place navigations (the tour lives on this page)
   useEffect(() => {
     if (!user) return;
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("addWorkout")) {
+    if (searchParams.get("addWorkout")) {
       openAddWorkoutModal();
-      window.history.replaceState({}, "", "/weekly");
+      router.replace("/weekly", { scroll: false });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
+  }, [user, searchParams]);
 
   const { rangeStart, rangeEnd } = getDateRange();
 
@@ -1130,5 +1131,17 @@ export default function WeeklyPlanPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function WeeklyPlanPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <p className="text-gray-500">Loading...</p>
+      </div>
+    }>
+      <WeeklyPlanContent />
+    </Suspense>
   );
 }
