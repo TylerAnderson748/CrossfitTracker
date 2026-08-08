@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { collection, query, where, getDocs, Timestamp, limit, doc, setDoc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { computeBaselineStatus } from "@/lib/baselines";
 import { AICoachPreferences, WorkoutComponent } from "@/lib/types";
 import { chatCompletion } from "@/lib/ai";
 
@@ -54,6 +55,7 @@ export default function PersonalAITrainer({ userId, todayPersonalWorkouts, userP
   // Check if there's any workout to analyze
   const hasWorkoutToAnalyze = todayPersonalWorkouts && todayPersonalWorkouts.length > 0;
   const [userHistory, setUserHistory] = useState<UserWorkoutHistory>({ lifts: [], wods: [] });
+  const [baselineData, setBaselineData] = useState<{ skillNames: string[]; cardioLogs: { activity: string; miles?: number }[]; trainingStyle: string } | null>(null);
   const [aiAdvice, setAiAdvice] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -132,6 +134,19 @@ export default function PersonalAITrainer({ userId, todayPersonalWorkouts, userP
         }).filter(w => w.wodTitle);
 
         setUserHistory({ lifts, wods });
+
+        // Baseline-battery data (skills, cardio, training style) so the
+        // unlock gate matches Oddo's standard baseline minimum
+        const [skillSnap, cardioSnap, prefsSnap] = await Promise.all([
+          getDocs(query(collection(db, "skillResults"), where("userId", "==", userId), limit(150))),
+          getDocs(query(collection(db, "cardioLogs"), where("userId", "==", userId), limit(150))),
+          getDocs(query(collection(db, "aiProgrammingPreferences"), where("userId", "==", userId))),
+        ]);
+        setBaselineData({
+          skillNames: Array.from(new Set(skillSnap.docs.map(d => String(d.data().skillTitle || d.data().skillName || "")).filter(Boolean))),
+          cardioLogs: cardioSnap.docs.map(d => ({ activity: String(d.data().activity || ""), miles: Number(d.data().miles) || 0 })),
+          trainingStyle: prefsSnap.empty ? "crossfit" : String(prefsSnap.docs[0].data().trainingStyle || "crossfit"),
+        });
         setHasLoadedHistory(true);
       } catch (err) {
         console.error("Error loading user history:", err);
@@ -336,20 +351,19 @@ Respond in a confident, direct coach tone. This advice will be saved and shown e
       .join(" | ");
   };
 
-  // Count unique lifts and WODs for requirements check
-  const getUniqueLiftCount = () => {
-    const uniqueLifts = new Set(userHistory.lifts.map(l => l.liftTitle));
-    return uniqueLifts.size;
-  };
-
-  const getUniqueWodCount = () => {
-    const uniqueWods = new Set(userHistory.wods.map(w => w.wodTitle));
-    return uniqueWods.size;
-  };
-
-  const uniqueLiftCount = getUniqueLiftCount();
-  const uniqueWodCount = getUniqueWodCount();
-  const meetsRequirements = uniqueLiftCount >= 5 && uniqueWodCount >= 5;
+  // Advice unlocks at the same standard baseline minimum Oddo programs from
+  const baselineStatus = baselineData
+    ? computeBaselineStatus({
+        trainingStyle: baselineData.trainingStyle,
+        liftTitles: Array.from(new Set(userHistory.lifts.map(l => l.liftTitle))),
+        wodTitles: Array.from(new Set(userHistory.wods.map(w => w.wodTitle))),
+        skillNames: baselineData.skillNames,
+        cardioLogs: baselineData.cardioLogs,
+      })
+    : null;
+  const isGeneralStyle = baselineData?.trainingStyle === "general";
+  const strengthDone = baselineStatus ? baselineStatus.lifts.done.length + baselineStatus.bodyweight.done.length : 0;
+  const meetsRequirements = baselineStatus ? baselineStatus.meetsMinimum : false;
 
   if (!hasLoadedHistory || !hasCheckedSavedAdvice) {
     return null;
@@ -431,41 +445,40 @@ Respond in a confident, direct coach tone. This advice will be saved and shown e
                 <svg className="w-5 h-5 text-yellow-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                 </svg>
-                <span className="font-medium">Unlock Personalized Advice</span>
+                <span className="font-medium">Complete Your Baseline</span>
               </div>
               <p className="text-sm text-white/80 mb-3">
-                Log at least 5 different lifts and 5 different WODs to unlock personalized coaching from Oddo.
+                Log your baseline tests so Oddo can coach from YOUR numbers - {baselineStatus?.minimumDescription || "a few strength and cardio tests"}.
               </p>
               <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-white/70">Unique Lifts</span>
-                  <div className="flex items-center gap-2">
-                    <div className="w-24 h-2 bg-white/20 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-green-400 rounded-full transition-all"
-                        style={{ width: `${Math.min(100, (uniqueLiftCount / 5) * 100)}%` }}
-                      />
+                {([
+                  { label: "Strength Tests", done: strengthDone, needed: 2, show: true },
+                  { label: "Cardio Test", done: baselineStatus?.cardio.done.length || 0, needed: 1, show: true },
+                  { label: "Benchmark WOD", done: baselineStatus?.wods.done.length || 0, needed: 1, show: !isGeneralStyle },
+                  { label: "Skill Test", done: baselineStatus?.skills.done.length || 0, needed: 1, show: !isGeneralStyle },
+                ]).filter(r => r.show).map(row => (
+                  <div key={row.label} className="flex items-center justify-between">
+                    <span className="text-sm text-white/70">{row.label}</span>
+                    <div className="flex items-center gap-2">
+                      <div className="w-24 h-2 bg-white/20 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-green-400 rounded-full transition-all"
+                          style={{ width: `${Math.min(100, (row.done / row.needed) * 100)}%` }}
+                        />
+                      </div>
+                      <span className={`text-sm font-medium ${row.done >= row.needed ? 'text-green-400' : 'text-white/90'}`}>
+                        {Math.min(row.done, row.needed)}/{row.needed}
+                      </span>
                     </div>
-                    <span className={`text-sm font-medium ${uniqueLiftCount >= 5 ? 'text-green-400' : 'text-white/90'}`}>
-                      {uniqueLiftCount}/5
-                    </span>
                   </div>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-white/70">Unique WODs</span>
-                  <div className="flex items-center gap-2">
-                    <div className="w-24 h-2 bg-white/20 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-green-400 rounded-full transition-all"
-                        style={{ width: `${Math.min(100, (uniqueWodCount / 5) * 100)}%` }}
-                      />
-                    </div>
-                    <span className={`text-sm font-medium ${uniqueWodCount >= 5 ? 'text-green-400' : 'text-white/90'}`}>
-                      {uniqueWodCount}/5
-                    </span>
-                  </div>
-                </div>
+                ))}
               </div>
+              <a
+                href="/programming"
+                className="inline-block mt-3 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg text-sm font-semibold transition-colors"
+              >
+                Log or Schedule My Baselines →
+              </a>
               <p className="text-xs text-white/50 mt-3">
                 Log your results from preset workouts to build your training profile.
               </p>
