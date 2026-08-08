@@ -1898,7 +1898,11 @@ PATCH RULES:
   const [addingBaseline, setAddingBaseline] = useState(false);
   const handleAddBaselineWeek = async () => {
     if (!baselineStatus || addingBaseline) return;
-    const daysPlan = buildBaselineWeek(baselineStatus, preferences.trainingStyle);
+    // Commercial gyms always have loadable equipment; at home, look for any
+    // mention of something loadable in the equipment list
+    const hasLoadableEquipment = (preferences.trainingEnvironment || "home") === "commercial" ||
+      /(barbell|dumbbell|\bdbs?\b|kettlebell|\bkbs?\b|sandbag|plate|weight)/i.test(preferences.equipment || "");
+    const daysPlan = buildBaselineWeek(baselineStatus, preferences.trainingStyle, hasLoadableEquipment);
     if (daysPlan.length === 0) {
       alert("Your baseline minimums are already covered - nothing to schedule!");
       return;
@@ -2291,7 +2295,9 @@ PATCH RULES:
               piece of advice gets calibrated to YOU.
             </p>
             <p className="text-xs text-gray-600 mb-3">
-              Progress: Lifts {baselineStatus.lifts.done.length}/5 • Cardio {baselineStatus.cardio.done.length}/5
+              Progress: Lifts {baselineStatus.lifts.done.length}/5
+              {baselineStatus.bodyweight.done.length > 0 && <> • Bodyweight {baselineStatus.bodyweight.done.length}/5</>}
+              {" "}• Cardio {baselineStatus.cardio.done.length}/5
               {(preferences.trainingStyle || "crossfit") !== "general" && (
                 <> • WODs {baselineStatus.wods.done.length}/5 • Skills {baselineStatus.skills.done.length}/5</>
               )}
@@ -2401,7 +2407,9 @@ PATCH RULES:
       {baselineStatus && !baselineStatus.meetsMinimum && (
         <div className="px-4 py-2.5 bg-purple-50 border-b border-purple-100 text-xs text-purple-800">
           🎯 <span className="font-semibold">Baseline data:</span>{" "}
-          Lifts {baselineStatus.lifts.done.length}/5 • Cardio {baselineStatus.cardio.done.length}/5
+          Lifts {baselineStatus.lifts.done.length}/5
+          {baselineStatus.bodyweight.done.length > 0 && <> • Bodyweight {baselineStatus.bodyweight.done.length}/5</>}
+          {" "}• Cardio {baselineStatus.cardio.done.length}/5
           {(preferences.trainingStyle || "crossfit") !== "general" && (
             <> • WODs {baselineStatus.wods.done.length}/5 • Skills {baselineStatus.skills.done.length}/5</>
           )}

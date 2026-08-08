@@ -2,7 +2,7 @@
 // coaching. Every AI athlete goes through this: log the bare minimum, or your
 // first programmed workouts ARE the missing tests.
 
-export type BaselineCategory = "lift" | "wod" | "cardio" | "skill";
+export type BaselineCategory = "lift" | "wod" | "cardio" | "skill" | "bodyweight";
 
 export interface BaselineItem {
   key: string;
@@ -36,6 +36,15 @@ export const BASELINE_CARDIO: BaselineItem[] = [
   { key: "swim", name: "Swim Session", category: "cardio", description: "Continuous swim session - as far as comfortable in 10-20 min. Log distance and time." },
 ];
 
+// For athletes with NO loadable equipment: these stand in for the lift tests
+export const BASELINE_BODYWEIGHT: BaselineItem[] = [
+  { key: "air_squats_2min", name: "2-Min Air Squats", category: "bodyweight", description: "Max air squats in 2 minutes - full depth, full hip extension, steady pace. Log total reps." },
+  { key: "max_lunges", name: "Max Walking Lunges", category: "bodyweight", description: "Max unbroken alternating walking lunges - knee gently touches the floor each rep. Log total steps." },
+  { key: "burpees_5min", name: "5-Min Burpees", category: "bodyweight", description: "Max burpees in 5 minutes at a sustainable pace - chest to floor, full stand with a small jump. Log total reps." },
+  { key: "wall_sit", name: "Wall Sit Hold", category: "bodyweight", description: "Max-duration wall sit at parallel, back flat against the wall. Log the time." },
+  { key: "situps_2min", name: "2-Min Sit-ups", category: "bodyweight", description: "Max sit-ups in 2 minutes - shoulders touch the floor, sit fully up. Log total reps." },
+];
+
 export const BASELINE_SKILLS: BaselineItem[] = [
   { key: "max_pullups", name: "Max Strict Pull-ups", category: "skill", description: "One max set of strict pull-ups, dead hang to chin over bar. No kipping. Log the number (use banded if needed and note the band)." },
   { key: "max_pushups", name: "Max Push-ups", category: "skill", description: "One max unbroken set of push-ups with full range and rigid plank. Log the number." },
@@ -49,6 +58,7 @@ export const BASELINE_BATTERY: BaselineItem[] = [
   ...BASELINE_WODS,
   ...BASELINE_CARDIO,
   ...BASELINE_SKILLS,
+  ...BASELINE_BODYWEIGHT,
 ];
 
 export interface BaselineStatusInput {
@@ -69,6 +79,7 @@ export interface BaselineStatus {
   wods: BaselineCategoryStatus;
   cardio: BaselineCategoryStatus;
   skills: BaselineCategoryStatus;
+  bodyweight: BaselineCategoryStatus;
   meetsMinimum: boolean;
   minimumDescription: string;
 }
@@ -102,23 +113,28 @@ function matchCardio(logs: { activity: string; miles?: number }[]): BaselineCate
 }
 
 // Bare minimum before full programming can be calibrated:
-//   CrossFit: 2 lifts + 1 cardio + 1 benchmark WOD + 1 skill
-//   General gym: 2 lifts + 1 cardio
+//   CrossFit: 2 strength tests + 1 cardio + 1 benchmark WOD + 1 skill
+//   General gym: 2 strength tests + 1 cardio
+// "Strength tests" = lift 5RMs, OR bodyweight benchmarks for athletes with
+// nothing to load
 export function computeBaselineStatus(input: BaselineStatusInput): BaselineStatus {
   const lifts = matchByName(BASELINE_LIFTS, input.liftTitles);
   const wods = matchByName(BASELINE_WODS, input.wodTitles);
   const skills = matchByName(BASELINE_SKILLS, input.skillNames);
+  // Bodyweight tests may get logged as skills or as scored workouts
+  const bodyweight = matchByName(BASELINE_BODYWEIGHT, [...input.skillNames, ...input.wodTitles]);
   const cardio = matchCardio(input.cardioLogs);
 
   const general = input.trainingStyle === "general";
+  const strengthDone = lifts.done.length + bodyweight.done.length;
   const meetsMinimum = general
-    ? lifts.done.length >= 2 && cardio.done.length >= 1
-    : lifts.done.length >= 2 && cardio.done.length >= 1 && wods.done.length >= 1 && skills.done.length >= 1;
+    ? strengthDone >= 2 && cardio.done.length >= 1
+    : strengthDone >= 2 && cardio.done.length >= 1 && wods.done.length >= 1 && skills.done.length >= 1;
   const minimumDescription = general
-    ? "2 baseline lifts + 1 baseline cardio test"
-    : "2 baseline lifts + 1 baseline cardio test + 1 benchmark WOD + 1 skill test";
+    ? "2 strength tests (lifts, or bodyweight if you have no equipment) + 1 cardio test"
+    : "2 strength tests (lifts, or bodyweight if you have no equipment) + 1 cardio test + 1 benchmark WOD + 1 skill test";
 
-  return { lifts, wods, cardio, skills, meetsMinimum, minimumDescription };
+  return { lifts, wods, cardio, skills, bodyweight, meetsMinimum, minimumDescription };
 }
 
 // A deterministic baseline week (no AI involved) that fills the athlete's
@@ -135,19 +151,27 @@ const WARMUP = {
   description: "5 min easy movement (jog, bike, or jump rope); 10 air squats, 10 push-ups, arm circles; build gradually into the first test.",
 };
 
-export function buildBaselineWeek(status: BaselineStatus, trainingStyle?: string): BaselineDayPlan[] {
+export function buildBaselineWeek(status: BaselineStatus, trainingStyle?: string, hasLoadableEquipment: boolean = true): BaselineDayPlan[] {
   const general = trainingStyle === "general";
   const days: BaselineDayPlan[] = [];
 
-  // Day 1: lift tests (up to 2 missing toward the 2-lift minimum)
-  const liftsNeeded = Math.max(0, 2 - status.lifts.done.length);
-  const liftTests = status.lifts.missing.slice(0, Math.max(liftsNeeded, 0) || 0);
-  if (liftTests.length > 0) {
+  // Day 1: strength tests (up to 2 missing toward the 2-test minimum).
+  // No barbell/DB/KB at all -> bodyweight benchmarks stand in for lifts.
+  const strengthDone = status.lifts.done.length + status.bodyweight.done.length;
+  const strengthNeeded = Math.max(0, 2 - strengthDone);
+  const strengthTests = hasLoadableEquipment
+    ? status.lifts.missing.slice(0, strengthNeeded)
+    : status.bodyweight.missing.slice(0, strengthNeeded);
+  if (strengthTests.length > 0) {
     days.push({
       dayOffset: 0,
       components: [
         WARMUP,
-        ...liftTests.map(t => ({ type: "lift", title: `Baseline: ${t.name}`, description: t.description })),
+        ...strengthTests.map(t => ({
+          type: t.category === "bodyweight" ? "skill" : "lift",
+          title: `Baseline: ${t.name}`,
+          description: t.description,
+        })),
       ],
     });
   }
@@ -187,6 +211,7 @@ export function buildBaselinePromptBlock(status: BaselineStatus, trainingStyle?:
 
   const battery = `STANDARD BASELINE BATTERY (the ONLY tests to use for baselining - never invent different ones):
 - Lifts (5-rep max builds): ${BASELINE_LIFTS.map(i => i.name).join(", ")} [${fmt(status.lifts)}]
+- Bodyweight strength (ONLY for athletes with no barbell/dumbbells/kettlebell - these replace the lift tests): ${BASELINE_BODYWEIGHT.map(i => i.name).join(", ")} [${fmt(status.bodyweight)}]
 - Cardio: ${BASELINE_CARDIO.map(i => i.name).join(", ")} [${fmt(status.cardio)}]${general ? "" : `
 - Benchmark WODs: ${BASELINE_WODS.map(i => i.name).join(", ")} [${fmt(status.wods)}]
 - Skills (max tests): ${BASELINE_SKILLS.map(i => i.name).join(", ")} [${fmt(status.skills)}]`}`;
@@ -198,7 +223,7 @@ export function buildBaselinePromptBlock(status: BaselineStatus, trainingStyle?:
   return `\n${battery}
 BASELINE MINIMUM NOT MET (requires ${status.minimumDescription}). This athlete cannot be programmed real loads/paces yet:
 1. The FIRST 1-2 WEEKS of any new plan MUST be a BASELINE BLOCK: schedule the MISSING battery tests above (max 2-3 tests per week, spread across days, never two max-effort tests in one session). Title each component EXACTLY "Baseline: <test name>" (e.g., "Baseline: Back Squat") and use the standard prescription for that test.
-2. Prioritize the tests that satisfy the minimum, matched to the athlete's goals and equipment (skip swims/bikes they can't do; use DB versions at home).
+2. Prioritize the tests that satisfy the minimum, matched to the athlete's goals and equipment (skip swims/bikes they can't do; use DB versions at home). If the athlete has NOTHING to load - no barbell, dumbbells, kettlebell, or sandbag - use the bodyweight strength tests in place of the lift tests, and choose WOD benchmarks that work bodyweight-only (Cindy).
 3. Everything else in the baseline block stays easy (RPE 5-6) - prescribe by RPE, NEVER percentages of unknown maxes.
 4. Once the athlete logs the tests, use those results as the reference numbers for all future programming.\n`;
 }
