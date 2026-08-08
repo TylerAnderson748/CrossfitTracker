@@ -41,8 +41,9 @@ const FIXED_CARDIO: Record<string, { miles: number; activity: string }> = {
 };
 
 interface EntryState {
-  a: string; // weight / reps / minutes / rounds / miles
+  a: string; // weight / reps / minutes / rounds / distance
   b: string; // reps / seconds / extra reps / minutes
+  u?: "mi" | "m"; // distance unit for free-distance tests (swim defaults to meters)
   saving: boolean;
   saved: boolean;
 }
@@ -122,9 +123,10 @@ export default function BaselineWizard({
             date: now(), dateString, notes: `Baseline: ${item.name}`, createdAt: now(),
           });
         } else {
-          const miles = parseFloat(entry.a) || 0;
+          const raw = parseFloat(entry.a) || 0;
+          const miles = Math.round(((entry.u || "m") === "m" ? raw * 0.000621371 : raw) * 100) / 100;
           const minutes = parseInt(entry.b) || 0;
-          if (miles <= 0 && minutes <= 0) throw new Error("Enter miles and/or minutes");
+          if (raw <= 0 && minutes <= 0) throw new Error("Enter distance and/or minutes");
           await addDoc(collection(db, "cardioLogs"), {
             userId, activity: item.key === "swim" ? "swim" : "bike_road", miles, timeInSeconds: minutes * 60,
             date: now(), dateString, notes: `Baseline: ${item.name}`, createdAt: now(),
@@ -198,9 +200,17 @@ export default function BaselineWizard({
       }
       return (
         <>
-          <input type="number" inputMode="decimal" min="0" placeholder="miles" value={entry.a}
-            onChange={(e) => patchEntry(item.key, { a: e.target.value })} className={smallInput} />
-          <span className="text-xs text-gray-500">mi in</span>
+          <input type="number" inputMode="decimal" min="0" placeholder="distance" value={entry.a}
+            onChange={(e) => patchEntry(item.key, { a: e.target.value })} className="w-20 px-2 py-1.5 border border-gray-300 rounded-lg text-center text-sm text-gray-900 bg-white" />
+          <select
+            value={entry.u || "m"}
+            onChange={(e) => patchEntry(item.key, { u: e.target.value as "mi" | "m" })}
+            className="px-1.5 py-1.5 border border-gray-300 rounded-lg text-xs text-gray-900 bg-white"
+          >
+            <option value="m">m</option>
+            <option value="mi">mi</option>
+          </select>
+          <span className="text-xs text-gray-500">in</span>
           <input type="number" inputMode="numeric" min="0" placeholder="min" value={entry.b}
             onChange={(e) => patchEntry(item.key, { b: e.target.value })} className={smallInput} />
           <span className="text-xs text-gray-500">min</span>

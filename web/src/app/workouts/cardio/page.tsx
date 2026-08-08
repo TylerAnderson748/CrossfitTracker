@@ -44,6 +44,8 @@ function CardioPageContent() {
     urlActivity && ACTIVITIES.includes(urlActivity) ? urlActivity : "run"
   );
   const [miles, setMiles] = useState(urlMiles || "");
+  // Distance can be entered in miles, kilometers, or meters (stored as miles)
+  const [distanceUnit, setDistanceUnit] = useState<"mi" | "km" | "m">("mi");
   const [hours, setHours] = useState("");
   const [minutes, setMinutes] = useState("");
   const [seconds, setSeconds] = useState("");
@@ -80,9 +82,14 @@ function CardioPageContent() {
     loadHistory();
   }, [loadHistory]);
 
+  const toMiles = (value: number): number => {
+    const mi = distanceUnit === "km" ? value * 0.621371 : distanceUnit === "m" ? value * 0.000621371 : value;
+    return Math.round(mi * 100) / 100;
+  };
+
   const handleSubmit = async () => {
     if (!user) return;
-    const milesNum = parseFloat(miles);
+    const milesNum = toMiles(parseFloat(miles) || 0);
     const totalSeconds = (parseInt(hours) || 0) * 3600 + (parseInt(minutes) || 0) * 60 + (parseInt(seconds) || 0);
     if (!milesNum && !totalSeconds) {
       setError("Enter at least mileage or a time");
@@ -182,17 +189,28 @@ function CardioPageContent() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Miles</label>
-              <input
-                type="number"
-                inputMode="decimal"
-                step="0.1"
-                min="0"
-                value={miles}
-                onChange={(e) => setMiles(e.target.value)}
-                placeholder="e.g., 4.5"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-red-500 focus:border-transparent"
-              />
+              <label className="block text-sm font-medium text-gray-700 mb-1">Distance</label>
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  step="0.1"
+                  min="0"
+                  value={miles}
+                  onChange={(e) => setMiles(e.target.value)}
+                  placeholder={distanceUnit === "m" ? "e.g., 2000" : "e.g., 4.5"}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                />
+                <select
+                  value={distanceUnit}
+                  onChange={(e) => setDistanceUnit(e.target.value as "mi" | "km" | "m")}
+                  className="px-2 py-2 border border-gray-300 rounded-lg text-gray-900 bg-white text-sm"
+                >
+                  <option value="mi">mi</option>
+                  <option value="km">km</option>
+                  <option value="m">m</option>
+                </select>
+              </div>
             </div>
           </div>
 
@@ -231,7 +249,7 @@ function CardioPageContent() {
                 className="w-20 px-3 py-2 border border-gray-300 rounded-lg text-gray-900 text-center focus:ring-2 focus:ring-red-500 focus:border-transparent"
               />
               {(() => {
-                const milesNum = parseFloat(miles);
+                const milesNum = toMiles(parseFloat(miles) || 0);
                 const total = (parseInt(hours) || 0) * 3600 + (parseInt(minutes) || 0) * 60 + (parseInt(seconds) || 0);
                 const pace = milesNum && total ? formatPace(milesNum, total) : "";
                 return pace ? <span className="ml-2 text-sm text-gray-500 font-mono">{pace}</span> : null;
