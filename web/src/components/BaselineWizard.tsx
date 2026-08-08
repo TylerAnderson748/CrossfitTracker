@@ -79,12 +79,8 @@ export default function BaselineWizard({
       : []),
     { name: "Bodyweight", needText: hasLoad ? "also count toward the 2 strength tests" : "need 2 (these are your strength tests)", met: strengthDone >= 2, cat: status.bodyweight },
     { name: "Cardio", needText: "need 1", met: status.cardio.done.length >= 1, cat: status.cardio },
-    ...(!general
-      ? [
-          { name: "Benchmark WODs", needText: "need 1", met: status.wods.done.length >= 1, cat: status.wods },
-          { name: "Skills", needText: "need 1", met: status.skills.done.length >= 1, cat: status.skills },
-        ]
-      : []),
+    { name: "Benchmark WODs", needText: general ? "optional for general gym training" : "need 1", met: status.wods.done.length >= 1, cat: status.wods },
+    { name: "Skills", needText: general ? "optional for general gym training" : "need 1", met: status.skills.done.length >= 1, cat: status.skills },
   ];
 
   const now = () => Timestamp.now();
