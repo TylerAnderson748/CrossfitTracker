@@ -94,7 +94,7 @@ export default function WelcomeTour({ userId, onDone }: WelcomeTourProps) {
               <div className="space-y-3">
                 {[
                   { icon: "➕", name: "1. Build a workout", desc: "On Home, hit \"+ Add Workout\", pick the date, and stack the pieces: warm-up, WOD, lifts, runs, skills - whatever your session is." },
-                  { icon: "📸", name: "Or scan it", desc: "Got programming on a whiteboard or paper? The Oddo tab's Scan feature photographs it straight onto your calendar (Oddo subscription)." },
+                  { icon: "📸", name: "Or scan it", desc: "Got programming on a whiteboard or paper? The Oddo tab's Scan feature photographs it straight onto your calendar. (Paid feature - requires an Oddo Coach or Oddo + Programming subscription.)" },
                   { icon: "✅", name: "2. Log your results", desc: "Each day's card on Home has Log buttons - WOD scores, the weights you lifted, cardio miles and time." },
                   { icon: "🏆", name: "3. Watch your records grow", desc: "Everything you log lands in Records: PR history, benchmark times, cardio pace - with charts in Progress." },
                 ].map(row => (

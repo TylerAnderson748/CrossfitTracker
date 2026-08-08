@@ -57,9 +57,10 @@ function SubscribeContent() {
       const now = new Date();
       const trialEndsAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000); // 7 days from now
 
-      // Trials get the full experience (programming included)
+      // The trial carries the tier the user selected - a coach-only trial
+      // must not unlock the plan builder
       const subscription: AITrainerSubscription = {
-        tier: "elite",
+        tier: selectedTier === "programming" ? "elite" : "pro",
         status: "trialing",
         startDate: Timestamp.fromDate(now),
         trialEndsAt: Timestamp.fromDate(trialEndsAt),
@@ -329,18 +330,16 @@ function SubscribeContent() {
             </div>
             <h2 className="text-2xl font-bold text-gray-900 mb-2">You&apos;re Already Subscribed!</h2>
             <p className="text-gray-600 mb-4">
-              {relevantSubscription?.status === "trialing"
-                ? "You're currently on a free trial with full access - Oddo and AI Programming."
-                : relevantSubscription?.tier === "elite"
-                ? "You have Oddo + Programming - the full experience."
-                : "You have the base Oddo: advice, scaling, scanning, and logging."}
+              {relevantSubscription?.tier === "elite"
+                ? `You have Oddo + Programming${relevantSubscription?.status === "trialing" ? " (free trial)" : ""} - the full experience.`
+                : `You have the base Oddo coach${relevantSubscription?.status === "trialing" ? " (free trial)" : ""}: advice, scaling, scanning, logging, and baseline testing.`}
             </p>
             {relevantSubscription?.trialEndsAt && relevantSubscription?.status === "trialing" && (
               <p className="text-sm text-purple-600 mb-4">
                 Trial ends: {relevantSubscription.trialEndsAt.toDate().toLocaleDateString()}
               </p>
             )}
-            {relevantSubscription?.status === "active" && relevantSubscription?.tier !== "elite" && (
+            {relevantSubscription?.tier !== "elite" && (
               <div className="max-w-md mx-auto mb-6 p-4 bg-gradient-to-br from-purple-50 to-indigo-50 rounded-lg border border-purple-200 text-left">
                 <p className="font-semibold text-purple-900 mb-1">📋 Add AI Programming</p>
                 <p className="text-sm text-purple-800 mb-3">

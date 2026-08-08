@@ -432,18 +432,18 @@ export const PRICING = {
   AI_PROGRAMMING_YEARLY: 159.99,
 } as const;
 
-// Subscription tier semantics:
-//   "pro"   = base Oddo (advice, scaling, scan, logging)
+/// Subscription tier semantics:
+//   "pro"   = base Oddo (advice, scaling, scan, logging, baseline tests)
 //   "elite" = Oddo + Programming (adds the AI plan builder)
-// Trials get full access so users can try everything.
+// Trials carry the tier chosen at signup - a coach-only trial does NOT
+// unlock the plan builder.
 export function hasActiveAICoach(sub?: AITrainerSubscription): boolean {
   return sub?.status === "active" || sub?.status === "trialing";
 }
 
 export function hasAIProgramming(sub?: AITrainerSubscription): boolean {
   if (!sub) return false;
-  if (sub.status === "trialing") return true;
-  return sub.status === "active" && sub.tier === "elite";
+  return (sub.status === "active" || sub.status === "trialing") && sub.tier === "elite";
 }
 
 // =========================
