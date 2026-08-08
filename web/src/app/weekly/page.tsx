@@ -25,6 +25,10 @@ export default function WeeklyPlanPage() {
   // Clear-calendar modal state
   const [showClearModal, setShowClearModal] = useState(false);
   const [clearing, setClearing] = useState(false);
+  // Session lift-logging modal: log every lift in a workout at once
+  const [logSessionWorkout, setLogSessionWorkout] = useState<PersonalWorkout | null>(null);
+  const [sessionEntries, setSessionEntries] = useState<Record<string, { weight: string; reps: string }>>({});
+  const [savingSession, setSavingSession] = useState(false);
   const [showAddWorkoutModal, setShowAddWorkoutModal] = useState(false);
   const [newWorkoutDate, setNewWorkoutDate] = useState("");
   const [workoutComponents, setWorkoutComponents] = useState<WorkoutComponent[]>([]);
@@ -288,6 +292,52 @@ export default function WeeklyPlanPage() {
       }
     } finally {
       setLoggingClassKey(null);
+    }
+  };
+
+  // Open the session logger with one row per lift component
+  const openLogSession = (workout: PersonalWorkout) => {
+    const entries: Record<string, { weight: string; reps: string }> = {};
+    workout.components.filter(c => c.type === "lift").forEach(c => {
+      entries[c.id] = { weight: "", reps: "" };
+    });
+    setSessionEntries(entries);
+    setLogSessionWorkout(workout);
+  };
+
+  // Save each filled-in lift as a liftResults entry (feeds PR history/charts)
+  const handleSaveSessionLog = async () => {
+    if (!user || !logSessionWorkout) return;
+    setSavingSession(true);
+    try {
+      const ds = logSessionWorkout.dateString || formatDateLocal(logSessionWorkout.date.toDate());
+      const [y, m, d] = ds.split("-").map(Number);
+      const logDate = Timestamp.fromDate(new Date(y, m - 1, d, 12, 0, 0));
+      let saved = 0;
+      for (const comp of logSessionWorkout.components.filter(c => c.type === "lift")) {
+        const entry = sessionEntries[comp.id];
+        const weight = parseFloat(entry?.weight || "");
+        if (!weight || weight <= 0) continue;
+        await addDoc(collection(db, "liftResults"), {
+          userId: user.id,
+          liftTitle: comp.title,
+          weight,
+          reps: parseInt(entry?.reps || "") || 1,
+          date: logDate,
+          isPersonalRecord: false,
+        });
+        saved++;
+      }
+      setLogSessionWorkout(null);
+      if (saved > 0) {
+        alert(`Logged ${saved} lift${saved === 1 ? "" : "s"}! They're in your history and count toward PRs.`);
+      }
+    } catch (error) {
+      console.error("Error logging session:", error);
+      const message = error instanceof Error ? error.message : String(error);
+      alert(`Couldn't save: ${message}`);
+    } finally {
+      setSavingSession(false);
     }
   };
 
@@ -605,18 +655,20 @@ export default function WeeklyPlanPage() {
                                         Log
                                       </Link>
                                     );
-                                  } else if (liftComponent && !classComponent) {
+                                  }
+                                  if (liftComponent && !classComponent) {
                                     buttons.push(
-                                      <Link
+                                      <button
                                         key="lift"
-                                        href={`/workouts/lift?name=${encodeURIComponent(liftComponent.title)}&description=${encodeURIComponent(liftComponent.description || "")}`}
+                                        onClick={() => openLogSession(personalWorkout)}
                                         className="px-2 py-1 bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1"
+                                        title="Log the weights you lifted in this session"
                                       >
                                         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                                         </svg>
-                                        Log
-                                      </Link>
+                                        Log Lifts
+                                      </button>
                                     );
                                   }
                                   if (cardioComponent && cardioComponent.activity) {
@@ -714,6 +766,66 @@ export default function WeeklyPlanPage() {
           </div>
         )}
       </main>
+
+      {/* Session Lift Log Modal */}
+      {logSessionWorkout && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <h2 className="text-xl font-bold text-gray-900 mb-1">Log Your Lifts</h2>
+            <p className="text-sm text-gray-500 mb-4">
+              Enter your top working set for each lift (leave blank to skip). Entries go into your lift history and count toward PRs.
+            </p>
+            <div className="space-y-4">
+              {logSessionWorkout.components.filter(c => c.type === "lift").map(comp => (
+                <div key={comp.id} className="border border-gray-200 rounded-lg p-3">
+                  <p className="font-semibold text-gray-900 text-sm">{comp.title}</p>
+                  {comp.description && (
+                    <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{comp.description}</p>
+                  )}
+                  <div className="flex items-center gap-2 mt-2">
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      min="0"
+                      placeholder="Weight"
+                      value={sessionEntries[comp.id]?.weight || ""}
+                      onChange={(e) => setSessionEntries(prev => ({ ...prev, [comp.id]: { ...prev[comp.id], weight: e.target.value } }))}
+                      className="w-24 px-3 py-2 border border-gray-300 rounded-lg text-gray-900 text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    />
+                    <span className="text-sm text-gray-500">lbs ×</span>
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      min="1"
+                      placeholder="Reps"
+                      value={sessionEntries[comp.id]?.reps || ""}
+                      onChange={(e) => setSessionEntries(prev => ({ ...prev, [comp.id]: { ...prev[comp.id], reps: e.target.value } }))}
+                      className="w-20 px-3 py-2 border border-gray-300 rounded-lg text-gray-900 text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    />
+                    <span className="text-sm text-gray-500">reps</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-3 mt-5">
+              <button
+                onClick={() => setLogSessionWorkout(null)}
+                disabled={savingSession}
+                className="flex-1 py-3 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveSessionLog}
+                disabled={savingSession}
+                className="flex-1 py-3 bg-purple-600 text-white font-bold rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50"
+              >
+                {savingSession ? "Saving..." : "Save Lifts"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Clear Calendar Modal */}
       {showClearModal && (
