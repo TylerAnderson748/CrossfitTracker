@@ -16,7 +16,7 @@ export default function Navigation() {
     { href: "/weekly", label: "Home", icon: "🏠" },
     { href: "/programming", label: "Oddo", icon: "🤖" },
     { href: "/plan", label: "My Plan", icon: "📋" },
-    { href: "/workouts", label: "Workouts", icon: "🏋️" },
+    { href: "/workouts", label: "Records", icon: "📖" },
     { href: "/progress", label: "Progress", icon: "📈" },
     { href: "/profile", label: "Profile", icon: "👤" },
     ...(!hasAISubscription ? [{ href: "/subscribe", label: "Get Oddo", icon: "⚡" }] : []),

@@ -3,10 +3,11 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { collection, query, where, getDocs, deleteDoc, doc, addDoc, Timestamp } from "firebase/firestore";
+import { collection, query, where, getDocs, deleteDoc, doc, addDoc, Timestamp, limit } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
-import { WorkoutLog, formatResult } from "@/lib/types";
+import { WorkoutLog, formatResult, CardioLog, cardioActivityLabels, cardioActivityIcons, CardioActivity } from "@/lib/types";
+import { computeBaselineStatus, BaselineStatus } from "@/lib/baselines";
 import Navigation from "@/components/Navigation";
 import { WOD_CATEGORIES, LIFT_CATEGORIES, SKILL_CATEGORIES, WorkoutCategory, getAllWods, getAllLifts, getAllSkills } from "@/lib/workoutData";
 
@@ -55,7 +56,9 @@ interface SearchResult {
 export default function WorkoutsPage() {
   const { user, loading, switching } = useAuth();
   const router = useRouter();
-  const [workoutType, setWorkoutType] = useState<"wod" | "lift" | "skill">("wod");
+  const [workoutType, setWorkoutType] = useState<"wod" | "lift" | "skill" | "cardio" | "baseline">("wod");
+  const [cardioLogs, setCardioLogs] = useState<CardioLog[]>([]);
+  const [baselineStatus, setBaselineStatus] = useState<BaselineStatus | null>(null);
   const [recentLogs, setRecentLogs] = useState<WorkoutLog[]>([]);
   const [frequentWods, setFrequentWods] = useState<FrequentWorkout[]>([]);
   const [frequentLifts, setFrequentLifts] = useState<FrequentWorkout[]>([]);
@@ -91,6 +94,36 @@ export default function WorkoutsPage() {
       router.push("/login");
     }
   }, [user, loading, switching, router]);
+
+  // Cardio history + baseline-battery status (for the Cardio and Benchmarks tabs)
+  useEffect(() => {
+    if (!user) return;
+    const loadRecords = async () => {
+      try {
+        const [liftSnap, wodSnap, skillSnap, cardioSnap, prefsSnap] = await Promise.all([
+          getDocs(query(collection(db, "liftResults"), where("userId", "==", user.id), limit(150))),
+          getDocs(query(collection(db, "workoutLogs"), where("userId", "==", user.id), limit(150))),
+          getDocs(query(collection(db, "skillResults"), where("userId", "==", user.id), limit(150))),
+          getDocs(query(collection(db, "cardioLogs"), where("userId", "==", user.id), limit(150))),
+          getDocs(query(collection(db, "aiProgrammingPreferences"), where("userId", "==", user.id))),
+        ]);
+        const cl = cardioSnap.docs
+          .map(d => ({ id: d.id, ...d.data() } as CardioLog))
+          .sort((a, b) => (b.date?.toMillis?.() || 0) - (a.date?.toMillis?.() || 0));
+        setCardioLogs(cl);
+        setBaselineStatus(computeBaselineStatus({
+          trainingStyle: prefsSnap.empty ? "crossfit" : String(prefsSnap.docs[0].data().trainingStyle || "crossfit"),
+          liftTitles: Array.from(new Set(liftSnap.docs.map(d => String(d.data().liftTitle || "")).filter(Boolean))),
+          wodTitles: Array.from(new Set(wodSnap.docs.map(d => String(d.data().wodTitle || "")).filter(Boolean))),
+          skillNames: Array.from(new Set(skillSnap.docs.map(d => String(d.data().skillTitle || d.data().skillName || "")).filter(Boolean))),
+          cardioLogs: cl.map(l => ({ activity: l.activity, miles: l.miles })),
+        }));
+      } catch (err) {
+        console.error("Error loading records data:", err);
+      }
+    };
+    loadRecords();
+  }, [user]);
 
   useEffect(() => {
     if (user) {
@@ -590,7 +623,7 @@ export default function WorkoutsPage() {
       <main className="max-w-4xl mx-auto px-4 py-8">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">Workouts</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Records</h1>
           <div className="relative">
             <button
               onClick={() => setShowLogDropdown(!showLogDropdown)}
@@ -625,57 +658,139 @@ export default function WorkoutsPage() {
                   <span className="font-medium">Log Skill</span>
                   <p className="text-xs text-gray-500">Gymnastics & skills</p>
                 </Link>
+                <Link
+                  href="/workouts/cardio"
+                  className="block px-4 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors"
+                >
+                  <span className="font-medium">Log Cardio</span>
+                  <p className="text-xs text-gray-500">Run, swim, bike, row</p>
+                </Link>
               </div>
             )}
           </div>
         </div>
 
         {/* Type Selector */}
-        <div className="flex gap-2 mb-6">
-          <button
-            onClick={() => {
-              setWorkoutType("wod");
-              setExpandedCategory(null);
-              setSearchQuery("");
-            }}
-            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-              workoutType === "wod"
-                ? "bg-blue-600 text-white"
-                : "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
-            }`}
-          >
-            WODs
-          </button>
-          <button
-            onClick={() => {
-              setWorkoutType("lift");
-              setExpandedCategory(null);
-              setSearchQuery("");
-            }}
-            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-              workoutType === "lift"
-                ? "bg-blue-600 text-white"
-                : "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
-            }`}
-          >
-            Lifts
-          </button>
-          <button
-            onClick={() => {
-              setWorkoutType("skill");
-              setExpandedCategory(null);
-              setSearchQuery("");
-            }}
-            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-              workoutType === "skill"
-                ? "bg-blue-600 text-white"
-                : "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
-            }`}
-          >
-            Skills
-          </button>
+        <div className="flex gap-2 mb-6 flex-wrap">
+          {([
+            { key: "wod", label: "WODs" },
+            { key: "lift", label: "Lifts" },
+            { key: "skill", label: "Skills" },
+            { key: "cardio", label: "Cardio" },
+            { key: "baseline", label: "🎯 Benchmarks" },
+          ] as const).map(tab => (
+            <button
+              key={tab.key}
+              onClick={() => {
+                setWorkoutType(tab.key);
+                setExpandedCategory(null);
+                setSearchQuery("");
+              }}
+              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                workoutType === tab.key
+                  ? "bg-blue-600 text-white"
+                  : "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
 
+        {/* Cardio tab: quick logging + history */}
+        {workoutType === "cardio" && (
+          <div className="max-w-3xl">
+            <div className="grid grid-cols-5 gap-2 mb-6">
+              {(["run", "swim", "bike_mtb", "bike_road", "row"] as CardioActivity[]).map(a => (
+                <Link
+                  key={a}
+                  href={`/workouts/cardio?activity=${a}`}
+                  className="py-3 rounded-xl border bg-white border-gray-200 hover:border-red-300 hover:shadow-sm text-center transition-all"
+                >
+                  <div className="text-2xl">{cardioActivityIcons[a]}</div>
+                  <div className="text-xs font-semibold mt-1 text-gray-600">{cardioActivityLabels[a]}</div>
+                </Link>
+              ))}
+            </div>
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="font-bold text-gray-900">Cardio History</h2>
+                <Link href="/workouts/cardio" className="text-sm text-red-600 hover:underline font-medium">+ Log Cardio</Link>
+              </div>
+              {cardioLogs.length === 0 ? (
+                <p className="text-gray-400 text-sm text-center py-4">No cardio logged yet - tap an activity above to log your first session</p>
+              ) : (
+                <div className="divide-y divide-gray-100">
+                  {cardioLogs.slice(0, 20).map(log => (
+                    <div key={log.id} className="py-2.5 flex items-center gap-3">
+                      <span className="text-xl">{cardioActivityIcons[log.activity] || "🏃"}</span>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-gray-900">
+                          {cardioActivityLabels[log.activity] || log.activity}
+                          {log.miles ? ` • ${log.miles} mi` : ""}
+                          {log.timeInSeconds ? ` • ${Math.floor(log.timeInSeconds / 60)}:${String(log.timeInSeconds % 60).padStart(2, "0")}` : ""}
+                          {log.miles && log.timeInSeconds ? (
+                            <span className="text-gray-400 font-normal">
+                              {" "}• {Math.floor(Math.round(log.timeInSeconds / log.miles) / 60)}:{String(Math.round(log.timeInSeconds / log.miles) % 60).padStart(2, "0")} /mi
+                            </span>
+                          ) : null}
+                        </p>
+                        <p className="text-xs text-gray-500">{log.date?.toDate?.().toLocaleDateString()}{log.notes ? ` — ${log.notes}` : ""}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Benchmarks tab: the standard baseline battery that powers Oddo */}
+        {workoutType === "baseline" && baselineStatus && (
+          <div className="max-w-3xl">
+            <p className="text-sm text-gray-600 mb-4">
+              These are the standard tests Oddo uses to calibrate your programming and coaching.
+              Log them here anytime - re-test every 6-8 weeks to keep your numbers current.
+            </p>
+            <div className="space-y-4">
+              {([
+                { title: "Lifts (5-rep max)", items: [...baselineStatus.lifts.done.map(i => ({ i, done: true })), ...baselineStatus.lifts.missing.map(i => ({ i, done: false }))] },
+                { title: "Bodyweight Strength", items: [...baselineStatus.bodyweight.done.map(i => ({ i, done: true })), ...baselineStatus.bodyweight.missing.map(i => ({ i, done: false }))] },
+                { title: "Cardio", items: [...baselineStatus.cardio.done.map(i => ({ i, done: true })), ...baselineStatus.cardio.missing.map(i => ({ i, done: false }))] },
+                { title: "Benchmark WODs", items: [...baselineStatus.wods.done.map(i => ({ i, done: true })), ...baselineStatus.wods.missing.map(i => ({ i, done: false }))] },
+                { title: "Skills (max tests)", items: [...baselineStatus.skills.done.map(i => ({ i, done: true })), ...baselineStatus.skills.missing.map(i => ({ i, done: false }))] },
+              ]).map(section => (
+                <div key={section.title} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                  <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+                    <h3 className="font-bold text-gray-900 text-sm">{section.title}</h3>
+                    <span className="text-xs text-gray-500">{section.items.filter(x => x.done).length}/{section.items.length} logged</span>
+                  </div>
+                  <div className="divide-y divide-gray-100">
+                    {section.items.map(({ i: item, done }) => {
+                      const href = item.category === "lift" ? `/workouts/lift?name=${encodeURIComponent(item.name)}`
+                        : item.category === "wod" ? `/workouts/new?name=${encodeURIComponent(item.name)}&description=${encodeURIComponent(item.description)}&scoringType=${item.key === "cindy" ? "amrap" : "fortime"}`
+                        : item.category === "cardio" ? `/workouts/cardio?activity=${item.key === "fan_bike" ? "bike_road" : item.key === "row_2k" ? "row" : item.key === "swim" ? "swim" : "run"}`
+                        : `/workouts/skill?name=${encodeURIComponent(item.name)}`;
+                      return (
+                        <Link key={item.key} href={href} className="px-4 py-2.5 flex items-center gap-3 hover:bg-blue-50 transition-colors">
+                          <span className={`font-bold ${done ? "text-green-600" : "text-gray-300"}`}>{done ? "✓" : "○"}</span>
+                          <div className="min-w-0 flex-1">
+                            <p className={`text-sm font-medium ${done ? "text-gray-500" : "text-gray-900"}`}>{item.name}</p>
+                            <p className="text-xs text-gray-500 truncate">{item.description}</p>
+                          </div>
+                          <span className="text-xs text-blue-600 font-medium shrink-0">{done ? "Re-test" : "Log"} →</span>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {(workoutType === "wod" || workoutType === "lift" || workoutType === "skill") && (
+        <>
         {/* Search */}
         <div className="mb-6">
           <input
@@ -1112,6 +1227,8 @@ export default function WorkoutsPage() {
             )}
           </div>
         </div>
+        </>
+        )}
       </main>
 
       {/* Delete Confirmation Modal */}
