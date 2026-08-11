@@ -1,20 +1,20 @@
 "use client";
 
 import { useState, Suspense } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { doc, updateDoc, Timestamp } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
 import Navigation from "@/components/Navigation";
-import { AITrainerSubscription, AICoachPreferences } from "@/lib/types";
+import { AITrainerSubscription, AICoachPreferences, PRICING } from "@/lib/types";
 
 function SubscribeContent() {
   const { user, loading, refreshUser } = useAuth();
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const variant = searchParams.get("variant") === "coach" ? "coach" : "athlete";
   const [selectedPlan, setSelectedPlan] = useState<"monthly" | "yearly">("monthly");
+  const [selectedTier, setSelectedTier] = useState<"coach" | "programming">("programming");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isUpgrading, setIsUpgrading] = useState(false);
   const [showGoalsStep, setShowGoalsStep] = useState(false);
   const [savingGoals, setSavingGoals] = useState(false);
   const [goalsForm, setGoalsForm] = useState<AICoachPreferences>({
@@ -24,40 +24,27 @@ function SubscribeContent() {
     focusAreas: [],
   });
 
-  const plans = {
-    monthly: {
-      price: 9.99,
-      period: "month",
-      savings: null,
-      trialDays: 7,
-    },
-    yearly: {
-      price: 79.99,
-      period: "year",
-      savings: "Save 33%",
-      monthlyEquivalent: 6.67,
-      trialDays: 7,
-    },
-  };
-
-  const athleteFeatures = [
-    { icon: "🎯", text: "Personalized weight recommendations based on YOUR lift history" },
-    { icon: "📊", text: "AI analyzes your past WOD performances for smart scaling" },
-    { icon: "🏋️", text: "Custom workout suggestions tailored to your fitness level" },
-    { icon: "💪", text: "Progress-aware coaching cues and advice" },
-    { icon: "🤖", text: "Unlimited AI programming conversations" },
-    { icon: "📈", text: "Track your progress with intelligent insights" },
-  ];
+  const tierPrices = {
+    coach: { monthly: PRICING.AI_COACH_MONTHLY, yearly: PRICING.AI_COACH_YEARLY },
+    programming: { monthly: PRICING.AI_PROGRAMMING_MONTHLY, yearly: PRICING.AI_PROGRAMMING_YEARLY },
+  } as const;
+  const currentPrice = tierPrices[selectedTier][selectedPlan];
+  const currentPeriod = selectedPlan === "monthly" ? "month" : "year";
 
   const coachFeatures = [
-    { icon: "💡", text: "AI drafts programming - you fine-tune and publish" },
-    { icon: "📸", text: "Scan whiteboard photos to instantly digitize workouts" },
-    { icon: "📝", text: "Paste your workouts, AI formats them for the app" },
-    { icon: "✏️", text: "Edit, adjust, or rewrite anything before publishing" },
-    { icon: "🎛️", text: "You stay in control - AI handles the busy work" },
+    { icon: "🎯", text: "Personalized weight recommendations based on YOUR lift history" },
+    { icon: "📊", text: "AI analyzes your past WOD performances for smart scaling" },
+    { icon: "📸", text: "Scan class whiteboards and handwritten workouts with your camera" },
+    { icon: "🏃", text: "Log runs, swims, and rides - mileage, time, and pace" },
+    { icon: "💪", text: "Progress-aware coaching cues and advice" },
   ];
 
-  const features = variant === "coach" ? coachFeatures : athleteFeatures;
+  const programmingFeatures = [
+    { icon: "📋", text: "Full day-by-day training plans: phases, runs, lifts, WODs, and rest days" },
+    { icon: "💬", text: "Revise the plan in chat - only the affected days get rewritten" },
+    { icon: "📅", text: "Lock the plan onto your calendar with one click" },
+    { icon: "🔄", text: "Regenerate any single day when life gets in the way" },
+  ];
 
   const handleStartTrial = async () => {
     if (!user) {
@@ -70,26 +57,20 @@ function SubscribeContent() {
       const now = new Date();
       const trialEndsAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000); // 7 days from now
 
+      // The trial carries the tier the user selected - a coach-only trial
+      // must not unlock the plan builder
       const subscription: AITrainerSubscription = {
-        tier: "pro",
+        tier: selectedTier === "programming" ? "elite" : "pro",
         status: "trialing",
         startDate: Timestamp.fromDate(now),
         trialEndsAt: Timestamp.fromDate(trialEndsAt),
       };
 
-      // Save to correct subscription field based on variant
-      const subscriptionField = variant === "coach" ? "aiProgrammingSubscription" : "aiTrainerSubscription";
       await updateDoc(doc(db, "users", user.id), {
-        [subscriptionField]: subscription,
+        aiTrainerSubscription: subscription,
       });
 
-      // Coaches skip the goals step, go straight to programming
-      if (variant === "coach") {
-        await refreshUser();
-        router.push("/programming");
-      } else {
-        setShowGoalsStep(true);
-      }
+      setShowGoalsStep(true);
     } catch (error) {
       console.error("Error starting trial:", error);
       alert("Failed to start trial. Please try again.");
@@ -112,30 +93,40 @@ function SubscribeContent() {
         : new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
 
       const subscription: AITrainerSubscription = {
-        tier: "pro",
+        tier: selectedTier === "programming" ? "elite" : "pro",
         status: "active",
         startDate: Timestamp.fromDate(now),
         endDate: Timestamp.fromDate(endDate),
       };
 
-      // Save to correct subscription field based on variant
-      const subscriptionField = variant === "coach" ? "aiProgrammingSubscription" : "aiTrainerSubscription";
       await updateDoc(doc(db, "users", user.id), {
-        [subscriptionField]: subscription,
+        aiTrainerSubscription: subscription,
       });
 
-      // Coaches skip the goals step, go straight to programming
-      if (variant === "coach") {
-        await refreshUser();
-        router.push("/programming");
-      } else {
-        setShowGoalsStep(true);
-      }
+      setShowGoalsStep(true);
     } catch (error) {
       console.error("Error subscribing:", error);
       alert("Failed to subscribe. Please try again.");
     } finally {
       setIsProcessing(false);
+    }
+  };
+
+  // Base subscriber adds the programming tier
+  const handleUpgradeToProgramming = async () => {
+    if (!user) return;
+    setIsUpgrading(true);
+    try {
+      await updateDoc(doc(db, "users", user.id), {
+        "aiTrainerSubscription.tier": "elite",
+      });
+      await refreshUser();
+      router.push("/programming");
+    } catch (error) {
+      console.error("Error upgrading subscription:", error);
+      alert("Failed to upgrade. Please try again.");
+    } finally {
+      setIsUpgrading(false);
     }
   };
 
@@ -176,10 +167,8 @@ function SubscribeContent() {
     router.push("/weekly");
   };
 
-  // Check if user already has an active subscription for the relevant product
-  const relevantSubscription = variant === "coach"
-    ? user?.aiProgrammingSubscription
-    : user?.aiTrainerSubscription;
+  // Check if user already has an active subscription
+  const relevantSubscription = user?.aiTrainerSubscription;
   const hasActiveSubscription = relevantSubscription?.status === "active" ||
     relevantSubscription?.status === "trialing";
 
@@ -203,10 +192,10 @@ function SubscribeContent() {
               </svg>
             </div>
             <h1 className="text-3xl font-bold text-white mb-2">
-              {variant === "coach" ? "AI Assistant Activated!" : "Welcome to AI Coach!"}
+              Welcome to Oddo!
             </h1>
             <p className="text-purple-200">
-              {variant === "coach" ? "You're ready to start creating programming" : "Let's personalize your experience"}
+              Let&apos;s personalize your experience
             </p>
           </div>
 
@@ -217,7 +206,7 @@ function SubscribeContent() {
               <h2 className="text-xl font-bold text-gray-900">Tell us about your goals</h2>
             </div>
             <p className="text-sm text-gray-500 mb-6">
-              This helps your AI Coach give you better personalized advice. You can always update this later in your profile.
+              This helps Oddo give you better personalized advice. You can always update this later in your profile.
             </p>
 
             <div className="space-y-5">
@@ -320,20 +309,14 @@ function SubscribeContent() {
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-purple-600 to-indigo-600 rounded-full mb-4">
             <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              {variant === "coach" ? (
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-              ) : (
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-              )}
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
             </svg>
           </div>
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            {variant === "coach" ? "AI Programming Assistant" : "AI Coach Subscription"}
+            Oddo Subscription
           </h1>
           <p className="text-gray-600 max-w-xl mx-auto">
-            {variant === "coach"
-              ? "Let AI handle the busy work while you stay in control of your gym's programming"
-              : "Get personalized scaling and weight recommendations powered by AI that learns from your workout history"}
+            Your garage gym coach: AI programming, scaling, and weight recommendations that learn from your workout history
           </p>
         </div>
 
@@ -347,29 +330,54 @@ function SubscribeContent() {
             </div>
             <h2 className="text-2xl font-bold text-gray-900 mb-2">You&apos;re Already Subscribed!</h2>
             <p className="text-gray-600 mb-4">
-              {relevantSubscription?.status === "trialing"
-                ? `You're currently on a free trial. Enjoy your ${variant === "coach" ? "AI Programming Assistant" : "AI Coach"}!`
-                : `You have an active ${variant === "coach" ? "AI Programming" : "AI Coach"} subscription.`}
+              {relevantSubscription?.tier === "elite"
+                ? `You have Oddo + Programming${relevantSubscription?.status === "trialing" ? " (free trial)" : ""} - the full experience.`
+                : `You have the base Oddo coach${relevantSubscription?.status === "trialing" ? " (free trial)" : ""}: advice, scaling, scanning, logging, and baseline testing.`}
             </p>
-            {relevantSubscription?.trialEndsAt && (
+            {relevantSubscription?.trialEndsAt && relevantSubscription?.status === "trialing" && (
               <p className="text-sm text-purple-600 mb-4">
                 Trial ends: {relevantSubscription.trialEndsAt.toDate().toLocaleDateString()}
               </p>
             )}
+            {relevantSubscription?.tier !== "elite" && (
+              <div className="max-w-md mx-auto mb-6 p-4 bg-gradient-to-br from-purple-50 to-indigo-50 rounded-lg border border-purple-200 text-left">
+                <p className="font-semibold text-purple-900 mb-1">📋 Add AI Programming</p>
+                <p className="text-sm text-purple-800 mb-3">
+                  Let Oddo build full day-by-day training plans you can revise in chat and lock onto
+                  your calendar - ${PRICING.AI_PROGRAMMING_MONTHLY}/mo total.
+                </p>
+                <button
+                  onClick={handleUpgradeToProgramming}
+                  disabled={isUpgrading}
+                  className="w-full py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold rounded-lg hover:from-purple-700 hover:to-indigo-700 transition-colors disabled:opacity-50"
+                >
+                  {isUpgrading ? "Upgrading..." : "Upgrade to Oddo + Programming"}
+                </button>
+              </div>
+            )}
             <button
-              onClick={() => router.push(variant === "coach" ? "/programming" : "/weekly")}
+              onClick={() => router.push("/weekly")}
               className="px-6 py-3 bg-purple-600 text-white font-medium rounded-lg hover:bg-purple-700 transition-colors"
             >
-              {variant === "coach" ? "Go to Programming" : "Go to My Training"}
+              Go to My Training
             </button>
           </div>
         ) : (
           <div className="grid md:grid-cols-2 gap-8">
             {/* Features Section */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <h2 className="text-xl font-bold text-gray-900 mb-4">What You Get</h2>
-              <div className="space-y-4">
-                {features.map((feature, idx) => (
+              <h2 className="text-xl font-bold text-gray-900 mb-4">Oddo <span className="text-sm font-normal text-gray-500">(base - ${PRICING.AI_COACH_MONTHLY}/mo)</span></h2>
+              <div className="space-y-3">
+                {coachFeatures.map((feature, idx) => (
+                  <div key={idx} className="flex items-start gap-3">
+                    <span className="text-2xl">{feature.icon}</span>
+                    <p className="text-gray-700">{feature.text}</p>
+                  </div>
+                ))}
+              </div>
+              <h2 className="text-xl font-bold text-gray-900 mt-6 mb-4">+ AI Programming <span className="text-sm font-normal text-gray-500">(add-on - ${PRICING.AI_PROGRAMMING_MONTHLY}/mo total)</span></h2>
+              <div className="space-y-3">
+                {programmingFeatures.map((feature, idx) => (
                   <div key={idx} className="flex items-start gap-3">
                     <span className="text-2xl">{feature.icon}</span>
                     <p className="text-gray-700">{feature.text}</p>
@@ -377,9 +385,8 @@ function SubscribeContent() {
                 ))}
               </div>
 
-              {/* Sample insight / Visual example */}
-              {variant === "coach" ? (
-                <div className="mt-6 space-y-4">
+              {/* Visual example */}
+              <div className="mt-6 space-y-4">
                   {/* Prompt example */}
                   <div className="bg-gray-100 rounded-lg p-3 border border-gray-200">
                     <div className="flex items-center gap-2 mb-2">
@@ -469,25 +476,56 @@ function SubscribeContent() {
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                     </svg>
-                    <span>Review, edit, then publish with one click</span>
+                    <span>Review, edit, then add to your calendar with one click</span>
                   </div>
+              </div>
+
+              <div className="mt-6 bg-gradient-to-br from-purple-50 to-indigo-50 rounded-lg p-4 border border-purple-100">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-yellow-500">⭐</span>
+                  <span className="font-semibold text-purple-900">Sample AI Insight</span>
                 </div>
-              ) : (
-                <div className="mt-6 bg-gradient-to-br from-purple-50 to-indigo-50 rounded-lg p-4 border border-purple-100">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-yellow-500">⭐</span>
-                    <span className="font-semibold text-purple-900">Sample AI Insight</span>
-                  </div>
-                  <p className="text-sm text-purple-800 italic">
-                    &quot;Based on your Back Squat PR of 225lb and recent Clean work at 155lb, I recommend trying 135lb thrusters today. This should let you maintain consistent sets while pushing your conditioning.&quot;
-                  </p>
-                </div>
-              )}
+                <p className="text-sm text-purple-800 italic">
+                  &quot;Based on your Back Squat PR of 225lb and recent Clean work at 155lb, I recommend trying 135lb thrusters today. This should let you maintain consistent sets while pushing your conditioning.&quot;
+                </p>
+              </div>
             </div>
 
             {/* Pricing Section */}
             <div className="bg-gradient-to-br from-purple-900 via-purple-800 to-indigo-900 rounded-xl p-6 text-white">
               <h2 className="text-xl font-bold mb-6 text-center">Choose Your Plan</h2>
+
+              {/* Tier selector */}
+              <div className="space-y-2 mb-6">
+                <button
+                  onClick={() => setSelectedTier("programming")}
+                  className={`w-full p-3 rounded-lg border text-left transition-colors ${
+                    selectedTier === "programming"
+                      ? "bg-white/15 border-yellow-400 ring-1 ring-yellow-400"
+                      : "bg-white/5 border-purple-600 hover:bg-white/10"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold">Oddo + Programming</span>
+                    <span className="text-sm">${tierPrices.programming[selectedPlan]}/{currentPeriod}</span>
+                  </div>
+                  <p className="text-xs text-purple-200 mt-0.5">Everything, including full day-by-day training plans</p>
+                </button>
+                <button
+                  onClick={() => setSelectedTier("coach")}
+                  className={`w-full p-3 rounded-lg border text-left transition-colors ${
+                    selectedTier === "coach"
+                      ? "bg-white/15 border-yellow-400 ring-1 ring-yellow-400"
+                      : "bg-white/5 border-purple-600 hover:bg-white/10"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold">Oddo</span>
+                    <span className="text-sm">${tierPrices.coach[selectedPlan]}/{currentPeriod}</span>
+                  </div>
+                  <p className="text-xs text-purple-200 mt-0.5">Advice, scaling, workout scan, and logging</p>
+                </button>
+              </div>
 
               {/* Plan Toggle */}
               <div className="flex justify-center mb-6">
@@ -521,12 +559,12 @@ function SubscribeContent() {
               {/* Price Display */}
               <div className="text-center mb-6">
                 <div className="text-5xl font-bold">
-                  ${plans[selectedPlan].price}
-                  <span className="text-lg font-normal text-purple-200">/{plans[selectedPlan].period}</span>
+                  ${currentPrice}
+                  <span className="text-lg font-normal text-purple-200">/{currentPeriod}</span>
                 </div>
                 {selectedPlan === "yearly" && (
                   <p className="text-sm text-purple-200 mt-1">
-                    That&apos;s just ${plans.yearly.monthlyEquivalent}/month
+                    That&apos;s just ${(tierPrices[selectedTier].yearly / 12).toFixed(2)}/month
                   </p>
                 )}
               </div>
@@ -569,7 +607,7 @@ function SubscribeContent() {
                   disabled={isProcessing}
                   className="w-full py-3 bg-white/10 hover:bg-white/20 text-white font-medium rounded-lg transition-colors disabled:opacity-50"
                 >
-                  Subscribe Now - ${plans[selectedPlan].price}/{plans[selectedPlan].period}
+                  Subscribe Now - ${currentPrice}/{currentPeriod}
                 </button>
               </div>
 
@@ -590,61 +628,36 @@ function SubscribeContent() {
         <div className="mt-12 bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <h2 className="text-xl font-bold text-gray-900 mb-6">Frequently Asked Questions</h2>
           <div className="space-y-4">
-            {variant === "coach" ? (
-              <>
-                <div>
-                  <h3 className="font-semibold text-gray-900 mb-1">How does AI Programming work?</h3>
-                  <p className="text-gray-600 text-sm">
-                    Tell the AI what kind of programming you want (strength focus, conditioning, skills work, etc.) and it generates complete workouts with warm-ups, lifts, skills, WODs, and cooldowns. You review, edit, and publish.
-                  </p>
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-900 mb-1">Do I lose control of my programming?</h3>
-                  <p className="text-gray-600 text-sm">
-                    Never. The AI is your assistant, not your replacement. Every workout goes through you before it&apos;s published. Edit anything, rewrite sections, or reject entirely.
-                  </p>
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-900 mb-1">Can I scan my existing whiteboard?</h3>
-                  <p className="text-gray-600 text-sm">
-                    Yes! Take a photo of your whiteboard and the AI will digitize it into the app format - complete with sections, scaling options, and notes.
-                  </p>
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-900 mb-1">Can I cancel anytime?</h3>
-                  <p className="text-gray-600 text-sm">
-                    Yes! You can cancel your subscription at any time. Your access will continue until the end of your billing period.
-                  </p>
-                </div>
-              </>
-            ) : (
-              <>
-                <div>
-                  <h3 className="font-semibold text-gray-900 mb-1">How does the AI Coach work?</h3>
-                  <p className="text-gray-600 text-sm">
-                    The AI Coach analyzes your workout history, lift PRs, and WOD performances to provide personalized recommendations. It considers your strength levels, recent performance trends, and the specific demands of each workout.
-                  </p>
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-900 mb-1">Can I cancel anytime?</h3>
-                  <p className="text-gray-600 text-sm">
-                    Yes! You can cancel your subscription at any time. Your access will continue until the end of your billing period.
-                  </p>
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-900 mb-1">What happens after my free trial?</h3>
-                  <p className="text-gray-600 text-sm">
-                    After your 7-day free trial, you&apos;ll be asked to subscribe to continue using the AI Coach features. You won&apos;t be charged automatically.
-                  </p>
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-900 mb-1">Is my data secure?</h3>
-                  <p className="text-gray-600 text-sm">
-                    Absolutely. Your workout data is securely stored and only used to provide you with personalized recommendations. We never share your data with third parties.
-                  </p>
-                </div>
-              </>
-            )}
+            <div>
+              <h3 className="font-semibold text-gray-900 mb-1">How does Oddo work?</h3>
+              <p className="text-gray-600 text-sm">
+                Oddo analyzes your workout history, lift PRs, and WOD performances to provide personalized recommendations. It considers your strength levels, recent performance trends, and the specific demands of each workout.
+              </p>
+            </div>
+            <div>
+              <h3 className="font-semibold text-gray-900 mb-1">Can it program my whole week?</h3>
+              <p className="text-gray-600 text-sm">
+                Yes! Tell the AI what kind of programming you want (strength focus, conditioning, skills work, etc.) and it generates complete workouts with warm-ups, lifts, skills, WODs, and cooldowns - all built around the equipment in your garage gym. You review, edit, and add them to your calendar.
+              </p>
+            </div>
+            <div>
+              <h3 className="font-semibold text-gray-900 mb-1">Can I cancel anytime?</h3>
+              <p className="text-gray-600 text-sm">
+                Yes! You can cancel your subscription at any time. Your access will continue until the end of your billing period.
+              </p>
+            </div>
+            <div>
+              <h3 className="font-semibold text-gray-900 mb-1">What happens after my free trial?</h3>
+              <p className="text-gray-600 text-sm">
+                After your 7-day free trial, you&apos;ll be asked to subscribe to continue using Oddo features. You won&apos;t be charged automatically.
+              </p>
+            </div>
+            <div>
+              <h3 className="font-semibold text-gray-900 mb-1">Is my data secure?</h3>
+              <p className="text-gray-600 text-sm">
+                Absolutely. Your workout data is securely stored and only used to provide you with personalized recommendations. We never share your data with third parties.
+              </p>
+            </div>
           </div>
         </div>
       </main>

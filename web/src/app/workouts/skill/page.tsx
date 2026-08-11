@@ -20,7 +20,6 @@ interface SkillResult {
   maxReps: number;
   userId: string;
   userName?: string;
-  gymId?: string;
   date: { toDate: () => Date };
   notes?: string;
 }
@@ -45,7 +44,6 @@ function SkillPageContent() {
   const [history, setHistory] = useState<SkillResult[]>([]);
   const [leaderboard, setLeaderboard] = useState<SkillResult[]>([]);
   const [loadingLeaderboard, setLoadingLeaderboard] = useState(false);
-  const [leaderboardScope, setLeaderboardScope] = useState<"gym" | "everyone">("everyone");
   const [chartTimeRange, setChartTimeRange] = useState<"1m" | "6m" | "1y" | "2y" | "5y">("1y");
 
   // Autocomplete suggestions state
@@ -69,7 +67,7 @@ function SkillPageContent() {
       loadHistory();
       loadLeaderboard();
     }
-  }, [user, skillName, leaderboardScope]);
+  }, [user, skillName]);
 
   const loadHistory = async () => {
     if (!user || !skillName) return;
@@ -129,11 +127,6 @@ function SkillPageContent() {
         results = results.filter((r) => r.userId === user.id);
       }
 
-      // Filter by gym if scope is gym
-      if (leaderboardScope === "gym" && user?.gymId) {
-        results = results.filter((r) => r.gymId === user.gymId);
-      }
-
       // Get max reps per user (only 1 entry per user - their best)
       const userBestMap = new Map<string, SkillResult>();
       for (const result of results) {
@@ -180,7 +173,6 @@ function SkillPageContent() {
       await addDoc(collection(db, "skillResults"), {
         userId: user.id,
         userName: user.displayName || `${user.firstName} ${user.lastName}`,
-        gymId: user.gymId || null,
         skillTitle: skillName.trim(),
         maxReps: parseInt(maxReps),
         notes: notes.trim(),
@@ -577,28 +569,6 @@ function SkillPageContent() {
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-4">
             <div className="flex justify-between items-center mb-3">
               <p className="text-sm font-semibold text-gray-700">Leaderboard</p>
-              <div className="flex rounded-lg overflow-hidden border border-gray-200 text-xs">
-                <button
-                  onClick={() => setLeaderboardScope("gym")}
-                  className={`px-3 py-1.5 font-medium transition-colors ${
-                    leaderboardScope === "gym"
-                      ? "bg-green-600 text-white"
-                      : "bg-white text-gray-600 hover:bg-gray-50"
-                  }`}
-                >
-                  Gym
-                </button>
-                <button
-                  onClick={() => setLeaderboardScope("everyone")}
-                  className={`px-3 py-1.5 font-medium transition-colors ${
-                    leaderboardScope === "everyone"
-                      ? "bg-green-600 text-white"
-                      : "bg-white text-gray-600 hover:bg-gray-50"
-                  }`}
-                >
-                  Everyone
-                </button>
-              </div>
             </div>
 
             {loadingLeaderboard ? (

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { collection, query, where, getDocs, Timestamp, limit } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
+import { chatCompletion } from "@/lib/ai";
 import Navigation from "@/components/Navigation";
 
 // Types for progress tracking
@@ -85,13 +86,9 @@ export default function ProgressPage() {
   const [isLoadingAI, setIsLoadingAI] = useState(false);
   const [selectedTimeRange, setSelectedTimeRange] = useState<"7" | "30" | "90" | "180" | "365">("90");
 
-  // Check if user has AI Coach access
+  // Check if user has Oddo access
   const hasAICoach = user?.aiTrainerSubscription?.status === "active" ||
-                     user?.aiTrainerSubscription?.status === "trialing" ||
-                     user?.gymAICoachEnabled ||
-                     user?.individualSubscription?.aiCoachEnabled ||
-                     user?.role === "superAdmin" || // Super admins always have access
-                     user?.role === "owner"; // Gym owners have access
+                     user?.aiTrainerSubscription?.status === "trialing";
 
   useEffect(() => {
     if (!loading && !switching && !user) {
@@ -640,12 +637,6 @@ export default function ProgressPage() {
     setAiAnalysis(null);
 
     try {
-      const apiKey = process.env.NEXT_PUBLIC_XAI_API_KEY;
-      if (!apiKey) {
-        setAiAnalysis("AI service not configured. Please add NEXT_PUBLIC_XAI_API_KEY to your environment.");
-        return;
-      }
-
       // Build summary for AI
       let summary = `ATHLETE PROGRESS ANALYSIS (Last ${selectedTimeRange} days)\n\n`;
 
@@ -714,30 +705,15 @@ ${user?.aiCoachPreferences?.goals ? `**GOAL ALIGNMENT:**\nHow their current prog
 
 Be specific, use their actual numbers, and be encouraging but honest. Keep it concise.`;
 
-      // Call xAI/Grok API (OpenAI-compatible format)
-      const response = await fetch("https://api.x.ai/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-          model: "grok-4-latest",
-          messages: [
-            { role: "system", content: "You are an experienced CrossFit coach providing personalized fitness analysis and advice." },
-            { role: "user", content: prompt }
-          ],
-          temperature: 0.7
-        })
+      // Call the fast model with streaming so the analysis appears as it's written
+      const analysisText = await chatCompletion({
+        messages: [
+          { role: "system", content: "You are an experienced CrossFit coach providing personalized fitness analysis and advice." },
+          { role: "user", content: prompt }
+        ],
+        temperature: 0.7,
+        onDelta: (textSoFar) => setAiAnalysis(textSoFar),
       });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error?.message || `API error: ${response.status}`);
-      }
-
-      const data = await response.json();
-      const analysisText = data.choices?.[0]?.message?.content;
 
       if (analysisText) {
         setAiAnalysis(analysisText);
@@ -934,8 +910,8 @@ Be specific, use their actual numbers, and be encouraging but honest. Keep it co
                       </svg>
                     </div>
                     <div>
-                      <h3 className="font-semibold">AI Coach Analysis</h3>
-                      <p className="text-white/70 text-sm">Personalized insights from your AI coach</p>
+                      <h3 className="font-semibold">Oddo Analysis</h3>
+                      <p className="text-white/70 text-sm">Personalized insights from your Oddo</p>
                     </div>
                   </div>
                 </div>
@@ -989,7 +965,7 @@ Be specific, use their actual numbers, and be encouraging but honest. Keep it co
               </div>
             )}
 
-            {/* Upgrade CTA for non-AI Coach users */}
+            {/* Upgrade CTA for non-Oddo users */}
             {!hasAICoach && (lifts.length > 0 || wods.length > 0 || skills.length > 0) && (
               <div className="bg-gray-100 rounded-xl p-6 text-center">
                 <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-3">
@@ -999,7 +975,7 @@ Be specific, use their actual numbers, and be encouraging but honest. Keep it co
                 </div>
                 <h3 className="font-semibold text-gray-900 mb-1">Want AI-Powered Insights?</h3>
                 <p className="text-sm text-gray-600 mb-3">
-                  Upgrade to AI Coach for personalized analysis of your progress and recommendations.
+                  Upgrade to Oddo for personalized analysis of your progress and recommendations.
                 </p>
                 <button
                   onClick={() => router.push("/subscribe")}

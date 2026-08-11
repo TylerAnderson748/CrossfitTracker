@@ -183,9 +183,9 @@ export function sanitizeWorkoutData(data: Record<string, unknown>): Record<strin
   const allowedFields = [
     'title', 'description', 'notes', 'type', 'duration',
     'rounds', 'reps', 'weight', 'time', 'components',
-    'userId', 'gymId', 'groupIds', 'date', 'createdAt',
+    'userId', 'date', 'dateString', 'createdAt',
     'wodTitle', 'wodDescription', 'workoutType', 'scoringType',
-    'timeSlots', 'hideDetails', 'recurrenceType', 'createdBy'
+    'createdBy'
   ];
 
   for (const key of allowedFields) {

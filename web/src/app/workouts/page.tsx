@@ -3,12 +3,13 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { collection, query, where, getDocs, getDoc, orderBy, limit, deleteDoc, doc, addDoc, Timestamp } from "firebase/firestore";
+import { collection, query, where, getDocs, deleteDoc, doc, addDoc, Timestamp, limit } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
-import { WorkoutLog, formatResult } from "@/lib/types";
+import { WorkoutLog, formatResult, CardioLog, cardioActivityLabels, cardioActivityIcons, CardioActivity } from "@/lib/types";
+import { computeBaselineStatus, BaselineStatus } from "@/lib/baselines";
 import Navigation from "@/components/Navigation";
-import { WOD_CATEGORIES, LIFT_CATEGORIES, SKILL_CATEGORIES, WorkoutCategory, Workout, getAllWods, getAllLifts, getAllSkills } from "@/lib/workoutData";
+import { WOD_CATEGORIES, LIFT_CATEGORIES, SKILL_CATEGORIES, WorkoutCategory, getAllWods, getAllLifts, getAllSkills } from "@/lib/workoutData";
 
 interface FrequentWorkout {
   name: string;
@@ -25,22 +26,11 @@ interface CustomWorkout {
   count: number;
 }
 
-interface GymWorkout {
-  name: string;
-  description: string;
-  type: "wod" | "lift" | "skill";
-  scoringType?: string;
-  scheduledDate?: Date;
-}
-
 interface ProgrammingSource {
   id: string;
   name: string;
-  type: "gym" | "online" | "pt" | "other" | "group";
+  type: "online" | "pt" | "other";
   createdAt: Date;
-  isAutomatic?: boolean; // true for gym/group sources that are auto-added
-  gymId?: string;
-  groupId?: string;
 }
 
 interface ProgrammedWorkout {
@@ -52,7 +42,6 @@ interface ProgrammedWorkout {
   sourceId: string;
   sourceName: string;
   scheduledDate?: Date;
-  groupNames?: string[]; // Groups this workout belongs to
 }
 
 interface SearchResult {
@@ -62,13 +51,14 @@ interface SearchResult {
   scoringType?: string;
   source: "preset" | "programmed" | "custom";
   sourceName?: string; // For programmed workouts
-  groupNames?: string[]; // For programmed workouts with groups
 }
 
 export default function WorkoutsPage() {
   const { user, loading, switching } = useAuth();
   const router = useRouter();
-  const [workoutType, setWorkoutType] = useState<"wod" | "lift" | "skill">("wod");
+  const [workoutType, setWorkoutType] = useState<"wod" | "lift" | "skill" | "cardio" | "baseline">("wod");
+  const [cardioLogs, setCardioLogs] = useState<CardioLog[]>([]);
+  const [baselineStatus, setBaselineStatus] = useState<BaselineStatus | null>(null);
   const [recentLogs, setRecentLogs] = useState<WorkoutLog[]>([]);
   const [frequentWods, setFrequentWods] = useState<FrequentWorkout[]>([]);
   const [frequentLifts, setFrequentLifts] = useState<FrequentWorkout[]>([]);
@@ -82,9 +72,6 @@ export default function WorkoutsPage() {
   const [customLifts, setCustomLifts] = useState<CustomWorkout[]>([]);
   const [customSkills, setCustomSkills] = useState<CustomWorkout[]>([]);
 
-  // Gym programming workouts
-  const [gymWorkouts, setGymWorkouts] = useState<GymWorkout[]>([]);
-
   // Delete confirmation state
   const [deletingWorkout, setDeletingWorkout] = useState<{ name: string; type: "wod" | "lift" | "skill" } | null>(null);
 
@@ -94,7 +81,7 @@ export default function WorkoutsPage() {
   const [hiddenSourceIds, setHiddenSourceIds] = useState<string[]>([]);
   const [showAddSourceModal, setShowAddSourceModal] = useState(false);
   const [newSourceName, setNewSourceName] = useState("");
-  const [newSourceType, setNewSourceType] = useState<"gym" | "online" | "pt" | "other">("online");
+  const [newSourceType, setNewSourceType] = useState<"online" | "pt" | "other">("online");
   const [expandedSource, setExpandedSource] = useState<string | null>(null);
   const [showAddWorkoutModal, setShowAddWorkoutModal] = useState<string | null>(null);
   const [newWorkoutName, setNewWorkoutName] = useState("");
@@ -107,6 +94,36 @@ export default function WorkoutsPage() {
       router.push("/login");
     }
   }, [user, loading, switching, router]);
+
+  // Cardio history + baseline-battery status (for the Cardio and Benchmarks tabs)
+  useEffect(() => {
+    if (!user) return;
+    const loadRecords = async () => {
+      try {
+        const [liftSnap, wodSnap, skillSnap, cardioSnap, prefsSnap] = await Promise.all([
+          getDocs(query(collection(db, "liftResults"), where("userId", "==", user.id), limit(150))),
+          getDocs(query(collection(db, "workoutLogs"), where("userId", "==", user.id), limit(150))),
+          getDocs(query(collection(db, "skillResults"), where("userId", "==", user.id), limit(150))),
+          getDocs(query(collection(db, "cardioLogs"), where("userId", "==", user.id), limit(150))),
+          getDocs(query(collection(db, "aiProgrammingPreferences"), where("userId", "==", user.id))),
+        ]);
+        const cl = cardioSnap.docs
+          .map(d => ({ id: d.id, ...d.data() } as CardioLog))
+          .sort((a, b) => (b.date?.toMillis?.() || 0) - (a.date?.toMillis?.() || 0));
+        setCardioLogs(cl);
+        setBaselineStatus(computeBaselineStatus({
+          trainingStyle: prefsSnap.empty ? "crossfit" : String(prefsSnap.docs[0].data().trainingStyle || "crossfit"),
+          liftTitles: Array.from(new Set(liftSnap.docs.map(d => String(d.data().liftTitle || "")).filter(Boolean))),
+          wodTitles: Array.from(new Set(wodSnap.docs.map(d => String(d.data().wodTitle || "")).filter(Boolean))),
+          skillNames: Array.from(new Set(skillSnap.docs.map(d => String(d.data().skillTitle || d.data().skillName || "")).filter(Boolean))),
+          cardioLogs: cl.map(l => ({ activity: l.activity, miles: l.miles })),
+        }));
+      } catch (err) {
+        console.error("Error loading records data:", err);
+      }
+    };
+    loadRecords();
+  }, [user]);
 
   useEffect(() => {
     if (user) {
@@ -305,104 +322,9 @@ export default function WorkoutsPage() {
         name: docSnap.data().name,
         type: docSnap.data().type,
         createdAt: docSnap.data().createdAt?.toDate?.() || new Date(),
-        isAutomatic: false,
       }));
 
-      // Auto-add gym as programming source if user has one
-      const automaticSources: ProgrammingSource[] = [];
-      const automaticWorkouts: ProgrammedWorkout[] = [];
-      let userGroupIds: string[] = [];
-      let groupIdToName: Record<string, string> = {};
-
-      if (user.gymId) {
-        // Fetch gym info
-        const gymDoc = await getDoc(doc(db, "gyms", user.gymId));
-        if (gymDoc.exists()) {
-          const gymData = gymDoc.data();
-          const gymSourceId = `gym-${user.gymId}`;
-          const gymName = gymData.name || "My Gym";
-
-          automaticSources.push({
-            id: gymSourceId,
-            name: gymName,
-            type: "gym",
-            createdAt: new Date(),
-            isAutomatic: true,
-            gymId: user.gymId,
-          });
-
-          // Fetch groups and create a map of groupId to groupName
-          const groupsQuery = query(
-            collection(db, "groups"),
-            where("gymId", "==", user.gymId)
-          );
-          const groupsSnapshot = await getDocs(groupsQuery);
-
-          for (const groupDoc of groupsSnapshot.docs) {
-            const groupData = groupDoc.data();
-            groupIdToName[groupDoc.id] = groupData.name || "Unknown Group";
-            const memberIds = groupData.memberIds || [];
-            if (memberIds.includes(user.id)) {
-              userGroupIds.push(groupDoc.id);
-            }
-          }
-
-          // Fetch all scheduled workouts for the gym
-          const gymWorkoutsQuery = query(
-            collection(db, "scheduledWorkouts"),
-            where("gymId", "==", user.gymId)
-          );
-          const gymWorkoutsSnapshot = await getDocs(gymWorkoutsQuery);
-
-          // Add workouts that either have no groupId or belong to a group the user is in
-          gymWorkoutsSnapshot.docs.forEach((workoutDoc) => {
-            const data = workoutDoc.data();
-            const workoutGroupId = data.groupId;
-            const workoutGroupIds = data.groupIds || []; // Some workouts may use groupIds array
-
-            // Check if user has access to this workout
-            const hasNoGroupRestriction = !workoutGroupId && workoutGroupIds.length === 0;
-            const isInSingleGroup = workoutGroupId && userGroupIds.includes(workoutGroupId);
-            const isInGroupArray = workoutGroupIds.length > 0 && workoutGroupIds.some((gid: string) => userGroupIds.includes(gid));
-            const hasAccess = hasNoGroupRestriction || isInSingleGroup || isInGroupArray;
-
-            // Get group names for this workout
-            const workoutGroupNames: string[] = [];
-            if (workoutGroupId && groupIdToName[workoutGroupId]) {
-              workoutGroupNames.push(groupIdToName[workoutGroupId]);
-            }
-            workoutGroupIds.forEach((gid: string) => {
-              if (groupIdToName[gid] && !workoutGroupNames.includes(groupIdToName[gid])) {
-                workoutGroupNames.push(groupIdToName[gid]);
-              }
-            });
-
-            if (hasAccess) {
-              const components = data.components || [];
-              components.forEach((component: { title?: string; description?: string; type?: string; scoringType?: string }, idx: number) => {
-                if (component.title) {
-                  const componentType = component.type === "lift" ? "lift" : component.type === "skill" ? "skill" : "wod";
-                  automaticWorkouts.push({
-                    id: `workout-${workoutDoc.id}-${idx}`,
-                    name: component.title,
-                    description: component.description || "",
-                    type: componentType as "wod" | "lift" | "skill",
-                    scoringType: component.scoringType,
-                    sourceId: gymSourceId,
-                    sourceName: gymName,
-                    scheduledDate: data.date?.toDate?.(),
-                    groupNames: workoutGroupNames.length > 0 ? workoutGroupNames : undefined,
-                  });
-                }
-              });
-            }
-          });
-        }
-      }
-
-      // Combine automatic and user-created sources
-      const allSources = [...automaticSources, ...userSourcesList];
-      setProgrammingSources(allSources);
+      setProgrammingSources(userSourcesList);
 
       // Fetch user-created programmed workouts
       const workoutsQuery = query(
@@ -425,8 +347,7 @@ export default function WorkoutsPage() {
         };
       });
 
-      // Combine automatic and user-created workouts
-      setProgrammedWorkouts([...automaticWorkouts, ...userWorkoutsList]);
+      setProgrammedWorkouts(userWorkoutsList);
     } catch (error) {
       console.error("Error fetching data:", error);
     } finally {
@@ -490,7 +411,6 @@ export default function WorkoutsPage() {
               scoringType: w.scoringType,
               source: "programmed",
               sourceName: w.sourceName,
-              groupNames: w.groupNames,
             });
           }
         }
@@ -529,12 +449,6 @@ export default function WorkoutsPage() {
     }
   };
   const currentCustomWorkouts = getCurrentCustomWorkouts();
-
-  // Get gym workouts for current type
-  const getCurrentGymWorkouts = (): GymWorkout[] => {
-    return gymWorkouts.filter(w => w.type === workoutType);
-  };
-  const currentGymWorkouts = getCurrentGymWorkouts();
 
   const toggleCategory = (categoryName: string) => {
     setExpandedCategory(expandedCategory === categoryName ? null : categoryName);
@@ -615,17 +529,6 @@ export default function WorkoutsPage() {
 
   const handleDeleteProgrammingSource = async (sourceId: string) => {
     if (!user) return;
-
-    // Find the source to check if it's automatic
-    const source = programmingSources.find(s => s.id === sourceId);
-
-    if (source?.isAutomatic) {
-      // For automatic sources (gym/groups), save to localStorage as hidden
-      const newHidden = [...hiddenSourceIds, sourceId];
-      setHiddenSourceIds(newHidden);
-      localStorage.setItem(`hiddenSources_${user.id}`, JSON.stringify(newHidden));
-      return;
-    }
 
     try {
       // Delete the source from Firestore
@@ -720,7 +623,7 @@ export default function WorkoutsPage() {
       <main className="max-w-4xl mx-auto px-4 py-8">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">Workouts</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Records</h1>
           <div className="relative">
             <button
               onClick={() => setShowLogDropdown(!showLogDropdown)}
@@ -755,57 +658,139 @@ export default function WorkoutsPage() {
                   <span className="font-medium">Log Skill</span>
                   <p className="text-xs text-gray-500">Gymnastics & skills</p>
                 </Link>
+                <Link
+                  href="/workouts/cardio"
+                  className="block px-4 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors"
+                >
+                  <span className="font-medium">Log Cardio</span>
+                  <p className="text-xs text-gray-500">Run, swim, bike, row</p>
+                </Link>
               </div>
             )}
           </div>
         </div>
 
         {/* Type Selector */}
-        <div className="flex gap-2 mb-6">
-          <button
-            onClick={() => {
-              setWorkoutType("wod");
-              setExpandedCategory(null);
-              setSearchQuery("");
-            }}
-            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-              workoutType === "wod"
-                ? "bg-blue-600 text-white"
-                : "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
-            }`}
-          >
-            WODs
-          </button>
-          <button
-            onClick={() => {
-              setWorkoutType("lift");
-              setExpandedCategory(null);
-              setSearchQuery("");
-            }}
-            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-              workoutType === "lift"
-                ? "bg-blue-600 text-white"
-                : "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
-            }`}
-          >
-            Lifts
-          </button>
-          <button
-            onClick={() => {
-              setWorkoutType("skill");
-              setExpandedCategory(null);
-              setSearchQuery("");
-            }}
-            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-              workoutType === "skill"
-                ? "bg-blue-600 text-white"
-                : "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
-            }`}
-          >
-            Skills
-          </button>
+        <div className="flex gap-2 mb-6 flex-wrap">
+          {([
+            { key: "wod", label: "WODs" },
+            { key: "lift", label: "Lifts" },
+            { key: "skill", label: "Skills" },
+            { key: "cardio", label: "Cardio" },
+            { key: "baseline", label: "🎯 Benchmarks" },
+          ] as const).map(tab => (
+            <button
+              key={tab.key}
+              onClick={() => {
+                setWorkoutType(tab.key);
+                setExpandedCategory(null);
+                setSearchQuery("");
+              }}
+              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                workoutType === tab.key
+                  ? "bg-blue-600 text-white"
+                  : "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
 
+        {/* Cardio tab: quick logging + history */}
+        {workoutType === "cardio" && (
+          <div className="max-w-3xl">
+            <div className="grid grid-cols-5 gap-2 mb-6">
+              {(["run", "swim", "bike_mtb", "bike_road", "row"] as CardioActivity[]).map(a => (
+                <Link
+                  key={a}
+                  href={`/workouts/cardio?activity=${a}`}
+                  className="py-3 rounded-xl border bg-white border-gray-200 hover:border-red-300 hover:shadow-sm text-center transition-all"
+                >
+                  <div className="text-2xl">{cardioActivityIcons[a]}</div>
+                  <div className="text-xs font-semibold mt-1 text-gray-600">{cardioActivityLabels[a]}</div>
+                </Link>
+              ))}
+            </div>
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="font-bold text-gray-900">Cardio History</h2>
+                <Link href="/workouts/cardio" className="text-sm text-red-600 hover:underline font-medium">+ Log Cardio</Link>
+              </div>
+              {cardioLogs.length === 0 ? (
+                <p className="text-gray-400 text-sm text-center py-4">No cardio logged yet - tap an activity above to log your first session</p>
+              ) : (
+                <div className="divide-y divide-gray-100">
+                  {cardioLogs.slice(0, 20).map(log => (
+                    <div key={log.id} className="py-2.5 flex items-center gap-3">
+                      <span className="text-xl">{cardioActivityIcons[log.activity] || "🏃"}</span>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-gray-900">
+                          {cardioActivityLabels[log.activity] || log.activity}
+                          {log.miles ? ` • ${log.miles} mi` : ""}
+                          {log.timeInSeconds ? ` • ${Math.floor(log.timeInSeconds / 60)}:${String(log.timeInSeconds % 60).padStart(2, "0")}` : ""}
+                          {log.miles && log.timeInSeconds ? (
+                            <span className="text-gray-400 font-normal">
+                              {" "}• {Math.floor(Math.round(log.timeInSeconds / log.miles) / 60)}:{String(Math.round(log.timeInSeconds / log.miles) % 60).padStart(2, "0")} /mi
+                            </span>
+                          ) : null}
+                        </p>
+                        <p className="text-xs text-gray-500">{log.date?.toDate?.().toLocaleDateString()}{log.notes ? ` — ${log.notes}` : ""}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Benchmarks tab: the standard baseline battery that powers Oddo */}
+        {workoutType === "baseline" && baselineStatus && (
+          <div className="max-w-3xl">
+            <p className="text-sm text-gray-600 mb-4">
+              These are the standard tests Oddo uses to calibrate your programming and coaching.
+              Log them here anytime - re-test every 6-8 weeks to keep your numbers current.
+            </p>
+            <div className="space-y-4">
+              {([
+                { title: "Lifts (5RM test - any logged rep max counts)", items: [...baselineStatus.lifts.done.map(i => ({ i, done: true })), ...baselineStatus.lifts.missing.map(i => ({ i, done: false }))] },
+                { title: "Bodyweight Strength", items: [...baselineStatus.bodyweight.done.map(i => ({ i, done: true })), ...baselineStatus.bodyweight.missing.map(i => ({ i, done: false }))] },
+                { title: "Cardio", items: [...baselineStatus.cardio.done.map(i => ({ i, done: true })), ...baselineStatus.cardio.missing.map(i => ({ i, done: false }))] },
+                { title: "Benchmark WODs", items: [...baselineStatus.wods.done.map(i => ({ i, done: true })), ...baselineStatus.wods.missing.map(i => ({ i, done: false }))] },
+                { title: "Skills (max tests)", items: [...baselineStatus.skills.done.map(i => ({ i, done: true })), ...baselineStatus.skills.missing.map(i => ({ i, done: false }))] },
+              ]).map(section => (
+                <div key={section.title} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                  <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+                    <h3 className="font-bold text-gray-900 text-sm">{section.title}</h3>
+                    <span className="text-xs text-gray-500">{section.items.filter(x => x.done).length}/{section.items.length} logged</span>
+                  </div>
+                  <div className="divide-y divide-gray-100">
+                    {section.items.map(({ i: item, done }) => {
+                      const href = item.category === "lift" ? `/workouts/lift?name=${encodeURIComponent(item.name)}`
+                        : item.category === "wod" ? `/workouts/new?name=${encodeURIComponent(item.name)}&description=${encodeURIComponent(item.description)}&scoringType=${item.key === "cindy" ? "amrap" : "fortime"}`
+                        : item.category === "cardio" ? `/workouts/cardio?activity=${item.key === "fan_bike" ? "bike_road" : item.key === "row_2k" ? "row" : item.key === "swim" ? "swim" : "run"}`
+                        : `/workouts/skill?name=${encodeURIComponent(item.name)}`;
+                      return (
+                        <Link key={item.key} href={href} className="px-4 py-2.5 flex items-center gap-3 hover:bg-blue-50 transition-colors">
+                          <span className={`font-bold ${done ? "text-green-600" : "text-gray-300"}`}>{done ? "✓" : "○"}</span>
+                          <div className="min-w-0 flex-1">
+                            <p className={`text-sm font-medium ${done ? "text-gray-500" : "text-gray-900"}`}>{item.name}</p>
+                            <p className="text-xs text-gray-500 truncate">{item.description}</p>
+                          </div>
+                          <span className="text-xs text-blue-600 font-medium shrink-0">{done ? "Re-test" : "Log"} →</span>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {(workoutType === "wod" || workoutType === "lift" || workoutType === "skill") && (
+        <>
         {/* Search */}
         <div className="mb-6">
           <input
@@ -867,11 +852,6 @@ export default function WorkoutsPage() {
                                  workout.scoringType === "emom" ? "EMOM" : workout.scoringType}
                               </span>
                             )}
-                            {workout.groupNames && workout.groupNames.map((groupName, gIdx) => (
-                              <span key={gIdx} className="px-2 py-0.5 text-xs rounded bg-teal-100 text-teal-700">
-                                {groupName}
-                              </span>
-                            ))}
                           </div>
                           <p className="text-gray-500 text-sm truncate">{workout.description}</p>
                         </div>
@@ -943,62 +923,6 @@ export default function WorkoutsPage() {
                   </div>
                 )}
 
-                {/* From My Gym Section */}
-                {currentGymWorkouts.length > 0 && (
-                  <div className="mb-6">
-                    <h2 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                      <span className="text-xl">🏋️</span>
-                      From My Gym
-                    </h2>
-                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                      {currentGymWorkouts.slice(0, 5).map((workout, idx) => (
-                        <Link
-                          key={`gym-${workout.name}-${idx}`}
-                          href={
-                            workout.type === "lift"
-                              ? `/workouts/lift?name=${encodeURIComponent(workout.name)}`
-                              : workout.type === "skill"
-                              ? `/workouts/skill?name=${encodeURIComponent(workout.name)}`
-                              : `/workouts/new?name=${encodeURIComponent(workout.name)}&description=${encodeURIComponent(workout.description)}&type=${workout.type}${workout.scoringType ? `&scoringType=${workout.scoringType}` : ""}`
-                          }
-                          className={`flex items-center justify-between p-4 hover:bg-gray-50 transition-colors ${
-                            idx > 0 ? "border-t border-gray-100" : ""
-                          }`}
-                        >
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <h3 className="font-medium text-gray-900">{workout.name}</h3>
-                              {workout.scoringType && (
-                                <span className={`px-2 py-0.5 text-xs rounded ${
-                                  workout.scoringType === "fortime" ? "bg-blue-100 text-blue-700" :
-                                  workout.scoringType === "amrap" ? "bg-green-100 text-green-700" :
-                                  workout.scoringType === "emom" ? "bg-purple-100 text-purple-700" :
-                                  "bg-gray-100 text-gray-700"
-                                }`}>
-                                  {workout.scoringType === "fortime" ? "For Time" :
-                                   workout.scoringType === "amrap" ? "AMRAP" :
-                                   workout.scoringType === "emom" ? "EMOM" : workout.scoringType}
-                                </span>
-                              )}
-                            </div>
-                            <p className="text-gray-500 text-sm truncate">{workout.description}</p>
-                          </div>
-                          <svg className="w-5 h-5 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                          </svg>
-                        </Link>
-                      ))}
-                      {currentGymWorkouts.length > 5 && (
-                        <div className="px-4 py-3 bg-gray-50 text-center border-t border-gray-100">
-                          <span className="text-sm text-gray-500">
-                            +{currentGymWorkouts.length - 5} more from gym programming
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
                 {/* External Programming Section */}
                 <div className="mb-6">
                   <div className="flex items-center justify-between mb-3">
@@ -1045,7 +969,7 @@ export default function WorkoutsPage() {
                                 onClick={() => handleUnhideSource(source.id)}
                                 className="inline-flex items-center gap-1 px-2 py-1 bg-white border border-gray-300 rounded text-sm text-gray-700 hover:bg-blue-50 hover:border-blue-300 transition-colors"
                               >
-                                <span>{source.type === "gym" ? "🏋️" : source.type === "group" ? "👥" : "📝"}</span>
+                                <span>📝</span>
                                 {source.name}
                                 <span className="text-blue-600 ml-1">+ Show</span>
                               </button>
@@ -1065,7 +989,7 @@ export default function WorkoutsPage() {
                             >
                               <div className="flex items-center gap-3">
                                 <span className="text-lg">
-                                  {source.type === "gym" ? "🏋️" : source.type === "group" ? "👥" : source.type === "online" ? "🌐" : source.type === "pt" ? "👤" : "📝"}
+                                  {source.type === "online" ? "🌐" : source.type === "pt" ? "👤" : "📝"}
                                 </span>
                                 <div>
                                   <h3 className="font-medium text-gray-900">{source.name}</h3>
@@ -1076,13 +1000,11 @@ export default function WorkoutsPage() {
                               </div>
                               <div className="flex items-center gap-2">
                                 <span className={`px-2 py-0.5 text-xs rounded ${
-                                  source.type === "gym" ? "bg-orange-100 text-orange-700" :
-                                  source.type === "group" ? "bg-teal-100 text-teal-700" :
                                   source.type === "online" ? "bg-blue-100 text-blue-700" :
                                   source.type === "pt" ? "bg-purple-100 text-purple-700" :
                                   "bg-gray-100 text-gray-700"
                                 }`}>
-                                  {source.type === "gym" ? "Gym" : source.type === "group" ? "Group" : source.type === "online" ? "Online" : source.type === "pt" ? "PT" : "Other"}
+                                  {source.type === "online" ? "Online" : source.type === "pt" ? "PT" : "Other"}
                                 </span>
                                 <svg
                                   className={`w-5 h-5 text-gray-400 transition-transform ${isExpanded ? "rotate-90" : ""}`}
@@ -1100,22 +1022,20 @@ export default function WorkoutsPage() {
                                 {sourceWorkouts.length === 0 ? (
                                   <div className="p-4">
                                     <p className="text-gray-500 text-sm mb-3 text-center">
-                                      No {workoutType === "wod" ? "WODs" : workoutType === "lift" ? "lifts" : "skills"} {source.isAutomatic ? "programmed" : "added"} yet
+                                      No {workoutType === "wod" ? "WODs" : workoutType === "lift" ? "lifts" : "skills"} added yet
                                     </p>
                                     <div className="flex justify-center gap-4">
-                                      {!source.isAutomatic && (
-                                        <button
-                                          onClick={() => setShowAddWorkoutModal(source.id)}
-                                          className="text-blue-600 hover:text-blue-700 font-medium text-sm"
-                                        >
-                                          + Add workout
-                                        </button>
-                                      )}
+                                      <button
+                                        onClick={() => setShowAddWorkoutModal(source.id)}
+                                        className="text-blue-600 hover:text-blue-700 font-medium text-sm"
+                                      >
+                                        + Add workout
+                                      </button>
                                       <button
                                         onClick={() => handleDeleteProgrammingSource(source.id)}
                                         className="text-red-500 hover:text-red-600 font-medium text-sm"
                                       >
-                                        {source.isAutomatic ? "Hide source" : "Delete source"}
+                                        Delete source
                                       </button>
                                     </div>
                                   </div>
@@ -1152,45 +1072,34 @@ export default function WorkoutsPage() {
                                                  workout.scoringType === "emom" ? "EMOM" : workout.scoringType}
                                               </span>
                                             )}
-                                            {workout.groupNames && workout.groupNames.map((groupName, gIdx) => (
-                                              <span key={gIdx} className="px-2 py-0.5 text-xs rounded bg-teal-100 text-teal-700">
-                                                {groupName}
-                                              </span>
-                                            ))}
                                           </div>
                                           {workout.description && (
                                             <p className="text-gray-500 text-sm truncate">{workout.description}</p>
                                           )}
                                         </Link>
-                                        {!source.isAutomatic && (
-                                          <button
-                                            onClick={() => handleDeleteProgrammedWorkout(workout.id)}
-                                            className="ml-3 p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors shrink-0"
-                                            title="Delete workout"
-                                          >
-                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                            </svg>
-                                          </button>
-                                        )}
+                                        <button
+                                          onClick={() => handleDeleteProgrammedWorkout(workout.id)}
+                                          className="ml-3 p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors shrink-0"
+                                          title="Delete workout"
+                                        >
+                                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                          </svg>
+                                        </button>
                                       </div>
                                     ))}
                                     <div className="p-3 border-t border-gray-200 flex justify-between items-center">
-                                      {!source.isAutomatic ? (
-                                        <button
-                                          onClick={() => setShowAddWorkoutModal(source.id)}
-                                          className="text-blue-600 hover:text-blue-700 font-medium text-sm"
-                                        >
-                                          + Add workout
-                                        </button>
-                                      ) : (
-                                        <span></span>
-                                      )}
+                                      <button
+                                        onClick={() => setShowAddWorkoutModal(source.id)}
+                                        className="text-blue-600 hover:text-blue-700 font-medium text-sm"
+                                      >
+                                        + Add workout
+                                      </button>
                                       <button
                                         onClick={() => handleDeleteProgrammingSource(source.id)}
                                         className="text-red-500 hover:text-red-600 font-medium text-sm"
                                       >
-                                        {source.isAutomatic ? "Hide source" : "Delete source"}
+                                        Delete source
                                       </button>
                                     </div>
                                   </>
@@ -1318,6 +1227,8 @@ export default function WorkoutsPage() {
             )}
           </div>
         </div>
+        </>
+        )}
       </main>
 
       {/* Delete Confirmation Modal */}
@@ -1365,16 +1276,6 @@ export default function WorkoutsPage() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Source Type</label>
                 <div className="grid grid-cols-2 gap-2">
-                  <button
-                    onClick={() => setNewSourceType("gym")}
-                    className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                      newSourceType === "gym"
-                        ? "bg-blue-600 text-white"
-                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                    }`}
-                  >
-                    Gym
-                  </button>
                   <button
                     onClick={() => setNewSourceType("online")}
                     className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${

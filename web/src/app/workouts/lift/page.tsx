@@ -21,7 +21,6 @@ interface LiftResult {
   reps: number;
   userId: string;
   userName?: string;
-  gymId?: string;
   date: { toDate: () => Date };
 }
 
@@ -41,9 +40,9 @@ function LiftPageContent() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [history, setHistory] = useState<LiftResult[]>([]);
+  const [allHistory, setAllHistory] = useState<LiftResult[]>([]);
   const [leaderboard, setLeaderboard] = useState<LiftResult[]>([]);
   const [loadingLeaderboard, setLoadingLeaderboard] = useState(false);
-  const [leaderboardScope, setLeaderboardScope] = useState<"gym" | "everyone">("everyone");
   const [chartTimeRange, setChartTimeRange] = useState<"1m" | "6m" | "1y" | "2y" | "5y">("1y");
 
   // Autocomplete suggestions state
@@ -67,7 +66,7 @@ function LiftPageContent() {
       loadHistory();
       loadLeaderboard();
     }
-  }, [user, liftName, selectedReps, leaderboardScope]);
+  }, [user, liftName, selectedReps]);
 
   const loadHistory = async () => {
     if (!user || !liftName) return;
@@ -85,16 +84,19 @@ function LiftPageContent() {
 
       // Case-insensitive match for lift name
       const liftNameLower = liftName.toLowerCase().trim();
-      const filtered = allResults
-        .filter((r) => r.liftTitle?.toLowerCase().trim() === liftNameLower && r.reps === selectedReps)
-        .sort((a, b) => {
-          const dateA = a.date?.toDate?.() || new Date(0);
-          const dateB = b.date?.toDate?.() || new Date(0);
-          return dateB.getTime() - dateA.getTime();
-        })
-        .slice(0, 10);
+      const byDateDesc = (a: LiftResult, b: LiftResult) => {
+        const dateA = a.date?.toDate?.() || new Date(0);
+        const dateB = b.date?.toDate?.() || new Date(0);
+        return dateB.getTime() - dateA.getTime();
+      };
+      const forLift = allResults
+        .filter((r) => r.liftTitle?.toLowerCase().trim() === liftNameLower)
+        .sort(byDateDesc);
 
-      setHistory(filtered);
+      // Rep-filtered set drives the chart / Training % / leaderboard;
+      // the full set (any rep count) drives the history list
+      setHistory(forLift.filter((r) => r.reps === selectedReps).slice(0, 10));
+      setAllHistory(forLift.slice(0, 20));
     } catch (err) {
       console.error("Error loading history:", err);
     }
@@ -130,11 +132,6 @@ function LiftPageContent() {
 
       // Filter by reps
       results = results.filter((r) => r.reps === selectedReps);
-
-      // Filter by gym if scope is gym
-      if (leaderboardScope === "gym" && user?.gymId) {
-        results = results.filter((r) => r.gymId === user.gymId);
-      }
 
       // Get max weight per user (only 1 entry per user - their best)
       const userBestMap = new Map<string, LiftResult>();
@@ -182,7 +179,6 @@ function LiftPageContent() {
       await addDoc(collection(db, "liftResults"), {
         userId: user.id,
         userName: user.displayName || `${user.firstName} ${user.lastName}`,
-        gymId: user.gymId || null,
         liftTitle: liftName.trim(),  // iOS app uses liftTitle
         weight: parseFloat(weight),
         reps: selectedReps,
@@ -463,15 +459,15 @@ function LiftPageContent() {
           </div>
         )}
 
-        {/* Reps Picker */}
+        {/* Reps Picker: common rep counts plus free entry for working sets */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-4">
           <div className="flex rounded-xl overflow-hidden border border-gray-200">
-            {[1, 2, 3, 4, 5].map((rep) => (
+            {[1, 2, 3, 4, 5, 8, 10, 12, 15].map((rep) => (
               <button
                 key={rep}
                 type="button"
                 onClick={() => setSelectedReps(rep)}
-                className={`flex-1 py-3 text-lg font-semibold transition-colors ${
+                className={`flex-1 py-3 text-base font-semibold transition-colors ${
                   selectedReps === rep
                     ? "bg-purple-600 text-white"
                     : "bg-white text-gray-600 hover:bg-gray-50"
@@ -480,6 +476,22 @@ function LiftPageContent() {
                 {rep}
               </button>
             ))}
+          </div>
+          <div className="flex items-center gap-2 mt-2">
+            <span className="text-xs text-gray-500">Other rep count:</span>
+            <input
+              type="number"
+              inputMode="numeric"
+              min="1"
+              max="50"
+              value={selectedReps}
+              onChange={(e) => {
+                const v = parseInt(e.target.value);
+                if (v >= 1 && v <= 50) setSelectedReps(v);
+              }}
+              className="w-16 px-2 py-1 border border-gray-300 rounded-lg text-center text-sm text-gray-900"
+            />
+            <span className="text-xs text-gray-400">reps</span>
           </div>
         </div>
 
@@ -640,28 +652,6 @@ function LiftPageContent() {
               <p className="text-sm font-semibold text-gray-700">
                 Leaderboard ({selectedReps} rep{selectedReps > 1 ? "s" : ""})
               </p>
-              <div className="flex rounded-lg overflow-hidden border border-gray-200 text-xs">
-                <button
-                  onClick={() => setLeaderboardScope("gym")}
-                  className={`px-3 py-1.5 font-medium transition-colors ${
-                    leaderboardScope === "gym"
-                      ? "bg-purple-600 text-white"
-                      : "bg-white text-gray-600 hover:bg-gray-50"
-                  }`}
-                >
-                  Gym
-                </button>
-                <button
-                  onClick={() => setLeaderboardScope("everyone")}
-                  className={`px-3 py-1.5 font-medium transition-colors ${
-                    leaderboardScope === "everyone"
-                      ? "bg-purple-600 text-white"
-                      : "bg-white text-gray-600 hover:bg-gray-50"
-                  }`}
-                >
-                  Everyone
-                </button>
-              </div>
             </div>
 
             {loadingLeaderboard ? (
@@ -703,13 +693,13 @@ function LiftPageContent() {
         )}
 
         {/* History */}
-        {history.length > 0 && (
+        {allHistory.length > 0 && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
             <p className="text-sm font-semibold text-gray-700 mb-3">
-              History ({selectedReps} rep{selectedReps > 1 ? "s" : ""})
+              History (all sets)
             </p>
             <div className="space-y-3">
-              {history.map((log) => (
+              {allHistory.map((log) => (
                 <div key={log.id} className="py-2 border-b border-gray-100 last:border-0">
                   {editingLogId === log.id ? (
                     <div className="space-y-3">
@@ -723,13 +713,18 @@ function LiftPageContent() {
                       </div>
                       <div>
                         <p className="text-xs text-gray-500 mb-1">Reps</p>
-                        <div className="flex rounded-lg overflow-hidden border border-gray-200 text-xs">
-                          {[1, 2, 3, 4, 5].map((rep) => (
-                            <button key={rep} onClick={() => setEditReps(rep)} className={`flex-1 px-2 py-1.5 font-medium ${editReps === rep ? "bg-purple-600 text-white" : "bg-white text-gray-600"}`}>
-                              {rep}
-                            </button>
-                          ))}
-                        </div>
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          min="1"
+                          max="50"
+                          value={editReps}
+                          onChange={(e) => {
+                            const v = parseInt(e.target.value);
+                            if (v >= 1 && v <= 50) setEditReps(v);
+                          }}
+                          className="w-full px-2 py-1 border border-gray-300 rounded text-center text-gray-900"
+                        />
                       </div>
                       <div className="flex gap-2">
                         <button onClick={() => saveEdit(log.id)} className="px-3 py-1.5 bg-purple-600 text-white rounded-lg text-sm font-medium">Save</button>
@@ -740,7 +735,7 @@ function LiftPageContent() {
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="text-xs text-gray-500">{log.date?.toDate().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</p>
-                        <p className="text-lg font-semibold text-gray-900">{log.weight} lbs</p>
+                        <p className="text-lg font-semibold text-gray-900">{log.weight} lbs <span className="text-sm font-normal text-gray-500">× {log.reps}</span></p>
                       </div>
                       <div className="flex gap-2">
                         <button onClick={() => startEditLog(log)} className="w-8 h-8 bg-purple-600 rounded-full flex items-center justify-center text-white text-sm">✎</button>

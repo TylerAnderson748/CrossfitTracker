@@ -1,88 +1,27 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useState } from "react";
 import { usePathname } from "next/navigation";
-import { collection, getDocs, query, where } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
-import { db } from "@/lib/firebase";
-import { Gym, GymApplication } from "@/lib/types";
 import AccountSwitcher from "./AccountSwitcher";
+import WelcomeTour from "./WelcomeTour";
 
 export default function Navigation() {
   const pathname = usePathname();
   const { user } = useAuth();
-  const [isGymOwner, setIsGymOwner] = useState(false);
-  const [hasGymApplication, setHasGymApplication] = useState(false);
+  const [showTour, setShowTour] = useState(false);
 
-  useEffect(() => {
-    const checkGymOwnership = async () => {
-      if (!user) {
-        setIsGymOwner(false);
-        setHasGymApplication(false);
-        return;
-      }
-      try {
-        // Check if user owns any gyms
-        const gymsSnapshot = await getDocs(collection(db, "gyms"));
-        const gyms = gymsSnapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        })) as Gym[];
-
-        const ownsGym = gyms.some((gym) => gym.ownerId === user.id);
-        setIsGymOwner(ownsGym);
-
-        // Check if user has any gym application (pending or approved awaiting setup)
-        if (!ownsGym) {
-          const applicationsQuery = query(
-            collection(db, "gymApplications"),
-            where("userId", "==", user.id)
-          );
-          const appSnapshot = await getDocs(applicationsQuery);
-          // Show gym tab if user has pending or approved (without gym created) application
-          const hasApplication = appSnapshot.docs.some(doc => {
-            const data = doc.data() as GymApplication;
-            if (data.status === "pending") return true;
-            if (data.status === "approved" && !data.approvedGymId) return true;
-            return false;
-          });
-          setHasGymApplication(hasApplication);
-        } else {
-          setHasGymApplication(false);
-        }
-      } catch (error) {
-        console.error("Error checking gym ownership:", error);
-        setIsGymOwner(false);
-        setHasGymApplication(false);
-      }
-    };
-
-    checkGymOwnership();
-  }, [user]);
-
-  // Check if user needs to subscribe - coaches check aiProgrammingSubscription, athletes check aiTrainerSubscription
-  const relevantSubscription = isGymOwner
-    ? user?.aiProgrammingSubscription
-    : user?.aiTrainerSubscription;
-  const hasAISubscription = relevantSubscription?.status === "active" ||
-    relevantSubscription?.status === "trialing";
-
-  // Super admin check
-  const isSuperAdmin = user?.role === "superAdmin";
-
-  // Show Gym tab if user owns a gym OR has an application (pending or approved)
-  const showGymTab = isGymOwner || hasGymApplication;
+  const hasAISubscription = user?.aiTrainerSubscription?.status === "active" ||
+    user?.aiTrainerSubscription?.status === "trialing";
 
   const navItems = [
     { href: "/weekly", label: "Home", icon: "🏠" },
-    ...(showGymTab ? [{ href: "/gym", label: "Gym", icon: "🏢" }] : []),
-    { href: "/programming", label: "Programming", icon: "📅" },
-    { href: "/workouts", label: "Workouts", icon: "📋" },
+    { href: "/programming", label: "Oddo", icon: "🤖" },
+    { href: "/workouts", label: "Records", icon: "📖" },
     { href: "/progress", label: "Progress", icon: "📈" },
     { href: "/profile", label: "Profile", icon: "👤" },
-    ...(isSuperAdmin ? [{ href: "/admin/gym-applications", label: "Admin", icon: "🛡️" }] : []),
-    ...(!hasAISubscription ? [{ href: isGymOwner ? "/subscribe?variant=coach" : "/subscribe", label: isGymOwner ? "AI Programming" : "AI Coach", icon: "⚡" }] : []),
+    ...(!hasAISubscription ? [{ href: "/subscribe", label: "Get Oddo", icon: "⚡" }] : []),
   ];
 
   return (
@@ -92,7 +31,7 @@ export default function Navigation() {
           <div className="flex items-center space-x-8">
             <Link href="/weekly" className="flex items-center space-x-2">
               <span className="text-2xl">🔥</span>
-              <span className="text-xl font-bold text-blue-600">CrossFit Tracker</span>
+              <span className="text-xl font-bold text-blue-600">CoachODDO</span>
             </Link>
             <div className="hidden md:flex space-x-1">
               {navItems.map((item) => (
@@ -111,7 +50,17 @@ export default function Navigation() {
               ))}
             </div>
           </div>
-          <div className="flex items-center">
+          <div className="flex items-center gap-2">
+            {user && (
+              <button
+                onClick={() => setShowTour(true)}
+                className="px-3 py-1.5 rounded-full bg-purple-100 hover:bg-purple-200 text-purple-700 text-sm font-semibold transition-colors flex items-center gap-1.5"
+                title="App tour - what can I do here?"
+              >
+                <span className="w-5 h-5 rounded-full bg-purple-600 text-white text-xs font-bold flex items-center justify-center">?</span>
+                <span className="hidden sm:inline">Help</span>
+              </button>
+            )}
             {user && <AccountSwitcher />}
           </div>
         </div>
@@ -133,6 +82,9 @@ export default function Navigation() {
           ))}
         </div>
       </div>
+      {showTour && user && (
+        <WelcomeTour userId={user.id} onDone={() => setShowTour(false)} />
+      )}
     </nav>
   );
 }

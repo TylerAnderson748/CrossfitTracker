@@ -4,7 +4,9 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { collection, query, where, getDocs, Timestamp, limit, doc, setDoc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { ScheduledWorkout, AICoachPreferences, WorkoutComponent, UserRole } from "@/lib/types";
+import { computeBaselineStatus } from "@/lib/baselines";
+import { AICoachPreferences, WorkoutComponent } from "@/lib/types";
+import { chatCompletion } from "@/lib/ai";
 
 // Types for user workout history
 interface LiftHistoryEntry {
@@ -29,7 +31,7 @@ interface UserWorkoutHistory {
   wods: WodHistoryEntry[];
 }
 
-// Personal workout type (from scan or manual entry)
+// Personal workout type (from AI programming, scan, or manual entry)
 interface PersonalWorkout {
   id: string;
   components: WorkoutComponent[];
@@ -38,33 +40,25 @@ interface PersonalWorkout {
 
 interface PersonalAITrainerProps {
   userId: string;
-  todayWorkout?: ScheduledWorkout | null;
   todayPersonalWorkouts?: PersonalWorkout[];
-  gymId?: string;
   userPreferences?: AICoachPreferences;
-  viewerRole?: UserRole; // For super admins viewing other users' AI coach
-}
-
-interface GymMemberStats {
-  lifts: Map<string, number>; // liftName -> average 1RM
-  count: number;
 }
 
 // Generate a unique ID for storing advice
-function getAdviceDocId(userId: string, workoutId?: string, personalWorkoutIds?: string[]): string {
+function getAdviceDocId(userId: string, personalWorkoutIds?: string[]): string {
   const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-  const workoutPart = workoutId || (personalWorkoutIds?.join('_') || 'personal');
+  const workoutPart = personalWorkoutIds?.join('_') || 'personal';
   return `${userId}_${today}_${workoutPart}`;
 }
 
-export default function PersonalAITrainer({ userId, todayWorkout, todayPersonalWorkouts, gymId, userPreferences, viewerRole }: PersonalAITrainerProps) {
-  const isSuperAdmin = viewerRole === "superAdmin";
-  // Check if there's any workout to analyze (gym or personal)
-  const hasWorkoutToAnalyze = todayWorkout || (todayPersonalWorkouts && todayPersonalWorkouts.length > 0);
+export default function PersonalAITrainer({ userId, todayPersonalWorkouts, userPreferences }: PersonalAITrainerProps) {
+  // Check if there's any workout to analyze
+  const hasWorkoutToAnalyze = todayPersonalWorkouts && todayPersonalWorkouts.length > 0;
   const [userHistory, setUserHistory] = useState<UserWorkoutHistory>({ lifts: [], wods: [] });
-  const [gymMemberStats, setGymMemberStats] = useState<GymMemberStats | null>(null);
+  const [baselineData, setBaselineData] = useState<{ skillNames: string[]; cardioLogs: { activity: string; miles?: number }[]; trainingStyle: string } | null>(null);
   const [aiAdvice, setAiAdvice] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isStreaming, setIsStreaming] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [hasLoadedHistory, setHasLoadedHistory] = useState(false);
   const [hasCheckedSavedAdvice, setHasCheckedSavedAdvice] = useState(false);
@@ -79,7 +73,7 @@ export default function PersonalAITrainer({ userId, todayWorkout, todayPersonalW
 
       try {
         const personalWorkoutIds = todayPersonalWorkouts?.map(pw => pw.id);
-        const adviceDocId = getAdviceDocId(userId, todayWorkout?.id, personalWorkoutIds);
+        const adviceDocId = getAdviceDocId(userId, personalWorkoutIds);
         const adviceDoc = await getDoc(doc(db, "aiCoachAdvice", adviceDocId));
 
         if (adviceDoc.exists()) {
@@ -94,7 +88,7 @@ export default function PersonalAITrainer({ userId, todayWorkout, todayPersonalW
     };
 
     loadSavedAdvice();
-  }, [userId, todayWorkout?.id, todayPersonalWorkouts, hasWorkoutToAnalyze]);
+  }, [userId, todayPersonalWorkouts, hasWorkoutToAnalyze]);
 
   // Load user workout history
   useEffect(() => {
@@ -140,6 +134,19 @@ export default function PersonalAITrainer({ userId, todayWorkout, todayPersonalW
         }).filter(w => w.wodTitle);
 
         setUserHistory({ lifts, wods });
+
+        // Baseline-battery data (skills, cardio, training style) so the
+        // unlock gate matches Oddo's standard baseline minimum
+        const [skillSnap, cardioSnap, prefsSnap] = await Promise.all([
+          getDocs(query(collection(db, "skillResults"), where("userId", "==", userId), limit(150))),
+          getDocs(query(collection(db, "cardioLogs"), where("userId", "==", userId), limit(150))),
+          getDocs(query(collection(db, "aiProgrammingPreferences"), where("userId", "==", userId))),
+        ]);
+        setBaselineData({
+          skillNames: Array.from(new Set(skillSnap.docs.map(d => String(d.data().skillTitle || d.data().skillName || "")).filter(Boolean))),
+          cardioLogs: cardioSnap.docs.map(d => ({ activity: String(d.data().activity || ""), miles: Number(d.data().miles) || 0 })),
+          trainingStyle: prefsSnap.empty ? "crossfit" : String(prefsSnap.docs[0].data().trainingStyle || "crossfit"),
+        });
         setHasLoadedHistory(true);
       } catch (err) {
         console.error("Error loading user history:", err);
@@ -150,107 +157,20 @@ export default function PersonalAITrainer({ userId, todayWorkout, todayPersonalW
     loadUserHistory();
   }, [userId]);
 
-  // Load gym member stats for consistency
-  useEffect(() => {
-    const loadGymMemberStats = async () => {
-      if (!gymId) return;
-
-      try {
-        // Get all gym members' lift data for comparison
-        const gymDoc = await getDocs(query(collection(db, "gyms"), where("__name__", "==", gymId)));
-        if (gymDoc.empty) return;
-
-        const gymData = gymDoc.docs[0].data();
-        const memberIds = [...(gymData.memberIds || []), ...(gymData.coachIds || [])];
-
-        if (memberIds.length === 0) return;
-
-        // Get lift results from gym members
-        const liftTotals = new Map<string, { total: number; count: number }>();
-
-        for (const memberId of memberIds.slice(0, 20)) { // Limit to 20 members for performance
-          if (memberId === userId) continue; // Skip current user
-
-          const memberLifts = await getDocs(query(
-            collection(db, "liftResults"),
-            where("userId", "==", memberId),
-            limit(50)
-          ));
-
-          memberLifts.docs.forEach(doc => {
-            const data = doc.data();
-            const liftName = data.liftTitle;
-            if (liftName && data.weight && data.reps === 1) { // Only 1RM for comparison
-              const existing = liftTotals.get(liftName) || { total: 0, count: 0 };
-              liftTotals.set(liftName, {
-                total: existing.total + data.weight,
-                count: existing.count + 1
-              });
-            }
-          });
-        }
-
-        // Calculate averages
-        const avgLifts = new Map<string, number>();
-        liftTotals.forEach((val, key) => {
-          avgLifts.set(key, Math.round(val.total / val.count));
-        });
-
-        setGymMemberStats({
-          lifts: avgLifts,
-          count: memberIds.length
-        });
-      } catch (err) {
-        console.error("Error loading gym member stats:", err);
-      }
-    };
-
-    loadGymMemberStats();
-  }, [gymId, userId]);
-
   const getPersonalizedAdvice = async () => {
     if (!hasWorkoutToAnalyze || isLoading) return;
 
     setIsLoading(true);
+    setIsStreaming(false);
     setAiAdvice(null);
 
     try {
-      const apiKey = process.env.NEXT_PUBLIC_XAI_API_KEY;
-      if (!apiKey) {
-        setAiAdvice("AI service not configured. Please add NEXT_PUBLIC_XAI_API_KEY to your environment.");
-        setIsLoading(false);
-        return;
-      }
+      // Build workout description from today's workouts
+      const workoutDescriptionParts: string[] = [];
 
-      // Build workout description from gym workout and/or personal workouts
-      let prescribedScalingOptions = "";
-      let workoutDescriptionParts: string[] = [];
-
-      // Add gym workout if present
-      if (todayWorkout && todayWorkout.components) {
-        workoutDescriptionParts.push("GYM PROGRAMMING:");
-        todayWorkout.components.forEach(comp => {
-          let desc = `${comp.type.toUpperCase()}: ${comp.title}\n${comp.description || ""}`;
-          if (comp.notes) {
-            desc += `\nCoach Notes: ${comp.notes}`;
-            // Check if notes contain scaling info
-            const notesLower = comp.notes.toLowerCase();
-            if (notesLower.includes("scale") || notesLower.includes("rx") || notesLower.includes("modify") ||
-                notesLower.includes("option") || notesLower.includes("substitute") || notesLower.includes("foundation")) {
-              prescribedScalingOptions += `\n${comp.type}: ${comp.notes}`;
-            }
-          }
-          workoutDescriptionParts.push(desc);
-        });
-      } else if (todayWorkout?.wodDescription) {
-        workoutDescriptionParts.push("GYM PROGRAMMING:");
-        workoutDescriptionParts.push(todayWorkout.wodDescription);
-      }
-
-      // Add personal workouts if present
       if (todayPersonalWorkouts && todayPersonalWorkouts.length > 0) {
-        workoutDescriptionParts.push("\nPERSONAL WORKOUTS:");
-        todayPersonalWorkouts.forEach((pw, idx) => {
+        workoutDescriptionParts.push("TODAY'S WORKOUT:");
+        todayPersonalWorkouts.forEach((pw) => {
           if (pw.components && pw.components.length > 0) {
             pw.components.forEach(comp => {
               let desc = `${comp.type.toUpperCase()}: ${comp.title}\n${comp.description || ""}`;
@@ -331,61 +251,18 @@ export default function PersonalAITrainer({ userId, todayWorkout, todayPersonalW
         }
       }
 
-      // Build gym comparison data
-      let gymComparisonInfo = "";
-      if (gymMemberStats && gymMemberStats.lifts.size > 0) {
-        gymComparisonInfo = "\nGYM AVERAGES (for context - ensure consistency with other members):\n";
-        gymMemberStats.lifts.forEach((avg, lift) => {
-          gymComparisonInfo += `- ${lift}: ${avg}lb avg across ${gymMemberStats.count} members\n`;
-        });
-      }
+      const prompt = `You are Oddo, the athlete's personal CrossFit coach, providing SPECIFIC, ACTIONABLE advice for today's workout. Your athlete trains alone in a garage/home gym - you are their only coach, so be direct and complete.
 
-      // Build prompt based on whether scaling options are prescribed
-      let scalingInstructions = "";
-      if (prescribedScalingOptions.trim()) {
-        scalingInstructions = `
-IMPORTANT - PRESCRIBED SCALING OPTIONS:
-The coach has provided specific scaling options for this workout. You MUST ONLY recommend from these options:
-${prescribedScalingOptions}
-
-Do NOT suggest any scaling modifications outside of what the coach has prescribed above. Help the athlete choose the RIGHT prescribed option for their level.`;
-      } else {
-        scalingInstructions = `
-No specific scaling options were prescribed by the coach, so you may suggest appropriate scaling based on the athlete's ability level (Rx, Scaled, or Foundations).`;
-      }
-
-      // Determine if we should focus on weaknesses (no goals set)
-      const shouldFocusOnWeaknesses = !userPreferences?.goals;
-
-      // Analyze weaknesses from workout history
-      let weaknessAnalysis = "";
-      if (shouldFocusOnWeaknesses && userHistory.wods.length > 0) {
-        // Look for patterns in workout categories/results to identify weaknesses
-        const wodsByCategory: Record<string, number[]> = {};
-        userHistory.wods.forEach(wod => {
-          if (wod.timeInSeconds && wod.category) {
-            if (!wodsByCategory[wod.category]) wodsByCategory[wod.category] = [];
-            wodsByCategory[wod.category].push(wod.timeInSeconds);
-          }
-        });
-        weaknessAnalysis = "\nPotential areas for improvement based on logged workouts - focus your advice here.";
-      }
-
-      const prompt = `You are a personal CrossFit coach providing SPECIFIC, ACTIONABLE advice for today's workout.
-
-TODAY'S WORKOUT:
 ${workoutDescription}
-${scalingInstructions}
 
 ATHLETE'S WORKOUT HISTORY:
 ${historySummary || "No workout history available yet - treat them as an intermediate athlete."}
-${userGoalsInfo ? `\nATHLETE'S PROFILE & GOALS:${userGoalsInfo}` : `\nNO GOALS SET - Focus advice on improving their weaknesses and building well-rounded fitness.${weaknessAnalysis}`}
-${gymComparisonInfo}
+${userGoalsInfo ? `\nATHLETE'S PROFILE & GOALS:${userGoalsInfo}` : `\nNO GOALS SET - Focus advice on improving their weaknesses and building well-rounded fitness.`}
 
 You MUST provide advice in this EXACT format with these sections:
 
 **SCALING RECOMMENDATION:**
-${prescribedScalingOptions.trim() ? "Choose from the coach's prescribed options and explain which one they should do" : "Recommend Rx, Scaled, or Foundations"} and explain WHY this is the right choice for them based on their specific numbers. Be direct: "Do [this option] because [specific reason]."
+Recommend Rx, Scaled, or Foundations and explain WHY this is the right choice for them based on their specific numbers. Be direct: "Do [this option] because [specific reason]."
 
 **SPECIFIC WEIGHTS/LOADS:**
 List each movement that requires loading and give them an EXACT number based on their lift PRs. Example: "Deadlifts: Use 185lb (that's 65% of your 285lb 1RM - perfect for this workout style)." If you don't have data for a lift, give a conservative recommendation and tell them to track it.
@@ -397,10 +274,9 @@ Give them a specific pacing target. For AMRAP: target rounds/hour and how to bre
 ${userPreferences?.goals ? `Connect this workout to their stated goal: "${userPreferences.goals}". Explain how today's approach helps them progress toward it.` : "Since they haven't set specific goals, explain how this approach helps them get fitter overall or addresses a weakness you noticed in their history."}
 
 **ONE MENTAL CUE:**
-A single focused thought to keep in mind during the workout.
+A single focused thought to keep in mind during the workout. Training alone takes extra discipline - give them something to hold onto.
 
 CRITICAL RULES:
-- ${prescribedScalingOptions.trim() ? "ONLY suggest scaling options from the coach's prescribed options above" : "You may suggest appropriate scaling"}
 - Use their ACTUAL numbers from history when recommending weights
 - Be specific and direct - no vague advice like "listen to your body" or "go at a moderate pace"
 - If this is a heavy strength day, give percentage-based recommendations
@@ -409,30 +285,18 @@ ${userPreferences?.injuries ? `- CRITICAL: They have injuries/limitations (${use
 
 Respond in a confident, direct coach tone. This advice will be saved and shown every time they view this workout, so make it count.`;
 
-      // Call xAI/Grok API (OpenAI-compatible format)
-      const response = await fetch("https://api.x.ai/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${apiKey}`
+      // Call the fast model with streaming so advice appears as it's written
+      const text = await chatCompletion({
+        messages: [
+          { role: "system", content: "You are an experienced CrossFit coach providing personalized workout advice." },
+          { role: "user", content: prompt }
+        ],
+        temperature: 0.7,
+        onDelta: (textSoFar) => {
+          setIsStreaming(true);
+          setAiAdvice(textSoFar);
         },
-        body: JSON.stringify({
-          model: "grok-4-latest",
-          messages: [
-            { role: "system", content: "You are an experienced CrossFit coach providing personalized workout advice." },
-            { role: "user", content: prompt }
-          ],
-          temperature: 0.7
-        })
       });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error?.message || `API error: ${response.status}`);
-      }
-
-      const data = await response.json();
-      const text = data.choices?.[0]?.message?.content;
 
       if (!text) {
         throw new Error("No response from AI");
@@ -443,14 +307,12 @@ Respond in a confident, direct coach tone. This advice will be saved and shown e
       // Save the advice to Firestore so it persists
       try {
         const personalWorkoutIds = todayPersonalWorkouts?.map(pw => pw.id);
-        const adviceDocId = getAdviceDocId(userId, todayWorkout?.id, personalWorkoutIds);
+        const adviceDocId = getAdviceDocId(userId, personalWorkoutIds);
 
         await setDoc(doc(db, "aiCoachAdvice", adviceDocId), {
           userId,
           advice: text,
-          workoutId: todayWorkout?.id || null,
           personalWorkoutIds: personalWorkoutIds || null,
-          gymId: gymId || null,
           createdAt: Timestamp.now(),
           date: new Date().toISOString().split('T')[0],
         });
@@ -464,6 +326,7 @@ Respond in a confident, direct coach tone. This advice will be saved and shown e
     }
 
     setIsLoading(false);
+    setIsStreaming(false);
   };
 
   // Get lift PRs summary for display
@@ -488,20 +351,18 @@ Respond in a confident, direct coach tone. This advice will be saved and shown e
       .join(" | ");
   };
 
-  // Count unique lifts and WODs for requirements check
-  const getUniqueLiftCount = () => {
-    const uniqueLifts = new Set(userHistory.lifts.map(l => l.liftTitle));
-    return uniqueLifts.size;
-  };
-
-  const getUniqueWodCount = () => {
-    const uniqueWods = new Set(userHistory.wods.map(w => w.wodTitle));
-    return uniqueWods.size;
-  };
-
-  const uniqueLiftCount = getUniqueLiftCount();
-  const uniqueWodCount = getUniqueWodCount();
-  const meetsRequirements = uniqueLiftCount >= 5 && uniqueWodCount >= 5;
+  // Advice unlocks at the same standard baseline minimum Oddo programs from
+  const baselineStatus = baselineData
+    ? computeBaselineStatus({
+        trainingStyle: baselineData.trainingStyle,
+        liftTitles: Array.from(new Set(userHistory.lifts.map(l => l.liftTitle))),
+        wodTitles: Array.from(new Set(userHistory.wods.map(w => w.wodTitle))),
+        skillNames: baselineData.skillNames,
+        cardioLogs: baselineData.cardioLogs,
+      })
+    : null;
+  const strengthDone = baselineStatus ? baselineStatus.lifts.done.length + baselineStatus.bodyweight.done.length : 0;
+  const meetsRequirements = baselineStatus ? baselineStatus.meetsMinimum : false;
 
   if (!hasLoadedHistory || !hasCheckedSavedAdvice) {
     return null;
@@ -517,7 +378,7 @@ Respond in a confident, direct coach tone. This advice will be saved and shown e
             </svg>
           </div>
           <div>
-            <h3 className="font-semibold">Your AI Coach</h3>
+            <h3 className="font-semibold">Coach Oddo</h3>
             <p className="text-white/70 text-xs">Personalized scaling & advice</p>
           </div>
         </div>
@@ -539,6 +400,24 @@ Respond in a confident, direct coach tone. This advice will be saved and shown e
       {isExpanded && (
         <div className="mt-4 space-y-4">
           {/* Quick Actions */}
+          <Link
+            href="/programming"
+            className="flex items-center gap-3 p-3 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
+          >
+            <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+              </svg>
+            </div>
+            <div className="flex-1">
+              <p className="font-medium text-sm">AI Programming</p>
+              <p className="text-white/60 text-xs">Have your coach build your next training block</p>
+            </div>
+            <svg className="w-5 h-5 text-white/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </Link>
+
           <Link
             href="/ai-coach/scan"
             className="flex items-center gap-3 p-3 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
@@ -565,41 +444,38 @@ Respond in a confident, direct coach tone. This advice will be saved and shown e
                 <svg className="w-5 h-5 text-yellow-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                 </svg>
-                <span className="font-medium">Unlock AI Coach</span>
+                <span className="font-medium">Complete Your Baseline</span>
               </div>
               <p className="text-sm text-white/80 mb-3">
-                Log at least 5 different lifts and 5 different WODs to unlock personalized AI coaching.
+                Log your baseline tests so Oddo can coach from YOUR numbers - {baselineStatus?.minimumDescription || "a few strength and cardio tests"}.
               </p>
               <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-white/70">Unique Lifts</span>
-                  <div className="flex items-center gap-2">
-                    <div className="w-24 h-2 bg-white/20 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-green-400 rounded-full transition-all"
-                        style={{ width: `${Math.min(100, (uniqueLiftCount / 5) * 100)}%` }}
-                      />
+                {([
+                  { label: "Strength Tests", done: strengthDone, needed: 2 },
+                  { label: "Cardio Test", done: baselineStatus?.cardio.done.length || 0, needed: 1 },
+                ]).map(row => (
+                  <div key={row.label} className="flex items-center justify-between">
+                    <span className="text-sm text-white/70">{row.label}</span>
+                    <div className="flex items-center gap-2">
+                      <div className="w-24 h-2 bg-white/20 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-green-400 rounded-full transition-all"
+                          style={{ width: `${Math.min(100, (row.done / row.needed) * 100)}%` }}
+                        />
+                      </div>
+                      <span className={`text-sm font-medium ${row.done >= row.needed ? 'text-green-400' : 'text-white/90'}`}>
+                        {Math.min(row.done, row.needed)}/{row.needed}
+                      </span>
                     </div>
-                    <span className={`text-sm font-medium ${uniqueLiftCount >= 5 ? 'text-green-400' : 'text-white/90'}`}>
-                      {uniqueLiftCount}/5
-                    </span>
                   </div>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-white/70">Unique WODs</span>
-                  <div className="flex items-center gap-2">
-                    <div className="w-24 h-2 bg-white/20 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-green-400 rounded-full transition-all"
-                        style={{ width: `${Math.min(100, (uniqueWodCount / 5) * 100)}%` }}
-                      />
-                    </div>
-                    <span className={`text-sm font-medium ${uniqueWodCount >= 5 ? 'text-green-400' : 'text-white/90'}`}>
-                      {uniqueWodCount}/5
-                    </span>
-                  </div>
-                </div>
+                ))}
               </div>
+              <a
+                href="/programming"
+                className="inline-block mt-3 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg text-sm font-semibold transition-colors"
+              >
+                Log or Schedule My Baselines →
+              </a>
               <p className="text-xs text-white/50 mt-3">
                 Log your results from preset workouts to build your training profile.
               </p>
@@ -616,67 +492,54 @@ Respond in a confident, direct coach tone. This advice will be saved and shown e
 
               {/* Get Advice Button or AI Advice Display */}
               {hasWorkoutToAnalyze && (
-            <>
-              {!aiAdvice && (
-                <button
-                  onClick={getPersonalizedAdvice}
-                  disabled={isLoading}
-                  className="w-full py-2.5 bg-white/20 hover:bg-white/30 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
-                >
-                  {isLoading ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      Analyzing your workout...
-                    </>
-                  ) : (
-                    <>
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                      </svg>
-                      Get Personalized Advice for Today
-                    </>
-                  )}
-                </button>
-              )}
-
-              {aiAdvice && (
-                <div className="bg-white/10 rounded-lg p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <svg className="w-4 h-4 text-yellow-300" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-                      </svg>
-                      <span className="font-medium text-yellow-300 text-sm">Your Personalized Plan</span>
-                    </div>
-                    {isSuperAdmin && (
-                      <button
-                        onClick={getPersonalizedAdvice}
-                        disabled={isLoading}
-                        className="text-xs bg-red-500/20 text-red-200 hover:bg-red-500/30 px-2 py-1 rounded flex items-center gap-1 disabled:opacity-50"
-                        title="Super Admin: Force regenerate advice"
-                      >
-                        {isLoading ? (
-                          <div className="w-3 h-3 border border-red-300/30 border-t-red-300 rounded-full animate-spin" />
-                        ) : (
-                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                <>
+                  {!aiAdvice && (
+                    <button
+                      onClick={getPersonalizedAdvice}
+                      disabled={isLoading}
+                      className="w-full py-2.5 bg-white/20 hover:bg-white/30 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                    >
+                      {isLoading ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                          Analyzing your workout...
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                           </svg>
+                          Get Personalized Advice for Today
+                        </>
+                      )}
+                    </button>
+                  )}
+
+                  {aiAdvice && (
+                    <div className="bg-white/10 rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <svg className="w-4 h-4 text-yellow-300" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                          </svg>
+                          <span className="font-medium text-yellow-300 text-sm">Your Personalized Plan</span>
+                        </div>
+                        {isStreaming && (
+                          <div className="w-3 h-3 border border-white/30 border-t-white rounded-full animate-spin" />
                         )}
-                      </button>
-                    )}
-                  </div>
-                  <div className="text-sm text-white/90 whitespace-pre-line">
-                    {aiAdvice.split('\n').map((line, i) => {
-                      if (line.startsWith('**') && line.endsWith('**')) {
-                        return <p key={i} className="font-bold text-white mt-3 first:mt-0">{line.replace(/\*\*/g, '')}</p>;
-                      }
-                      return line ? <p key={i} className="mt-1">{line}</p> : null;
-                    })}
-                  </div>
-                </div>
+                      </div>
+                      <div className="text-sm text-white/90 whitespace-pre-line">
+                        {aiAdvice.split('\n').map((line, i) => {
+                          if (line.startsWith('**') && line.endsWith('**')) {
+                            return <p key={i} className="font-bold text-white mt-3 first:mt-0">{line.replace(/\*\*/g, '')}</p>;
+                          }
+                          return line ? <p key={i} className="mt-1">{line}</p> : null;
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
-            </>
-          )}
             </>
           )}
         </div>

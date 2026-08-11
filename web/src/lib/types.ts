@@ -1,6 +1,6 @@
 import { Timestamp } from "firebase/firestore";
 
-// User roles
+// User roles (legacy roles may still exist on old user docs)
 export type UserRole = "athlete" | "member" | "coach" | "owner" | "superAdmin";
 export type Gender = "Male" | "Female";
 
@@ -13,22 +13,17 @@ export interface AppUser {
   lastName?: string;
   displayName?: string;
   gender?: Gender;
-  gymId?: string;
   createdAt: Timestamp;
   hideFromLeaderboards: boolean;
-  // AI Trainer subscription (for athletes - personalized scaling/recommendations)
+  // Set once the first-run welcome tour has been completed or dismissed
+  onboardedAt?: Timestamp;
+  // Oddo subscription (personalized scaling, advice, and programming)
   aiTrainerSubscription?: AITrainerSubscription;
-  // AI Programming subscription (for coaches - programming assistant)
-  aiProgrammingSubscription?: AITrainerSubscription;
-  // AI Coach preferences and goals
+  // Oddo preferences and goals
   aiCoachPreferences?: AICoachPreferences;
-  // Individual subscription (for users not in a gym)
-  individualSubscription?: IndividualSubscription;
-  // Flag to indicate if user has AI Coach via their gym
-  gymAICoachEnabled?: boolean;
 }
 
-// AI Coach user preferences
+// Oddo user preferences
 export interface AICoachPreferences {
   goals?: string; // User's fitness goals (free text)
   injuries?: string; // Current injuries or limitations
@@ -38,7 +33,7 @@ export interface AICoachPreferences {
 }
 
 // AI Trainer Subscription types
-export type AISubscriptionTier = "free" | "pro" | "elite" | "coach";
+export type AISubscriptionTier = "free" | "pro" | "elite";
 
 export interface AITrainerSubscription {
   tier: AISubscriptionTier;
@@ -60,9 +55,7 @@ export interface StoredAccount {
 }
 
 // Workout types
-export type WorkoutType = "lift" | "wod";
 export type WorkoutResultType = "time" | "rounds" | "weight" | "reps" | "other";
-export type RecurrenceType = "none" | "daily" | "weekly" | "monthly";
 
 // WOD Scoring Types
 export type WODScoringType = "fortime" | "emom" | "amrap";
@@ -80,7 +73,54 @@ export const wodScoringTypeColors: Record<WODScoringType, { bg: string; text: st
 };
 
 // Workout component types for programming
-export type WorkoutComponentType = "warmup" | "wod" | "lift" | "skill" | "cooldown";
+// ("cardio" is legacy - new programming uses the specific run/swim/bike types)
+export type WorkoutComponentType =
+  | "warmup" | "wod" | "lift" | "skill"
+  | "run" | "swim" | "bike_mtb" | "bike_road" | "row"
+  | "cardio" | "class" | "cooldown";
+
+// The loggable cardio activities (miles + time)
+export type CardioActivity = "run" | "swim" | "bike_mtb" | "bike_road" | "row";
+
+export const cardioActivityLabels: Record<CardioActivity, string> = {
+  run: "Run",
+  swim: "Swim",
+  bike_mtb: "MTB",
+  bike_road: "Bike",
+  row: "Row",
+};
+
+export const cardioActivityIcons: Record<CardioActivity, string> = {
+  run: "🏃",
+  swim: "🏊",
+  bike_mtb: "🚵",
+  bike_road: "🚴",
+  row: "🚣",
+};
+
+// A logged cardio session (mileage and time for now)
+export interface CardioLog {
+  id: string;
+  userId: string;
+  activity: CardioActivity;
+  miles: number;
+  timeInSeconds: number;
+  date: Timestamp;
+  dateString?: string; // YYYY-MM-DD
+  notes?: string;
+  createdAt: Timestamp;
+}
+
+// A logged class attendance ("I did it")
+export interface ClassLog {
+  id: string;
+  userId: string;
+  title: string; // e.g., "Olympic Lifting Class"
+  date: Timestamp;
+  dateString: string; // YYYY-MM-DD
+  notes?: string;
+  createdAt: Timestamp;
+}
 
 export interface WorkoutComponent {
   id: string;
@@ -89,7 +129,7 @@ export interface WorkoutComponent {
   description: string;
   scoringType?: WODScoringType; // For WOD components: fortime, emom, amrap
   isPreset?: boolean; // True if this is a preset workout (locked fields)
-  notes?: string; // Coach notes: stimulus, scaling options, intent, etc.
+  notes?: string; // Notes: stimulus, scaling options, intent, etc.
 }
 
 export const workoutComponentLabels: Record<WorkoutComponentType, string> = {
@@ -97,6 +137,13 @@ export const workoutComponentLabels: Record<WorkoutComponentType, string> = {
   wod: "WOD",
   lift: "Lift",
   skill: "Skill Work",
+  run: "Run",
+  swim: "Swim",
+  bike_mtb: "MTB",
+  bike_road: "Bike",
+  row: "Row",
+  cardio: "Cardio",
+  class: "Class",
   cooldown: "Cool Down",
 };
 
@@ -105,8 +152,28 @@ export const workoutComponentColors: Record<WorkoutComponentType, { bg: string; 
   wod: { bg: "bg-orange-100", text: "text-orange-700" },
   lift: { bg: "bg-purple-100", text: "text-purple-700" },
   skill: { bg: "bg-green-100", text: "text-green-700" },
+  run: { bg: "bg-red-100", text: "text-red-700" },
+  swim: { bg: "bg-sky-100", text: "text-sky-700" },
+  bike_mtb: { bg: "bg-lime-100", text: "text-lime-700" },
+  bike_road: { bg: "bg-teal-100", text: "text-teal-700" },
+  row: { bg: "bg-cyan-100", text: "text-cyan-700" },
+  cardio: { bg: "bg-red-100", text: "text-red-700" },
+  class: { bg: "bg-indigo-100", text: "text-indigo-700" },
   cooldown: { bg: "bg-blue-100", text: "text-blue-700" },
 };
+
+// Component types that log as a cardio session (with legacy "cardio" mapping to run)
+export function cardioActivityForComponent(type: WorkoutComponentType, title?: string): CardioActivity | null {
+  if (type === "run" || type === "swim" || type === "bike_mtb" || type === "bike_road" || type === "row") return type;
+  if (type === "cardio" || (type === "wod" && title && /\b(run|jog|ruck)\b/i.test(title))) {
+    if (title && /\bswim\b/i.test(title)) return "swim";
+    if (title && /\brow(?:ing|er)?\b/i.test(title)) return "row";
+    if (title && /\b(mtb|mountain)\b/i.test(title)) return "bike_mtb";
+    if (title && /\b(bike|cycle|cycling)\b/i.test(title)) return "bike_road";
+    return "run";
+  }
+  return null;
+}
 
 // WOD Categories
 export type WODCategory = "RX" | "Scaled" | "Just For Fun";
@@ -120,29 +187,17 @@ export const categoryColors: Record<WODCategory, { bg: string; text: string; bad
   "Just For Fun": { bg: "bg-green-500", text: "text-white", badge: "bg-green-100 text-green-700" },
 };
 
-// Time slot with signups for a scheduled workout
-export interface ScheduledTimeSlot extends TimeSlot {
-  signups: string[]; // Array of user IDs signed up for this slot
-}
-
-export interface ScheduledWorkout {
+// A workout on the athlete's personal calendar (manual, scanned, or AI-generated)
+export interface PersonalWorkout {
   id: string;
-  wodTitle: string;
-  wodDescription: string;
+  userId: string;
   date: Timestamp;
-  workoutType: WorkoutType;
-  groupIds: string[];
-  createdBy: string;
-  recurrenceType: RecurrenceType;
-  hideDetails?: boolean;
-  revealDate?: Timestamp;
-  // Multi-component support
-  components?: WorkoutComponent[];
-  // Series tracking for recurring workouts
-  seriesId?: string;
-  gymId?: string;
-  // Time slots for this workout (with signup tracking)
-  timeSlots?: ScheduledTimeSlot[];
+  dateString?: string; // YYYY-MM-DD for reliable date comparison
+  components: WorkoutComponent[];
+  notes?: string;
+  createdAt: Timestamp;
+  // Set when this workout was published by an AI programming session
+  aiSessionId?: string;
 }
 
 export interface WorkoutLog {
@@ -166,7 +221,6 @@ export interface LeaderboardEntry {
   userId: string;
   userName: string;
   userGender?: Gender;
-  gymName?: string;
   workoutLogId: string;
   normalizedWorkoutName: string;
   originalWorkoutName: string;
@@ -188,130 +242,6 @@ export interface LiftResult {
   reps: number;
   date: Timestamp;
   isPersonalRecord: boolean;
-}
-
-// Pricing types
-export type BillingCycle = "monthly" | "yearly" | "one-time";
-export type ClassLimitType = "unlimited" | "per-month" | "fixed";
-export type PaymentStatus = "active" | "past_due" | "cancelled" | "trial";
-
-export interface PricingTier {
-  id: string;
-  name: string;
-  // Pricing per billing cycle
-  monthlyPrice?: number;
-  yearlyPrice?: number;
-  oneTimePrice?: number;
-  // Class limits
-  classLimitType: ClassLimitType;
-  classesPerMonth?: number;  // For "per-month" type
-  totalClasses?: number;     // For "fixed" (one-time pack) type
-  description?: string;
-  features?: string[];
-  isActive: boolean;
-  // Hidden plan with signup code
-  isHidden?: boolean;
-  signupCode?: string;
-}
-
-export type DiscountType = "percentage" | "fixed";
-
-export interface DiscountCode {
-  id: string;
-  code: string;
-  discountType: DiscountType;
-  discountValue: number; // Percentage (0-100) or fixed dollar amount
-  description?: string;
-  isActive: boolean;
-  expiresAt?: Timestamp;
-  usageLimit?: number;
-  usageCount: number;
-}
-
-export interface MemberSubscription {
-  id: string;
-  memberId: string;
-  tierId: string;
-  status: PaymentStatus;
-  startDate: Timestamp;
-  nextBillingDate?: Timestamp;
-  cancelledAt?: Timestamp;
-}
-
-export interface Gym {
-  id: string;
-  name: string;
-  ownerId: string;
-  coachIds: string[];
-  memberIds: string[];
-  createdAt: Timestamp;
-  // Pricing settings (mockup)
-  pricingEnabled?: boolean;
-  defaultPricingTierId?: string;
-  // Gym subscription (platform fees)
-  subscription?: GymSubscription;
-  // Gym details (from application)
-  address?: string;
-  city?: string;
-  state?: string;
-  zip?: string;
-  phone?: string;
-  website?: string;
-  // Application tracking
-  applicationId?: string; // Reference to original application
-  isApproved: boolean; // Whether the gym has been approved by admin
-}
-
-// Group types
-export type GroupType = "default" | "custom" | "personal";
-export type MembershipType = "auto-assign-all" | "invite-only";
-
-export interface TimeSlot {
-  id: string;
-  hour: number;
-  minute: number;
-  capacity: number;
-}
-
-export interface WorkoutGroup {
-  id: string;
-  name: string;
-  type: GroupType;
-  gymId?: string;
-  memberIds: string[];
-  coachIds: string[];
-  ownerId: string;
-  createdAt?: Timestamp;
-  // Settings
-  membershipType: MembershipType;
-  isPublic: boolean;
-  isDeletable: boolean;
-  // Default time slots
-  defaultTimeSlots: TimeSlot[];
-  // Workout visibility settings
-  hideDetailsByDefault: boolean;
-  defaultRevealDaysBefore: number;
-  defaultRevealHour: number;
-  defaultRevealMinute: number;
-  // Signup cutoff (minutes before time slot)
-  signupCutoffMinutes: number;
-  // Pricing settings (mockup)
-  pricingTierId?: string;
-  requiresPayment?: boolean;
-  additionalFee?: number;
-}
-
-// Group membership request
-export interface GroupMembershipRequest {
-  id: string;
-  groupId: string;
-  groupName: string;
-  gymId: string;
-  userId: string;
-  userName: string;
-  userEmail: string;
-  status: "pending" | "approved" | "denied";
-  createdAt: Timestamp;
 }
 
 // Helper functions
@@ -356,15 +286,6 @@ export function getRelativeDate(date: Date): string {
   return date.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
 }
 
-export function formatTimeSlot(hour: number, minute: number): string {
-  const safeHour = hour ?? 0;
-  const safeMinute = minute ?? 0;
-  const period = safeHour >= 12 ? "PM" : "AM";
-  const displayHour = safeHour % 12 || 12;
-  const displayMinute = safeMinute.toString().padStart(2, "0");
-  return `${displayHour}:${displayMinute} ${period}`;
-}
-
 // =====================
 // AI PROGRAMMING TYPES
 // =====================
@@ -380,7 +301,7 @@ export interface AIChatMessage {
 
 export interface AIProgrammingSession {
   id: string;
-  gymId: string;
+  userId: string;
   createdBy: string;
   title: string;
   status: "active" | "published" | "archived";
@@ -388,7 +309,6 @@ export interface AIProgrammingSession {
   // Generated program details
   programWeeks?: number;
   programStartDate?: Timestamp;
-  targetGroupIds?: string[];
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
@@ -398,7 +318,7 @@ export interface AIGeneratedWorkout {
   title: string;
   description: string;
   scoringType?: WODScoringType;
-  notes?: string; // Coach notes: stimulus, scaling options, intent, etc.
+  notes?: string; // Stimulus, scaling options, intent, etc.
 }
 
 export interface AIGeneratedDay {
@@ -408,9 +328,49 @@ export interface AIGeneratedDay {
   components: AIGeneratedWorkout[];
 }
 
+// A race or competition the athlete is training toward
+export type TrainingEventType = "running_race" | "crossfit_comp" | "other";
+
+export interface TrainingEvent {
+  id: string;
+  type: TrainingEventType;
+  name: string;
+  date: string; // YYYY-MM-DD
+  detail?: string; // e.g., race distance ("Marathon", "5K") or notes
+}
+
+export type WeekdayKey = "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday";
+
+// How a given weekday is handled every week
+export interface ScheduleDaySetting {
+  mode: "open" | "class" | "rest";
+  classDescription?: string; // when mode === "class"
+  classAttendance?: "always" | "optional"; // attend every week, or let the AI decide
+  maxMinutes?: number; // optional time budget for training days (0 = no limit)
+}
+
+// What kind of programming the athlete wants
+export type TrainingStyle = "crossfit" | "general";
+// Where the athlete trains (drives equipment assumptions)
+export type TrainingEnvironment = "home" | "commercial";
+
 export interface AIProgrammingPreferences {
-  gymId: string;
-  philosophy: string; // Free-form text describing gym's programming philosophy
+  userId: string;
+  // CrossFit/mixed-modal vs conventional gym training (default crossfit)
+  trainingStyle?: TrainingStyle;
+  // Home/garage gym (equipment list is a hard constraint) vs commercial gym
+  // with full standard equipment (default home)
+  trainingEnvironment?: TrainingEnvironment;
+  philosophy: string; // Free-form text describing the athlete's training philosophy
+  equipment: string; // Available equipment (home) or notes about their gym (commercial)
+  // Races/competitions the plan should build toward
+  events?: TrainingEvent[];
+  // Fixed weekly structure (class days, rest days)
+  weeklySchedule?: Partial<Record<WeekdayKey, ScheduleDaySetting>>;
+  // Which day the weekly long run lands on (empty = AI decides); used for running races
+  longRunDay?: WeekdayKey | "";
+  // Full rest days per week (0 = AI decides, defaults to 1-2)
+  restDaysPerWeek?: number;
   workoutDuration: "short" | "medium" | "long" | "varied"; // Preferred workout length
   benchmarkFrequency: "often" | "sometimes" | "rarely"; // How often to program benchmarks
   programmingStyle: string; // e.g., "Mayhem", "CompTrain", "HWPO", "Custom"
@@ -418,61 +378,72 @@ export interface AIProgrammingPreferences {
   updatedAt: Timestamp;
 }
 
-// =========================
-// SUBSCRIPTION & PRICING TYPES
-// =========================
+// =====================
+// TRAINING PLAN TABLE
+// =====================
 
-// Gym Plan Types
-export type GymPlanType = "base" | "ai_programmer";
-
-export interface GymSubscription {
-  plan: GymPlanType;
-  status: "active" | "canceled" | "past_due" | "trialing";
-  aiProgrammerEnabled: boolean;  // +$100/mo add-on
-  aiCoachEnabled: boolean;       // Enables $1/member/mo AI Coach for all members
-  aiCoachMemberCount?: number;   // Number of members with AI Coach enabled
-  startDate?: Timestamp;
-  currentPeriodEnd?: Timestamp;
-  aiProgrammerEndsAt?: Timestamp;  // When AI Programmer will be disabled (if downgrading)
-  aiCoachEndsAt?: Timestamp;       // When AI Coach will be disabled (if canceling)
-  stripeCustomerId?: string;
-  stripeSubscriptionId?: string;
+// A typed sub-component of a plan day (used by imported plans)
+export interface PlanRowComponent {
+  type: WorkoutComponentType;
+  title: string;
+  description: string;
 }
 
-// Individual User Subscription Flags
-export interface IndividualSubscription {
-  isIndividual: boolean;           // true if user is not affiliated with a gym
-  aiCoachEnabled: boolean;         // $9.99/mo personal AI Coach subscription
-  externalProgrammingEnabled: boolean; // $50/mo for external programming import
-  aiProgrammerEnabled: boolean;    // $100/mo for AI-generated workouts
-  status: "active" | "canceled" | "past_due" | "trialing";
-  startDate?: Timestamp;
-  currentPeriodEnd?: Timestamp;
-  stripeCustomerId?: string;
-  stripeSubscriptionId?: string;
+// One row of the day-by-day training plan table
+export interface PlanRow {
+  date: string;        // YYYY-MM-DD
+  day: string;         // "Monday"
+  week: number;        // 1-based week number
+  phase: string;       // e.g., "Base", "Build", "Comp Taper", "Marathon Taper"
+  session: string;     // short label, e.g., "Run + CrossFit", "Oly Class", "Rest", "MARATHON"
+  detail: string;      // the complete prescription for the day
+  runMiles?: number;   // planned run miles (0 = none)
+  targetRPE?: string;  // e.g., "3-7"
+  estMinutes?: number; // estimated total session minutes
+  reason?: string;     // why this day is programmed this way
+  components?: PlanRowComponent[]; // typed components (imported plans)
 }
 
-// Pricing Constants
+// The full plan document (one per AI programming session, doc id = session id)
+export interface TrainingPlan {
+  id: string;
+  userId: string;
+  sessionId: string;
+  title: string;
+  status: "draft" | "locked";
+  startDate: string; // YYYY-MM-DD
+  endDate: string;   // YYYY-MM-DD
+  rows: PlanRow[];
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+// =========================
+// PRICING
+// =========================
+
 export const PRICING = {
-  // Gym pricing
-  GYM_BASE: 49,             // $49/mo base gym subscription (includes external programming import)
-  GYM_AI_PROGRAMMER: 99,    // +$99/mo AI Programmer add-on for gyms
-  GYM_AI_COACH_PER_MEMBER: 1, // +$1/member/mo for AI Coach
-
-  // Individual pricing (FREE tier = tracking only)
-  INDIVIDUAL_AI_COACH: 9.99,        // $9.99/mo personal AI Coach
-  INDIVIDUAL_AI_PROGRAMMER: 9.99,   // $9.99/mo AI-generated personal programming
-  INDIVIDUAL_AI_PROGRAMMER_PLUS: 14.99, // $14.99/mo premium AI programming
-  INDIVIDUAL_EXTERNAL_PROGRAMMING: 4.99, // $4.99/mo external programming import
+  // FREE tier = tracking only
+  // Base Oddo: advice, scaling, workout scan, cardio/class logging
+  AI_COACH_MONTHLY: 9.99,
+  AI_COACH_YEARLY: 79.99,
+  // Oddo + Programming: adds the AI plan builder (day-by-day training plans)
+  AI_PROGRAMMING_MONTHLY: 19.99,
+  AI_PROGRAMMING_YEARLY: 159.99,
 } as const;
 
-// Feature Access Helpers
-export interface FeatureAccess {
-  canUseAIProgrammer: boolean;
-  canUseAICoach: boolean;
-  canImportExternalProgramming: boolean;
-  isGymOwner: boolean;
-  isGymMember: boolean;
+/// Subscription tier semantics:
+//   "pro"   = base Oddo (advice, scaling, scan, logging, baseline tests)
+//   "elite" = Oddo + Programming (adds the AI plan builder)
+// Trials carry the tier chosen at signup - a coach-only trial does NOT
+// unlock the plan builder.
+export function hasActiveAICoach(sub?: AITrainerSubscription): boolean {
+  return sub?.status === "active" || sub?.status === "trialing";
+}
+
+export function hasAIProgramming(sub?: AITrainerSubscription): boolean {
+  if (!sub) return false;
+  return (sub.status === "active" || sub.status === "trialing") && sub.tier === "elite";
 }
 
 // =========================
@@ -491,42 +462,3 @@ export interface AICoachSuggestion {
   // For week suggestions, this is the start of the week (Sunday)
   weekStartDate?: string;
 }
-
-// =========================
-// GYM APPLICATION TYPES
-// =========================
-
-export type GymApplicationStatus = "pending" | "approved" | "rejected";
-
-export interface GymApplication {
-  id: string;
-  // Applicant info
-  userId: string;
-  userEmail: string;
-  userName: string;
-
-  // Gym details
-  gymName: string;
-  gymAddress: string;
-  gymCity: string;
-  gymState: string;
-  gymZip: string;
-  gymPhone?: string;
-  gymWebsite?: string;
-
-  // Verification
-  ownershipProof?: string; // Description of how they can prove ownership
-  additionalNotes?: string;
-
-  // Status
-  status: GymApplicationStatus;
-  submittedAt: Timestamp;
-  reviewedAt?: Timestamp;
-  reviewedBy?: string; // Super admin user ID
-  rejectionReason?: string;
-
-  // If approved, the created gym ID
-  approvedGymId?: string;
-}
-
-
