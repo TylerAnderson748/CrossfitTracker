@@ -308,6 +308,7 @@ export default function BaselineWizard({
                         return (
                           <div key={item.key} className="px-2 py-2 border border-gray-200 rounded-lg">
                             <p className="text-sm font-medium text-gray-900">{item.name}</p>
+                            <p className="text-xs text-gray-500 mt-0.5">{item.description}</p>
                             <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
                               {renderForm(item)}
                               <button
