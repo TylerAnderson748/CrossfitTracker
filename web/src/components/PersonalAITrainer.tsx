@@ -361,7 +361,6 @@ Respond in a confident, direct coach tone. This advice will be saved and shown e
         cardioLogs: baselineData.cardioLogs,
       })
     : null;
-  const isGeneralStyle = baselineData?.trainingStyle === "general";
   const strengthDone = baselineStatus ? baselineStatus.lifts.done.length + baselineStatus.bodyweight.done.length : 0;
   const meetsRequirements = baselineStatus ? baselineStatus.meetsMinimum : false;
 
@@ -452,11 +451,9 @@ Respond in a confident, direct coach tone. This advice will be saved and shown e
               </p>
               <div className="space-y-2">
                 {([
-                  { label: "Strength Tests", done: strengthDone, needed: 2, show: true },
-                  { label: "Cardio Test", done: baselineStatus?.cardio.done.length || 0, needed: 1, show: true },
-                  { label: "Benchmark WOD", done: baselineStatus?.wods.done.length || 0, needed: 1, show: !isGeneralStyle },
-                  { label: "Skill Test", done: baselineStatus?.skills.done.length || 0, needed: 1, show: !isGeneralStyle },
-                ]).filter(r => r.show).map(row => (
+                  { label: "Strength Tests", done: strengthDone, needed: 2 },
+                  { label: "Cardio Test", done: baselineStatus?.cardio.done.length || 0, needed: 1 },
+                ]).map(row => (
                   <div key={row.label} className="flex items-center justify-between">
                     <span className="text-sm text-white/70">{row.label}</span>
                     <div className="flex items-center gap-2">

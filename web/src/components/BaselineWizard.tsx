@@ -59,7 +59,6 @@ export default function BaselineWizard({
   onScheduleRemaining,
   scheduling,
 }: BaselineWizardProps) {
-  const general = trainingStyle === "general";
   const [equipmentAnswer, setEquipmentAnswer] = useState<string | null>(null);
   const [entries, setEntries] = useState<Record<string, EntryState>>({});
   const [openSection, setOpenSection] = useState<string | null>(null);
@@ -80,8 +79,8 @@ export default function BaselineWizard({
       : []),
     { name: "Bodyweight", needText: hasLoad ? "also count toward the 2 strength tests" : "need 2 (these are your strength tests)", met: strengthDone >= 2, cat: status.bodyweight },
     { name: "Cardio", needText: "need 1", met: status.cardio.done.length >= 1, cat: status.cardio },
-    { name: "Benchmark WODs", needText: general ? "optional for general gym training" : "need 1", met: status.wods.done.length >= 1, cat: status.wods },
-    { name: "Skills", needText: general ? "optional for general gym training" : "need 1", met: status.skills.done.length >= 1, cat: status.skills },
+    { name: "Benchmark WODs", needText: "optional - sharpens Oddo's coaching", met: status.wods.done.length >= 1, cat: status.wods },
+    { name: "Skills", needText: "optional - sharpens Oddo's coaching", met: status.skills.done.length >= 1, cat: status.skills },
   ];
 
   const now = () => Timestamp.now();

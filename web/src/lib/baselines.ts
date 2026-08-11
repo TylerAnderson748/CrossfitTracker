@@ -127,14 +127,11 @@ export function computeBaselineStatus(input: BaselineStatusInput): BaselineStatu
   const bodyweight = matchByName(BASELINE_BODYWEIGHT, [...input.skillNames, ...input.wodTitles]);
   const cardio = matchCardio(input.cardioLogs);
 
-  const general = input.trainingStyle === "general";
+  // Same minimum for every style - benchmark WODs and skills are always
+  // optional extras that sharpen the coaching, never requirements
   const strengthDone = lifts.done.length + bodyweight.done.length;
-  const meetsMinimum = general
-    ? strengthDone >= 2 && cardio.done.length >= 1
-    : strengthDone >= 2 && cardio.done.length >= 1 && wods.done.length >= 1 && skills.done.length >= 1;
-  const minimumDescription = general
-    ? "2 strength tests (lifts, or bodyweight if you have no equipment) + 1 cardio test"
-    : "2 strength tests (lifts, or bodyweight if you have no equipment) + 1 cardio test + 1 benchmark WOD + 1 skill test";
+  const meetsMinimum = strengthDone >= 2 && cardio.done.length >= 1;
+  const minimumDescription = "2 strength tests (lifts, or bodyweight if you have no equipment) + 1 cardio test";
 
   return { lifts, wods, cardio, skills, bodyweight, meetsMinimum, minimumDescription };
 }
