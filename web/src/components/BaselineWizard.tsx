@@ -75,7 +75,7 @@ export default function BaselineWizard({
   const strengthDone = status.lifts.done.length + status.bodyweight.done.length;
   const sections: { name: string; needText: string; met: boolean; cat: BaselineCategoryStatus }[] = [
     ...(hasLoad
-      ? [{ name: "Lifts", needText: "need 2 strength total (lifts or bodyweight)", met: strengthDone >= 2, cat: status.lifts }]
+      ? [{ name: "Lifts", needText: "need 2 strength total - any rep max counts (1RM or 5RM)", met: strengthDone >= 2, cat: status.lifts }]
       : []),
     { name: "Bodyweight", needText: hasLoad ? "also count toward the 2 strength tests" : "need 2 (these are your strength tests)", met: strengthDone >= 2, cat: status.bodyweight },
     { name: "Cardio", needText: "need 1", met: status.cardio.done.length >= 1, cat: status.cardio },

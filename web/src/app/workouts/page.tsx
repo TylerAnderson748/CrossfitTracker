@@ -754,7 +754,7 @@ export default function WorkoutsPage() {
             </p>
             <div className="space-y-4">
               {([
-                { title: "Lifts (5-rep max)", items: [...baselineStatus.lifts.done.map(i => ({ i, done: true })), ...baselineStatus.lifts.missing.map(i => ({ i, done: false }))] },
+                { title: "Lifts (5RM test - any logged rep max counts)", items: [...baselineStatus.lifts.done.map(i => ({ i, done: true })), ...baselineStatus.lifts.missing.map(i => ({ i, done: false }))] },
                 { title: "Bodyweight Strength", items: [...baselineStatus.bodyweight.done.map(i => ({ i, done: true })), ...baselineStatus.bodyweight.missing.map(i => ({ i, done: false }))] },
                 { title: "Cardio", items: [...baselineStatus.cardio.done.map(i => ({ i, done: true })), ...baselineStatus.cardio.missing.map(i => ({ i, done: false }))] },
                 { title: "Benchmark WODs", items: [...baselineStatus.wods.done.map(i => ({ i, done: true })), ...baselineStatus.wods.missing.map(i => ({ i, done: false }))] },

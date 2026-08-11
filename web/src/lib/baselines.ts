@@ -209,7 +209,7 @@ export function buildBaselinePromptBlock(status: BaselineStatus, trainingStyle?:
     `logged: ${s.done.length > 0 ? s.done.map(i => i.name).join(", ") : "none"}; missing: ${s.missing.map(i => i.name).join(", ") || "none"}`;
 
   const battery = `STANDARD BASELINE BATTERY (the ONLY tests to use for baselining - never invent different ones):
-- Lifts (5-rep max builds): ${BASELINE_LIFTS.map(i => i.name).join(", ")} [${fmt(status.lifts)}]
+- Lifts (5-rep max is the prescribed test, but ANY logged rep max for the lift counts as its baseline - e.g. a known 1RM): ${BASELINE_LIFTS.map(i => i.name).join(", ")} [${fmt(status.lifts)}]
 - Bodyweight strength (ONLY for athletes with no barbell/dumbbells/kettlebell - these replace the lift tests): ${BASELINE_BODYWEIGHT.map(i => i.name).join(", ")} [${fmt(status.bodyweight)}]
 - Cardio: ${BASELINE_CARDIO.map(i => i.name).join(", ")} [${fmt(status.cardio)}]${general ? "" : `
 - Benchmark WODs: ${BASELINE_WODS.map(i => i.name).join(", ")} [${fmt(status.wods)}]
