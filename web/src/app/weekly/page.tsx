@@ -16,7 +16,7 @@ function WeeklyPlanContent() {
   const { user, loading, switching } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [calendarRange, setCalendarRange] = useState<"next7days" | "thisWeek" | "nextWeek" | "2weeks" | "month">("next7days");
+  const [calendarRange, setCalendarRange] = useState<"next7days" | "thisWeek" | "nextWeek" | "2weeks" | "month" | "lastWeek" | "last2weeks" | "lastMonth">("next7days");
   const [loadingData, setLoadingData] = useState(true);
 
   // Personal workouts state
@@ -204,6 +204,19 @@ function WeeklyPlanContent() {
         break;
       case "month":
         rangeEnd.setDate(startOfWeek.getDate() + 29);
+        break;
+      // Past ranges end the day before this week's Monday
+      case "lastWeek":
+        rangeStart.setDate(startOfWeek.getDate() - 7);
+        rangeEnd.setDate(startOfWeek.getDate() - 1);
+        break;
+      case "last2weeks":
+        rangeStart.setDate(startOfWeek.getDate() - 14);
+        rangeEnd.setDate(startOfWeek.getDate() - 1);
+        break;
+      case "lastMonth":
+        rangeStart.setDate(startOfWeek.getDate() - 28);
+        rangeEnd.setDate(startOfWeek.getDate() - 1);
         break;
     }
 
@@ -459,12 +472,16 @@ function WeeklyPlanContent() {
     const today = new Date();
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
 
     let dayLabel: string;
     if (date.toDateString() === today.toDateString()) {
       dayLabel = "Today";
     } else if (date.toDateString() === tomorrow.toDateString()) {
       dayLabel = "Tomorrow";
+    } else if (date.toDateString() === yesterday.toDateString()) {
+      dayLabel = "Yesterday";
     } else {
       dayLabel = date.toLocaleDateString("en-US", { weekday: "short" });
     }
@@ -552,6 +569,9 @@ function WeeklyPlanContent() {
             { id: "nextWeek", label: "Next Week" },
             { id: "2weeks", label: "2 Weeks" },
             { id: "month", label: "Month" },
+            { id: "lastWeek", label: "Last Week" },
+            { id: "last2weeks", label: "Last 2 Weeks" },
+            { id: "lastMonth", label: "Last Month" },
           ].map((range) => (
             <button
               key={range.id}
@@ -790,14 +810,20 @@ function WeeklyPlanContent() {
             {personalWorkouts.length === 0 && !loadingData && (
               <div className="bg-white rounded-lg border border-gray-200 p-8 text-center mt-4">
                 <div className="text-4xl mb-3">🤖</div>
-                <p className="text-gray-500 mb-2">No workouts scheduled for this period</p>
-                <p className="text-gray-400 text-sm mb-4">Let Oddo build your week, or add your own workout</p>
-                <Link
-                  href="/programming"
-                  className="inline-block px-5 py-2.5 bg-purple-600 text-white text-sm font-semibold rounded-lg hover:bg-purple-700 transition-colors"
-                >
-                  Ask Oddo to Program My Week
-                </Link>
+                {["lastWeek", "last2weeks", "lastMonth"].includes(calendarRange) ? (
+                  <p className="text-gray-500 mb-2">No workouts were on your calendar for this period</p>
+                ) : (
+                  <>
+                    <p className="text-gray-500 mb-2">No workouts scheduled for this period</p>
+                    <p className="text-gray-400 text-sm mb-4">Let Oddo build your week, or add your own workout</p>
+                    <Link
+                      href="/programming"
+                      className="inline-block px-5 py-2.5 bg-purple-600 text-white text-sm font-semibold rounded-lg hover:bg-purple-700 transition-colors"
+                    >
+                      Ask Oddo to Program My Week
+                    </Link>
+                  </>
+                )}
               </div>
             )}
           </div>
