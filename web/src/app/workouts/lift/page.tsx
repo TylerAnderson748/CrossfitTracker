@@ -636,21 +636,27 @@ function LiftPageContent() {
                 <p className="text-sm text-gray-500">
                   Nothing in this time range - try a longer range above.
                 </p>
-              ) : otherTabAtReps.length > 0 ? (
-                <p className="text-sm text-gray-500">
-                  No {viewMode === "records" ? "tested max" : "working sets"} at {selectedReps} rep{selectedReps > 1 ? "s" : ""} yet - your {selectedReps}-rep {viewMode === "records" ? "training sets are" : "maxes are"} on the{" "}
-                  <button
-                    onClick={() => setViewMode(viewMode === "records" ? "working" : "records")}
-                    className="text-purple-600 font-semibold hover:underline"
-                  >
-                    {viewMode === "records" ? "Working Sets" : "Records"}
-                  </button>{" "}
-                  tab.
-                </p>
               ) : (
-                <p className="text-sm text-gray-500">
-                  Log your first {selectedReps}-rep {viewMode === "records" ? "max attempt" : "working set"} above to start your graph.
-                </p>
+                <>
+                  <p className="text-sm font-medium text-gray-600">
+                    No {selectedReps}-rep {viewMode === "records" ? "max attempts" : "working sets"} yet
+                  </p>
+                  <p className="text-sm text-gray-500 mt-1">
+                    Enter one above to populate your graph.
+                  </p>
+                  {otherTabAtReps.length > 0 && (
+                    <p className="text-xs text-gray-400 mt-1.5">
+                      (Your {selectedReps}-rep {viewMode === "records" ? "training sets are" : "maxes are"} on the{" "}
+                      <button
+                        onClick={() => setViewMode(viewMode === "records" ? "working" : "records")}
+                        className="text-purple-500 font-semibold hover:underline"
+                      >
+                        {viewMode === "records" ? "Working Sets" : "Records"}
+                      </button>{" "}
+                      tab.)
+                    </p>
+                  )}
+                </>
               )}
             </div>
           </div>
