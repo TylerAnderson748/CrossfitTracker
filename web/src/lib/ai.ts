@@ -1,4 +1,8 @@
-// Centralized xAI/Grok client for all Oddo features.
+// Centralized AI client for all Oddo features.
+//
+// Browser calls go through OUR server proxy (/api/ai/chat) so the xAI key
+// never ships to the client; the proxy verifies the caller's Firebase ID
+// token and forwards to xAI.
 //
 // Speed strategy:
 // - Default to grok-4-fast-non-reasoning: responses start in ~1s instead of the
@@ -7,18 +11,12 @@
 // - If the configured fast model is rejected by the API (e.g. renamed), retry
 //   once with FALLBACK_MODEL so the coach never goes down.
 
-export const XAI_API_URL = "https://api.x.ai/v1/chat/completions";
+import { auth } from "./firebase";
+import { FAST_MODEL, FALLBACK_MODEL } from "./aiModels";
 
-// Fast model for chat/coaching text (and vision - grok-4-fast is multimodal)
-export const FAST_MODEL = process.env.NEXT_PUBLIC_XAI_MODEL || "grok-4-fast-non-reasoning";
-export const FALLBACK_MODEL = process.env.NEXT_PUBLIC_XAI_FALLBACK_MODEL || "grok-4-latest";
-// Stronger (reasoning) model for plan revisions - patching an existing table
-// correctly needs more care than speed; override with NEXT_PUBLIC_XAI_REVISION_MODEL
-export const REVISION_MODEL = process.env.NEXT_PUBLIC_XAI_REVISION_MODEL || FALLBACK_MODEL;
+export { XAI_API_URL, FAST_MODEL, FALLBACK_MODEL, REVISION_MODEL } from "./aiModels";
+const PROXY_URL = "/api/ai/chat";
 
-export function getApiKey(): string | undefined {
-  return process.env.NEXT_PUBLIC_XAI_API_KEY;
-}
 
 type MessageContent =
   | string
@@ -46,19 +44,19 @@ export interface ChatOptions {
 async function requestCompletion(
   model: string,
   { messages, temperature = 0.7, maxTokens, onDelta, signal }: ChatOptions,
-  apiKey: string
+  idToken: string
 ): Promise<{ ok: boolean; status: number; text: string; errorMessage?: string }> {
-  const response = await fetch(XAI_API_URL, {
+  const response = await fetch(PROXY_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
+      Authorization: `Bearer ${idToken}`,
     },
     body: JSON.stringify({
       model,
       messages,
       temperature,
-      ...(maxTokens ? { max_tokens: maxTokens } : {}),
+      ...(maxTokens ? { maxTokens } : {}),
       ...(onDelta ? { stream: true } : {}),
     }),
     signal,
@@ -125,18 +123,18 @@ async function requestCompletion(
  * Returns the full response text. Throws on unrecoverable errors.
  */
 export async function chatCompletion(options: ChatOptions): Promise<string> {
-  const apiKey = getApiKey();
-  if (!apiKey) {
-    throw new Error("AI service not configured. Please add NEXT_PUBLIC_XAI_API_KEY to your environment.");
+  const idToken = await auth.currentUser?.getIdToken();
+  if (!idToken) {
+    throw new Error("Please sign in to use Oddo.");
   }
 
   const primaryModel = options.model || FAST_MODEL;
-  const result = await requestCompletion(primaryModel, options, apiKey);
+  const result = await requestCompletion(primaryModel, options, idToken);
   if (result.ok) return result.text;
 
   // 400/404 usually means the model name isn't available - retry on fallback
   if ((result.status === 400 || result.status === 404) && primaryModel !== FALLBACK_MODEL) {
-    const retry = await requestCompletion(FALLBACK_MODEL, options, apiKey);
+    const retry = await requestCompletion(FALLBACK_MODEL, options, idToken);
     if (retry.ok) return retry.text;
     throw new Error(retry.errorMessage || "AI request failed");
   }
