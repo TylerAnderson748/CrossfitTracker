@@ -40,12 +40,14 @@ function LiftPageContent() {
   const [liftName, setLiftName] = useState(urlLiftName);
   const [selectedReps, setSelectedReps] = useState(1);
   const [weight, setWeight] = useState("");
-  const [setType, setSetType] = useState<"max" | "working">("max");
+  // Records tab = tested max attempts; Working Sets tab = programmed
+  // submaximal training. The active tab decides what you see AND what a
+  // new entry saves as.
+  const [viewMode, setViewMode] = useState<"records" | "working">("records");
   const [entryDate, setEntryDate] = useState(new Date().toISOString().split("T")[0]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const [history, setHistory] = useState<LiftResult[]>([]);
-  const [allHistory, setAllHistory] = useState<LiftResult[]>([]);
+  const [liftEntries, setLiftEntries] = useState<LiftResult[]>([]);
   const [leaderboard, setLeaderboard] = useState<LiftResult[]>([]);
   const [loadingLeaderboard, setLoadingLeaderboard] = useState(false);
   const [chartTimeRange, setChartTimeRange] = useState<"1m" | "6m" | "1y" | "2y" | "5y">("1y");
@@ -99,10 +101,9 @@ function LiftPageContent() {
         .filter((r) => r.liftTitle?.toLowerCase().trim() === liftNameLower)
         .sort(byDateDesc);
 
-      // Rep-filtered set drives the chart / Training % / leaderboard;
-      // the full set (any rep count) drives the history list
-      setHistory(forLift.filter((r) => r.reps === selectedReps).slice(0, 10));
-      setAllHistory(forLift.slice(0, 20));
+      // Store every entry for this lift; the Records / Working Sets tabs
+      // and the rep picker derive their own views from it
+      setLiftEntries(forLift.slice(0, 200));
     } catch (err) {
       console.error("Error loading history:", err);
     }
@@ -161,8 +162,19 @@ function LiftPageContent() {
     }
   };
 
-  // Training % anchors on the latest max attempt, not working sets
-  const latestMax = history.find(h => (h.setType || "max") === "max") || null;
+  // Split entries by the active tab: Records shows only tested max
+  // attempts, Working Sets shows only programmed training sets
+  const matchesView = (r: LiftResult) =>
+    ((r.setType || "max") === "working") === (viewMode === "working");
+  const viewEntries = liftEntries.filter(matchesView);
+  const history = viewEntries.filter((r) => r.reps === selectedReps).slice(0, 10);
+  const allHistory = viewEntries.slice(0, 20);
+  // Entries at this rep count that live on the OTHER tab (for the hint card)
+  const otherTabAtReps = liftEntries.filter((r) => r.reps === selectedReps && !matchesView(r));
+
+  // Training % always anchors on the latest tested max at this rep count,
+  // even on the Working Sets tab (so "65%" means 65% of your real max)
+  const latestMax = liftEntries.find(h => h.reps === selectedReps && (h.setType || "max") === "max") || null;
   const latestWeight = latestMax ? latestMax.weight : null;
 
   const handleSubmit = async () => {
@@ -193,7 +205,7 @@ function LiftPageContent() {
         reps: selectedReps,
         date: workoutDate,
         isPersonalRecord: false,
-        setType,
+        setType: viewMode === "working" ? "working" : "max",
       });
 
       setWeight("");
@@ -485,6 +497,36 @@ function LiftPageContent() {
           </div>
         )}
 
+        {/* Records / Working Sets tabs - the active tab decides what's
+            shown and what a new entry saves as */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-2 mb-4">
+          <div className="flex rounded-lg overflow-hidden border border-gray-200">
+            <button
+              type="button"
+              onClick={() => setViewMode("records")}
+              className={`flex-1 py-2.5 text-sm font-semibold transition-colors ${
+                viewMode === "records" ? "bg-purple-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"
+              }`}
+            >
+              🏆 Records
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("working")}
+              className={`flex-1 py-2.5 text-sm font-semibold transition-colors ${
+                viewMode === "working" ? "bg-purple-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"
+              }`}
+            >
+              🏋️ Working Sets
+            </button>
+          </div>
+          <p className="text-xs text-gray-400 mt-2 px-1">
+            {viewMode === "records"
+              ? "Tested rep maxes - new entries here count toward your records and the leaderboard."
+              : "Programmed training weights (e.g. 3 reps @ 65%) - tracked separately, never counted as records."}
+          </p>
+        </div>
+
         {/* Reps Picker: common rep counts plus free entry for working sets */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-4">
           <div className="flex rounded-xl overflow-hidden border border-gray-200">
@@ -523,32 +565,6 @@ function LiftPageContent() {
 
         {/* Weight + Date + Save Row */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-4">
-          {/* Set type: max attempts drive records/leaderboard, working sets are training data */}
-          <div className="flex rounded-lg overflow-hidden border border-gray-200 mb-2 text-sm">
-            <button
-              type="button"
-              onClick={() => setSetType("max")}
-              className={`flex-1 py-2 font-semibold transition-colors ${
-                setType === "max" ? "bg-purple-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"
-              }`}
-            >
-              Max Attempt
-            </button>
-            <button
-              type="button"
-              onClick={() => setSetType("working")}
-              className={`flex-1 py-2 font-semibold transition-colors ${
-                setType === "working" ? "bg-purple-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"
-              }`}
-            >
-              Working Set
-            </button>
-          </div>
-          <p className="text-xs text-gray-400 mb-3">
-            {setType === "max"
-              ? "A true test of your max - counts toward your records and the leaderboard."
-              : "Programmed training weight (e.g. 3 reps @ 65%) - saved to history and charts, but not counted as a record."}
-          </p>
           <div className="flex items-end gap-3">
             <div className="flex-1">
               <div className="flex items-center border border-gray-300 rounded-lg overflow-hidden">
@@ -589,7 +605,7 @@ function LiftPageContent() {
             <div className="flex justify-between items-center mb-3">
               <p className="text-sm font-semibold text-gray-700">Training %</p>
               <p className="text-sm text-purple-600 font-medium">
-                Latest: {latestWeight} × {selectedReps}
+                Latest max: {latestWeight} × {selectedReps}
               </p>
             </div>
             <div className="grid grid-cols-3 gap-x-6">
@@ -606,6 +622,30 @@ function LiftPageContent() {
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* Cross-tab hint: this tab has nothing at this rep count, but the
+            other tab does - point there instead of showing a blank page */}
+        {history.length === 0 && otherTabAtReps.length > 0 && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-4 text-sm text-gray-500">
+            {viewMode === "records" ? (
+              <>
+                No tested max at {selectedReps} rep{selectedReps > 1 ? "s" : ""} yet - your {selectedReps}-rep training sets live on the{" "}
+                <button onClick={() => setViewMode("working")} className="text-purple-600 font-semibold hover:underline">
+                  Working Sets
+                </button>{" "}
+                tab.
+              </>
+            ) : (
+              <>
+                No working sets at {selectedReps} rep{selectedReps > 1 ? "s" : ""} yet - your tested maxes live on the{" "}
+                <button onClick={() => setViewMode("records")} className="text-purple-600 font-semibold hover:underline">
+                  Records
+                </button>{" "}
+                tab.
+              </>
+            )}
           </div>
         )}
 
@@ -674,14 +714,13 @@ function LiftPageContent() {
                         }))}
                       />
                     ) : null}
-                    {/* Data points - working sets render lighter than max attempts */}
+                    {/* Data points */}
                     {chartData.map((d, i) => {
                       const date = d.date?.toDate?.() || new Date();
                       const xPct = (date.getTime() - timeRangeStart.getTime()) / timeRangeMs;
                       const x = 5 + xPct * 340;
                       const y = range > 0 ? 4 + (1 - (d.weight - chartMin) / range) * 152 : 80;
-                      const isWorking = (d.setType || "max") === "working";
-                      return <circle key={i} cx={x} cy={y} r="4" fill={isWorking ? "#C4B5FD" : "#9333EA"} />;
+                      return <circle key={i} cx={x} cy={y} r="4" fill={viewMode === "working" ? "#A78BFA" : "#9333EA"} />;
                     })}
                   </svg>
                 </div>
@@ -694,18 +733,12 @@ function LiftPageContent() {
                   ))}
                 </div>
               </div>
-              {chartData.some(d => (d.setType || "max") === "working") && (
-                <div className="flex items-center gap-3 mt-2 text-xs text-gray-400">
-                  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-purple-600 inline-block" /> Max attempt</span>
-                  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-purple-300 inline-block" /> Working set</span>
-                </div>
-              )}
             </div>
           </div>
         )}
 
-        {/* Leaderboard */}
-        {liftName && (
+        {/* Leaderboard - records only (working sets never compete) */}
+        {liftName && viewMode === "records" && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-4">
             <div className="flex justify-between items-center mb-3">
               <p className="text-sm font-semibold text-gray-700">
@@ -755,7 +788,7 @@ function LiftPageContent() {
         {allHistory.length > 0 && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
             <p className="text-sm font-semibold text-gray-700 mb-3">
-              History (all sets)
+              History ({viewMode === "records" ? "max attempts" : "working sets"})
             </p>
             <div className="space-y-3">
               {allHistory.map((log) => (
@@ -827,7 +860,9 @@ function LiftPageContent() {
                                 ? "bg-gray-100 text-gray-500 hover:bg-gray-200"
                                 : "bg-purple-100 text-purple-700 hover:bg-purple-200"
                             }`}
-                            title="Tap to switch between max attempt (counts toward records) and working set (training data only)"
+                            title={(log.setType || "max") === "working"
+                              ? "Tap to reclassify as a max attempt (moves to the Records tab)"
+                              : "Tap to reclassify as a working set (moves to the Working Sets tab)"}
                           >
                             {(log.setType || "max") === "working" ? "working set" : "max"}
                           </button>
