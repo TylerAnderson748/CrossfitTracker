@@ -250,6 +250,20 @@ function LiftPageContent() {
     }
   };
 
+  // One-tap flip between max attempt and working set (fixes legacy entries
+  // that predate set types and got grandfathered in as maxes)
+  const toggleSetType = async (log: LiftResult) => {
+    const next = (log.setType || "max") === "max" ? "working" : "max";
+    try {
+      await updateDoc(doc(db, "liftResults", log.id), { setType: next });
+      loadHistory();
+      loadLeaderboard();
+    } catch (err) {
+      console.error("Error updating set type:", err);
+      setError("Failed to update set type.");
+    }
+  };
+
   const deleteLog = async (logId: string) => {
     if (!confirm("Are you sure you want to delete this entry?")) return;
 
@@ -806,9 +820,17 @@ function LiftPageContent() {
                         <p className="text-xs text-gray-500">{log.date?.toDate().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</p>
                         <p className="text-lg font-semibold text-gray-900">
                           {log.weight} lbs <span className="text-sm font-normal text-gray-500">× {log.reps}</span>
-                          {(log.setType || "max") === "working" && (
-                            <span className="ml-2 align-middle text-xs font-medium px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">working set</span>
-                          )}
+                          <button
+                            onClick={() => toggleSetType(log)}
+                            className={`ml-2 align-middle text-xs font-medium px-1.5 py-0.5 rounded transition-colors ${
+                              (log.setType || "max") === "working"
+                                ? "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                                : "bg-purple-100 text-purple-700 hover:bg-purple-200"
+                            }`}
+                            title="Tap to switch between max attempt (counts toward records) and working set (training data only)"
+                          >
+                            {(log.setType || "max") === "working" ? "working set" : "max"}
+                          </button>
                         </p>
                       </div>
                       <div className="flex gap-2">
