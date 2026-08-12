@@ -332,15 +332,23 @@ function WeeklyPlanContent() {
   const openLogSession = (workout: PersonalWorkout) => {
     const entries: Record<string, { weight: string; reps: string; isMax?: boolean }> = {};
     workout.components.filter(c => c.type === "lift").forEach(c => {
-      // Programmed sessions are working sets by default - a percentage-based
+      // If this day was already logged, prefill from the saved log so the
+      // athlete edits it instead of creating a duplicate. Otherwise
+      // programmed sessions default to working sets - a percentage-based
       // prescription is not a rep-max test (the athlete can flag a true max)
-      entries[c.id] = { weight: "", reps: parseProgrammedReps(`${c.title} ${c.description}`), isMax: false };
+      const saved = workout.sessionLog?.entries?.[c.id];
+      entries[c.id] = saved
+        ? { weight: String(saved.weight), reps: String(saved.reps), isMax: !!saved.isMax }
+        : { weight: "", reps: parseProgrammedReps(`${c.title} ${c.description}`), isMax: false };
     });
     setSessionEntries(entries);
     setLogSessionWorkout(workout);
   };
 
-  // Save each filled-in lift as a liftResults entry (feeds PR history/charts)
+  // Save each filled-in lift as a liftResults entry (feeds PR history and
+  // charts). A day logs exactly once: the created doc ids are remembered on
+  // the workout's sessionLog, and re-saving updates those docs in place
+  // (or deletes one if its weight is blanked) instead of duplicating.
   const handleSaveSessionLog = async () => {
     if (!user || !logSessionWorkout) return;
     setSavingSession(true);
@@ -348,25 +356,55 @@ function WeeklyPlanContent() {
       const ds = logSessionWorkout.dateString || formatDateLocal(logSessionWorkout.date.toDate());
       const [y, m, d] = ds.split("-").map(Number);
       const logDate = Timestamp.fromDate(new Date(y, m - 1, d, 12, 0, 0));
+      const isEdit = !!logSessionWorkout.sessionLog;
+      const newEntries: Record<string, { liftResultId: string; weight: number; reps: number; isMax: boolean }> = {};
       let saved = 0;
       for (const comp of logSessionWorkout.components.filter(c => c.type === "lift")) {
         const entry = sessionEntries[comp.id];
         const weight = parseFloat(entry?.weight || "");
-        if (!weight || weight <= 0) continue;
-        await addDoc(collection(db, "liftResults"), {
-          userId: user.id,
-          liftTitle: comp.title,
-          weight,
-          reps: parseInt(entry?.reps || "") || 1,
-          date: logDate,
-          isPersonalRecord: false,
-          setType: entry?.isMax ? "max" : "working",
-        });
+        const prev = logSessionWorkout.sessionLog?.entries?.[comp.id];
+        if (!weight || weight <= 0) {
+          // Blanked out a previously logged lift - remove its entry
+          if (prev?.liftResultId) {
+            await deleteDoc(doc(db, "liftResults", prev.liftResultId)).catch(() => {});
+          }
+          continue;
+        }
+        const reps = parseInt(entry?.reps || "") || 1;
+        const isMax = !!entry?.isMax;
+        if (prev?.liftResultId) {
+          await updateDoc(doc(db, "liftResults", prev.liftResultId), {
+            weight,
+            reps,
+            date: logDate,
+            setType: isMax ? "max" : "working",
+          });
+          newEntries[comp.id] = { liftResultId: prev.liftResultId, weight, reps, isMax };
+        } else {
+          const ref = await addDoc(collection(db, "liftResults"), {
+            userId: user.id,
+            liftTitle: comp.title,
+            weight,
+            reps,
+            date: logDate,
+            isPersonalRecord: false,
+            setType: isMax ? "max" : "working",
+          });
+          newEntries[comp.id] = { liftResultId: ref.id, weight, reps, isMax };
+        }
         saved++;
       }
+      // Remember (or clear) the log on the workout so the card shows its
+      // logged state and future opens edit instead of re-logging
+      await updateDoc(doc(db, "personalWorkouts", logSessionWorkout.id), {
+        sessionLog: saved > 0 ? { loggedAt: Timestamp.now(), entries: newEntries } : null,
+      });
       setLogSessionWorkout(null);
+      await fetchPersonalWorkouts();
       if (saved > 0) {
-        alert(`Logged ${saved} lift${saved === 1 ? "" : "s"}! Working sets go to your history and charts; max attempts count toward records.`);
+        alert(isEdit
+          ? `Updated your log (${saved} lift${saved === 1 ? "" : "s"}).`
+          : `Logged ${saved} lift${saved === 1 ? "" : "s"}! Working sets go to your history and charts; max attempts count toward records.`);
       }
     } catch (error) {
       console.error("Error logging session:", error);
@@ -687,16 +725,20 @@ function WeeklyPlanContent() {
                                         {classLogged ? "✓ Attended" : "Did It"}
                                       </button>
                                     );
-                                    buttons.push(
-                                      <Link
-                                        key="scan"
-                                        href={`/ai-coach/scan?replace=${personalWorkout.id}&classTitle=${encodeURIComponent(classComponent.title)}&date=${cardDateString}`}
-                                        className="px-2 py-1 text-xs font-semibold rounded-lg bg-indigo-100 text-indigo-700 hover:bg-indigo-200 transition-colors flex items-center gap-1"
-                                        title="Scan the class whiteboard - the scanned program replaces this class placeholder"
-                                      >
-                                        📸 Scan Whiteboard
-                                      </Link>
-                                    );
+                                    // Offer the whiteboard scan until programming has been
+                                    // attached under the class
+                                    if (!liftComponent && !wodComponent) {
+                                      buttons.push(
+                                        <Link
+                                          key="scan"
+                                          href={`/ai-coach/scan?replace=${personalWorkout.id}&classTitle=${encodeURIComponent(classComponent.title)}&date=${cardDateString}`}
+                                          className="px-2 py-1 text-xs font-semibold rounded-lg bg-indigo-100 text-indigo-700 hover:bg-indigo-200 transition-colors flex items-center gap-1"
+                                          title="Scan the class whiteboard - the scanned program is attached under this class"
+                                        >
+                                          📸 Scan Whiteboard
+                                        </Link>
+                                      );
+                                    }
                                   }
                                   if (wodComponent) {
                                     const scoringType = wodComponent.scoringType || "fortime";
@@ -713,18 +755,23 @@ function WeeklyPlanContent() {
                                       </Link>
                                     );
                                   }
-                                  if (liftComponent && !classComponent) {
+                                  if (liftComponent) {
+                                    const sessionLogged = !!personalWorkout.sessionLog;
                                     buttons.push(
                                       <button
                                         key="lift"
                                         onClick={() => openLogSession(personalWorkout)}
-                                        className="px-2 py-1 bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1"
-                                        title="Log the weights you lifted in this session"
+                                        className={`px-2 py-1 text-xs font-semibold rounded-lg transition-colors flex items-center gap-1 ${
+                                          sessionLogged
+                                            ? "bg-green-100 text-green-700 hover:bg-green-200"
+                                            : "bg-purple-600 hover:bg-purple-700 text-white"
+                                        }`}
+                                        title={sessionLogged ? "Already logged - tap to edit your log" : "Log the weights you lifted in this session"}
                                       >
                                         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                                         </svg>
-                                        Log Lifts
+                                        {sessionLogged ? "✓ Logged" : "Log Lifts"}
                                       </button>
                                     );
                                   }
@@ -834,9 +881,13 @@ function WeeklyPlanContent() {
       {logSessionWorkout && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
-            <h2 className="text-xl font-bold text-gray-900 mb-1">Log Your Lifts</h2>
+            <h2 className="text-xl font-bold text-gray-900 mb-1">
+              {logSessionWorkout.sessionLog ? "Edit Your Log" : "Log Your Lifts"}
+            </h2>
             <p className="text-sm text-gray-500 mb-4">
-              Enter your top set for each lift (leave blank to skip). These save as working sets - check &quot;max attempt&quot; if you actually tested a rep max, so it counts toward your records.
+              {logSessionWorkout.sessionLog
+                ? "This day is already logged - changes update your existing entries (blank a weight to remove it). No duplicates."
+                : "Enter your top set for each lift (leave blank to skip). These save as working sets - check “max attempt” if you actually tested a rep max, so it counts toward your records."}
             </p>
             <div className="space-y-4">
               {logSessionWorkout.components.filter(c => c.type === "lift").map(comp => (
@@ -892,7 +943,7 @@ function WeeklyPlanContent() {
                 disabled={savingSession}
                 className="flex-1 py-3 bg-purple-600 text-white font-bold rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50"
               >
-                {savingSession ? "Saving..." : "Save Lifts"}
+                {savingSession ? "Saving..." : logSessionWorkout.sessionLog ? "Update Log" : "Save Lifts"}
               </button>
             </div>
           </div>

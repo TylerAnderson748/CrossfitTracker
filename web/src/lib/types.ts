@@ -188,6 +188,14 @@ export const categoryColors: Record<WODCategory, { bg: string; text: string; bad
 };
 
 // A workout on the athlete's personal calendar (manual, scanned, or AI-generated)
+// One saved lift-session log per workout day. Remembers which liftResults
+// docs each component's log created, so re-opening the logger edits those
+// entries in place instead of creating duplicates.
+export interface SessionLiftLog {
+  loggedAt: Timestamp;
+  entries: Record<string, { liftResultId: string; weight: number; reps: number; isMax?: boolean }>;
+}
+
 export interface PersonalWorkout {
   id: string;
   userId: string;
@@ -198,6 +206,8 @@ export interface PersonalWorkout {
   createdAt: Timestamp;
   // Set when this workout was published by an AI programming session
   aiSessionId?: string;
+  // Set once the athlete logs their lifts for this day
+  sessionLog?: SessionLiftLog;
 }
 
 export interface WorkoutLog {

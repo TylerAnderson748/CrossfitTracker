@@ -281,9 +281,11 @@ IMPORTANT:
     });
   };
 
-  // Replace a class placeholder on the calendar with the scanned program.
-  // Other components on that day are kept; the scanned components slot in
-  // where the class component was.
+  // Attach the scanned program under the class placeholder on the
+  // calendar. The class component stays (so the day still reads as e.g.
+  // "Olympic Lifting Class" and attendance logging keeps working) with a
+  // note that its programming was scanned in; the scanned components slot
+  // in right below it, where they're loggable as lifts/WODs.
   const handleReplaceClass = async () => {
     if (!user || generatedWorkouts.length === 0 || !replaceWorkoutId) return;
 
@@ -297,7 +299,13 @@ IMPORTANT:
         throw new Error("Couldn't find that class on your calendar");
       }
 
-      const existing = (snap.data().components || []) as { id: string; type: WorkoutComponentType; title: string; description: string; notes?: string; order?: number }[];
+      const scanNote = "📸 Programming below scanned from the class whiteboard.";
+      const existing = ((snap.data().components || []) as { id: string; type: WorkoutComponentType; title: string; description: string; notes?: string; order?: number }[])
+        .map((c) =>
+          c.type === "class" && !(c.notes || "").includes(scanNote)
+            ? { ...c, notes: c.notes ? `${c.notes} ${scanNote}` : scanNote }
+            : c
+        );
       const scanned = generatedWorkouts.map((w, idx) => ({
         id: `comp_${Date.now()}_${idx}`,
         type: w.type,
@@ -308,14 +316,13 @@ IMPORTANT:
       }));
 
       const classIdx = existing.findIndex((c) => c.type === "class");
-      const kept = existing.filter((c) => c.type !== "class");
-      const insertAt = classIdx === -1 ? kept.length : Math.min(classIdx, kept.length);
-      const components = [...kept.slice(0, insertAt), ...scanned, ...kept.slice(insertAt)]
+      const insertAt = classIdx === -1 ? existing.length : classIdx + 1;
+      const components = [...existing.slice(0, insertAt), ...scanned, ...existing.slice(insertAt)]
         .map((c, idx) => ({ ...c, order: idx }));
 
       await updateDoc(workoutRef, { components });
 
-      setSaveSuccess(`Replaced "${replaceClassTitle}" with the scanned program (${scanned.length} component${scanned.length !== 1 ? "s" : ""})`);
+      setSaveSuccess(`Attached the scanned program under "${replaceClassTitle}" (${scanned.length} component${scanned.length !== 1 ? "s" : ""})`);
       setIsSaving(false);
 
       setTimeout(() => {
@@ -323,8 +330,8 @@ IMPORTANT:
       }, 1500);
       return;
     } catch (err) {
-      console.error("Error replacing class with scanned program:", err);
-      setError("Failed to replace the class. Please try again.");
+      console.error("Error attaching scanned program to class:", err);
+      setError("Failed to attach the program. Please try again.");
     }
 
     setIsSaving(false);
@@ -444,7 +451,7 @@ IMPORTANT:
               {replaceDate ? ` (${replaceDate})` : ""}
             </p>
             <p className="text-xs text-indigo-700 mt-1">
-              The scanned workout will replace the class placeholder on your calendar, so your log shows what you actually did.
+              The scanned programming gets attached under the class on your calendar - the day stays labeled as your class, with the actual work listed (and loggable) beneath it.
             </p>
           </div>
         )}
@@ -781,7 +788,7 @@ IMPORTANT:
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                       </svg>
-                      {isSaving ? "Replacing..." : `Replace "${replaceClassTitle}" with This Program`}
+                      {isSaving ? "Attaching..." : `Attach This Program to "${replaceClassTitle}"`}
                     </button>
                     <button
                       onClick={() => {
