@@ -625,31 +625,36 @@ function LiftPageContent() {
           </div>
         )}
 
-        {/* Cross-tab hint: this tab has nothing at this rep count, but the
-            other tab does - point there instead of showing a blank page */}
-        {history.length === 0 && otherTabAtReps.length > 0 && (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-4 text-sm text-gray-500">
-            {viewMode === "records" ? (
-              <>
-                No tested max at {selectedReps} rep{selectedReps > 1 ? "s" : ""} yet - your {selectedReps}-rep training sets live on the{" "}
-                <button onClick={() => setViewMode("working")} className="text-purple-600 font-semibold hover:underline">
-                  Working Sets
-                </button>{" "}
-                tab.
-              </>
-            ) : (
-              <>
-                No working sets at {selectedReps} rep{selectedReps > 1 ? "s" : ""} yet - your tested maxes live on the{" "}
-                <button onClick={() => setViewMode("records")} className="text-purple-600 font-semibold hover:underline">
-                  Records
-                </button>{" "}
-                tab.
-              </>
-            )}
+        {/* Progress Line Chart - the card always has its place; an empty
+            chart explains how to fill it instead of disappearing */}
+        {liftName && filteredHistory.length === 0 && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-4">
+            <p className="text-sm font-semibold text-gray-700 mb-3">Progress</p>
+            <div className="h-32 flex flex-col items-center justify-center text-center border-2 border-dashed border-gray-200 rounded-lg px-4">
+              <span className="text-2xl mb-2">📈</span>
+              {history.length > 0 ? (
+                <p className="text-sm text-gray-500">
+                  Nothing in this time range - try a longer range above.
+                </p>
+              ) : otherTabAtReps.length > 0 ? (
+                <p className="text-sm text-gray-500">
+                  No {viewMode === "records" ? "tested max" : "working sets"} at {selectedReps} rep{selectedReps > 1 ? "s" : ""} yet - your {selectedReps}-rep {viewMode === "records" ? "training sets are" : "maxes are"} on the{" "}
+                  <button
+                    onClick={() => setViewMode(viewMode === "records" ? "working" : "records")}
+                    className="text-purple-600 font-semibold hover:underline"
+                  >
+                    {viewMode === "records" ? "Working Sets" : "Records"}
+                  </button>{" "}
+                  tab.
+                </p>
+              ) : (
+                <p className="text-sm text-gray-500">
+                  Log your first {selectedReps}-rep {viewMode === "records" ? "max attempt" : "working set"} above to start your graph.
+                </p>
+              )}
+            </div>
           </div>
         )}
-
-        {/* Progress Line Chart */}
         {filteredHistory.length >= 1 && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-4">
             <div className="flex justify-between items-center mb-3">
