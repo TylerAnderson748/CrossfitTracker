@@ -188,19 +188,26 @@ export default function PersonalAITrainer({ userId, todayPersonalWorkouts, userP
       // Build user history summary
       let historySummary = "";
       if (userHistory.lifts.length > 0) {
-        const liftBests = new Map<string, { weight: number; reps: number }>();
+        // Best result per lift per rep count, grouped by lift with an
+        // estimated 1RM (Epley) so the AI has a correct anchor for % math
+        const liftGroups = new Map<string, Map<number, number>>();
         userHistory.lifts.forEach(lift => {
-          const key = `${lift.liftTitle}-${lift.reps}`;
-          const existing = liftBests.get(key);
-          if (!existing || lift.weight > existing.weight) {
-            liftBests.set(key, { weight: lift.weight, reps: lift.reps });
+          const repBests = liftGroups.get(lift.liftTitle) || new Map<number, number>();
+          if ((repBests.get(lift.reps) || 0) < lift.weight) {
+            repBests.set(lift.reps, lift.weight);
           }
+          liftGroups.set(lift.liftTitle, repBests);
         });
 
-        historySummary += "Lift PRs:\n" + Array.from(liftBests.entries())
-          .map(([key, val]) => {
-            const liftName = key.split('-')[0];
-            return `- ${liftName}: ${val.weight}lbs (${val.reps}RM)`;
+        historySummary += "Lift PRs (best sets with estimated 1RM):\n" + Array.from(liftGroups.entries())
+          .map(([liftName, repBests]) => {
+            const sets = Array.from(repBests.entries())
+              .sort((a, b) => a[0] - b[0])
+              .map(([reps, weight]) => `${weight}lb x ${reps}`)
+              .join(", ");
+            const e1rm = Math.max(...Array.from(repBests.entries())
+              .map(([reps, weight]) => Math.round(weight * (1 + reps / 30))));
+            return `- ${liftName}: ${sets} (estimated 1RM: ${e1rm}lb)`;
           })
           .join("\n");
       }
@@ -277,6 +284,10 @@ ${userPreferences?.goals ? `Connect this workout to their stated goal: "${userPr
 A single focused thought to keep in mind during the workout. Training alone takes extra discipline - give them something to hold onto.
 
 CRITICAL RULES:
+- ONLY coach the movements listed in TODAY'S WORKOUT above. Do NOT add extra movements, sessions, classes, or workouts that are not listed - if it's not written in today's workout, it does not exist.
+- Follow the written rep scheme EXACTLY as programmed. If it says "E2MOM - 3 reps", that means 3 reps every 2 minutes - never change the interval, sets, or rep count. (EMOM = every minute on the minute; E2MOM = every 2 minutes on the minute.)
+- PERCENTAGE MATH: "@ 65%" means 65% of the athlete's 1RM for THAT SAME lift. Apply the percentage exactly ONCE to the correct 1RM, show the math (e.g. "115lb - that's 65% of your 175lb snatch 1RM"), and round to the nearest 5lb. Never apply a percentage to a weight that was already reduced by a percentage.
+- If you have NO data for a movement, say so and give a conservative starting weight with a note to log it. NEVER derive it from an unrelated lift (e.g. do not base RDL weight on strict press).
 - Use their ACTUAL numbers from history when recommending weights
 - Be specific and direct - no vague advice like "listen to your body" or "go at a moderate pace"
 - If this is a heavy strength day, give percentage-based recommendations
@@ -288,10 +299,10 @@ Respond in a confident, direct coach tone. This advice will be saved and shown e
       // Call the fast model with streaming so advice appears as it's written
       const text = await chatCompletion({
         messages: [
-          { role: "system", content: "You are an experienced CrossFit coach providing personalized workout advice." },
+          { role: "system", content: "You are an experienced CrossFit coach providing personalized workout advice. You only coach the workout you are given - you never invent extra movements or change the programmed rep scheme, and your percentage/weight math is always correct." },
           { role: "user", content: prompt }
         ],
-        temperature: 0.7,
+        temperature: 0.4,
         onDelta: (textSoFar) => {
           setIsStreaming(true);
           setAiAdvice(textSoFar);

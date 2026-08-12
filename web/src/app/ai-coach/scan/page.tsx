@@ -78,9 +78,21 @@ export default function AIScanPage() {
     setError(null);
 
     try {
-      const prompt = `You are a CrossFit coach analyzing a handwritten workout or programming notes.
+      const prompt = `You are a CrossFit coach transcribing a photo of handwritten workout programming (whiteboard or notebook).
 
-Look at this image and extract any workout programming you can see. Classify each component into ONE of these types:
+STEP 1 - TRANSCRIBE FAITHFULLY:
+Extract ONLY what is actually written in the image. Never invent movements, sets, percentages, or workouts that are not visible. Handwriting is messy - decode it using standard training shorthand:
+- EMOM = every minute on the minute. E2MOM / E2M = every 2 minutes on the minute. E90 = every 90 seconds. A letter that looks like "Z" between "E" and "MOM" is almost always the digit 2 - read "EZMOM" as "E2MOM".
+- AMRAP = as many rounds/reps as possible. RFT = rounds for time.
+- "4x6" = 4 sets of 6 reps. "@ 65%" = at 65% of that lift's 1-rep max.
+- "/leg", "/arm", "/side" = per side (so "4x10/leg" = 4 sets of 10 reps each leg). "w/" = with. "sec" = seconds.
+- RDL = Romanian deadlift, OHS = overhead squat, C&J = clean and jerk, T2B = toes-to-bar, HSPU = handstand push-up, DU = double-unders, KB = kettlebell, DB = dumbbell, BS = back squat, FS = front squat.
+
+STEP 2 - GROUP CORRECTLY:
+Lines written under or beside a movement name belong to THAT movement - they are its sets/reps/percentage/tempo, not a separate workout. Example: "Snatch w/ 2 sec pause @ the catch" followed by "E2MOM - 3 reps @ 65%" is ONE component (a snatch done as 3 reps every 2 minutes at 65%), not two. "Back Squat" followed by "4x6 @ 75%" is ONE component.
+
+STEP 3 - CLASSIFY:
+Classify each component into ONE of these types:
 - "warmup" - Warm-up exercises, mobility, activation
 - "lift" - Strength work (squats, deadlifts, presses, Olympic lifts, etc.)
 - "wod" - WOD/Metcon (AMRAP, EMOM, For Time, mixed-modal conditioning pieces)
@@ -117,7 +129,9 @@ If you cannot read the handwriting or the image doesn't contain workout programm
 
 IMPORTANT:
 - Only respond with valid JSON. No additional text before or after the JSON.
-- The "type" field MUST be exactly one of: warmup, lift, wod, skill, run, swim, bike_mtb, bike_road, cooldown (lowercase)`;
+- The "type" field MUST be exactly one of: warmup, lift, wod, skill, run, swim, bike_mtb, bike_road, cooldown (lowercase)
+- The "description" must contain only what is written in the image (expanded from shorthand). Put your own suggestions or uncertainty ONLY in "notes".
+- If part of the writing is ambiguous, make your best standard-shorthand reading and flag it in "notes" (e.g. "Read as E2MOM - double-check"). NEVER add content that is not in the image.`;
 
       // Call the fast vision model (with automatic fallback)
       const text = await chatCompletion({
@@ -130,7 +144,7 @@ IMPORTANT:
             ]
           }
         ],
-        temperature: 0.3,
+        temperature: 0.1,
       });
 
       if (!text) {
