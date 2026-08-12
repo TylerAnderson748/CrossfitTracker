@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { XAI_API_URL, FAST_MODEL, FALLBACK_MODEL } from "@/lib/ai";
+import { XAI_API_URL, FAST_MODEL, FALLBACK_MODEL } from "@/lib/aiModels";
 
 type SuggestionType = "today" | "tomorrow" | "week";
 
@@ -133,7 +133,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid type" }, { status: 400 });
     }
 
-    const apiKey = process.env.NEXT_PUBLIC_XAI_API_KEY;
+    const apiKey = process.env.XAI_API_KEY || process.env.NEXT_PUBLIC_XAI_API_KEY;
     if (!apiKey) {
       return NextResponse.json({ error: "AI service not configured" }, { status: 500 });
     }
@@ -166,7 +166,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const apiKey = process.env.NEXT_PUBLIC_XAI_API_KEY;
+  const apiKey = process.env.XAI_API_KEY || process.env.NEXT_PUBLIC_XAI_API_KEY;
   if (!apiKey) {
     return NextResponse.json({ error: "AI service not configured" }, { status: 500 });
   }
