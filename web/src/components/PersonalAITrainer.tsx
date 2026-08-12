@@ -14,6 +14,8 @@ interface LiftHistoryEntry {
   weight: number;
   reps: number;
   date: Timestamp;
+  // "working" = programmed submaximal sets; "max"/missing = true rep-max attempt
+  setType?: "max" | "working";
 }
 
 interface WodHistoryEntry {
@@ -110,6 +112,7 @@ export default function PersonalAITrainer({ userId, todayPersonalWorkouts, userP
             weight: data.weight || 0,
             reps: data.reps || 1,
             date: data.date,
+            setType: data.setType,
           } as LiftHistoryEntry;
         }).filter(l => l.liftTitle && l.weight > 0);
 
@@ -188,25 +191,34 @@ export default function PersonalAITrainer({ userId, todayPersonalWorkouts, userP
       // Build user history summary
       let historySummary = "";
       if (userHistory.lifts.length > 0) {
-        // Best result per lift per rep count, grouped by lift with an
-        // estimated 1RM (Epley) so the AI has a correct anchor for % math
-        const liftGroups = new Map<string, Map<number, number>>();
+        // Best TESTED result per lift per rep count (working sets are
+        // programmed submaximal training, not PRs - they only contribute a
+        // 1RM floor). Estimated 1RM uses Epley so the AI has a correct
+        // anchor for % math.
+        const epley = (weight: number, reps: number) => Math.round(weight * (1 + reps / 30));
+        const liftGroups = new Map<string, { maxBests: Map<number, number>; e1rmFloor: number }>();
         userHistory.lifts.forEach(lift => {
-          const repBests = liftGroups.get(lift.liftTitle) || new Map<number, number>();
-          if ((repBests.get(lift.reps) || 0) < lift.weight) {
-            repBests.set(lift.reps, lift.weight);
+          const group = liftGroups.get(lift.liftTitle) || { maxBests: new Map<number, number>(), e1rmFloor: 0 };
+          if ((lift.setType || "max") === "max" && (group.maxBests.get(lift.reps) || 0) < lift.weight) {
+            group.maxBests.set(lift.reps, lift.weight);
           }
-          liftGroups.set(lift.liftTitle, repBests);
+          group.e1rmFloor = Math.max(group.e1rmFloor, epley(lift.weight, lift.reps));
+          liftGroups.set(lift.liftTitle, group);
         });
 
-        historySummary += "Lift PRs (best sets with estimated 1RM):\n" + Array.from(liftGroups.entries())
-          .map(([liftName, repBests]) => {
-            const sets = Array.from(repBests.entries())
+        historySummary += "Lift PRs (tested max attempts, with estimated 1RM):\n" + Array.from(liftGroups.entries())
+          .map(([liftName, group]) => {
+            if (group.maxBests.size === 0) {
+              return `- ${liftName}: no tested max yet; logged working sets imply a 1RM of at least ~${group.e1rmFloor}lb`;
+            }
+            const sets = Array.from(group.maxBests.entries())
               .sort((a, b) => a[0] - b[0])
               .map(([reps, weight]) => `${weight}lb x ${reps}`)
               .join(", ");
-            const e1rm = Math.max(...Array.from(repBests.entries())
-              .map(([reps, weight]) => Math.round(weight * (1 + reps / 30))));
+            const e1rm = Math.max(
+              group.e1rmFloor,
+              ...Array.from(group.maxBests.entries()).map(([reps, weight]) => epley(weight, reps))
+            );
             return `- ${liftName}: ${sets} (estimated 1RM: ${e1rm}lb)`;
           })
           .join("\n");
@@ -288,6 +300,7 @@ CRITICAL RULES:
 - Follow the written rep scheme EXACTLY as programmed. If it says "E2MOM - 3 reps", that means 3 reps every 2 minutes - never change the interval, sets, or rep count. (EMOM = every minute on the minute; E2MOM = every 2 minutes on the minute.)
 - PERCENTAGE MATH: "@ 65%" means 65% of the athlete's 1RM for THAT SAME lift. Apply the percentage exactly ONCE to the correct 1RM, show the math (e.g. "115lb - that's 65% of your 175lb snatch 1RM"), and round to the nearest 5lb. Never apply a percentage to a weight that was already reduced by a percentage.
 - If you have NO data for a movement, say so and give a conservative starting weight with a note to log it. NEVER derive it from an unrelated lift (e.g. do not base RDL weight on strict press).
+- If today's workout is a coached CLASS with no specific programming listed, do NOT guess the class content. Keep advice short: readiness, effort level, and mindset only - and remind them they can scan the class whiteboard to log the actual work.
 - Use their ACTUAL numbers from history when recommending weights
 - Be specific and direct - no vague advice like "listen to your body" or "go at a moderate pace"
 - If this is a heavy strength day, give percentage-based recommendations

@@ -520,7 +520,7 @@ When generating workouts, you MUST respond with valid JSON in this exact format:
 Component types: "warmup", "lift", "wod", "skill", "run", "swim", "bike_mtb", "bike_road", "row", "class", "cooldown"
 Scoring types for WODs: "fortime", "amrap", "emom"
 Use the specific cardio types for pure aerobic work - "run" (also jogging/rucking), "swim", "bike_mtb" (mountain biking), "bike_road" (road/stationary/fan bike), "row" (rowing erg) - steady-state or intervals, with exact distance/time and pace or RPE. Only program swimming, biking, or rowing when the athlete has said they do those or has the equipment. Mixed-modal conditioning pieces (AMRAPs, EMOMs, For Time) stay "wod". Cardio components are exempt from the preset-name rule.
-Use "class" when the athlete attends a coached class elsewhere (e.g., "Olympic Lifting Class", "CrossFit Class"): name the class and give intensity/focus guidance for it. Class components are exempt from the preset-name rule.
+Use "class" when the athlete attends a coached class elsewhere (e.g., "Olympic Lifting Class", "CrossFit Class"). The CLASS COACH decides the content, so keep it generic: title = the class name, description = a short line like "Attend your Olympic lifting class - follow the coach's programming." Do NOT guess what the class will cover - no movement suggestions, no "focus on X" technique notes, no invented workouts. The only extra guidance allowed is effort level when the plan requires it (e.g., taper/deload week: "keep the intensity easy this week"). Class components are exempt from the preset-name rule.
 
 IMPORTANT - PRESET WORKOUTS:
 For SKILL components, you MUST ONLY use these preset skill names (do not make up new skills):
@@ -1505,7 +1505,7 @@ RULES:
 - Event days (competition, race): session in CAPS (e.g., "MARATHON", "CROSSFIT COMPETITION") with one component of race-day execution guidance.
 - "session" is a short 2-4 word label summarizing the day. "phase" is a consistent short label across the plan (e.g., "Base", "Build", "Comp Taper", "Marathon Taper", "Recovery").
 - EVERY row is ONE definitive prescription. Never "optional", never "attend or rest - your call".
-- Class days: ONE "class" component naming the class and saying to follow the coach's programming plus intensity guidance.
+- Class days: ONE "class" component naming the class and saying to follow the coach's programming. NEVER guess the class content - no movement suggestions or "focus on X" notes (the class coach programs it). Add effort-level guidance ONLY when the plan needs it (taper/deload week).
 - runMiles = total planned run miles that day (0 if none). targetRPE like "3-7". estMinutes = total session time including warmup.
 - Time budgets are CAPS, not targets: do NOT fill every available minute. Distribute training load across the whole week - never schedule two maximal days back-to-back, and keep most sessions comfortably under their cap.
 - If the athlete is training for a running race: program 3-4 run days per week - ONE long run plus easy midweek runs (easy runs fit inside weekday caps). Weekly total mileage progresses roughly 10% week over week with a lighter cutback week every 3rd-4th week; the long run builds toward the race distance, then tapers.

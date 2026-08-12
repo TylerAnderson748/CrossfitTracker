@@ -31,7 +31,7 @@ function WeeklyPlanContent() {
   const [clearing, setClearing] = useState(false);
   // Session lift-logging modal: log every lift in a workout at once
   const [logSessionWorkout, setLogSessionWorkout] = useState<PersonalWorkout | null>(null);
-  const [sessionEntries, setSessionEntries] = useState<Record<string, { weight: string; reps: string }>>({});
+  const [sessionEntries, setSessionEntries] = useState<Record<string, { weight: string; reps: string; isMax?: boolean }>>({});
   const [savingSession, setSavingSession] = useState(false);
   const [showAddWorkoutModal, setShowAddWorkoutModal] = useState(false);
   const [newWorkoutDate, setNewWorkoutDate] = useState("");
@@ -317,9 +317,11 @@ function WeeklyPlanContent() {
   // Open the session logger with one row per lift component, reps pre-filled
   // from the prescription
   const openLogSession = (workout: PersonalWorkout) => {
-    const entries: Record<string, { weight: string; reps: string }> = {};
+    const entries: Record<string, { weight: string; reps: string; isMax?: boolean }> = {};
     workout.components.filter(c => c.type === "lift").forEach(c => {
-      entries[c.id] = { weight: "", reps: parseProgrammedReps(`${c.title} ${c.description}`) };
+      // Programmed sessions are working sets by default - a percentage-based
+      // prescription is not a rep-max test (the athlete can flag a true max)
+      entries[c.id] = { weight: "", reps: parseProgrammedReps(`${c.title} ${c.description}`), isMax: false };
     });
     setSessionEntries(entries);
     setLogSessionWorkout(workout);
@@ -345,12 +347,13 @@ function WeeklyPlanContent() {
           reps: parseInt(entry?.reps || "") || 1,
           date: logDate,
           isPersonalRecord: false,
+          setType: entry?.isMax ? "max" : "working",
         });
         saved++;
       }
       setLogSessionWorkout(null);
       if (saved > 0) {
-        alert(`Logged ${saved} lift${saved === 1 ? "" : "s"}! They're in your history and count toward PRs.`);
+        alert(`Logged ${saved} lift${saved === 1 ? "" : "s"}! Working sets go to your history and charts; max attempts count toward records.`);
       }
     } catch (error) {
       console.error("Error logging session:", error);
@@ -667,11 +670,11 @@ function WeeklyPlanContent() {
                                     buttons.push(
                                       <Link
                                         key="scan"
-                                        href="/ai-coach/scan"
-                                        className="p-1 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-                                        title="Scan the class whiteboard to log the specific workout"
+                                        href={`/ai-coach/scan?replace=${personalWorkout.id}&classTitle=${encodeURIComponent(classComponent.title)}&date=${cardDateString}`}
+                                        className="px-2 py-1 text-xs font-semibold rounded-lg bg-indigo-100 text-indigo-700 hover:bg-indigo-200 transition-colors flex items-center gap-1"
+                                        title="Scan the class whiteboard - the scanned program replaces this class placeholder"
                                       >
-                                        📸
+                                        📸 Scan Whiteboard
                                       </Link>
                                     );
                                   }
@@ -807,7 +810,7 @@ function WeeklyPlanContent() {
           <div className="bg-white rounded-xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
             <h2 className="text-xl font-bold text-gray-900 mb-1">Log Your Lifts</h2>
             <p className="text-sm text-gray-500 mb-4">
-              Enter your top working set for each lift (leave blank to skip). Entries go into your lift history and count toward PRs.
+              Enter your top set for each lift (leave blank to skip). These save as working sets - check &quot;max attempt&quot; if you actually tested a rep max, so it counts toward your records.
             </p>
             <div className="space-y-4">
               {logSessionWorkout.components.filter(c => c.type === "lift").map(comp => (
@@ -838,6 +841,15 @@ function WeeklyPlanContent() {
                     />
                     <span className="text-sm text-gray-500">reps</span>
                   </div>
+                  <label className="flex items-center gap-2 mt-2 text-xs text-gray-600 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={!!sessionEntries[comp.id]?.isMax}
+                      onChange={(e) => setSessionEntries(prev => ({ ...prev, [comp.id]: { ...prev[comp.id], isMax: e.target.checked } }))}
+                      className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                    />
+                    This was a max attempt (count toward my records)
+                  </label>
                 </div>
               ))}
             </div>

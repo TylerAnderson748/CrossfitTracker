@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useRef } from "react";
-import { useRouter } from "next/navigation";
-import { collection, addDoc, Timestamp } from "firebase/firestore";
+import { useState, useRef, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { collection, addDoc, doc, getDoc, updateDoc, Timestamp } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
 import { WorkoutComponentType, workoutComponentLabels, workoutComponentColors } from "@/lib/types";
@@ -19,10 +19,19 @@ interface GeneratedWorkout {
 
 const COMPONENT_TYPES: WorkoutComponentType[] = ["warmup", "lift", "wod", "skill", "run", "swim", "bike_mtb", "bike_road", "row", "class", "cooldown"];
 
-export default function AIScanPage() {
+function AIScanPageContent() {
   const { user, loading } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Replace mode: arrived from a class placeholder on the calendar - the
+  // scanned program replaces that class component instead of creating a
+  // new workout
+  const replaceWorkoutId = searchParams.get("replace");
+  const replaceClassTitle = searchParams.get("classTitle") || "class";
+  const replaceDate = searchParams.get("date");
+  const isReplaceMode = !!replaceWorkoutId;
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [scannedImages, setScannedImages] = useState<string[]>([]); // Track all scanned images
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -272,6 +281,55 @@ IMPORTANT:
     });
   };
 
+  // Replace a class placeholder on the calendar with the scanned program.
+  // Other components on that day are kept; the scanned components slot in
+  // where the class component was.
+  const handleReplaceClass = async () => {
+    if (!user || generatedWorkouts.length === 0 || !replaceWorkoutId) return;
+
+    setIsSaving(true);
+    setSaveSuccess(null);
+
+    try {
+      const workoutRef = doc(db, "personalWorkouts", replaceWorkoutId);
+      const snap = await getDoc(workoutRef);
+      if (!snap.exists() || snap.data().userId !== user.id) {
+        throw new Error("Couldn't find that class on your calendar");
+      }
+
+      const existing = (snap.data().components || []) as { id: string; type: WorkoutComponentType; title: string; description: string; notes?: string; order?: number }[];
+      const scanned = generatedWorkouts.map((w, idx) => ({
+        id: `comp_${Date.now()}_${idx}`,
+        type: w.type,
+        title: w.title,
+        description: w.description,
+        notes: w.notes || "",
+        order: 0,
+      }));
+
+      const classIdx = existing.findIndex((c) => c.type === "class");
+      const kept = existing.filter((c) => c.type !== "class");
+      const insertAt = classIdx === -1 ? kept.length : Math.min(classIdx, kept.length);
+      const components = [...kept.slice(0, insertAt), ...scanned, ...kept.slice(insertAt)]
+        .map((c, idx) => ({ ...c, order: idx }));
+
+      await updateDoc(workoutRef, { components });
+
+      setSaveSuccess(`Replaced "${replaceClassTitle}" with the scanned program (${scanned.length} component${scanned.length !== 1 ? "s" : ""})`);
+      setIsSaving(false);
+
+      setTimeout(() => {
+        window.location.href = "/weekly";
+      }, 1500);
+      return;
+    } catch (err) {
+      console.error("Error replacing class with scanned program:", err);
+      setError("Failed to replace the class. Please try again.");
+    }
+
+    setIsSaving(false);
+  };
+
   // Save to personal workouts
   const handleSaveToPersonal = async (overrideDate?: string) => {
     if (!user || generatedWorkouts.length === 0) return;
@@ -377,6 +435,19 @@ IMPORTANT:
             Take a photo of your handwritten workout notes and let AI convert them to structured programming
           </p>
         </div>
+
+        {/* Replace-mode banner */}
+        {isReplaceMode && (
+          <div className="mb-4 bg-indigo-50 border border-indigo-200 rounded-xl p-4">
+            <p className="text-sm text-indigo-900">
+              <span className="font-semibold">Scanning for: {replaceClassTitle}</span>
+              {replaceDate ? ` (${replaceDate})` : ""}
+            </p>
+            <p className="text-xs text-indigo-700 mt-1">
+              The scanned workout will replace the class placeholder on your calendar, so your log shows what you actually did.
+            </p>
+          </div>
+        )}
 
         {/* Image Input */}
         <input
@@ -699,8 +770,38 @@ IMPORTANT:
                   </div>
                 )}
 
+                {/* Replace-mode Actions */}
+                {!showDatePicker && !saveSuccess && isReplaceMode && (
+                  <div className="space-y-3">
+                    <button
+                      onClick={handleReplaceClass}
+                      disabled={isSaving}
+                      className="w-full py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold rounded-lg hover:from-indigo-700 hover:to-purple-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      {isSaving ? "Replacing..." : `Replace "${replaceClassTitle}" with This Program`}
+                    </button>
+                    <button
+                      onClick={() => {
+                        clearImage();
+                      }}
+                      className="w-full py-2.5 bg-blue-50 text-blue-700 font-medium rounded-lg hover:bg-blue-100 transition-colors"
+                    >
+                      Scan Another Photo (Add More)
+                    </button>
+                    <button
+                      onClick={clearAll}
+                      className="w-full py-2.5 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors"
+                    >
+                      Start Over
+                    </button>
+                  </div>
+                )}
+
                 {/* Action Buttons */}
-                {!showDatePicker && !saveSuccess && (
+                {!showDatePicker && !saveSuccess && !isReplaceMode && (
                   <div className="space-y-3">
                     <div className="space-y-2">
                       <button
@@ -786,5 +887,13 @@ IMPORTANT:
         )}
       </main>
     </div>
+  );
+}
+
+export default function AIScanPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-gray-50"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div></div>}>
+      <AIScanPageContent />
+    </Suspense>
   );
 }

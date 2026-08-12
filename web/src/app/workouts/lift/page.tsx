@@ -22,6 +22,10 @@ interface LiftResult {
   userId: string;
   userName?: string;
   date: { toDate: () => Date };
+  // "max" = a true rep-max attempt (counts toward records/leaderboard).
+  // "working" = programmed submaximal sets (history/charts only).
+  // Missing on legacy entries - treated as "max".
+  setType?: "max" | "working";
 }
 
 function LiftPageContent() {
@@ -36,6 +40,7 @@ function LiftPageContent() {
   const [liftName, setLiftName] = useState(urlLiftName);
   const [selectedReps, setSelectedReps] = useState(1);
   const [weight, setWeight] = useState("");
+  const [setType, setSetType] = useState<"max" | "working">("max");
   const [entryDate, setEntryDate] = useState(new Date().toISOString().split("T")[0]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -54,6 +59,7 @@ function LiftPageContent() {
   const [editWeight, setEditWeight] = useState("");
   const [editReps, setEditReps] = useState(1);
   const [editDate, setEditDate] = useState("");
+  const [editSetType, setEditSetType] = useState<"max" | "working">("max");
 
   useEffect(() => {
     if (!loading && !switching && !user) {
@@ -130,8 +136,9 @@ function LiftPageContent() {
         results = results.filter((r) => r.userId === user.id);
       }
 
-      // Filter by reps
-      results = results.filter((r) => r.reps === selectedReps);
+      // Filter by reps; only true max attempts compete on the leaderboard
+      // (legacy entries without setType count as max)
+      results = results.filter((r) => r.reps === selectedReps && (r.setType || "max") === "max");
 
       // Get max weight per user (only 1 entry per user - their best)
       const userBestMap = new Map<string, LiftResult>();
@@ -154,7 +161,9 @@ function LiftPageContent() {
     }
   };
 
-  const latestWeight = history.length > 0 ? history[0].weight : null;
+  // Training % anchors on the latest max attempt, not working sets
+  const latestMax = history.find(h => (h.setType || "max") === "max") || null;
+  const latestWeight = latestMax ? latestMax.weight : null;
 
   const handleSubmit = async () => {
     setError("");
@@ -184,6 +193,7 @@ function LiftPageContent() {
         reps: selectedReps,
         date: workoutDate,
         isPersonalRecord: false,
+        setType,
       });
 
       setWeight("");
@@ -201,6 +211,7 @@ function LiftPageContent() {
     setEditingLogId(log.id);
     setEditWeight(log.weight.toString());
     setEditReps(log.reps);
+    setEditSetType(log.setType || "max");
     const logDate = log.date?.toDate?.();
     if (logDate) {
       setEditDate(logDate.toISOString().split("T")[0]);
@@ -227,6 +238,7 @@ function LiftPageContent() {
         weight: newWeight,
         reps: editReps,
         date: newDate,
+        setType: editSetType,
       });
 
       setEditingLogId(null);
@@ -497,6 +509,32 @@ function LiftPageContent() {
 
         {/* Weight + Date + Save Row */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-4">
+          {/* Set type: max attempts drive records/leaderboard, working sets are training data */}
+          <div className="flex rounded-lg overflow-hidden border border-gray-200 mb-2 text-sm">
+            <button
+              type="button"
+              onClick={() => setSetType("max")}
+              className={`flex-1 py-2 font-semibold transition-colors ${
+                setType === "max" ? "bg-purple-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"
+              }`}
+            >
+              Max Attempt
+            </button>
+            <button
+              type="button"
+              onClick={() => setSetType("working")}
+              className={`flex-1 py-2 font-semibold transition-colors ${
+                setType === "working" ? "bg-purple-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"
+              }`}
+            >
+              Working Set
+            </button>
+          </div>
+          <p className="text-xs text-gray-400 mb-3">
+            {setType === "max"
+              ? "A true test of your max - counts toward your records and the leaderboard."
+              : "Programmed training weight (e.g. 3 reps @ 65%) - saved to history and charts, but not counted as a record."}
+          </p>
           <div className="flex items-end gap-3">
             <div className="flex-1">
               <div className="flex items-center border border-gray-300 rounded-lg overflow-hidden">
@@ -622,13 +660,14 @@ function LiftPageContent() {
                         }))}
                       />
                     ) : null}
-                    {/* Data points */}
+                    {/* Data points - working sets render lighter than max attempts */}
                     {chartData.map((d, i) => {
                       const date = d.date?.toDate?.() || new Date();
                       const xPct = (date.getTime() - timeRangeStart.getTime()) / timeRangeMs;
                       const x = 5 + xPct * 340;
                       const y = range > 0 ? 4 + (1 - (d.weight - chartMin) / range) * 152 : 80;
-                      return <circle key={i} cx={x} cy={y} r="4" fill="#9333EA" />;
+                      const isWorking = (d.setType || "max") === "working";
+                      return <circle key={i} cx={x} cy={y} r="4" fill={isWorking ? "#C4B5FD" : "#9333EA"} />;
                     })}
                   </svg>
                 </div>
@@ -641,6 +680,12 @@ function LiftPageContent() {
                   ))}
                 </div>
               </div>
+              {chartData.some(d => (d.setType || "max") === "working") && (
+                <div className="flex items-center gap-3 mt-2 text-xs text-gray-400">
+                  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-purple-600 inline-block" /> Max attempt</span>
+                  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-purple-300 inline-block" /> Working set</span>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -726,6 +771,30 @@ function LiftPageContent() {
                           className="w-full px-2 py-1 border border-gray-300 rounded text-center text-gray-900"
                         />
                       </div>
+                      <div>
+                        <p className="text-xs text-gray-500 mb-1">Set type</p>
+                        <div className="flex rounded-lg overflow-hidden border border-gray-200 text-sm">
+                          <button
+                            type="button"
+                            onClick={() => setEditSetType("max")}
+                            className={`flex-1 py-1.5 font-medium transition-colors ${
+                              editSetType === "max" ? "bg-purple-600 text-white" : "bg-white text-gray-600"
+                            }`}
+                          >
+                            Max Attempt
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditSetType("working")}
+                            className={`flex-1 py-1.5 font-medium transition-colors ${
+                              editSetType === "working" ? "bg-purple-600 text-white" : "bg-white text-gray-600"
+                            }`}
+                          >
+                            Working Set
+                          </button>
+                        </div>
+                        <p className="text-xs text-gray-400 mt-1">Working sets don&apos;t count toward records or the leaderboard.</p>
+                      </div>
                       <div className="flex gap-2">
                         <button onClick={() => saveEdit(log.id)} className="px-3 py-1.5 bg-purple-600 text-white rounded-lg text-sm font-medium">Save</button>
                         <button onClick={cancelEdit} className="px-3 py-1.5 bg-gray-200 text-gray-700 rounded-lg text-sm font-medium">Cancel</button>
@@ -735,7 +804,12 @@ function LiftPageContent() {
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="text-xs text-gray-500">{log.date?.toDate().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</p>
-                        <p className="text-lg font-semibold text-gray-900">{log.weight} lbs <span className="text-sm font-normal text-gray-500">× {log.reps}</span></p>
+                        <p className="text-lg font-semibold text-gray-900">
+                          {log.weight} lbs <span className="text-sm font-normal text-gray-500">× {log.reps}</span>
+                          {(log.setType || "max") === "working" && (
+                            <span className="ml-2 align-middle text-xs font-medium px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">working set</span>
+                          )}
+                        </p>
                       </div>
                       <div className="flex gap-2">
                         <button onClick={() => startEditLog(log)} className="w-8 h-8 bg-purple-600 rounded-full flex items-center justify-center text-white text-sm">✎</button>
