@@ -168,7 +168,8 @@ function SkillPageContent() {
     setSubmitting(true);
 
     try {
-      const workoutDate = Timestamp.fromDate(new Date(entryDate));
+      const [ey, em, ed] = entryDate.split("-").map(Number);
+      const workoutDate = Timestamp.fromDate(new Date(ey, em - 1, ed, 12, 0, 0));
 
       await addDoc(collection(db, "skillResults"), {
         userId: user.id,
@@ -216,7 +217,8 @@ function SkillPageContent() {
     if (!newReps || newReps <= 0) return;
 
     try {
-      const newDate = Timestamp.fromDate(new Date(editDate));
+      const [ny, nm, nd] = editDate.split("-").map(Number);
+      const newDate = Timestamp.fromDate(new Date(ny, nm - 1, nd, 12, 0, 0));
 
       await updateDoc(doc(db, "skillResults", logId), {
         maxReps: newReps,

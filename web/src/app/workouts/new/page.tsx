@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { collection, addDoc, query, where, orderBy, getDocs, getDoc, Timestamp, limit, doc, updateDoc, deleteDoc } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
-import { WODCategory, normalizeWorkoutName, LeaderboardEntry, categoryOrder, categoryColors, WODScoringType, wodScoringTypeLabels, wodScoringTypeColors } from "@/lib/types";
+import { WODCategory, normalizeWorkoutName, LeaderboardEntry, categoryOrder, categoryColors, WODScoringType, wodScoringTypeLabels, wodScoringTypeColors, inferScoringType } from "@/lib/types";
 import Navigation from "@/components/Navigation";
 import { getAllWods } from "@/lib/workoutData";
 
@@ -225,6 +225,34 @@ function NewWorkoutContent() {
       return null;
     }
   };
+
+  // Resolve the scoring type when the URL didn't provide one: preset data
+  // wins, then a clear AMRAP/EMOM signal in the workout text, then how the
+  // user logged this workout before. Without this, any entry path that
+  // doesn't pass ?scoringType= silently logs AMRAPs as For Time.
+  useEffect(() => {
+    if (urlScoringType || !wodTitle.trim()) return;
+    let cancelled = false;
+    const resolve = async () => {
+      const preset = getPresetWorkout(wodTitle);
+      let resolved: WODScoringType | null = preset?.scoringType || null;
+      if (!resolved) {
+        const inferred = inferScoringType(`${wodTitle} ${wodDescription}`);
+        if (inferred !== "fortime") resolved = inferred; // text explicitly says AMRAP/EMOM
+      }
+      if (!resolved) {
+        resolved = await checkExistingWorkoutType(wodTitle);
+      }
+      if (!cancelled && resolved && resolved !== "fortime") {
+        setScoringType(resolved);
+        setScoringTypeLocked(true);
+      }
+    };
+    resolve();
+    return () => { cancelled = true; };
+    // Run once for the workout the page opened with
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
 
   // Handle scoring type change with conflict check
   const handleScoringTypeChange = async (newType: WODScoringType) => {
@@ -638,7 +666,10 @@ function NewWorkoutContent() {
     setSubmitting(true);
     try {
       const now = Timestamp.now();
-      const workoutDate = Timestamp.fromDate(new Date(entryDate));
+      // Parse as LOCAL noon - new Date("YYYY-MM-DD") is UTC midnight, which
+      // lands on the previous day for anyone west of Greenwich
+      const [ey, em, ed] = entryDate.split("-").map(Number);
+      const workoutDate = Timestamp.fromDate(new Date(ey, em - 1, ed, 12, 0, 0));
 
       // Determine result type based on scoring type
       const resultType = scoringType === "amrap" ? "rounds" : "time";
@@ -750,7 +781,8 @@ function NewWorkoutContent() {
     if (newTime <= 0) return;
 
     try {
-      const newDate = Timestamp.fromDate(new Date(editDate));
+      const [ny, nm, nd] = editDate.split("-").map(Number);
+      const newDate = Timestamp.fromDate(new Date(ny, nm - 1, nd, 12, 0, 0));
 
       await updateDoc(doc(db, "workoutLogs", logId), {
         timeInSeconds: newTime,

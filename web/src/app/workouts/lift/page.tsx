@@ -208,7 +208,10 @@ function LiftPageContent() {
     setSubmitting(true);
 
     try {
-      const workoutDate = Timestamp.fromDate(new Date(entryDate));
+      // Parse as LOCAL noon - new Date("YYYY-MM-DD") is UTC midnight, which
+      // lands on the previous day for anyone west of Greenwich
+      const [ey, em, ed] = entryDate.split("-").map(Number);
+      const workoutDate = Timestamp.fromDate(new Date(ey, em - 1, ed, 12, 0, 0));
 
       await addDoc(collection(db, "liftResults"), {
         userId: user.id,
@@ -258,7 +261,8 @@ function LiftPageContent() {
     if (!newWeight || newWeight <= 0) return;
 
     try {
-      const newDate = Timestamp.fromDate(new Date(editDate));
+      const [ey, em, ed] = editDate.split("-").map(Number);
+      const newDate = Timestamp.fromDate(new Date(ey, em - 1, ed, 12, 0, 0));
 
       await updateDoc(doc(db, "liftResults", logId), {
         weight: newWeight,

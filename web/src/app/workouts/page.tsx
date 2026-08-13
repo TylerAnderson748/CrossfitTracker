@@ -6,7 +6,7 @@ import Link from "next/link";
 import { collection, query, where, getDocs, deleteDoc, doc, addDoc, Timestamp, limit } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
-import { WorkoutLog, formatResult, CardioLog, cardioActivityLabels, cardioActivityIcons, CardioActivity } from "@/lib/types";
+import { WorkoutLog, formatResult, CardioLog, cardioActivityLabels, cardioActivityIcons, CardioActivity, inferScoringType } from "@/lib/types";
 import { computeBaselineStatus, BaselineStatus } from "@/lib/baselines";
 import Navigation from "@/components/Navigation";
 import { WOD_CATEGORIES, LIFT_CATEGORIES, SKILL_CATEGORIES, WorkoutCategory, getAllWods, getAllLifts, getAllSkills } from "@/lib/workoutData";
@@ -768,7 +768,7 @@ export default function WorkoutsPage() {
                   <div className="divide-y divide-gray-100">
                     {section.items.map(({ i: item, done }) => {
                       const href = item.category === "lift" ? `/workouts/lift?name=${encodeURIComponent(item.name)}`
-                        : item.category === "wod" ? `/workouts/new?name=${encodeURIComponent(item.name)}&description=${encodeURIComponent(item.description)}&scoringType=${item.key === "cindy" ? "amrap" : "fortime"}`
+                        : item.category === "wod" ? `/workouts/new?name=${encodeURIComponent(item.name)}&description=${encodeURIComponent(item.description)}&scoringType=${inferScoringType(`${item.name} ${item.description}`)}`
                         : item.category === "cardio" ? `/workouts/cardio?activity=${item.key === "fan_bike" ? "bike_road" : item.key === "row_2k" ? "row" : item.key === "swim" ? "swim" : "run"}`
                         : `/workouts/skill?name=${encodeURIComponent(item.name)}`;
                       return (
