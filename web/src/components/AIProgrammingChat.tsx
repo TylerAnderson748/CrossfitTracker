@@ -329,7 +329,7 @@ function buildPreferencesSection(preferences?: Omit<AIProgrammingPreferences, "u
             : "";
           scheduleLines.push(`- ${dayNames[key]}: CLASS AVAILABLE - ${desc}. YOU decide each week and COMMIT to exactly one prescription for this day: the class, a specific programmed workout, or rest. NEVER write "optional" or "attend or rest - your call" - the athlete wants to be told exactly what to do. When prescribing the class, add ONE component noting it. A class day is a TRAINING opportunity - do NOT default it to Rest week after week; prescribe rest here only when recovery genuinely demands it that week.${timeBudget}`);
         } else {
-          scheduleLines.push(`- ${dayNames[key]}: FIXED CLASS every week - ${desc}. Do NOT program a workout for this day; add ONE component noting the class (with intensity guidance during taper weeks).`);
+          scheduleLines.push(`- ${dayNames[key]}: FIXED CLASS every week - ${desc}. Do NOT program a workout for this day; add ONE component naming the class and nothing more.`);
         }
       }
     }
@@ -519,8 +519,8 @@ When generating workouts, you MUST respond with valid JSON in this exact format:
 
 Component types: "warmup", "lift", "wod", "skill", "run", "swim", "bike_mtb", "bike_road", "row", "class", "cooldown"
 Scoring types for WODs: "fortime", "amrap", "emom"
-Use the specific cardio types for pure aerobic work - "run" (also jogging/rucking), "swim", "bike_mtb" (mountain biking), "bike_road" (road/stationary/fan bike), "row" (rowing erg) - steady-state or intervals, with exact distance/time and pace or RPE. Only program swimming, biking, or rowing when the athlete has said they do those or has the equipment. Mixed-modal conditioning pieces (AMRAPs, EMOMs, For Time) stay "wod". Cardio components are exempt from the preset-name rule.
-Use "class" when the athlete attends a coached class elsewhere (e.g., "Olympic Lifting Class", "CrossFit Class"). The CLASS COACH decides the content, so keep it generic: title = the class name, description = a short line like "Attend your Olympic lifting class - follow the coach's programming." Do NOT guess what the class will cover - no movement suggestions, no "focus on X" technique notes, no invented workouts. The only extra guidance allowed is effort level when the plan requires it (e.g., taper/deload week: "keep the intensity easy this week"). Class components are exempt from the preset-name rule.
+Use the specific cardio types for pure aerobic work - "run" (also jogging/rucking), "swim", "bike_mtb" (mountain biking), "bike_road" (road/stationary/fan bike), "row" (rowing erg) - steady-state or intervals, with exact distance/time and pace or % effort. Only program swimming, biking, or rowing when the athlete has said they do those or has the equipment. Mixed-modal conditioning pieces (AMRAPs, EMOMs, For Time) stay "wod". Cardio components are exempt from the preset-name rule.
+Use "class" when the athlete attends a coached class elsewhere (e.g., "Olympic Lifting Class", "CrossFit Class"). The CLASS COACH decides the content and the athlete scans the whiteboard in afterward, so a class component is ONLY the name: title = the class name, description = "Follow the coach's programming." NOTHING else - no movement suggestions, no focus/technique notes, no effort or intensity guidance, no invented workouts. Class components are exempt from the preset-name rule.
 
 IMPORTANT - PRESET WORKOUTS:
 For SKILL components, you MUST ONLY use these preset skill names (do not make up new skills):
@@ -1498,13 +1498,13 @@ Respond with valid JSON in this exact format:
       "phase": "${week.focus.split(" - ")[0]}",
       "session": "Run + CrossFit",
       "runMiles": 4,
-      "targetRPE": "3-7",
+      "targetRPE": "60-80%",
       "estMinutes": 60,
       "reason": "Easy aerobic volume plus an upper-body-biased WOD keeps the legs fresh for Tuesday's lifting class while building the weekly base.",
       "components": [
         { "type": "warmup", "title": "Warm-up", "description": "3 min easy movement; 10 air squats + 10 glute bridges; wrist/ankle/hip mobility." },
         { "type": "wod", "title": "DB Upper Circuit", "description": "12-min AMRAP: 8 DB floor presses (50s), 12 KB swings (53), 10 sit-ups." },
-        { "type": "run", "title": "Easy Run", "description": "4 mi easy at conversational RPE 3-4; finish with 4x20-sec relaxed strides." }
+        { "type": "run", "title": "Easy Run", "description": "4 mi easy at a conversational pace (~40% effort); finish with 4x20-sec relaxed strides." }
       ]
     }
   ]
@@ -1519,8 +1519,8 @@ RULES:
 - Event days (competition, race): session in CAPS (e.g., "MARATHON", "CROSSFIT COMPETITION") with one component of race-day execution guidance.
 - "session" is a short 2-4 word label summarizing the day. "phase" is a consistent short label across the plan (e.g., "Base", "Build", "Comp Taper", "Marathon Taper", "Recovery").
 - EVERY row is ONE definitive prescription. Never "optional", never "attend or rest - your call".
-- Class days: ONE "class" component naming the class and saying to follow the coach's programming. NEVER guess the class content - no movement suggestions or "focus on X" notes (the class coach programs it). Add effort-level guidance ONLY when the plan needs it (taper/deload week).
-- runMiles = total planned run miles that day (0 if none). targetRPE like "3-7". estMinutes = total session time including warmup.
+- Class days: ONE "class" component - title is the class name, description is "Follow the coach's programming", and that is ALL. No guessed content, no technique advice, no effort/intensity guidance - the athlete scans the class whiteboard in afterward.
+- runMiles = total planned run miles that day (0 if none). targetRPE is the day's EFFORT as a percentage of max effort, like "60-80%" - NEVER 1-10 RPE numbers; the athlete thinks in % effort. estMinutes = total session time including warmup.
 - Time budgets are CAPS, not targets: do NOT fill every available minute. Distribute training load across the whole week - never schedule two maximal days back-to-back, and keep most sessions comfortably under their cap.
 - FATIGUE MANAGEMENT: wave the intensity. Never stack more than 2 hard days in a row - follow them with an easy day, skill day, or rest, and prefer an extra rest day after a demanding stretch over forcing volume. Harder and easier weeks alternate within a block, with every 3rd-4th week a genuine deload (volume AND intensity down 30-40%). Calibrate to the athlete's recent check-ins: repeated "very hard" means ease the coming days; repeated "too easy" means push.
 - If the athlete is training for a running race: program 3-4 run days per week - ONE long run plus easy midweek runs (easy runs fit inside weekday caps). Weekly total mileage progresses roughly 10% week over week with a lighter cutback week every 3rd-4th week; the long run builds toward the race distance, then tapers.
@@ -1536,7 +1536,7 @@ RULES:
     return `You are Oddo, the athlete's coach, maintaining their day-by-day training plan TABLE.
 ${buildPreferencesSection(preferences)}${athleteBlock}
 CURRENT PLAN TABLE (${currentPlan.startDate} to ${currentPlan.endDate}, ${currentPlan.rows.length} days).
-Format: date|day|week|phase|session|runMiles|RPE|minutes|detail
+Format: date|day|week|phase|session|runMiles|effort%|minutes|detail
 ${serializePlanRows(currentPlan.rows)}
 ${violations.length > 0 ? `\nSCHEDULE VIOLATIONS CURRENTLY IN THE TABLE - these break the athlete's hard rules and MUST be fixed by your next patch (fix ALL of them in one patchRows, across every listed week):\n${violations.map(v => `- ${v}`).join("\n")}` : ""}
 
@@ -2106,7 +2106,7 @@ PATCH RULES:
 
         const noteBits = [
           `Phase: ${row.phase}`,
-          row.targetRPE ? `Target RPE ${row.targetRPE}` : "",
+          row.targetRPE ? `Effort ${row.targetRPE}` : "",
           row.estMinutes ? `~${row.estMinutes} min` : "",
           row.runMiles ? `${row.runMiles} mi planned` : "",
           row.reason ? `Why: ${row.reason}` : "",

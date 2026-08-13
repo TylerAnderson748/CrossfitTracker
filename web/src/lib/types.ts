@@ -425,7 +425,7 @@ export interface PlanRow {
   session: string;     // short label, e.g., "Run + CrossFit", "Oly Class", "Rest", "MARATHON"
   detail: string;      // the complete prescription for the day
   runMiles?: number;   // planned run miles (0 = none)
-  targetRPE?: string;  // e.g., "3-7"
+  targetRPE?: string;  // percent effort, e.g. "60-80%"
   estMinutes?: number; // estimated total session minutes
   reason?: string;     // why this day is programmed this way
   components?: PlanRowComponent[]; // typed components (imported plans)

@@ -84,7 +84,7 @@ export default function PlanTable({ rows, statusByDate }: PlanTableProps) {
             <th className="px-2 py-2 whitespace-nowrap">Session</th>
             <th className="px-2 py-2 min-w-[280px]">Detailed Plan</th>
             <th className="px-2 py-2 text-right">Mi</th>
-            <th className="px-2 py-2 text-center whitespace-nowrap">RPE</th>
+            <th className="px-2 py-2 text-center whitespace-nowrap">Effort</th>
             <th className="px-2 py-2 text-right">Min</th>
           </tr>
         </thead>

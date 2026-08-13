@@ -223,6 +223,6 @@ export function buildBaselinePromptBlock(status: BaselineStatus, trainingStyle?:
 BASELINE MINIMUM NOT MET (requires ${status.minimumDescription}). This athlete cannot be programmed real loads/paces yet:
 1. The FIRST 1-2 WEEKS of any new plan MUST be a BASELINE BLOCK: schedule the MISSING battery tests above (max 2-3 tests per week, spread across days, never two max-effort tests in one session). Title each component EXACTLY "Baseline: <test name>" (e.g., "Baseline: Back Squat") and use the standard prescription for that test.
 2. Prioritize the tests that satisfy the minimum, matched to the athlete's goals and equipment (skip swims/bikes they can't do; use DB versions at home). If the athlete has NOTHING to load - no barbell, dumbbells, kettlebell, or sandbag - use the bodyweight strength tests in place of the lift tests, and choose WOD benchmarks that work bodyweight-only (Cindy).
-3. Everything else in the baseline block stays easy (RPE 5-6) - prescribe by RPE, NEVER percentages of unknown maxes.
+3. Everything else in the baseline block stays easy (~50-60% effort) - prescribe by feel/% effort, NEVER as percentages of unknown lift maxes.
 4. Once the athlete logs the tests, use those results as the reference numbers for all future programming.\n`;
 }
