@@ -56,6 +56,7 @@ interface ProgramOutline {
   startDate: string;
   endDate: string;
   weeks: ProgramOutlineWeek[];
+  phases?: { name?: string; phase?: string; weeks?: string; goal?: string }[];
 }
 
 // Strip markdown code fences from an AI JSON response
@@ -631,6 +632,13 @@ If the user asks for programming spanning MORE than 14 days (e.g., "program ever
   "outline": {
     "startDate": "YYYY-MM-DD",
     "endDate": "YYYY-MM-DD",
+    "phases": [
+      {
+        "name": "Build",
+        "weeks": "1-3",
+        "goal": "One sentence on what this phase accomplishes for THIS athlete, tied to their data and goal (e.g., 'Establish baselines for the unlogged pressing lifts and build squat volume toward the Oct 3 comp')"
+      }
+    ],
     "weeks": [
       {
         "weekNumber": 1,
@@ -644,6 +652,7 @@ If the user asks for programming spanning MORE than 14 days (e.g., "program ever
 - startDate is the first training day (today unless they say otherwise); endDate is the final day of the plan (e.g., race day).
 - Include one entry per week covering the ENTIRE requested date range - never stop early.
 - Build proper phases around any events the user mentions (base -> build -> peak -> taper -> event -> recovery).
+- "phases" lists every phase in order with the week range it covers and a one-sentence goal specific to THIS athlete - it's the athlete's map of the whole block.
 - Restate the athlete's fixed weekly commitments (classes on specific days) and their rest days in EVERY week's details.
 Keep each week's details under 40 words - day-level detail comes later, week by week.\nThe app will then ask you to fill in a day-by-day plan TABLE (one detailed row per day) one week at a time.
 
@@ -1561,7 +1570,7 @@ READING THE ATHLETE:
 Respond to the athlete's latest message with valid JSON in EXACTLY ONE of these forms:
 1. Just answering a question / discussing: {"message": "..."} - this form changes NOTHING in the table. NEVER use it to say you updated/moved/changed anything: without patchRows, no change happens. ANY requested change REQUIRES form 2 or 3.
 2. Targeted plan changes: {"message": "summary of what you changed and why", "patchRows": [complete replacement rows for ONLY the days that change, using the full row schema: date, day, week, phase, session, runMiles, targetRPE, estMinutes, reason, and components (typed pieces: warmup/wod/lift/skill/run/swim/bike_mtb/bike_road/class/cooldown - pure aerobic work uses the specific cardio type, coached classes attended elsewhere are "class" - each with title and a complete description)]}
-3. The request changes the plan's fundamental structure (different weekly pattern, new/changed events, different phases): {"message": "...", "outline": {"startDate": "YYYY-MM-DD", "endDate": "YYYY-MM-DD", "weeks": [{"weekNumber": 1, "startDate": "YYYY-MM-DD", "focus": "...", "details": "..."}]}} - the app will rebuild the whole table from it.
+3. The request changes the plan's fundamental structure (different weekly pattern, new/changed events, different phases): {"message": "...", "outline": {"startDate": "YYYY-MM-DD", "endDate": "YYYY-MM-DD", "phases": [{"name": "Build", "weeks": "1-3", "goal": "one athlete-specific sentence"}], "weeks": [{"weekNumber": 1, "startDate": "YYYY-MM-DD", "focus": "...", "details": "..."}]}} - the app will rebuild the whole table from it.
 
 PATCH RULES:
 - patchRows contains ONLY changed days; every unchanged day stays out of it.
@@ -1806,6 +1815,9 @@ PATCH RULES:
 
     // Save the table as a draft plan (doc id = session id)
     const now = Timestamp.now();
+    const phaseGoals = (outline.phases || [])
+      .map(p => ({ phase: String(p.name || p.phase || "").trim(), weeks: String(p.weeks || "").trim(), goal: String(p.goal || "").trim() }))
+      .filter(p => p.phase && p.goal);
     const planDoc: Omit<TrainingPlan, "id"> = {
       userId,
       sessionId,
@@ -1814,6 +1826,7 @@ PATCH RULES:
       startDate: outline.startDate || allRows[0]?.date || "",
       endDate: outline.endDate || allRows[allRows.length - 1]?.date || "",
       rows: allRows,
+      ...(phaseGoals.length > 0 ? { phaseGoals } : {}),
       createdAt: plan?.createdAt || now,
       updatedAt: now,
     };
@@ -2952,6 +2965,40 @@ PATCH RULES:
             </div>
 
             <div className="flex-1 overflow-auto p-4">
+              {/* Phase map: what each stretch of the block is FOR. Falls back
+                  to phase names/week ranges derived from the rows when the
+                  plan predates stored phase goals. */}
+              {(() => {
+                const stored = plan.phaseGoals && plan.phaseGoals.length > 0 ? plan.phaseGoals : null;
+                const derived: { phase: string; weeks: string; goal: string }[] = [];
+                if (!stored) {
+                  plan.rows.forEach(r => {
+                    const last = derived[derived.length - 1];
+                    if (last && last.phase === r.phase) {
+                      const [a] = last.weeks.split("-");
+                      last.weeks = Number(a) === r.week ? last.weeks : `${a}-${r.week}`;
+                    } else if (r.phase) {
+                      derived.push({ phase: r.phase, weeks: String(r.week), goal: "" });
+                    }
+                  });
+                }
+                const phases = stored || derived;
+                if (phases.length < 2 && !stored) return null;
+                return (
+                  <div className="mb-4 bg-purple-50 border border-purple-100 rounded-lg p-3">
+                    <p className="text-xs font-semibold text-purple-700 uppercase tracking-wide mb-2">The plan, phase by phase</p>
+                    <div className="space-y-1.5">
+                      {phases.map((p, i) => (
+                        <p key={i} className="text-sm text-gray-700">
+                          <span className="font-semibold text-gray-900">{p.phase}</span>
+                          {p.weeks && <span className="text-gray-400"> (wk {p.weeks})</span>}
+                          {p.goal && <> — {p.goal}</>}
+                        </p>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
               <PlanTable rows={plan.rows} />
             </div>
 

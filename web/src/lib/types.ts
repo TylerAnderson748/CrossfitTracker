@@ -459,6 +459,8 @@ export interface TrainingPlan {
   startDate: string; // YYYY-MM-DD
   endDate: string;   // YYYY-MM-DD
   rows: PlanRow[];
+  // What each phase of the block is FOR ("Build: push squat volume so...")
+  phaseGoals?: { phase: string; weeks: string; goal: string }[];
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
