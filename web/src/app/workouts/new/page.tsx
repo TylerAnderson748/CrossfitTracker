@@ -129,7 +129,11 @@ function NewWorkoutContent() {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [manualMinutes, setManualMinutes] = useState("");
   const [manualSeconds, setManualSeconds] = useState("");
-  const [entryDate, setEntryDate] = useState(new Date().toISOString().split("T")[0]);
+  // Prefill from ?date= (e.g. logging a scheduled workout from the weekly
+  // calendar) so backdated logs land on the right day
+  const [entryDate, setEntryDate] = useState(
+    searchParams.get("date") || new Date().toISOString().split("T")[0]
+  );
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Timer type state - initialized based on scoring type

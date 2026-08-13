@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { collection, query, where, getDocs, updateDoc, doc, Timestamp, addDoc, deleteDoc, writeBatch } from "firebase/firestore";
+import { collection, query, where, getDocs, updateDoc, doc, Timestamp, addDoc, deleteDoc, writeBatch, limit } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
 import { workoutComponentLabels, workoutComponentColors, WorkoutComponent, WorkoutComponentType, WODScoringType, wodScoringTypeLabels, wodScoringTypeColors, PersonalWorkout, ClassLog, cardioActivityForComponent } from "@/lib/types";
@@ -33,6 +33,15 @@ function WeeklyPlanContent() {
   const [logSessionWorkout, setLogSessionWorkout] = useState<PersonalWorkout | null>(null);
   const [sessionEntries, setSessionEntries] = useState<Record<string, { weight: string; reps: string; isMax?: boolean }>>({});
   const [savingSession, setSavingSession] = useState(false);
+  // Logged-state lookups so buttons show "✓ Logged" instead of inviting duplicates
+  const [wodLogKeys, setWodLogKeys] = useState<Record<string, boolean>>({});
+  const [cardioLogKeys, setCardioLogKeys] = useState<Record<string, boolean>>({});
+  // Best estimated 1RM per lift (lowercased name), for auto % weight hints
+  const [liftMaxes, setLiftMaxes] = useState<Record<string, { max: number; name: string }>>({});
+  // Post-workout check-in modal
+  const [feedbackWorkout, setFeedbackWorkout] = useState<PersonalWorkout | null>(null);
+  const [feedbackNote, setFeedbackNote] = useState("");
+  const [savingFeedback, setSavingFeedback] = useState(false);
   const [showAddWorkoutModal, setShowAddWorkoutModal] = useState(false);
   const [newWorkoutDate, setNewWorkoutDate] = useState("");
   const [workoutComponents, setWorkoutComponents] = useState<WorkoutComponent[]>([]);
@@ -255,17 +264,53 @@ function WeeklyPlanContent() {
 
       setPersonalWorkouts(filteredWorkouts);
 
-      // Load class attendance logs so class cards can show "Attended"
-      const classSnap = await getDocs(query(
-        collection(db, "classLogs"),
-        where("userId", "==", user.id)
-      ));
+      // Load the athlete's logs so cards can show logged state (classes,
+      // WODs, cardio) and lift maxes for auto percentage-weight hints
+      const [classSnap, wodSnap, cardioSnap, liftSnap] = await Promise.all([
+        getDocs(query(collection(db, "classLogs"), where("userId", "==", user.id))),
+        getDocs(query(collection(db, "workoutLogs"), where("userId", "==", user.id))),
+        getDocs(query(collection(db, "cardioLogs"), where("userId", "==", user.id))),
+        getDocs(query(collection(db, "liftResults"), where("userId", "==", user.id), limit(300))),
+      ]);
       const keys: Record<string, string> = {};
       classSnap.docs.forEach(d => {
         const data = d.data() as ClassLog;
         if (data.dateString) keys[`${data.dateString}|${data.title || ""}`] = d.id;
       });
       setClassLogKeys(keys);
+
+      const wodKeys: Record<string, boolean> = {};
+      wodSnap.docs.forEach(d => {
+        const data = d.data();
+        const wd = data.workoutDate?.toDate?.() || data.completedDate?.toDate?.();
+        if (wd && data.wodTitle) {
+          wodKeys[`${formatDateLocal(wd)}|${String(data.wodTitle).toLowerCase().trim()}`] = true;
+        }
+      });
+      setWodLogKeys(wodKeys);
+
+      const cardioKeys: Record<string, boolean> = {};
+      cardioSnap.docs.forEach(d => {
+        const data = d.data();
+        const ds = data.dateString || (data.date?.toDate?.() ? formatDateLocal(data.date.toDate()) : "");
+        if (ds && data.activity) cardioKeys[`${ds}|${data.activity}`] = true;
+      });
+      setCardioLogKeys(cardioKeys);
+
+      // Best estimated 1RM per lift (Epley) - max attempts and working
+      // sets both raise the floor, so % hints stay close to reality
+      const maxes: Record<string, { max: number; name: string }> = {};
+      liftSnap.docs.forEach(d => {
+        const data = d.data();
+        const title = String(data.liftTitle || "").trim();
+        const weight = Number(data.weight) || 0;
+        const reps = Number(data.reps) || 1;
+        if (!title || weight <= 0) return;
+        const e1rm = Math.round(weight * (1 + reps / 30));
+        const key = title.toLowerCase();
+        if (!maxes[key] || e1rm > maxes[key].max) maxes[key] = { max: e1rm, name: title };
+      });
+      setLiftMaxes(maxes);
     } catch (error) {
       console.error("Error fetching personal workouts:", error);
     } finally {
@@ -309,6 +354,46 @@ function WeeklyPlanContent() {
       }
     } finally {
       setLoggingClassKey(null);
+    }
+  };
+
+  // Turn "@ 65%" in a lift prescription into a real weight using the
+  // athlete's best estimated 1RM for that lift (matched by name)
+  const percentWeightHint = (comp: WorkoutComponent): string | null => {
+    const text = `${comp.title} ${comp.description}`;
+    const m = text.match(/(\d{2,3}(?:\.\d)?)\s*%/);
+    if (!m) return null;
+    const pct = parseFloat(m[1]);
+    if (pct < 30 || pct > 120) return null;
+    const lower = text.toLowerCase();
+    let best: { max: number; name: string } | null = null;
+    let bestLen = 0;
+    for (const key of Object.keys(liftMaxes)) {
+      if (lower.includes(key) && key.length > bestLen) {
+        best = liftMaxes[key];
+        bestLen = key.length;
+      }
+    }
+    if (!best) return null;
+    const w = Math.round(((pct / 100) * best.max) / 5) * 5;
+    return `≈ ${w} lb (${pct}% of your ~${best.max} lb ${best.name} max)`;
+  };
+
+  // Save the post-workout check-in Oddo uses to tune future programming
+  const saveSessionFeedback = async (rating: "easy" | "right" | "hard") => {
+    if (!user || !feedbackWorkout) return;
+    setSavingFeedback(true);
+    try {
+      await updateDoc(doc(db, "personalWorkouts", feedbackWorkout.id), {
+        sessionFeedback: { rating, note: feedbackNote.trim() || null, at: Timestamp.now() },
+      });
+      setFeedbackWorkout(null);
+      await fetchPersonalWorkouts();
+    } catch (error) {
+      console.error("Error saving session feedback:", error);
+      alert("Couldn't save your feedback. Please try again.");
+    } finally {
+      setSavingFeedback(false);
     }
   };
 
@@ -384,6 +469,7 @@ function WeeklyPlanContent() {
           const ref = await addDoc(collection(db, "liftResults"), {
             userId: user.id,
             liftTitle: comp.title,
+            liftTitleLower: comp.title.trim().toLowerCase(),
             weight,
             reps,
             date: logDate,
@@ -399,12 +485,17 @@ function WeeklyPlanContent() {
       await updateDoc(doc(db, "personalWorkouts", logSessionWorkout.id), {
         sessionLog: saved > 0 ? { loggedAt: Timestamp.now(), entries: newEntries } : null,
       });
+      const justLogged = logSessionWorkout;
       setLogSessionWorkout(null);
       await fetchPersonalWorkouts();
       if (saved > 0) {
-        alert(isEdit
-          ? `Updated your log (${saved} lift${saved === 1 ? "" : "s"}).`
-          : `Logged ${saved} lift${saved === 1 ? "" : "s"}! Working sets go to your history and charts; max attempts count toward records.`);
+        if (isEdit) {
+          alert(`Updated your log (${saved} lift${saved === 1 ? "" : "s"}).`);
+        } else {
+          // First log of the day: ask how it felt so Oddo can adjust
+          setFeedbackNote("");
+          setFeedbackWorkout(justLogged);
+        }
       }
     } catch (error) {
       console.error("Error logging session:", error);
@@ -742,16 +833,22 @@ function WeeklyPlanContent() {
                                   }
                                   if (wodComponent) {
                                     const scoringType = wodComponent.scoringType || "fortime";
+                                    const wodLogged = !!wodLogKeys[`${cardDateString}|${wodComponent.title.toLowerCase().trim()}`];
                                     buttons.push(
                                       <Link
                                         key="wod"
-                                        href={`/workouts/new?name=${encodeURIComponent(wodComponent.title)}&description=${encodeURIComponent(wodComponent.description || "")}&scoringType=${scoringType}`}
-                                        className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1"
+                                        href={`/workouts/new?name=${encodeURIComponent(wodComponent.title)}&description=${encodeURIComponent(wodComponent.description || "")}&scoringType=${scoringType}&date=${cardDateString}`}
+                                        className={`px-2 py-1 text-xs font-semibold rounded-lg transition-colors flex items-center gap-1 ${
+                                          wodLogged
+                                            ? "bg-green-100 text-green-700 hover:bg-green-200"
+                                            : "bg-green-600 hover:bg-green-700 text-white"
+                                        }`}
+                                        title={wodLogged ? "Already logged for this day - open to view or edit" : "Log your score"}
                                       >
                                         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                                         </svg>
-                                        Log
+                                        {wodLogged ? "✓ Logged" : "Log"}
                                       </Link>
                                     );
                                   }
@@ -776,16 +873,22 @@ function WeeklyPlanContent() {
                                     );
                                   }
                                   if (cardioComponent && cardioComponent.activity) {
+                                    const cardioLogged = !!cardioLogKeys[`${cardDateString}|${cardioComponent.activity}`];
                                     buttons.push(
                                       <Link
                                         key="cardio"
                                         href={`/workouts/cardio?activity=${cardioComponent.activity}&date=${cardDateString}&name=${encodeURIComponent(cardioComponent.c.title)}`}
-                                        className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1"
+                                        className={`px-2 py-1 text-xs font-semibold rounded-lg transition-colors flex items-center gap-1 ${
+                                          cardioLogged
+                                            ? "bg-green-100 text-green-700 hover:bg-green-200"
+                                            : "bg-red-600 hover:bg-red-700 text-white"
+                                        }`}
+                                        title={cardioLogged ? "Already logged for this day - open to view or edit" : "Log this cardio session"}
                                       >
                                         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                                         </svg>
-                                        Log Cardio
+                                        {cardioLogged ? "✓ Logged" : "Log Cardio"}
                                       </Link>
                                     );
                                   }
@@ -836,6 +939,12 @@ function WeeklyPlanContent() {
                                   {comp.description && (
                                     <p className="text-gray-700 text-xs whitespace-pre-wrap mt-1 ml-1">{comp.description}</p>
                                   )}
+                                  {(comp.type === "lift" || comp.type === "wod") && (() => {
+                                    const hint = percentWeightHint(comp);
+                                    return hint ? (
+                                      <p className="text-purple-600 text-xs font-medium mt-1 ml-1">{hint}</p>
+                                    ) : null;
+                                  })()}
                                   {comp.notes && (
                                     <div className="mt-2 ml-1 p-2 bg-amber-50 rounded border-l-2 border-amber-300">
                                       <p className="text-amber-800 text-xs whitespace-pre-line">{comp.notes}</p>
@@ -946,6 +1055,49 @@ function WeeklyPlanContent() {
                 {savingSession ? "Saving..." : logSessionWorkout.sessionLog ? "Update Log" : "Save Lifts"}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Post-workout check-in: one tap of feedback for Oddo */}
+      {feedbackWorkout && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl p-6 w-full max-w-md">
+            <h2 className="text-xl font-bold text-gray-900 mb-1">Lifts logged! 💪</h2>
+            <p className="text-sm text-gray-500 mb-4">
+              One more thing for Coach Oddo - how did the session feel?
+            </p>
+            <div className="grid grid-cols-3 gap-2 mb-3">
+              {([
+                ["easy", "😴", "Too Easy"],
+                ["right", "👌", "Just Right"],
+                ["hard", "🥵", "Crushed Me"],
+              ] as const).map(([rating, emoji, label]) => (
+                <button
+                  key={rating}
+                  onClick={() => saveSessionFeedback(rating)}
+                  disabled={savingFeedback}
+                  className="py-3 border border-gray-200 rounded-lg hover:bg-purple-50 hover:border-purple-300 transition-colors flex flex-col items-center gap-1 disabled:opacity-50"
+                >
+                  <span className="text-2xl">{emoji}</span>
+                  <span className="text-xs font-medium text-gray-700">{label}</span>
+                </button>
+              ))}
+            </div>
+            <input
+              type="text"
+              value={feedbackNote}
+              onChange={(e) => setFeedbackNote(e.target.value)}
+              placeholder="Optional note (e.g. wrist was cranky on snatches)"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 mb-3 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+            />
+            <button
+              onClick={() => setFeedbackWorkout(null)}
+              disabled={savingFeedback}
+              className="w-full py-2 text-sm text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              Skip
+            </button>
           </div>
         </div>
       )}

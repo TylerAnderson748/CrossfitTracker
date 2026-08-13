@@ -208,6 +208,13 @@ export interface PersonalWorkout {
   aiSessionId?: string;
   // Set once the athlete logs their lifts for this day
   sessionLog?: SessionLiftLog;
+  // Post-workout check-in ("how did it feel?") - Oddo uses this to tune
+  // future programming and advice
+  sessionFeedback?: {
+    rating: "easy" | "right" | "hard";
+    note?: string | null;
+    at: Timestamp;
+  };
 }
 
 export interface WorkoutLog {

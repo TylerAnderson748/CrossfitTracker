@@ -11,7 +11,7 @@ const FIREBASE_API_KEY = "AIzaSyAl9Dn4Q_Aj7FULt2cGKeaOOH7oQ5AjI8w";
 
 const ALLOWED_MODELS = new Set([FAST_MODEL, FALLBACK_MODEL, REVISION_MODEL]);
 
-async function verifyFirebaseToken(idToken: string): Promise<boolean> {
+async function verifyFirebaseToken(idToken: string): Promise<string | null> {
   try {
     const res = await fetch(
       `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${FIREBASE_API_KEY}`,
@@ -21,12 +21,47 @@ async function verifyFirebaseToken(idToken: string): Promise<boolean> {
         body: JSON.stringify({ idToken }),
       }
     );
-    if (!res.ok) return false;
+    if (!res.ok) return null;
     const data = await res.json();
-    return Array.isArray(data.users) && data.users.length > 0;
+    const uid = Array.isArray(data.users) && data.users.length > 0 ? data.users[0]?.localId : null;
+    return typeof uid === "string" && uid ? uid : null;
   } catch {
-    return false;
+    return null;
   }
+}
+
+// Per-user rate limiting so a stuck retry loop (or an enthusiastic user)
+// can't run up the xAI bill. In-memory per serverless instance, so the
+// caps are approximate across instances/cold starts - but bursts and
+// runaway loops all hammer one warm instance, which this stops.
+const RATE_WINDOW_MS = 60_000;
+const RATE_WINDOW_MAX = 20;   // requests per minute
+const RATE_DAY_MAX = 400;     // requests per UTC day (per instance)
+const usageByUser = new Map<string, { times: number[]; day: string; dayCount: number }>();
+
+function checkRateLimit(uid: string): string | null {
+  const now = Date.now();
+  const today = new Date().toISOString().slice(0, 10);
+  let u = usageByUser.get(uid);
+  if (!u || u.day !== today) {
+    u = { times: [], day: today, dayCount: 0 };
+    usageByUser.set(uid, u);
+  }
+  u.times = u.times.filter((t) => now - t < RATE_WINDOW_MS);
+  if (u.times.length >= RATE_WINDOW_MAX) {
+    return "Oddo needs a breather - too many requests at once. Try again in a minute.";
+  }
+  if (u.dayCount >= RATE_DAY_MAX) {
+    return "You've hit today's AI limit. Oddo will be ready again tomorrow.";
+  }
+  u.times.push(now);
+  u.dayCount++;
+  // Keep the map from growing unbounded
+  if (usageByUser.size > 5000) {
+    const oldest = usageByUser.keys().next().value;
+    if (oldest) usageByUser.delete(oldest);
+  }
+  return null;
 }
 
 export async function POST(req: NextRequest) {
@@ -38,8 +73,14 @@ export async function POST(req: NextRequest) {
   }
 
   const idToken = (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
-  if (!idToken || !(await verifyFirebaseToken(idToken))) {
+  const uid = idToken ? await verifyFirebaseToken(idToken) : null;
+  if (!uid) {
     return Response.json({ error: "Unauthorized - please sign in again" }, { status: 401 });
+  }
+
+  const rateLimitMessage = checkRateLimit(uid);
+  if (rateLimitMessage) {
+    return Response.json({ error: rateLimitMessage }, { status: 429 });
   }
 
   const body = await req.json().catch(() => null);

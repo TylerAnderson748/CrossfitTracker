@@ -119,10 +119,14 @@ export default function ProgressPage() {
         limit(500)
       );
       const liftSnapshot = await getDocs(liftQuery);
-      const liftData = liftSnapshot.docs.map(doc => ({
+      // Working sets are programmed submaximal training, not PRs - exclude
+      // them so progress scores/maxes reflect tested strength only
+      // (legacy entries without setType count as max attempts)
+      const liftData = (liftSnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
-      })) as LiftRecord[];
+      })) as (LiftRecord & { setType?: string })[])
+        .filter(l => (l.setType || "max") !== "working");
       // Sort by date descending in JavaScript
       liftData.sort((a, b) => (b.date?.toMillis() || 0) - (a.date?.toMillis() || 0));
       setLifts(liftData);

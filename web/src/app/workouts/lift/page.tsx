@@ -26,6 +26,9 @@ interface LiftResult {
   // "working" = programmed submaximal sets (history/charts only).
   // Missing on legacy entries - treated as "max".
   setType?: "max" | "working";
+  // Normalized name so the leaderboard can query server-side; missing on
+  // legacy entries (lazily backfilled for the viewer's own docs)
+  liftTitleLower?: string;
 }
 
 function LiftPageContent() {
@@ -104,6 +107,15 @@ function LiftPageContent() {
       // Store every entry for this lift; the Records / Working Sets tabs
       // and the rep picker derive their own views from it
       setLiftEntries(forLift.slice(0, 200));
+
+      // Lazy backfill: entries that predate liftTitleLower can't be found
+      // by the server-side leaderboard query - patch the viewer's own docs
+      forLift
+        .filter((r) => !r.liftTitleLower)
+        .slice(0, 25)
+        .forEach((r) => {
+          updateDoc(doc(db, "liftResults", r.id), { liftTitleLower: liftNameLower }).catch(() => {});
+        });
     } catch (err) {
       console.error("Error loading history:", err);
     }
@@ -118,9 +130,13 @@ function LiftPageContent() {
       const liftNameLower = liftName.toLowerCase().trim();
       const isPresetLift = allLifts.some(l => l.name.toLowerCase().trim() === liftNameLower);
 
-      // Fetch all lift results and filter client-side for case-insensitive matching
+      // Server-side query on the normalized name - fetches only this lift's
+      // entries instead of pulling everyone's results into the browser.
+      // (Legacy docs without liftTitleLower appear once their owner opens
+      // this lift page, which lazily backfills the field.)
       const q = query(
         collection(db, "liftResults"),
+        where("liftTitleLower", "==", liftNameLower),
         limit(500)
       );
       const snapshot = await getDocs(q);
@@ -128,9 +144,6 @@ function LiftPageContent() {
         id: doc.id,
         ...doc.data(),
       })) as LiftResult[];
-
-      // Case-insensitive match for lift name (iOS uses liftTitle field)
-      results = results.filter((r) => r.liftTitle?.toLowerCase().trim() === liftNameLower);
 
       // For custom (non-preset) lifts, only show current user's entries
       if (!isPresetLift && user) {
@@ -201,6 +214,7 @@ function LiftPageContent() {
         userId: user.id,
         userName: user.displayName || `${user.firstName} ${user.lastName}`,
         liftTitle: liftName.trim(),  // iOS app uses liftTitle
+        liftTitleLower: liftName.trim().toLowerCase(),
         weight: parseFloat(weight),
         reps: selectedReps,
         date: workoutDate,
@@ -350,9 +364,22 @@ function LiftPageContent() {
     return date && date >= timeRangeStart;
   });
   const chartData = filteredHistory.slice(0, 50).reverse();
+
+  // Estimated-1RM trend (Epley) across ALL sets - any rep count, max and
+  // working alike - so strength progress shows between true max tests
+  const e1rmSeries = liftEntries
+    .filter((h) => {
+      const d = h.date?.toDate?.();
+      return d && d >= timeRangeStart;
+    })
+    .map((h) => ({ date: h.date!.toDate(), e1rm: Math.round(h.weight * (1 + h.reps / 30)) }))
+    .sort((a, b) => a.date.getTime() - b.date.getTime())
+    .slice(-50);
+
   const weights = chartData.map((h) => h.weight);
-  const dataMax = weights.length > 0 ? Math.max(...weights) : 100;
-  const dataMin = weights.length > 0 ? Math.min(...weights) : 0;
+  const scaleValues = [...weights, ...e1rmSeries.map((p) => p.e1rm)];
+  const dataMax = scaleValues.length > 0 ? Math.max(...scaleValues) : 100;
+  const dataMin = scaleValues.length > 0 ? Math.min(...scaleValues) : 0;
 
   // Calculate tick interval to fit data in ~5-6 ticks with padding
   const dataRange = dataMax - dataMin || 50;
@@ -725,6 +752,24 @@ function LiftPageContent() {
                         }))}
                       />
                     ) : null}
+                    {/* Estimated-1RM trend across all sets (dashed) */}
+                    {e1rmSeries.length > 1 && (
+                      <path
+                        fill="none"
+                        stroke="#F59E0B"
+                        strokeWidth="1.5"
+                        strokeDasharray="6 4"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        vectorEffect="non-scaling-stroke"
+                        d={getLinePath(e1rmSeries.map((p) => {
+                          const xPct = (p.date.getTime() - timeRangeStart.getTime()) / timeRangeMs;
+                          const x = 5 + xPct * 340;
+                          const y = range > 0 ? 4 + (1 - (p.e1rm - chartMin) / range) * 152 : 80;
+                          return { x, y };
+                        }))}
+                      />
+                    )}
                     {/* Data points */}
                     {chartData.map((d, i) => {
                       const date = d.date?.toDate?.() || new Date();
@@ -744,6 +789,18 @@ function LiftPageContent() {
                   ))}
                 </div>
               </div>
+              {e1rmSeries.length > 1 && (
+                <div className="flex items-center gap-4 mt-2 text-xs text-gray-400">
+                  <span className="flex items-center gap-1">
+                    <span className={`w-2.5 h-2.5 rounded-full inline-block ${viewMode === "working" ? "bg-purple-400" : "bg-purple-600"}`} />
+                    {selectedReps}-rep {viewMode === "working" ? "working sets" : "maxes"}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="w-4 border-t-2 border-dashed border-amber-500 inline-block" />
+                    Est. 1RM trend (all sets)
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         )}

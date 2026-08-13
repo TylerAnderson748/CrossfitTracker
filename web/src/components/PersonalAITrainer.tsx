@@ -40,23 +40,53 @@ interface PersonalWorkout {
   notes?: string;
 }
 
+interface SessionFeedbackEntry {
+  dateString: string;
+  titles: string;
+  rating: "easy" | "right" | "hard";
+  note?: string;
+}
+
+const feedbackRatingLabels: Record<"easy" | "right" | "hard", string> = {
+  easy: "too easy",
+  right: "about right",
+  hard: "very hard",
+};
+
 interface PersonalAITrainerProps {
   userId: string;
   todayPersonalWorkouts?: PersonalWorkout[];
   userPreferences?: AICoachPreferences;
 }
 
-// Generate a unique ID for storing advice
-function getAdviceDocId(userId: string, personalWorkoutIds?: string[]): string {
+// Generate a unique ID for storing advice. Includes a hash of the day's
+// component CONTENT (not just workout ids) so advice regenerates when the
+// programming changes - e.g. after scanning the class whiteboard.
+function hashString(s: string): string {
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) {
+    h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+  }
+  return Math.abs(h).toString(36);
+}
+
+function getAdviceDocId(userId: string, workouts?: PersonalWorkout[]): string {
   const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-  const workoutPart = personalWorkoutIds?.join('_') || 'personal';
-  return `${userId}_${today}_${workoutPart}`;
+  const idPart = workouts?.map(pw => pw.id).join('_') || 'personal';
+  const contentPart = hashString(
+    (workouts || [])
+      .flatMap(pw => pw.components || [])
+      .map(c => `${c.type}|${c.title}|${c.description}|${c.notes || ''}`)
+      .join('~')
+  );
+  return `${userId}_${today}_${idPart}_${contentPart}`;
 }
 
 export default function PersonalAITrainer({ userId, todayPersonalWorkouts, userPreferences }: PersonalAITrainerProps) {
   // Check if there's any workout to analyze
   const hasWorkoutToAnalyze = todayPersonalWorkouts && todayPersonalWorkouts.length > 0;
   const [userHistory, setUserHistory] = useState<UserWorkoutHistory>({ lifts: [], wods: [] });
+  const [sessionFeedbacks, setSessionFeedbacks] = useState<SessionFeedbackEntry[]>([]);
   const [baselineData, setBaselineData] = useState<{ skillNames: string[]; cardioLogs: { activity: string; miles?: number }[]; trainingStyle: string } | null>(null);
   const [aiAdvice, setAiAdvice] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -74,8 +104,7 @@ export default function PersonalAITrainer({ userId, todayPersonalWorkouts, userP
       }
 
       try {
-        const personalWorkoutIds = todayPersonalWorkouts?.map(pw => pw.id);
-        const adviceDocId = getAdviceDocId(userId, personalWorkoutIds);
+        const adviceDocId = getAdviceDocId(userId, todayPersonalWorkouts);
         const adviceDoc = await getDoc(doc(db, "aiCoachAdvice", adviceDocId));
 
         if (adviceDoc.exists()) {
@@ -139,12 +168,26 @@ export default function PersonalAITrainer({ userId, todayPersonalWorkouts, userP
         setUserHistory({ lifts, wods });
 
         // Baseline-battery data (skills, cardio, training style) so the
-        // unlock gate matches Oddo's standard baseline minimum
-        const [skillSnap, cardioSnap, prefsSnap] = await Promise.all([
+        // unlock gate matches Oddo's standard baseline minimum, plus recent
+        // post-workout check-ins so advice reflects how training has felt
+        const [skillSnap, cardioSnap, prefsSnap, pwSnap] = await Promise.all([
           getDocs(query(collection(db, "skillResults"), where("userId", "==", userId), limit(150))),
           getDocs(query(collection(db, "cardioLogs"), where("userId", "==", userId), limit(150))),
           getDocs(query(collection(db, "aiProgrammingPreferences"), where("userId", "==", userId))),
+          getDocs(query(collection(db, "personalWorkouts"), where("userId", "==", userId), limit(150))),
         ]);
+        const feedbacks: SessionFeedbackEntry[] = pwSnap.docs
+          .map(d => d.data())
+          .filter(d => d.sessionFeedback?.rating)
+          .sort((a, b) => String(b.dateString || "").localeCompare(String(a.dateString || "")))
+          .slice(0, 5)
+          .map(d => ({
+            dateString: String(d.dateString || ""),
+            titles: ((d.components || []) as WorkoutComponent[]).map(c => c.title).filter(Boolean).slice(0, 3).join(", "),
+            rating: d.sessionFeedback.rating,
+            note: d.sessionFeedback.note || undefined,
+          }));
+        setSessionFeedbacks(feedbacks);
         setBaselineData({
           skillNames: Array.from(new Set(skillSnap.docs.map(d => String(d.data().skillTitle || d.data().skillName || "")).filter(Boolean))),
           cardioLogs: cardioSnap.docs.map(d => ({ activity: String(d.data().activity || ""), miles: Number(d.data().miles) || 0 })),
@@ -253,6 +296,12 @@ export default function PersonalAITrainer({ userId, todayPersonalWorkouts, userP
         }
       }
 
+      if (sessionFeedbacks.length > 0) {
+        historySummary += "\n\nHOW RECENT SESSIONS FELT (athlete's post-workout check-ins - adjust intensity accordingly):\n" + sessionFeedbacks
+          .map(f => `- ${f.dateString} (${f.titles || "session"}): felt ${feedbackRatingLabels[f.rating]}${f.note ? ` - "${f.note}"` : ""}`)
+          .join("\n");
+      }
+
       // Build user preferences/goals section
       let userGoalsInfo = "";
       if (userPreferences) {
@@ -331,7 +380,7 @@ Respond in a confident, direct coach tone. This advice will be saved and shown e
       // Save the advice to Firestore so it persists
       try {
         const personalWorkoutIds = todayPersonalWorkouts?.map(pw => pw.id);
-        const adviceDocId = getAdviceDocId(userId, personalWorkoutIds);
+        const adviceDocId = getAdviceDocId(userId, todayPersonalWorkouts);
 
         await setDoc(doc(db, "aiCoachAdvice", adviceDocId), {
           userId,
