@@ -554,6 +554,8 @@ Guidelines:
 - FATIGUE MANAGEMENT: wave the intensity deliberately. Never stack more than 2 hard days in a row - follow them with an easy day, skill day, or rest, and add an extra rest day after an especially demanding stretch rather than forcing volume. Across weeks, alternate harder and easier weeks within a block and make every 3rd-4th week a genuine deload (volume AND intensity down 30-40%, named as such in the phase). If recent check-ins say sessions felt "very hard", pull the next week's intensity down; if "too easy", nudge it up.
 - REST PLACEMENT is anchored to the week's biggest sessions: rest or easy movement goes immediately before AND after the long run / heaviest day whenever the fixed class schedule allows - never a hard metcon or heavy lifting adjacent to a 8+ mile run. A rest day's reason must describe its ACTUAL neighbors: never claim it protects a session when a hard day sits in between - if fixed classes force that layout, say so honestly (e.g., "Thursday is the last open day to rest before Sunday's 17-miler since Saturday's class is fixed").
 - Blocks of 6+ weeks: re-test 1-2 of the athlete's baselines most relevant to the block's goal in the final or penultimate week (never race week) so progress is measured, not assumed.
+- THIN DATA = NO FAKE PRECISION: prescribe %-of-1RM ONLY for lifts with solid logged data. For lifts marked [ROUGH] or with no data at all, NEVER invent derived rep-maxes or precise adjustments ("~11RM", "8-9% intensity increase") - prescribe by feel ("build to a hard but crisp set of 5 - log it, that becomes your baseline") and make the block's FIRST week establish those baselines explicitly, with later weeks anchored to what gets logged.
+- UNKNOWNS: if a movement is central to this plan and you have no data for it, either ask the athlete for a rough number in your ONE clarifying message before generating, or schedule its baseline in week 1 and say so in that day's reason.
 - If the athlete is training for a running race: 3-4 run days per week (one long run + easy midweek runs). The long run is its OWN session on its own day - never stacked after a class or metcon
 - If the athlete asks for a multi-week program but their weekly availability, goals, or schedule are unknown, ask for those essentials in ONE concise message BEFORE generating - do not guess a schedule for someone you know nothing about
 - Scale difficulty based on the athlete's level
@@ -698,11 +700,13 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
         // Lift PRs (best weight per lift + rep count)
         const liftSnap = await getDocs(query(collection(db, "liftResults"), where("userId", "==", userId), limit(150)));
         const bests = new Map<string, number>();
+        const countByLift = new Map<string, number>();
         liftSnap.docs.forEach(d => {
           const x = d.data();
           if (x.liftTitle && x.weight) {
             const k = `${x.liftTitle}|${x.reps || 1}`;
             if ((bests.get(k) || 0) < x.weight) bests.set(k, x.weight);
+            countByLift.set(x.liftTitle, (countByLift.get(x.liftTitle) || 0) + 1);
           }
         });
         if (bests.size > 0) {
@@ -711,9 +715,10 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
             .slice(0, 20)
             .map(([k, w]) => {
               const [title, reps] = k.split("|");
-              return `- ${title}: ${w}lb (${reps}RM)`;
+              const n = countByLift.get(title) || 0;
+              return `- ${title}: ${w}lb (${reps}RM)${n < 3 ? ` [ROUGH - only ${n} logged ${n === 1 ? "entry" : "entries"}]` : ""}`;
             });
-          parts.push(`LIFT PRs - use these to prescribe REAL weights for percentage work (e.g., "165lb - that's 70% of your 235lb 1RM"):\n${lines.join("\n")}\nCAUTION: barbell PRs were likely set at the athlete's gym/class. They do NOT mean the athlete has a barbell at home - the equipment list decides what can be programmed on home days.`);
+          parts.push(`LIFT PRs - use these to prescribe REAL weights for percentage work (e.g., "165lb - that's 70% of your 235lb 1RM"):\n${lines.join("\n")}\nLifts marked [ROUGH] have too little data for precise math - never derive rep-maxes or percentages from them.\nCAUTION: barbell PRs were likely set at the athlete's gym/class. They do NOT mean the athlete has a barbell at home - the equipment list decides what can be programmed on home days.`);
         }
 
         // Recent WOD results
@@ -1245,14 +1250,15 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
     }
   };
 
-  const sendMessage = async () => {
-    if (!input.trim() || !activeSession || isLoading) return;
+  const sendMessage = async (overrideText?: string) => {
+    const messageText = (overrideText ?? input).trim();
+    if (!messageText || !activeSession || isLoading) return;
     if (!requireProfile()) return;
 
     const userMessage: AIChatMessage = {
       id: `msg-${Date.now()}`,
       role: "user",
-      content: input.trim(),
+      content: messageText,
       timestamp: Timestamp.now(),
     };
 
@@ -1518,6 +1524,7 @@ RULES:
 - Component typing is strict: "lift" is ONLY dedicated strength work on a single named lift (sets x reps @ load, e.g. "Back Squat 5x5 @ 75%"). ANY multi-movement circuit, rounds-based piece, EMOM, or AMRAP is a "wod" - even when strength-biased and even on short time-capped days (a 4-round DB/sandbag circuit is a wod, not a lift). "wod" says nothing about session length - a 15-minute piece is still a wod.
 - "reason" (1-2 sentences): WHY this day is programmed this way given the phase, the surrounding days, and the athlete's goals. Every non-rest day gets one. The reason speaks to the ATHLETE about training intent - NEVER write rule bookkeeping ("to maintain exactly 2 rest days", "to satisfy the weekly cap") as a reason.
 - COACH THE PERSON, not the textbook: this plan is for ONE specific athlete whose data is above. Every week, several reasons and prescriptions must reference THEIR actual specifics - their PR numbers, their recent check-ins ("last week's squats felt very hard, so..."), their injuries, their goal race date, their class schedule. A reason that could appear in anyone's plan ("builds aerobic base", "maintains lifting skill") is filler - replace it with what this day does for THIS athlete right now.
+- THIN DATA = NO FAKE PRECISION: %-of-1RM prescriptions ONLY for lifts with solid logged data. For lifts marked [ROUGH] or unlogged, never invent derived rep-maxes or fabricated adjustments - prescribe by feel ("build to a hard but crisp set of 5 - log it, that becomes your baseline"), establish the baseline early in the block, and anchor later weeks to what the athlete actually logs.
 - Rest days: session "Rest", components [] (or one light "cooldown" mobility component), runMiles 0. The reason states the RECOVERY PURPOSE in the context of the surrounding days (e.g., "Absorbs Sunday's long run so Tuesday's Oly class is quality lifting, not junk volume"). NEVER cite the rest-day rule, quota, settings, or "requirement" as the reason - the athlete wants to know what the rest accomplishes, not that a rule was followed.
 - Event days (competition, race): session in CAPS (e.g., "MARATHON", "CROSSFIT COMPETITION") with one component of race-day execution guidance.
 - "session" is a short 2-4 word label summarizing the day. "phase" is a consistent short label across the plan (e.g., "Base", "Build", "Comp Taper", "Marathon Taper", "Recovery").
@@ -2733,6 +2740,17 @@ PATCH RULES:
 
           {/* Input Area */}
           <div className="p-4 border-t border-gray-200 bg-white">
+            {/* Phase check-in: once a plan is locked, review actual results
+                and adjust the weeks ahead instead of trusting the original
+                guesses for the whole block */}
+            {plan && plan.status === "locked" && !isLoading && (
+              <button
+                onClick={() => sendMessage("Review my completed training so far: compare what I actually logged (weights, times, check-ins) against what was programmed. Then adjust the UPCOMING weeks only - keep what's working, fix loads that were off, re-anchor any percentages to my newly logged numbers, and replace any guessed baselines with my real ones. Tell me what you changed and why.")}
+                className="w-full mb-3 py-2.5 bg-purple-50 text-purple-700 text-sm font-semibold rounded-lg hover:bg-purple-100 transition-colors"
+              >
+                📊 Check my progress & adjust the upcoming weeks
+              </button>
+            )}
             <div className="flex gap-3">
               <input
                 type="text"
@@ -2744,7 +2762,7 @@ PATCH RULES:
                 className="flex-1 px-4 py-3 border border-gray-300 rounded-lg text-gray-900 bg-white focus:ring-2 focus:ring-purple-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
               />
               <button
-                onClick={sendMessage}
+                onClick={() => sendMessage()}
                 disabled={!input.trim() || isLoading || activeSession.status === "published"}
                 className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
