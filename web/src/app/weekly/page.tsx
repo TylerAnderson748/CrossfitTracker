@@ -6,7 +6,7 @@ import Link from "next/link";
 import { collection, query, where, getDocs, updateDoc, doc, Timestamp, addDoc, deleteDoc, writeBatch, limit } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
-import { workoutComponentLabels, workoutComponentColors, WorkoutComponent, WorkoutComponentType, WODScoringType, wodScoringTypeLabels, wodScoringTypeColors, PersonalWorkout, ClassLog, cardioActivityForComponent } from "@/lib/types";
+import { workoutComponentLabels, workoutComponentColors, WorkoutComponent, WorkoutComponentType, WODScoringType, wodScoringTypeLabels, wodScoringTypeColors, PersonalWorkout, ClassLog, cardioActivityForComponent, inferScoringType } from "@/lib/types";
 import { getAllWods, getAllLifts } from "@/lib/workoutData";
 import Navigation from "@/components/Navigation";
 import PersonalAITrainer from "@/components/PersonalAITrainer";
@@ -832,7 +832,10 @@ function WeeklyPlanContent() {
                                     }
                                   }
                                   if (wodComponent) {
-                                    const scoringType = wodComponent.scoringType || "fortime";
+                                    // Infer from the text when the component (e.g. from an AI
+                                    // plan) didn't set one, so AMRAPs log rounds not time
+                                    const scoringType = wodComponent.scoringType
+                                      || inferScoringType(`${wodComponent.title} ${wodComponent.description || ""}`);
                                     const wodLogged = !!wodLogKeys[`${cardDateString}|${wodComponent.title.toLowerCase().trim()}`];
                                     buttons.push(
                                       <Link

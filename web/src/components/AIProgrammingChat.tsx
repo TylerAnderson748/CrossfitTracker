@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { collection, addDoc, updateDoc, doc, query, where, getDocs, getDoc, setDoc, limit, Timestamp, serverTimestamp, deleteDoc, writeBatch } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { AIProgrammingSession, AIChatMessage, AIGeneratedDay, AIProgrammingPreferences, AITrainerSubscription, TrainingEvent, TrainingEventType, WeekdayKey, AICoachPreferences, PlanRow, PlanRowComponent, TrainingPlan, workoutComponentColors, workoutComponentLabels, cardioActivityForComponent, hasAIProgramming, PRICING } from "@/lib/types";
+import { AIProgrammingSession, AIChatMessage, AIGeneratedDay, AIProgrammingPreferences, AITrainerSubscription, TrainingEvent, TrainingEventType, WeekdayKey, AICoachPreferences, PlanRow, PlanRowComponent, TrainingPlan, workoutComponentColors, workoutComponentLabels, cardioActivityForComponent, hasAIProgramming, inferScoringType, PRICING } from "@/lib/types";
 import { getAllSkills, getAllLifts, getAllWods } from "@/lib/workoutData";
 import { chatCompletion, REVISION_MODEL } from "@/lib/ai";
 import { computeBaselineStatus, buildBaselinePromptBlock, buildBaselineWeek, BaselineStatusInput, BaselineCategory } from "@/lib/baselines";
@@ -551,6 +551,7 @@ Guidelines:
 - Include proper warm-ups and skill work
 - Program appropriate rest days (typically 2 per week)
 - Time budgets are CAPS, not targets - do not fill every available minute; distribute load across the week and never schedule two maximal days back-to-back
+- FATIGUE MANAGEMENT: wave the intensity deliberately. Never stack more than 2 hard days in a row - follow them with an easy day, skill day, or rest, and add an extra rest day after an especially demanding stretch rather than forcing volume. Across weeks, alternate harder and easier weeks within a block and make every 3rd-4th week a genuine deload (volume AND intensity down 30-40%, named as such in the phase). If recent check-ins say sessions felt "very hard", pull the next week's intensity down; if "too easy", nudge it up.
 - If the athlete is training for a running race: 3-4 run days per week (one long run + easy midweek runs). The long run is its OWN session on its own day - never stacked after a class or metcon
 - If the athlete asks for a multi-week program but their weekly availability, goals, or schedule are unknown, ask for those essentials in ONE concise message BEFORE generating - do not guess a schedule for someone you know nothing about
 - Scale difficulty based on the athlete's level
@@ -765,6 +766,19 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
             return `- ${ds}: ${titles || "workout"}${x.aiSessionId ? " (AI plan)" : ""}`;
           });
           parts.push(`WORKOUTS ALREADY ON THE ATHLETE'S CALENDAR - account for these when planning; publishing a new AI plan REPLACES AI-planned workouts on the same dates, but manually-added workouts stay:\n${lines.join("\n")}`);
+        }
+
+        // Recent post-workout check-ins - the strongest signal for
+        // calibrating how hard the programming should actually be
+        const ratingText: Record<string, string> = { easy: "too easy", right: "about right", hard: "very hard" };
+        const checkIns = pwSnap.docs.map(d => d.data())
+          .filter(x => x.sessionFeedback?.rating)
+          .sort((a, b) => String(b.dateString || "").localeCompare(String(a.dateString || "")))
+          .slice(0, 6);
+        if (checkIns.length > 0) {
+          parts.push(`RECENT POST-WORKOUT CHECK-INS (how programmed sessions actually FELT - calibrate intensity to these; repeated "very hard" means ease up, repeated "too easy" means push harder):\n${checkIns
+            .map(x => `- ${x.dateString || "recent"}: felt ${ratingText[x.sessionFeedback.rating] || x.sessionFeedback.rating}${x.sessionFeedback.note ? ` - "${x.sessionFeedback.note}"` : ""}`)
+            .join("\n")}`);
         }
 
         setAthleteContext(parts.length > 0 ? `\nATHLETE DATA (from their training log):\n\n${parts.join("\n\n")}\n` : "");
@@ -1508,6 +1522,7 @@ RULES:
 - Class days: ONE "class" component naming the class and saying to follow the coach's programming. NEVER guess the class content - no movement suggestions or "focus on X" notes (the class coach programs it). Add effort-level guidance ONLY when the plan needs it (taper/deload week).
 - runMiles = total planned run miles that day (0 if none). targetRPE like "3-7". estMinutes = total session time including warmup.
 - Time budgets are CAPS, not targets: do NOT fill every available minute. Distribute training load across the whole week - never schedule two maximal days back-to-back, and keep most sessions comfortably under their cap.
+- FATIGUE MANAGEMENT: wave the intensity. Never stack more than 2 hard days in a row - follow them with an easy day, skill day, or rest, and prefer an extra rest day after a demanding stretch over forcing volume. Harder and easier weeks alternate within a block, with every 3rd-4th week a genuine deload (volume AND intensity down 30-40%). Calibrate to the athlete's recent check-ins: repeated "very hard" means ease the coming days; repeated "too easy" means push.
 - If the athlete is training for a running race: program 3-4 run days per week - ONE long run plus easy midweek runs (easy runs fit inside weekday caps). Weekly total mileage progresses roughly 10% week over week with a lighter cutback week every 3rd-4th week; the long run builds toward the race distance, then tapers.
 - The LONG RUN is its own session on the athlete's long-run day: nothing else that day beyond a short warm-up and cool-down. NEVER stack the long run after a class or metcon.
 - Conditioning pieces stay in the 8-20 minute range (base phase toward the lower end). No 30-minute heavy-implement EMOMs.
@@ -2110,6 +2125,9 @@ PATCH RULES:
                 type,
                 title: c.title,
                 description: c.description,
+                // WODs need a scoring type so the logger offers the right
+                // score entry (AMRAP = rounds+reps, not a time)
+                ...(type === "wod" ? { scoringType: inferScoringType(`${c.title} ${c.description}`) } : {}),
                 notes: idx === 0 ? noteBits : "",
               };
             })
@@ -2118,6 +2136,7 @@ PATCH RULES:
               type: row.session.toLowerCase().includes("class") ? "class" : "wod",
               title: row.session,
               description: row.detail,
+              ...(row.session.toLowerCase().includes("class") ? {} : { scoringType: inferScoringType(`${row.session} ${row.detail}`) }),
               notes: noteBits,
             }];
 

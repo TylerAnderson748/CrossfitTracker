@@ -87,7 +87,7 @@ export default function PersonalAITrainer({ userId, todayPersonalWorkouts, userP
   const hasWorkoutToAnalyze = todayPersonalWorkouts && todayPersonalWorkouts.length > 0;
   const [userHistory, setUserHistory] = useState<UserWorkoutHistory>({ lifts: [], wods: [] });
   const [sessionFeedbacks, setSessionFeedbacks] = useState<SessionFeedbackEntry[]>([]);
-  const [baselineData, setBaselineData] = useState<{ skillNames: string[]; cardioLogs: { activity: string; miles?: number }[]; trainingStyle: string } | null>(null);
+  const [baselineData, setBaselineData] = useState<{ skillNames: string[]; cardioLogs: { activity: string; miles?: number; dateString?: string }[]; trainingStyle: string } | null>(null);
   const [aiAdvice, setAiAdvice] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -190,7 +190,7 @@ export default function PersonalAITrainer({ userId, todayPersonalWorkouts, userP
         setSessionFeedbacks(feedbacks);
         setBaselineData({
           skillNames: Array.from(new Set(skillSnap.docs.map(d => String(d.data().skillTitle || d.data().skillName || "")).filter(Boolean))),
-          cardioLogs: cardioSnap.docs.map(d => ({ activity: String(d.data().activity || ""), miles: Number(d.data().miles) || 0 })),
+          cardioLogs: cardioSnap.docs.map(d => ({ activity: String(d.data().activity || ""), miles: Number(d.data().miles) || 0, dateString: String(d.data().dateString || "") })),
           trainingStyle: prefsSnap.empty ? "crossfit" : String(prefsSnap.docs[0].data().trainingStyle || "crossfit"),
         });
         setHasLoadedHistory(true);
@@ -302,6 +302,36 @@ export default function PersonalAITrainer({ userId, todayPersonalWorkouts, userP
           .join("\n");
       }
 
+      // Last-7-days training load so the coach can judge fatigue
+      const nowMs = Date.now();
+      const loadByDay = new Map<string, string[]>();
+      const noteDay = (d: Date | undefined | null, s: string) => {
+        if (!d) return;
+        const ageDays = (nowMs - d.getTime()) / 86400000;
+        if (ageDays < -1 || ageDays > 7) return;
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+        loadByDay.set(key, [...(loadByDay.get(key) || []), s]);
+      };
+      userHistory.lifts.forEach(l => noteDay(l.date?.toDate?.(), `${l.liftTitle} ${l.weight}x${l.reps}`));
+      userHistory.wods.forEach(w => noteDay(w.completedDate?.toDate?.(), w.wodTitle));
+      baselineData?.cardioLogs.forEach(c => {
+        if (!c.dateString) return;
+        const [yy, mm, dd] = c.dateString.split("-").map(Number);
+        if (yy && mm && dd) noteDay(new Date(yy, mm - 1, dd, 12), `${c.activity}${c.miles ? ` ${c.miles}mi` : ""}`);
+      });
+      const feedbackByDay = new Map(sessionFeedbacks.map(f => [f.dateString, f]));
+      let recentLoad = "";
+      if (loadByDay.size > 0) {
+        recentLoad = "\n\nLAST 7 DAYS OF TRAINING (judge fatigue from this - consecutive hard days, volume spikes, check-ins):\n" + Array.from(loadByDay.entries())
+          .sort((a, b) => b[0].localeCompare(a[0]))
+          .slice(0, 7)
+          .map(([day, items]) => {
+            const fb = feedbackByDay.get(day);
+            return `- ${day}: ${items.slice(0, 5).join("; ")}${fb ? ` (felt ${feedbackRatingLabels[fb.rating]})` : ""}`;
+          })
+          .join("\n");
+      }
+
       // Build user preferences/goals section
       let userGoalsInfo = "";
       if (userPreferences) {
@@ -324,7 +354,7 @@ export default function PersonalAITrainer({ userId, todayPersonalWorkouts, userP
 ${workoutDescription}
 
 ATHLETE'S WORKOUT HISTORY:
-${historySummary || "No workout history available yet - treat them as an intermediate athlete."}
+${historySummary || "No workout history available yet - treat them as an intermediate athlete."}${recentLoad}
 ${userGoalsInfo ? `\nATHLETE'S PROFILE & GOALS:${userGoalsInfo}` : `\nNO GOALS SET - Focus advice on improving their weaknesses and building well-rounded fitness.`}
 
 You MUST provide advice in this EXACT format with these sections:
@@ -337,6 +367,9 @@ List each movement that requires loading and give them an EXACT number based on 
 
 **PACING & REP SCHEME STRATEGY:**
 Give them a specific pacing target. For AMRAP: target rounds/hour and how to break up reps (e.g., "Break the wall balls into sets of 10 from the start"). For For Time: target finish time and when to push/rest. For EMOMs: work-to-rest ratio goals. Be SPECIFIC with numbers.
+
+**FATIGUE & READINESS:**
+Judge how fresh or beat up they likely are from the LAST 7 DAYS OF TRAINING above (consecutive hard days, volume spikes, "very hard" check-ins) and say why in one sentence. Then fork today's plan: "Feeling good: [slightly harder option with specific loads/pace]" vs "Feeling beat up: [reduced option with specific loads/pace]". If there's no recent training data, say so and skip the fork.
 
 **WHY THIS APPROACH IS BEST FOR YOU:**
 ${userPreferences?.goals ? `Connect this workout to their stated goal: "${userPreferences.goals}". Explain how today's approach helps them progress toward it.` : "Since they haven't set specific goals, explain how this approach helps them get fitter overall or addresses a weakness you noticed in their history."}

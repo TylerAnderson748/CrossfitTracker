@@ -66,6 +66,16 @@ export const wodScoringTypeLabels: Record<WODScoringType, string> = {
   amrap: "AMRAP",
 };
 
+// Guess a WOD's scoring type from its text when none was set explicitly
+// (e.g. AI-generated plan components) so the logger offers the right
+// score entry (rounds+reps for AMRAP, completion for EMOM, time otherwise)
+export function inferScoringType(text: string): WODScoringType {
+  const t = text.toLowerCase();
+  if (/\bamrap\b|as many (rounds|reps)/.test(t)) return "amrap";
+  if (/\be\d*mom\b|every (minute|\d+\s*(?:min|minutes|seconds|sec))/.test(t)) return "emom";
+  return "fortime";
+}
+
 export const wodScoringTypeColors: Record<WODScoringType, { bg: string; text: string }> = {
   fortime: { bg: "bg-blue-500", text: "text-white" },
   emom: { bg: "bg-orange-500", text: "text-white" },
