@@ -552,6 +552,8 @@ Guidelines:
 - Program appropriate rest days (typically 2 per week)
 - Time budgets are CAPS, not targets - do not fill every available minute; distribute load across the week and never schedule two maximal days back-to-back
 - FATIGUE MANAGEMENT: wave the intensity deliberately. Never stack more than 2 hard days in a row - follow them with an easy day, skill day, or rest, and add an extra rest day after an especially demanding stretch rather than forcing volume. Across weeks, alternate harder and easier weeks within a block and make every 3rd-4th week a genuine deload (volume AND intensity down 30-40%, named as such in the phase). If recent check-ins say sessions felt "very hard", pull the next week's intensity down; if "too easy", nudge it up.
+- REST PLACEMENT is anchored to the week's biggest sessions: rest or easy movement goes immediately before AND after the long run / heaviest day whenever the fixed class schedule allows - never a hard metcon or heavy lifting adjacent to a 8+ mile run. A rest day's reason must describe its ACTUAL neighbors: never claim it protects a session when a hard day sits in between - if fixed classes force that layout, say so honestly (e.g., "Thursday is the last open day to rest before Sunday's 17-miler since Saturday's class is fixed").
+- Blocks of 6+ weeks: re-test 1-2 of the athlete's baselines most relevant to the block's goal in the final or penultimate week (never race week) so progress is measured, not assumed.
 - If the athlete is training for a running race: 3-4 run days per week (one long run + easy midweek runs). The long run is its OWN session on its own day - never stacked after a class or metcon
 - If the athlete asks for a multi-week program but their weekly availability, goals, or schedule are unknown, ask for those essentials in ONE concise message BEFORE generating - do not guess a schedule for someone you know nothing about
 - Scale difficulty based on the athlete's level
@@ -1523,6 +1525,7 @@ RULES:
 - runMiles = total planned run miles that day (0 if none). targetRPE is the day's EFFORT as a percentage of max effort, like "60-80%" - NEVER 1-10 RPE numbers; the athlete thinks in % effort. estMinutes = total session time including warmup.
 - Time budgets are CAPS, not targets: do NOT fill every available minute. Distribute training load across the whole week - never schedule two maximal days back-to-back, and keep most sessions comfortably under their cap.
 - FATIGUE MANAGEMENT: wave the intensity. Never stack more than 2 hard days in a row - follow them with an easy day, skill day, or rest, and prefer an extra rest day after a demanding stretch over forcing volume. Harder and easier weeks alternate within a block, with every 3rd-4th week a genuine deload (volume AND intensity down 30-40%). Calibrate to the athlete's recent check-ins: repeated "very hard" means ease the coming days; repeated "too easy" means push.
+- REST PLACEMENT anchors to the week's biggest sessions: rest or easy movement immediately before AND after the long run / heaviest day whenever fixed classes allow - never a hard metcon or heavy lifting adjacent to a 8+ mile run. Rest-day reasons must describe their ACTUAL neighbors - never claim a rest protects a session when a hard day sits between them; if the fixed class schedule forces that layout, say so honestly.
 - If the athlete is training for a running race: program 3-4 run days per week - ONE long run plus easy midweek runs (easy runs fit inside weekday caps). Weekly total mileage progresses roughly 10% week over week with a lighter cutback week every 3rd-4th week; the long run builds toward the race distance, then tapers.
 - The LONG RUN is its own session on the athlete's long-run day: nothing else that day beyond a short warm-up and cool-down. NEVER stack the long run after a class or metcon.
 - Conditioning pieces stay in the 8-20 minute range (base phase toward the lower end). No 30-minute heavy-implement EMOMs.
@@ -1603,6 +1606,27 @@ PATCH RULES:
         const preferredDay = preferences.longRunDay || "";
         if (preferredDay && dayNameForDate(longRunRow.date).toLowerCase() !== preferredDay) {
           problems.push(`the long run (${longRunRow.runMiles} mi) is on ${dayNameForDate(longRunRow.date)} but the athlete's long-run day is ${preferredDay.charAt(0).toUpperCase() + preferredDay.slice(1)}`);
+        }
+        // Adjacency: no hard chosen sessions (wod/lift) right before or
+        // after a big run. Fixed classes can't move, so they're exempt -
+        // but a metcon or heavy lifting next to a 8+ mile run is the
+        // model's own scheduling choice and must be fixed.
+        if ((longRunRow.runMiles || 0) >= 8) {
+          const shiftDate = (ds: string, n: number) => {
+            const [sy, sm, sd] = ds.split("-").map(Number);
+            const dt = new Date(sy, sm - 1, sd + n, 12);
+            return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+          };
+          const hardChosen = (r?: PlanRow) =>
+            !!r && (r.components || []).some(c => c.type === "wod" || c.type === "lift");
+          const before = candidate.find(r => r.date === shiftDate(longRunRow.date, -1));
+          const after = candidate.find(r => r.date === shiftDate(longRunRow.date, 1));
+          if (hardChosen(before)) {
+            problems.push(`${before!.date} programs a hard session the day BEFORE the ${longRunRow.runMiles} mi long run - the day before a big run must be rest or easy movement (fixed classes excepted)`);
+          }
+          if (hardChosen(after)) {
+            problems.push(`${after!.date} programs a hard session the day AFTER the ${longRunRow.runMiles} mi long run - recover after a big run with rest or easy movement (fixed classes excepted)`);
+          }
         }
       }
     }
