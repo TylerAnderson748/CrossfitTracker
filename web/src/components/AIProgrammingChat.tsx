@@ -1530,7 +1530,8 @@ Respond with valid JSON in this exact format:
 RULES:
 - ONE row per date listed above - no other dates, no skipped dates, day names copied exactly from the list.
 - "components" is the day's prescription broken into typed pieces: "warmup", "wod" (mixed-modal metcons), "lift", "skill", "run"/"swim"/"bike_mtb"/"bike_road"/"row" (pure aerobic work - steady-state or intervals; only program swim/bike/row if the athlete does those or has the equipment), "class" (coached classes the athlete attends elsewhere), "cooldown". Each component's description is COMPLETE: exact distances, paces, movements, reps, and loads (use the athlete's PRs for percentage work) - specific enough to train from with no other information.
-- Component typing is strict: "lift" is ONLY dedicated strength work on a single named lift (sets x reps @ load, e.g. "Back Squat 5x5 @ 75%"). ANY multi-movement circuit, rounds-based piece, EMOM, or AMRAP is a "wod" - even when strength-biased and even on short time-capped days (a 4-round DB/sandbag circuit is a wod, not a lift). "wod" says nothing about session length - a 15-minute piece is still a wod.
+- Component typing is strict: "lift" is dedicated strength work on a single named lift (sets x reps @ load, e.g. "Back Squat 5x5 @ 75%"). A strength day with SEVERAL lifts done as sequential straight sets (e.g. bench, then rows, then accessories) is MULTIPLE "lift" components - one per named movement, in order, each titled with the lift name - NEVER one text blob and never a "wod". Only circuits, rounds-based pieces, EMOMs, and AMRAPs are "wod" - even when strength-biased. "wod" says nothing about session length - a 15-minute piece is still a wod.
+- Baseline days especially: every tested movement is its OWN "lift" component (title = the lift name, description = the test, e.g. "Build to a hard but crisp set of 5 - log it as your baseline; then 3x8 @ 70% of that weight"). The athlete logs each lift from its component - a baseline buried in a paragraph can't be logged.
 - "reason" (1-2 sentences): WHY this day is programmed this way given the phase, the surrounding days, and the athlete's goals. Every non-rest day gets one. The reason speaks to the ATHLETE about training intent - NEVER write rule bookkeeping ("to maintain exactly 2 rest days", "to satisfy the weekly cap") as a reason.
 - COACH THE PERSON, not the textbook: this plan is for ONE specific athlete whose data is above. Every week, several reasons and prescriptions must reference THEIR actual specifics - their PR numbers, their recent check-ins ("last week's squats felt very hard, so..."), their injuries, their goal race date, their class schedule. A reason that could appear in anyone's plan ("builds aerobic base", "maintains lifting skill") is filler - replace it with what this day does for THIS athlete right now.
 - THIN DATA = NO FAKE PRECISION: %-of-1RM prescriptions ONLY for lifts with solid logged data. For lifts marked [ROUGH] or unlogged, never invent derived rep-maxes or fabricated adjustments - prescribe by feel ("build to a hard but crisp set of 5 - log it, that becomes your baseline"), establish the baseline early in the block, and anchor later weeks to what the athlete actually logs.
@@ -1679,6 +1680,14 @@ PATCH RULES:
         if (classText.length > 60 || /focus|technique|volume|intensity|effort|work on|emphasi|wall.?ball|wraps|reps|sets/i.test(classText)) {
           problems.push(`${ds} class component includes guessed content/advice ("${classText.slice(0, 60)}") - a class component's description must be exactly "Follow the coach's programming." and nothing more`);
         }
+      }
+      // Baseline/strength days must expose each lift as its own component
+      // so the athlete can log it (a baseline in a paragraph can't be logged)
+      if (row && !row.session.toLowerCase().includes("rest") &&
+          /baseline|strength|hypertrophy|press|squat|deadlift|bench/i.test(row.session) &&
+          (row.components || []).filter(c => c.type === "lift").length === 0 &&
+          !(row.components || []).some(c => c.type === "class")) {
+        problems.push(`${ds} ("${row.session}") looks like a strength/baseline day but has NO "lift" components - each named movement must be its own "lift" component (titled with the lift name) so the athlete can log it against their records`);
       }
       // Reasons must speak to training purpose, not rule bookkeeping
       // ("maintains the two-rest requirement" tells the athlete nothing)
