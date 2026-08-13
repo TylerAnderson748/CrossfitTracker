@@ -125,13 +125,16 @@ export default function PlanTable({ rows, statusByDate }: PlanTableProps) {
                     <div className="space-y-1.5">
                       {row.components.map((c, i) => {
                         const badge = componentBadge(c);
+                        // Class content comes from the class coach (scanned in
+                        // later) - never show generated advice for it
+                        const desc = c.type === "class" ? "Follow the coach's programming." : c.description;
                         return (
                           <div key={i}>
                             <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide mr-1.5 align-middle ${badge.bg} ${badge.text}`}>
                               {badge.label}
                             </span>
                             <span className="font-medium text-gray-900">{c.title}</span>
-                            {c.description && <span className="text-gray-600"> — {c.description}</span>}
+                            {desc && <span className="text-gray-600"> — {desc}</span>}
                           </div>
                         );
                       })}
@@ -139,7 +142,7 @@ export default function PlanTable({ rows, statusByDate }: PlanTableProps) {
                   ) : (
                     row.detail
                   )}
-                  {row.reason && (
+                  {row.reason && !(row.components || []).some(c => c.type === "class") && (
                     <div className="text-[11px] text-gray-400 italic mt-1.5">Why: {row.reason}</div>
                   )}
                 </td>

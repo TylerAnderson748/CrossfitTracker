@@ -1632,6 +1632,12 @@ PATCH RULES:
         if (wrongDay) {
           problems.push(`${ds} is a ${dayName} but its class component says "${wrongDay}" - describe ${dayName}'s actual class${setting?.classDescription ? ` (${setting.classDescription})` : ""}`);
         }
+        // Class components must not invent content or advice - the class
+        // coach programs it and the athlete scans the whiteboard in later
+        const classText = `${classComp.description || ""}`;
+        if (classText.length > 60 || /focus|technique|volume|intensity|effort|work on|emphasi|wall.?ball|wraps|reps|sets/i.test(classText)) {
+          problems.push(`${ds} class component includes guessed content/advice ("${classText.slice(0, 60)}") - a class component's description must be exactly "Follow the coach's programming." and nothing more`);
+        }
       }
     }
 
@@ -2120,6 +2126,17 @@ PATCH RULES:
                 type = cardioActivityForComponent("cardio", c.title) || "run";
               }
               if ((type === "wod" || type === "lift") && /\bclass\b/i.test(c.title)) type = "class";
+              // Class content is the class coach's call (scanned in later) -
+              // strip any generated advice no matter what the model wrote
+              if (type === "class") {
+                return {
+                  id: `comp-${idx}`,
+                  type,
+                  title: c.title,
+                  description: "Follow the coach's programming.",
+                  notes: idx === 0 ? `Phase: ${row.phase}` : "",
+                };
+              }
               return {
                 id: `comp-${idx}`,
                 type,
@@ -2131,14 +2148,22 @@ PATCH RULES:
                 notes: idx === 0 ? noteBits : "",
               };
             })
-          : [{
-              id: "comp-0",
-              type: row.session.toLowerCase().includes("class") ? "class" : "wod",
-              title: row.session,
-              description: row.detail,
-              ...(row.session.toLowerCase().includes("class") ? {} : { scoringType: inferScoringType(`${row.session} ${row.detail}`) }),
-              notes: noteBits,
-            }];
+          : [row.session.toLowerCase().includes("class")
+            ? {
+                id: "comp-0",
+                type: "class" as const,
+                title: row.session,
+                description: "Follow the coach's programming.",
+                notes: `Phase: ${row.phase}`,
+              }
+            : {
+                id: "comp-0",
+                type: "wod" as const,
+                title: row.session,
+                description: row.detail,
+                scoringType: inferScoringType(`${row.session} ${row.detail}`),
+                notes: noteBits,
+              }];
 
         const workoutRef = doc(collection(db, "personalWorkouts"));
         batch.set(workoutRef, {
