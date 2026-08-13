@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { collection, addDoc, updateDoc, doc, query, where, getDocs, getDoc, setDoc, limit, Timestamp, serverTimestamp, deleteDoc, writeBatch } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { AIProgrammingSession, AIChatMessage, AIGeneratedDay, AIProgrammingPreferences, AITrainerSubscription, TrainingEvent, TrainingEventType, WeekdayKey, AICoachPreferences, PlanRow, PlanRowComponent, TrainingPlan, workoutComponentColors, workoutComponentLabels, cardioActivityForComponent, hasAIProgramming, inferScoringType, PRICING } from "@/lib/types";
+import { AIProgrammingSession, AIChatMessage, AIGeneratedDay, AIProgrammingPreferences, AITrainerSubscription, TrainingEvent, TrainingEventType, WeekdayKey, AICoachPreferences, PlanRow, PlanRowComponent, TrainingPlan, workoutComponentColors, workoutComponentLabels, cardioActivityForComponent, hasAIProgramming, inferScoringType, rpeToPercentEffort, effortValueToPercent, PRICING } from "@/lib/types";
 import { getAllSkills, getAllLifts, getAllWods } from "@/lib/workoutData";
 import { chatCompletion, REVISION_MODEL } from "@/lib/ai";
 import { computeBaselineStatus, buildBaselinePromptBlock, buildBaselineWeek, BaselineStatusInput, BaselineCategory } from "@/lib/baselines";
@@ -1515,7 +1515,7 @@ RULES:
 - "components" is the day's prescription broken into typed pieces: "warmup", "wod" (mixed-modal metcons), "lift", "skill", "run"/"swim"/"bike_mtb"/"bike_road"/"row" (pure aerobic work - steady-state or intervals; only program swim/bike/row if the athlete does those or has the equipment), "class" (coached classes the athlete attends elsewhere), "cooldown". Each component's description is COMPLETE: exact distances, paces, movements, reps, and loads (use the athlete's PRs for percentage work) - specific enough to train from with no other information.
 - Component typing is strict: "lift" is ONLY dedicated strength work on a single named lift (sets x reps @ load, e.g. "Back Squat 5x5 @ 75%"). ANY multi-movement circuit, rounds-based piece, EMOM, or AMRAP is a "wod" - even when strength-biased and even on short time-capped days (a 4-round DB/sandbag circuit is a wod, not a lift). "wod" says nothing about session length - a 15-minute piece is still a wod.
 - "reason" (1-2 sentences): WHY this day is programmed this way given the phase, the surrounding days, and the athlete's goals. Every non-rest day gets one. The reason speaks to the ATHLETE about training intent - NEVER write rule bookkeeping ("to maintain exactly 2 rest days", "to satisfy the weekly cap") as a reason.
-- Rest days: session "Rest", components [] (or one light "cooldown" mobility component), runMiles 0, reason explaining what the rest protects.
+- Rest days: session "Rest", components [] (or one light "cooldown" mobility component), runMiles 0. The reason states the RECOVERY PURPOSE in the context of the surrounding days (e.g., "Absorbs Sunday's long run so Tuesday's Oly class is quality lifting, not junk volume"). NEVER cite the rest-day rule, quota, settings, or "requirement" as the reason - the athlete wants to know what the rest accomplishes, not that a rule was followed.
 - Event days (competition, race): session in CAPS (e.g., "MARATHON", "CROSSFIT COMPETITION") with one component of race-day execution guidance.
 - "session" is a short 2-4 word label summarizing the day. "phase" is a consistent short label across the plan (e.g., "Base", "Build", "Comp Taper", "Marathon Taper", "Recovery").
 - EVERY row is ONE definitive prescription. Never "optional", never "attend or rest - your call".
@@ -1638,6 +1638,11 @@ PATCH RULES:
         if (classText.length > 60 || /focus|technique|volume|intensity|effort|work on|emphasi|wall.?ball|wraps|reps|sets/i.test(classText)) {
           problems.push(`${ds} class component includes guessed content/advice ("${classText.slice(0, 60)}") - a class component's description must be exactly "Follow the coach's programming." and nothing more`);
         }
+      }
+      // Reasons must speak to training purpose, not rule bookkeeping
+      // ("maintains the two-rest requirement" tells the athlete nothing)
+      if (row?.reason && /quota|requirement|rest[- ]day (?:rule|count)|exact(?:ly)? (?:one|two|\d+)[- ]rest|per (?:your|the) (?:settings|schedule)|as (?:required|instructed)|maintain(?:s|ing)? (?:the )?(?:weekly )?rest/i.test(row.reason)) {
+        problems.push(`${ds} reason is rule bookkeeping ("${row.reason.slice(0, 60)}") - state what the day accomplishes for the athlete given the surrounding days instead`);
       }
     }
 
@@ -2112,10 +2117,10 @@ PATCH RULES:
 
         const noteBits = [
           `Phase: ${row.phase}`,
-          row.targetRPE ? `Effort ${row.targetRPE}` : "",
+          row.targetRPE ? `Effort ${effortValueToPercent(row.targetRPE)}` : "",
           row.estMinutes ? `~${row.estMinutes} min` : "",
           row.runMiles ? `${row.runMiles} mi planned` : "",
-          row.reason ? `Why: ${row.reason}` : "",
+          row.reason ? `Why: ${rpeToPercentEffort(row.reason)}` : "",
         ].filter(Boolean).join(" • ");
 
         const components = (row.components && row.components.length > 0)
@@ -2141,7 +2146,7 @@ PATCH RULES:
                 id: `comp-${idx}`,
                 type,
                 title: c.title,
-                description: c.description,
+                description: rpeToPercentEffort(c.description || ""),
                 // WODs need a scoring type so the logger offers the right
                 // score entry (AMRAP = rounds+reps, not a time)
                 ...(type === "wod" ? { scoringType: inferScoringType(`${c.title} ${c.description}`) } : {}),
@@ -2160,7 +2165,7 @@ PATCH RULES:
                 id: "comp-0",
                 type: "wod" as const,
                 title: row.session,
-                description: row.detail,
+                description: rpeToPercentEffort(row.detail || ""),
                 scoringType: inferScoringType(`${row.session} ${row.detail}`),
                 notes: noteBits,
               }];

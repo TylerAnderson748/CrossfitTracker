@@ -66,6 +66,24 @@ export const wodScoringTypeLabels: Record<WODScoringType, string> = {
   amrap: "AMRAP",
 };
 
+// Convert RPE mentions to percent effort ("RPE 3-5" -> "30-50% effort").
+// The athlete thinks in % effort; also cleans up plans generated before
+// the switch away from RPE.
+export function rpeToPercentEffort(text: string): string {
+  return text.replace(/(?:at\s+)?RPE\s*(\d{1,2})(?:\s*(?:-|–|to)\s*(\d{1,2}))?/gi, (_m, a, b) => {
+    const lo = Math.min(Number(a) * 10, 100);
+    return b ? `at ${lo}-${Math.min(Number(b) * 10, 100)}% effort` : `at ~${lo}% effort`;
+  });
+}
+
+// Bare RPE-style range values ("3-7") from old plans -> "30-70%"
+export function effortValueToPercent(value: string): string {
+  const m = value.trim().match(/^(\d{1,2})(?:\s*-\s*(\d{1,2}))?$/);
+  if (!m) return value; // already "60-80%" or free text
+  const lo = Math.min(Number(m[1]) * 10, 100);
+  return m[2] ? `${lo}-${Math.min(Number(m[2]) * 10, 100)}%` : `${lo}%`;
+}
+
 // Guess a WOD's scoring type from its text when none was set explicitly
 // (e.g. AI-generated plan components) so the logger offers the right
 // score entry (rounds+reps for AMRAP, completion for EMOM, time otherwise)

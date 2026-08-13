@@ -1,6 +1,6 @@
 "use client";
 
-import { PlanRow, PlanRowComponent, workoutComponentLabels, workoutComponentColors, cardioActivityForComponent, cardioActivityLabels } from "@/lib/types";
+import { PlanRow, PlanRowComponent, workoutComponentLabels, workoutComponentColors, cardioActivityForComponent, cardioActivityLabels, rpeToPercentEffort, effortValueToPercent } from "@/lib/types";
 
 export type PlanDayStatus = "done" | "missed" | "today" | "upcoming";
 
@@ -127,7 +127,7 @@ export default function PlanTable({ rows, statusByDate }: PlanTableProps) {
                         const badge = componentBadge(c);
                         // Class content comes from the class coach (scanned in
                         // later) - never show generated advice for it
-                        const desc = c.type === "class" ? "Follow the coach's programming." : c.description;
+                        const desc = c.type === "class" ? "Follow the coach's programming." : rpeToPercentEffort(c.description || "");
                         return (
                           <div key={i}>
                             <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide mr-1.5 align-middle ${badge.bg} ${badge.text}`}>
@@ -140,7 +140,7 @@ export default function PlanTable({ rows, statusByDate }: PlanTableProps) {
                       })}
                     </div>
                   ) : (
-                    row.detail
+                    rpeToPercentEffort(row.detail || "")
                   )}
                   {row.reason && !(row.components || []).some(c => c.type === "class") && (
                     <div className="text-[11px] text-gray-400 italic mt-1.5">Why: {row.reason}</div>
@@ -149,7 +149,7 @@ export default function PlanTable({ rows, statusByDate }: PlanTableProps) {
                 <td className="px-2 py-2 text-right text-gray-700 font-mono text-xs">
                   {row.runMiles ? row.runMiles : ""}
                 </td>
-                <td className="px-2 py-2 text-center text-gray-500 text-xs whitespace-nowrap">{row.targetRPE || ""}</td>
+                <td className="px-2 py-2 text-center text-gray-500 text-xs whitespace-nowrap">{row.targetRPE ? effortValueToPercent(row.targetRPE) : ""}</td>
                 <td className="px-2 py-2 text-right text-gray-500 font-mono text-xs">{row.estMinutes || ""}</td>
               </tr>
             );
