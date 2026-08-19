@@ -37,7 +37,7 @@ function WeeklyPlanContent() {
   const [wodLogKeys, setWodLogKeys] = useState<Record<string, boolean>>({});
   const [cardioLogKeys, setCardioLogKeys] = useState<Record<string, boolean>>({});
   // Best estimated 1RM per lift (lowercased name), for auto % weight hints
-  const [liftMaxes, setLiftMaxes] = useState<Record<string, { max: number; name: string }>>({});
+  const [liftMaxes, setLiftMaxes] = useState<Record<string, { max: number; name: string; tested: boolean }>>({});
   // Post-workout check-in modal
   const [feedbackWorkout, setFeedbackWorkout] = useState<PersonalWorkout | null>(null);
   const [feedbackNote, setFeedbackNote] = useState("");
@@ -297,18 +297,23 @@ function WeeklyPlanContent() {
       });
       setCardioLogKeys(cardioKeys);
 
-      // Best estimated 1RM per lift (Epley) - max attempts and working
-      // sets both raise the floor, so % hints stay close to reality
-      const maxes: Record<string, { max: number; name: string }> = {};
+      // Best max per lift for % hints: a TESTED single is the real 1RM and
+      // always wins; Epley estimates only fill in for untested lifts
+      const maxes: Record<string, { max: number; name: string; tested: boolean }> = {};
       liftSnap.docs.forEach(d => {
         const data = d.data();
         const title = String(data.liftTitle || "").trim();
         const weight = Number(data.weight) || 0;
         const reps = Number(data.reps) || 1;
         if (!title || weight <= 0) return;
-        const e1rm = Math.round(weight * (1 + reps / 30));
         const key = title.toLowerCase();
-        if (!maxes[key] || e1rm > maxes[key].max) maxes[key] = { max: e1rm, name: title };
+        const cur = maxes[key];
+        if (reps === 1 && (data.setType || "max") !== "working") {
+          if (!cur || !cur.tested || weight > cur.max) maxes[key] = { max: weight, name: title, tested: true };
+        } else {
+          const e1rm = Math.round(weight * (1 + reps / 30));
+          if (!cur || (!cur.tested && e1rm > cur.max)) maxes[key] = { max: e1rm, name: title, tested: false };
+        }
       });
       setLiftMaxes(maxes);
     } catch (error) {
@@ -366,7 +371,7 @@ function WeeklyPlanContent() {
     const pct = parseFloat(m[1]);
     if (pct < 30 || pct > 120) return null;
     const lower = text.toLowerCase();
-    let best: { max: number; name: string } | null = null;
+    let best: { max: number; name: string; tested: boolean } | null = null;
     let bestLen = 0;
     for (const key of Object.keys(liftMaxes)) {
       if (lower.includes(key) && key.length > bestLen) {
@@ -376,7 +381,9 @@ function WeeklyPlanContent() {
     }
     if (!best) return null;
     const w = Math.round(((pct / 100) * best.max) / 5) * 5;
-    return `≈ ${w} lb (${pct}% of your ~${best.max} lb ${best.name} max)`;
+    return best.tested
+      ? `≈ ${w} lb (${pct}% of your ${best.max} lb ${best.name} 1RM)`
+      : `≈ ${w} lb (${pct}% of your ~${best.max} lb estimated ${best.name} max)`;
   };
 
   // Save the post-workout check-in Oddo uses to tune future programming

@@ -249,10 +249,21 @@ export default function PersonalAITrainer({ userId, todayPersonalWorkouts, userP
           liftGroups.set(lift.liftTitle, group);
         });
 
-        historySummary += "Lift PRs (tested max attempts, with estimated 1RM):\n" + Array.from(liftGroups.entries())
+        historySummary += "Lift PRs:\n" + Array.from(liftGroups.entries())
           .map(([liftName, group]) => {
+            // A tested single is the athlete's REAL 1RM - it beats any
+            // Epley estimate, which can only fill in for untested lifts
+            const tested1RM = group.maxBests.get(1);
+            if (tested1RM) {
+              const others = Array.from(group.maxBests.entries())
+                .filter(([reps]) => reps !== 1)
+                .sort((a, b) => a[0] - b[0])
+                .map(([reps, weight]) => `${weight}lb x ${reps}`)
+                .join(", ");
+              return `- ${liftName}: TESTED 1RM ${tested1RM}lb${others ? ` (other maxes: ${others})` : ""} -> ALL % math uses ${tested1RM}lb`;
+            }
             if (group.maxBests.size === 0) {
-              return `- ${liftName}: no tested max yet; logged working sets imply a 1RM of at least ~${group.e1rmFloor}lb`;
+              return `- ${liftName}: no tested max yet; logged working sets imply a 1RM of at least ~${group.e1rmFloor}lb (estimate only)`;
             }
             const sets = Array.from(group.maxBests.entries())
               .sort((a, b) => a[0] - b[0])
@@ -262,7 +273,7 @@ export default function PersonalAITrainer({ userId, todayPersonalWorkouts, userP
               group.e1rmFloor,
               ...Array.from(group.maxBests.entries()).map(([reps, weight]) => epley(weight, reps))
             );
-            return `- ${liftName}: ${sets} (estimated 1RM: ${e1rm}lb)`;
+            return `- ${liftName}: ${sets} (no tested single; estimated 1RM ~${e1rm}lb - present it as an estimate)`;
           })
           .join("\n");
       }
@@ -381,6 +392,7 @@ CRITICAL RULES:
 - ONLY coach the movements listed in TODAY'S WORKOUT above. Do NOT add extra movements, sessions, classes, or workouts that are not listed - if it's not written in today's workout, it does not exist.
 - Follow the written rep scheme EXACTLY as programmed. If it says "E2MOM - 3 reps", that means 3 reps every 2 minutes - never change the interval, sets, or rep count. (EMOM = every minute on the minute; E2MOM = every 2 minutes on the minute.)
 - PERCENTAGE MATH: "@ 65%" means 65% of the athlete's 1RM for THAT SAME lift. Apply the percentage exactly ONCE to the correct 1RM, show the math (e.g. "115lb - that's 65% of your 175lb snatch 1RM"), and round to the nearest 5lb. Never apply a percentage to a weight that was already reduced by a percentage.
+- A lift's TESTED 1RM (marked in the history above) IS the athlete's 1RM. Use it EXACTLY for all % math - never quote a different or Epley-estimated number for that lift. Estimates exist only for lifts with no tested single and must be written as estimates ("~180lb estimated").
 - If you have NO data for a movement, say so and give a conservative starting weight with a note to log it. NEVER derive it from an unrelated lift (e.g. do not base RDL weight on strict press).
 - If today's workout is a coached CLASS with no specific programming listed, do NOT guess the class content. Keep advice short: readiness, effort level, and mindset only - and remind them they can scan the class whiteboard to log the actual work.
 - Use their ACTUAL numbers from history when recommending weights
@@ -435,25 +447,24 @@ Respond in a confident, direct coach tone. This advice will be saved and shown e
     setIsStreaming(false);
   };
 
-  // Get lift PRs summary for display
+  // Get lift PRs summary for display: the tested 1RM when one exists,
+  // otherwise the heaviest tested set (working sets never shown as PRs)
   const getLiftPRsSummary = () => {
     if (userHistory.lifts.length === 0) return null;
 
-    const liftBests = new Map<string, { weight: number; reps: number }>();
+    const bests = new Map<string, { weight: number; reps: number }>();
     userHistory.lifts.forEach(lift => {
-      const key = `${lift.liftTitle}-${lift.reps}`;
-      const existing = liftBests.get(key);
-      if (!existing || lift.weight > existing.weight) {
-        liftBests.set(key, { weight: lift.weight, reps: lift.reps });
-      }
+      if ((lift.setType || "max") === "working") return;
+      const cur = bests.get(lift.liftTitle);
+      const better = !cur
+        || (lift.reps === 1 && cur.reps !== 1)
+        || ((lift.reps === 1) === (cur.reps === 1) && lift.weight > cur.weight);
+      if (better) bests.set(lift.liftTitle, { weight: lift.weight, reps: lift.reps });
     });
 
-    return Array.from(liftBests.entries())
+    return Array.from(bests.entries())
       .slice(0, 6)
-      .map(([key, val]) => {
-        const liftName = key.split('-')[0];
-        return `${liftName}: ${val.weight}lb`;
-      })
+      .map(([liftName, val]) => `${liftName}: ${val.weight}lb${val.reps !== 1 ? ` x${val.reps}` : ""}`)
       .join(" | ");
   };
 
