@@ -797,6 +797,45 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
             .join("\n")}`);
         }
 
+        // Day-by-day training log (last 21 days) so progress reviews can
+        // compare what was programmed against what actually got logged
+        const dayLog = new Map<string, string[]>();
+        const dsOf = (t?: { toDate?: () => Date }) => {
+          const dt = t?.toDate?.();
+          return dt ? `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}` : undefined;
+        };
+        const noteLog = (ds: string | undefined, s: string) => {
+          if (!ds) return;
+          const age = (Date.now() - new Date(`${ds}T12:00:00`).getTime()) / 86400000;
+          if (age < -1 || age > 21) return;
+          dayLog.set(ds, [...(dayLog.get(ds) || []), s]);
+        };
+        liftSnap.docs.forEach(d => {
+          const x = d.data();
+          if (x.liftTitle && x.weight) noteLog(dsOf(x.date), `${x.liftTitle} ${x.weight}x${x.reps || 1}${(x.setType || "max") === "working" ? " (working set)" : " (max)"}`);
+        });
+        wodSnap.docs.forEach(d => {
+          const x = d.data();
+          if (!x.wodTitle) return;
+          const score = x.timeInSeconds ? ` ${Math.floor(x.timeInSeconds / 60)}:${String(x.timeInSeconds % 60).padStart(2, "0")}` : (x.rounds !== undefined && x.rounds !== null) ? ` ${x.rounds}+${x.reps || 0}` : "";
+          noteLog(dsOf(x.workoutDate) || dsOf(x.completedDate), `${x.wodTitle}${score}`);
+        });
+        cardioSnap.docs.forEach(d => {
+          const x = d.data();
+          if (x.activity) noteLog(String(x.dateString || "") || dsOf(x.date), `${x.activity}${x.miles ? ` ${x.miles}mi` : ""}`);
+        });
+        pwSnap.docs.forEach(d => {
+          const x = d.data();
+          if (x.sessionFeedback?.rating && x.dateString) noteLog(String(x.dateString), `felt ${ratingText[x.sessionFeedback.rating] || x.sessionFeedback.rating}`);
+        });
+        if (dayLog.size > 0) {
+          parts.push(`TRAINING LOG BY DAY (last 21 days - what the athlete ACTUALLY did; compare against plan days when reviewing progress):\n${Array.from(dayLog.entries())
+            .sort((a, b) => b[0].localeCompare(a[0]))
+            .slice(0, 21)
+            .map(([ds, items]) => `- ${ds}: ${items.slice(0, 6).join("; ")}`)
+            .join("\n")}`);
+        }
+
         setAthleteContext(parts.length > 0 ? `\nATHLETE DATA (from their training log):\n\n${parts.join("\n\n")}\n` : "");
       } catch (err) {
         console.error("Error loading athlete context:", err);
@@ -926,41 +965,46 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Fetch preferences from Firestore, sync state, and return the fresh
+  // values. Called on mount AND before every send, so equipment/schedule
+  // edits made on other pages or tabs reach the coach immediately.
+  const fetchPreferencesFromDb = async () => {
+    try {
+      const prefsQuery = query(
+        collection(db, "aiProgrammingPreferences"),
+        where("userId", "==", userId)
+      );
+      const snapshot = await getDocs(prefsQuery);
+      if (snapshot.empty) return null;
+      const prefDoc = snapshot.docs[0];
+      const prefData = prefDoc.data();
+      const fresh = {
+        trainingStyle: prefData.trainingStyle || "crossfit",
+        trainingEnvironment: prefData.trainingEnvironment || "home",
+        philosophy: prefData.philosophy || "",
+        equipment: prefData.equipment || "",
+        events: prefData.events || [],
+        weeklySchedule: prefData.weeklySchedule || {},
+        longRunDay: prefData.longRunDay || "",
+        restDaysPerWeek: prefData.restDaysPerWeek || 0,
+        workoutDuration: prefData.workoutDuration || "varied",
+        benchmarkFrequency: prefData.benchmarkFrequency || "sometimes",
+        programmingStyle: prefData.programmingStyle || "",
+        additionalRules: prefData.additionalRules || "",
+      };
+      setPreferencesDocId(prefDoc.id);
+      setPreferences(fresh);
+      return fresh;
+    } catch (err) {
+      console.error("Error loading preferences:", err);
+      return null;
+    }
+  };
+
   // Load programming preferences
   useEffect(() => {
-    const loadPreferences = async () => {
-      try {
-        const prefsQuery = query(
-          collection(db, "aiProgrammingPreferences"),
-          where("userId", "==", userId)
-        );
-        const snapshot = await getDocs(prefsQuery);
-        if (!snapshot.empty) {
-          const prefDoc = snapshot.docs[0];
-          const prefData = prefDoc.data();
-          setPreferencesDocId(prefDoc.id);
-          setPreferences({
-            trainingStyle: prefData.trainingStyle || "crossfit",
-            trainingEnvironment: prefData.trainingEnvironment || "home",
-            philosophy: prefData.philosophy || "",
-            equipment: prefData.equipment || "",
-            events: prefData.events || [],
-            weeklySchedule: prefData.weeklySchedule || {},
-            longRunDay: prefData.longRunDay || "",
-            restDaysPerWeek: prefData.restDaysPerWeek || 0,
-            workoutDuration: prefData.workoutDuration || "varied",
-            benchmarkFrequency: prefData.benchmarkFrequency || "sometimes",
-            programmingStyle: prefData.programmingStyle || "",
-            additionalRules: prefData.additionalRules || "",
-          });
-        }
-      } catch (err) {
-        console.error("Error loading preferences:", err);
-      } finally {
-        setPrefsChecked(true);
-      }
-    };
-    loadPreferences();
+    fetchPreferencesFromDb().finally(() => setPrefsChecked(true));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
 
   // Brand-new users get walked into setup before asking for programming
@@ -1284,10 +1328,14 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
         `${msg.role === "user" ? "User" : "Assistant"}: ${msg.content}`
       ).join("\n\n");
 
+      // Re-read preferences so equipment/schedule edits made on other
+      // pages or tabs reach the coach on this very message
+      const freshPrefs = (await fetchPreferencesFromDb()) || preferences;
+
       // If this session already has a plan table, converse in revision mode
       const prompt = plan
-        ? buildRevisionPrompt(plan, conversationHistory)
-        : `${getSystemPrompt(preferences, recentlyUsedWorkouts)}\n${athleteBlock}\nConversation so far:\n${conversationHistory}\n\nRespond to the user's latest message. Remember to output valid JSON only.`;
+        ? buildRevisionPrompt(plan, conversationHistory, freshPrefs)
+        : `${getSystemPrompt(freshPrefs, recentlyUsedWorkouts)}\n${athleteBlock}\nConversation so far:\n${conversationHistory}\n\nRespond to the user's latest message. Remember to output valid JSON only.`;
 
       // Call xAI/Grok API. Plan revisions use the stronger reasoning model -
       // patching an existing table correctly matters more than speed there.
@@ -1351,9 +1399,18 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
                 await applyPatchWithCorrections(redo.patchRows, redo.message || "Plan updated.", updatedMessages, conversationHistory);
                 return;
               }
-              parsed.message = `I wasn't able to produce that change automatically. Nothing in the plan was modified - tell me exactly which day(s) to change (e.g., "make every Friday a rest day and move that workout to Wednesday") and I'll patch the table.`;
+              if (redo?.message && !claimsChange) parsed.message = redo.message;
             } catch {
+              // fall through to the message handling below
+            }
+            // Only stamp the hard failure when the model CLAIMED it changed
+            // something (a lie without patchRows). A conditional request
+            // ("fix loads that were off") can legitimately conclude with an
+            // analysis and no patches - keep that answer, with a note.
+            if (claimsChange) {
               parsed.message = `I wasn't able to produce that change automatically. Nothing in the plan was modified - tell me exactly which day(s) to change (e.g., "make every Friday a rest day and move that workout to Wednesday") and I'll patch the table.`;
+            } else {
+              parsed.message = `${parsed.message}\n\n(No table changes were applied. If you expected a change, tell me the exact days - e.g., "re-anchor week 3's bench to my logged 165x5".)`;
             }
           }
         }
@@ -1552,10 +1609,10 @@ RULES:
   };
 
   // Build the prompt for revising an existing plan table conversationally
-  const buildRevisionPrompt = (currentPlan: TrainingPlan, conversationHistory: string): string => {
+  const buildRevisionPrompt = (currentPlan: TrainingPlan, conversationHistory: string, prefs = preferences): string => {
     const violations = planWeekViolations(currentPlan.rows);
     return `You are Oddo, the athlete's coach, maintaining their day-by-day training plan TABLE.
-${buildPreferencesSection(preferences)}${athleteBlock}
+${buildPreferencesSection(prefs)}${athleteBlock}
 CURRENT PLAN TABLE (${currentPlan.startDate} to ${currentPlan.endDate}, ${currentPlan.rows.length} days).
 Format: date|day|week|phase|session|runMiles|effort%|minutes|detail
 ${serializePlanRows(currentPlan.rows)}
@@ -1567,6 +1624,8 @@ ${conversationHistory}
 READING THE ATHLETE:
 - Observations and shared context ("Saturdays are pretty hard", "I ran 13 miles two weeks ago", "my legs are tired") are NOT change requests. Acknowledge them, factor them into future programming decisions, and explain how - but do NOT add, remove, or replace sessions unless the athlete explicitly asks for a change. If you genuinely cannot tell whether they want a change, ask ONE short clarifying question (form 1) instead of guessing.
 - SANITY-CHECK every number the athlete reports (distance, time, pace, load). If it is implausible (e.g., "3 miles in 2.5 hours" is a 50-minute mile), question it in a message-only response BEFORE rebuilding anything around it.
+- The preferences above (equipment, schedule) are CURRENT as of this message - trust them over your memory of earlier turns. If the athlete says they added equipment: when it IS in the list, immediately patch the upcoming days that can now use it (or output a new outline for a full remake); when it is NOT in the list, quote exactly what the equipment list currently says and ask them to save it in preferences. NEVER claim the plan "already maximizes" equipment without naming the specific upcoming days that use it.
+- A progress-review request ("compare what I logged vs what was programmed") is answered from the TRAINING LOG BY DAY data above: name the specific days and lifts you compared, then patch what needs re-anchoring. If everything is genuinely on track, a message-only answer is CORRECT - but it must cite specifics ("your 165x5 bench on 08-27 matches the programmed 70%"), never a bare "no changes needed".
 
 Respond to the athlete's latest message with valid JSON in EXACTLY ONE of these forms:
 1. Just answering a question / discussing: {"message": "..."} - this form changes NOTHING in the table. NEVER use it to say you updated/moved/changed anything: without patchRows, no change happens. ANY requested change REQUIRES form 2 or 3.
