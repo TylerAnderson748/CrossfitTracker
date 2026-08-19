@@ -385,6 +385,15 @@ ${prefParts.join("\n")}
   return athletePreferencesSection;
 }
 
+// How odd implements are actually used - shared by plan generation and
+// revisions so the coach never programs impossible movements (e.g.,
+// back-racking a 150 lb soft sandbag)
+const IMPLEMENT_KNOWLEDGE = `SANDBAG & ODD-IMPLEMENT RULES (get these right):
+- Heavy soft sandbags (100-150+ lb) cannot be back-racked or stabilized overhead. Their movement library is: bear-hug squats, bear-hug carries, ground-to-shoulder cleans (bag rests on ONE shoulder, stand tall to finish), over-the-shoulder tosses, front-loaded (bear-hug) lunges, shouldered carries and lunges, drags.
+- Match the bag to the movement: a heavy bag (100-150 lb) = low-rep whole-body power (cleans, tosses, squats, short carries). Only lighter bags (~40-70 lb) suit high-rep lunges, presses, or long carries.
+- If the athlete owns multiple bags or implements of different weights, every prescription names WHICH one ("bear-hug squat with the 150 lb bag", "walking lunges with the 100 lb bag").
+- Same principle for all equipment: program only movements the implement is actually designed for - no kettlebell bench press as main strength work, no D-ball back squats, no heavy-sandbag overhead pressing.`;
+
 const getSystemPrompt = (preferences?: Omit<AIProgrammingPreferences, "userId" | "updatedAt">, recentlyUsedWorkouts?: string[]) => {
   // All date strings in LOCAL time - mixing toISOString (UTC) with local weekdays
   // produced day/date mismatches in the evenings
@@ -561,6 +570,7 @@ Guidelines:
 - If the athlete asks for a multi-week program but their weekly availability, goals, or schedule are unknown, ask for those essentials in ONE concise message BEFORE generating - do not guess a schedule for someone you know nothing about
 - Scale difficulty based on the athlete's level
 - Assume a garage/home gym setup: no fancy machines unless the athlete lists them
+${IMPLEMENT_KNOWLEDGE}
 - Use standard CrossFit movements and terminology
 - Keep descriptions clear and concise
 - Use newlines (\\n) for formatting within descriptions
@@ -1601,6 +1611,7 @@ RULES:
 - "reason" (1-2 sentences): WHY this day is programmed this way given the phase, the surrounding days, and the athlete's goals. Every non-rest day gets one. The reason speaks to the ATHLETE about training intent - NEVER write rule bookkeeping ("to maintain exactly 2 rest days", "to satisfy the weekly cap") as a reason.
 - COACH THE PERSON, not the textbook: this plan is for ONE specific athlete whose data is above. Every week, several reasons and prescriptions must reference THEIR actual specifics - their PR numbers, their recent check-ins ("last week's squats felt very hard, so..."), their injuries, their goal race date, their class schedule. A reason that could appear in anyone's plan ("builds aerobic base", "maintains lifting skill") is filler - replace it with what this day does for THIS athlete right now.
 - THIN DATA = NO FAKE PRECISION: %-of-1RM prescriptions ONLY for lifts with solid logged data. For lifts marked [ROUGH] or unlogged, never invent derived rep-maxes or fabricated adjustments - prescribe by feel ("build to a hard but crisp set of 5 - log it, that becomes your baseline"), establish the baseline early in the block, and anchor later weeks to what the athlete actually logs.
+${IMPLEMENT_KNOWLEDGE}
 - Rest days: session "Rest", components [] (or one light "cooldown" mobility component), runMiles 0. The reason states the RECOVERY PURPOSE in the context of the surrounding days (e.g., "Absorbs Sunday's long run so Tuesday's Oly class is quality lifting, not junk volume"). NEVER cite the rest-day rule, quota, settings, or "requirement" as the reason - the athlete wants to know what the rest accomplishes, not that a rule was followed.
 - Event days (competition, race): session in CAPS (e.g., "MARATHON", "CROSSFIT COMPETITION") with one component of race-day execution guidance.
 - "session" is a short 2-4 word label summarizing the day. "phase" is a consistent short label across the plan (e.g., "Base", "Build", "Comp Taper", "Marathon Taper", "Recovery").
@@ -1642,6 +1653,8 @@ Respond to the athlete's latest message with valid JSON in EXACTLY ONE of these 
 1. Just answering a question / discussing: {"message": "..."} - this form changes NOTHING in the table. NEVER use it to say you updated/moved/changed anything: without patchRows, no change happens. ANY requested change REQUIRES form 2 or 3.
 2. Targeted plan changes: {"message": "summary of what you changed and why", "patchRows": [complete replacement rows for ONLY the days that change, using the full row schema: date, day, week, phase, session, runMiles, targetRPE, estMinutes, reason, and components (typed pieces: warmup/wod/lift/skill/run/swim/bike_mtb/bike_road/class/cooldown - pure aerobic work uses the specific cardio type, coached classes attended elsewhere are "class" - each with title and a complete description)]}
 3. The request changes the plan's fundamental structure (different weekly pattern, new/changed events, different phases): {"message": "...", "outline": {"startDate": "YYYY-MM-DD", "endDate": "YYYY-MM-DD", "phases": [{"name": "Build", "weeks": "1-3", "goal": "one athlete-specific sentence"}], "weeks": [{"weekNumber": 1, "startDate": "YYYY-MM-DD", "focus": "...", "details": "..."}]}} - the app will rebuild the whole table from it.
+
+${IMPLEMENT_KNOWLEDGE}
 
 PATCH RULES:
 - patchRows contains ONLY changed days; every unchanged day stays out of it.
