@@ -87,7 +87,7 @@ export default function PersonalAITrainer({ userId, todayPersonalWorkouts, userP
   const hasWorkoutToAnalyze = todayPersonalWorkouts && todayPersonalWorkouts.length > 0;
   const [userHistory, setUserHistory] = useState<UserWorkoutHistory>({ lifts: [], wods: [] });
   const [sessionFeedbacks, setSessionFeedbacks] = useState<SessionFeedbackEntry[]>([]);
-  const [baselineData, setBaselineData] = useState<{ skillNames: string[]; cardioLogs: { activity: string; miles?: number; dateString?: string }[]; trainingStyle: string } | null>(null);
+  const [baselineData, setBaselineData] = useState<{ skillNames: string[]; cardioLogs: { activity: string; miles?: number; dateString?: string }[]; trainingStyle: string; equipment: string } | null>(null);
   const [aiAdvice, setAiAdvice] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -192,6 +192,7 @@ export default function PersonalAITrainer({ userId, todayPersonalWorkouts, userP
           skillNames: Array.from(new Set(skillSnap.docs.map(d => String(d.data().skillTitle || d.data().skillName || "")).filter(Boolean))),
           cardioLogs: cardioSnap.docs.map(d => ({ activity: String(d.data().activity || ""), miles: Number(d.data().miles) || 0, dateString: String(d.data().dateString || "") })),
           trainingStyle: prefsSnap.empty ? "crossfit" : String(prefsSnap.docs[0].data().trainingStyle || "crossfit"),
+          equipment: prefsSnap.empty ? "" : String(prefsSnap.docs[0].data().equipment || ""),
         });
         setHasLoadedHistory(true);
       } catch (err) {
@@ -366,6 +367,7 @@ ${workoutDescription}
 
 ATHLETE'S WORKOUT HISTORY:
 ${historySummary || "No workout history available yet - treat them as an intermediate athlete."}${recentLoad}
+${baselineData?.equipment ? `\nEQUIPMENT THE ATHLETE OWNS (home/garage): ${baselineData.equipment}` : ""}
 ${userGoalsInfo ? `\nATHLETE'S PROFILE & GOALS:${userGoalsInfo}` : `\nNO GOALS SET - Focus advice on improving their weaknesses and building well-rounded fitness.`}
 
 You MUST provide advice in this EXACT format with these sections:
@@ -394,6 +396,7 @@ CRITICAL RULES:
 - PERCENTAGE MATH: "@ 65%" means 65% of the athlete's 1RM for THAT SAME lift. Apply the percentage exactly ONCE to the correct 1RM, show the math (e.g. "115lb - that's 65% of your 175lb snatch 1RM"), and round to the nearest 5lb. Never apply a percentage to a weight that was already reduced by a percentage.
 - A lift's TESTED 1RM (marked in the history above) IS the athlete's 1RM. Use it EXACTLY for all % math - never quote a different or Epley-estimated number for that lift. Estimates exist only for lifts with no tested single and must be written as estimates ("~180lb estimated").
 - If you have NO data for a movement, say so and give a conservative starting weight with a note to log it. NEVER derive it from an unrelated lift (e.g. do not base RDL weight on strict press).
+- When the workout is at home, recommend ONLY loads and implements from the EQUIPMENT list above (their exact bells/bags/bars - don't invent a 53lb kettlebell they don't own). If a movement needs equipment they lack, give the closest substitution using what they have. Heavy soft sandbags can't be back-racked or pressed overhead - bear-hug squats/carries, single-shoulder cleans, and over-shoulder tosses are the sandbag moves. Workouts at a gym/class can assume full gym equipment.
 - If today's workout is a coached CLASS with no specific programming listed, do NOT guess the class content. Keep advice short: readiness, effort level, and mindset only - and remind them they can scan the class whiteboard to log the actual work.
 - Use their ACTUAL numbers from history when recommending weights
 - Be specific and direct - no vague advice like "listen to your body" or "go at a moderate pace"
