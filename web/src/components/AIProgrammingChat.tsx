@@ -1387,7 +1387,7 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
           const lastUserText = String([...updatedMessages].reverse().find(m => m.role === "user")?.content || "");
           const looksLikeQuestion = /^\s*(why|what|how|when|who|where|is|are|does|did|will|would|should)\b/i.test(lastUserText);
           const looksLikeChangeRequest = !looksLikeQuestion &&
-            /\b(make|move|swap|switch|change|replace|shift|drop|remove|add|reschedule|cancel|skip|rest day|as rest|to rest)\b/i.test(lastUserText);
+            /\b(make|move|swap|switch|change|replace|shift|drop|remove|add|added|reschedule|cancel|skip|redo|remake|rebuild|regenerate|re-?anchor|incorporate|adjust|update|new (?:plan|program|equipment)|rest day|as rest|to rest)\b/i.test(lastUserText);
           const claimsChange = /\b(updated|patched|moved|shifted|swapped|rescheduled|adjusted|changed|replaced)\b/i.test(parsed.message);
 
           if (claimsChange || looksLikeChangeRequest) {
@@ -1633,7 +1633,9 @@ ${conversationHistory}
 READING THE ATHLETE:
 - Observations and shared context ("Saturdays are pretty hard", "I ran 13 miles two weeks ago", "my legs are tired") are NOT change requests. Acknowledge them, factor them into future programming decisions, and explain how - but do NOT add, remove, or replace sessions unless the athlete explicitly asks for a change. If you genuinely cannot tell whether they want a change, ask ONE short clarifying question (form 1) instead of guessing.
 - SANITY-CHECK every number the athlete reports (distance, time, pace, load). If it is implausible (e.g., "3 miles in 2.5 hours" is a 50-minute mile), question it in a message-only response BEFORE rebuilding anything around it.
-- The preferences above (equipment, schedule) are CURRENT as of this message - trust them over your memory of earlier turns. If the athlete says they added equipment: when it IS in the list, immediately patch the upcoming days that can now use it (or output a new outline for a full remake); when it is NOT in the list, quote exactly what the equipment list currently says and ask them to save it in preferences. NEVER claim the plan "already maximizes" equipment without naming the specific upcoming days that use it.
+- The preferences above (equipment, schedule) are CURRENT as of this message - trust them over your memory of earlier turns. If the athlete says they added equipment: when it IS in the list, immediately patch the upcoming days that can now use it (or output a new outline for a full remake); when it is NOT in the list, quote exactly what the equipment list currently says and ask them to save it in preferences.
+- Equipment counts as "incorporated" ONLY if upcoming days contain movements that literally USE it (pull-up bar -> pull-ups, chin-ups, toes-to-bar, hanging work; sandbag -> sandbag cleans, carries, squats, over-shoulder throws). Wall balls and runs use neither. Scan the upcoming table: if the new equipment's movements appear on no upcoming day, it is NOT incorporated - patch it into the upcoming weeks now.
+- An explicit "redo/remake/regenerate the plan" - or the athlete REPEATING a request you already declined - is an ORDER, not a discussion. Respond with patchRows (or a full outline) THIS turn. Never refuse the same request twice.
 - A progress-review request ("compare what I logged vs what was programmed") is answered from the TRAINING LOG BY DAY data above: name the specific days and lifts you compared, then patch what needs re-anchoring. If everything is genuinely on track, a message-only answer is CORRECT - but it must cite specifics ("your 165x5 bench on 08-27 matches the programmed 70%"), never a bare "no changes needed".
 
 Respond to the athlete's latest message with valid JSON in EXACTLY ONE of these forms:
