@@ -688,6 +688,9 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
   // True once we know whether this user has ever saved preferences
   const [prefsChecked, setPrefsChecked] = useState(false);
   const autoOpenedSetup = useRef(false);
+  // Keeps the chat pinned to the newest message instead of making the
+  // athlete scroll down past the whole history
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const [savingPreferences, setSavingPreferences] = useState(false);
 
   // Recently used workouts (last 6 months) - to avoid repetition
@@ -1006,6 +1009,12 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
     fetchPreferencesFromDb().finally(() => setPrefsChecked(true));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
+
+  // Pin the chat to the newest message (new turns, loading dots, and
+  // week-by-week generation progress all land at the bottom)
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [activeSession?.messages?.length, isLoading, generationProgress]);
 
   // Brand-new users get walked into setup before asking for programming
   useEffect(() => {
@@ -2810,6 +2819,7 @@ PATCH RULES:
               </div>
             )}
 
+            <div ref={messagesEndRef} />
           </div>
 
           {/* Error Display */}

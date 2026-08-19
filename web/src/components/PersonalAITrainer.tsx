@@ -360,7 +360,7 @@ ${userGoalsInfo ? `\nATHLETE'S PROFILE & GOALS:${userGoalsInfo}` : `\nNO GOALS S
 You MUST provide advice in this EXACT format with these sections:
 
 **SCALING RECOMMENDATION:**
-Recommend Rx, Scaled, or Foundations and explain WHY this is the right choice for them based on their specific numbers. Be direct: "Do [this option] because [specific reason]."
+ONLY if today's workout is a WOD/benchmark with actual Rx/Scaled variants (prescribed Rx weights or standard scaling options): recommend Rx, Scaled, or Foundations and explain WHY based on their numbers. If today is percentage-based strength work, class programming, or anything WITHOUT an Rx option, there is NOTHING to scale - SKIP this section entirely (do not print the header) and let the weights section do the talking. Never tell them to "do Rx" on a workout that has no Rx.
 
 **SPECIFIC WEIGHTS/LOADS:**
 List each movement that requires loading and give them an EXACT number based on their lift PRs. Example: "Deadlifts: Use 185lb (that's 65% of your 285lb 1RM - perfect for this workout style)." If you don't have data for a lift, give a conservative recommendation and tell them to track it.
