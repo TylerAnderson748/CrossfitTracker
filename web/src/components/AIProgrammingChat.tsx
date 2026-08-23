@@ -571,6 +571,9 @@ Guidelines:
 - Scale difficulty based on the athlete's level
 - Assume a garage/home gym setup: no fancy machines unless the athlete lists them
 ${IMPLEMENT_KNOWLEDGE}
+EQUIPMENT TRUTH:
+- When asked what equipment they own or what you'll program with, QUOTE their saved equipment list VERBATIM - never paraphrase, shorten, or recite from memory, so they can spot anything missing or wrong.
+- If the athlete mentions gear that is NOT in their saved list, include "equipmentAdditions": ["item", ...] in your JSON response (alongside message/workouts) - the app saves those to their preferences - then program with them.
 - Use standard CrossFit movements and terminology
 - Keep descriptions clear and concise
 - Use newlines (\\n) for formatting within descriptions
@@ -1384,6 +1387,11 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
           throw new SyntaxError("Unparseable AI response");
         }
 
+        // The athlete mentioned gear that isn't saved yet - persist it
+        if (Array.isArray(parsed.equipmentAdditions) && parsed.equipmentAdditions.length > 0) {
+          await applyEquipmentAdditions(parsed.equipmentAdditions.map((s: unknown) => String(s)));
+        }
+
         // Revision mode: targeted changes to the existing plan table
         if (plan && Array.isArray(parsed.patchRows) && parsed.patchRows.length > 0) {
           await applyPatchWithCorrections(parsed.patchRows, parsed.message || "Plan updated.", updatedMessages, conversationHistory);
@@ -1644,7 +1652,8 @@ ${conversationHistory}
 READING THE ATHLETE:
 - Observations and shared context ("Saturdays are pretty hard", "I ran 13 miles two weeks ago", "my legs are tired") are NOT change requests. Acknowledge them, factor them into future programming decisions, and explain how - but do NOT add, remove, or replace sessions unless the athlete explicitly asks for a change. If you genuinely cannot tell whether they want a change, ask ONE short clarifying question (form 1) instead of guessing.
 - SANITY-CHECK every number the athlete reports (distance, time, pace, load). If it is implausible (e.g., "3 miles in 2.5 hours" is a 50-minute mile), question it in a message-only response BEFORE rebuilding anything around it.
-- The preferences above (equipment, schedule) are CURRENT as of this message - trust them over your memory of earlier turns. If the athlete says they added equipment: when it IS in the list, immediately patch the upcoming days that can now use it (or output a new outline for a full remake); when it is NOT in the list, quote exactly what the equipment list currently says and ask them to save it in preferences.
+- The preferences above (equipment, schedule) are CURRENT as of this message - trust them over your memory of earlier turns. If the athlete says they added equipment: when it IS in the list, immediately patch the upcoming days that can now use it (or output a new outline for a full remake); when it is NOT in the list, include "equipmentAdditions": ["item", ...] in your JSON response (the app saves them to preferences) and program with them in the same turn.
+- When asked what equipment they own or what you'll program with, QUOTE the saved equipment list VERBATIM - never paraphrase or shorten it, so the athlete can spot anything missing.
 - Equipment counts as "incorporated" ONLY if upcoming days contain movements that literally USE it (pull-up bar -> pull-ups, chin-ups, toes-to-bar, hanging work; sandbag -> sandbag cleans, carries, squats, over-shoulder throws). Wall balls and runs use neither. Scan the upcoming table: if the new equipment's movements appear on no upcoming day, it is NOT incorporated - patch it into the upcoming weeks now.
 - An explicit "redo/remake/regenerate the plan" - or the athlete REPEATING a request you already declined - is an ORDER, not a discussion. Respond with patchRows (or a full outline) THIS turn. Never refuse the same request twice.
 - A progress-review request ("compare what I logged vs what was programmed") is answered from the TRAINING LOG BY DAY data above: name the specific days and lifts you compared, then patch what needs re-anchoring. If everything is genuinely on track, a message-only answer is CORRECT - but it must cite specifics ("your 165x5 bench on 08-27 matches the programmed 70%"), never a bare "no changes needed".
@@ -2116,6 +2125,24 @@ PATCH RULES:
       wodTitles: category === "wod" ? [...prev.wodTitles, name] : prev.wodTitles,
       cardioLogs: category === "cardio" ? [...prev.cardioLogs, { activity: "run", miles: 1 }] : prev.cardioLogs,
     } : prev);
+  };
+
+  // Chat mentioned new gear: append it to the saved equipment list so the
+  // whole app (programming, daily advice, % hints) knows about it
+  const applyEquipmentAdditions = async (items: string[]) => {
+    try {
+      const current = (await fetchPreferencesFromDb()) || preferences;
+      const existingLower = (current.equipment || "").toLowerCase();
+      const newItems = items.map(s => s.trim()).filter(s => s && !existingLower.includes(s.toLowerCase()));
+      if (newItems.length === 0) return;
+      const equipment = current.equipment ? `${current.equipment}, ${newItems.join(", ")}` : newItems.join(", ");
+      setPreferences(prev => ({ ...prev, equipment }));
+      if (preferencesDocId) {
+        await updateDoc(doc(db, "aiProgrammingPreferences", preferencesDocId), { equipment, updatedAt: serverTimestamp() });
+      }
+    } catch (err) {
+      console.error("Error saving equipment additions:", err);
+    }
   };
 
   // Wizard learned what equipment the athlete has: persist it to preferences
