@@ -461,6 +461,15 @@ export interface TrainingPlan {
   rows: PlanRow[];
   // What each phase of the block is FOR ("Build: push squat volume so...")
   phaseGoals?: { phase: string; weeks: string; goal: string }[];
+  // The macro outline day-level blocks are generated from, ~4 weeks at a
+  // time, so later blocks are written from real logged data
+  outline?: {
+    startDate: string;
+    endDate: string;
+    weeks: { weekNumber: number; startDate: string; focus: string; details?: string }[];
+  };
+  // Highest outline week that has day-level rows generated so far
+  generatedThroughWeek?: number;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }

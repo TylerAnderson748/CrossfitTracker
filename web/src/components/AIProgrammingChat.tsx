@@ -1679,6 +1679,42 @@ PATCH RULES:
 - Pure JSON only - no markdown fences.`;
   };
 
+  // Generate the next ~4-week block of an existing plan from its stored
+  // macro outline. Runs with fresh preferences and the athlete's current
+  // logs/check-ins, so the new block is anchored to reality, not to
+  // guesses made a month ago.
+  const generateNextBlock = async () => {
+    if (!plan?.outline || !activeSession || isLoading) return;
+    const done = plan.generatedThroughWeek || 0;
+    const remaining = (plan.outline.weeks || []).filter(w => w.weekNumber > done);
+    if (remaining.length === 0) return;
+    setIsLoading(true);
+    setError(null);
+    try {
+      await fetchPreferencesFromDb();
+      const conversationHistory = (activeSession.messages || [])
+        .map(m => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`)
+        .join("\n\n");
+      await generatePlanTable(
+        activeSession.id,
+        `Building your next block from the outline - anchored to what you've actually logged so far.`,
+        { startDate: plan.outline.startDate, endDate: plan.outline.endDate, weeks: remaining },
+        conversationHistory,
+        activeSession.messages || [],
+        plan.rows
+      );
+    } catch (err) {
+      console.error("Error generating next block:", err);
+      setError("Failed to build the next block. Please try again.");
+    } finally {
+      setIsLoading(false);
+      setGenerationProgress(null);
+    }
+  };
+
+  // True when the plan has outline weeks beyond what's been generated
+  const nextBlockAvailable = !!(plan?.outline && (plan.outline.weeks || []).some(w => w.weekNumber > (plan.generatedThroughWeek || 0)));
+
   // Deterministic checks a generated week must pass (rest-day count, class
   // placement, endurance structure when a race is on the calendar)
   const validateWeekRows = (candidate: PlanRow[], weekDates: string[]): string[] => {
@@ -2019,7 +2055,8 @@ Respond: {"problems": []} or {"problems": ["which weeks + what's wrong + the fix
     planMessage: string,
     outline: ProgramOutline,
     conversationHistory: string,
-    updatedMessages: AIChatMessage[]
+    updatedMessages: AIChatMessage[],
+    existingRows: PlanRow[] = []
   ) => {
     // Never program the past: clamp the outline to start no earlier than
     // today, and drop weeks whose entire range is already behind us
@@ -2027,14 +2064,23 @@ Respond: {"problems": []} or {"problems": ["which weeks + what's wrong + the fix
     const todayStr = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
     if (outline.startDate && outline.startDate < todayStr) outline.startDate = todayStr;
     const allWeeks = (outline.weeks || []).slice(0, 20);
-    const weeks = allWeeks.filter((w, idx) => {
+    const futureWeeks = allWeeks.filter((w, idx) => {
       const end = allWeeks[idx + 1]?.startDate || outline.endDate || w.startDate;
       return !end || end >= todayStr;
     });
-    weeks.forEach(w => {
+    futureWeeks.forEach(w => {
       if (w.startDate && w.startDate < todayStr) w.startDate = todayStr;
     });
-    const allRows: PlanRow[] = [];
+
+    // Blocks, not whole macrocycles: write day-level rows for the next
+    // ~4 weeks only. The rest of the plan stays as the phase outline and
+    // is generated block by block from real logged data as the athlete
+    // gets there.
+    const BLOCK_WEEKS = 4;
+    const weeks = futureWeeks.slice(0, BLOCK_WEEKS);
+    const remainingAfterBlock = futureWeeks.slice(BLOCK_WEEKS);
+
+    const allRows: PlanRow[] = [...existingRows];
     const failedWeeks: number[] = [];
 
     for (let i = 0; i < weeks.length; i++) {
@@ -2117,6 +2163,24 @@ Respond: {"problems": []} or {"problems": ["which weeks + what's wrong + the fix
     const phaseGoals = (outline.phases || [])
       .map(p => ({ phase: String(p.name || p.phase || "").trim(), weeks: String(p.weeks || "").trim(), goal: String(p.goal || "").trim() }))
       .filter(p => p.phase && p.goal);
+    const mergedPhaseGoals = phaseGoals.length > 0 ? phaseGoals : (plan?.phaseGoals || []);
+    // Persist the macro outline so later blocks can be generated from it;
+    // continuations keep the original full outline
+    const isContinuation = existingRows.length > 0;
+    const outlineForStore = isContinuation && plan?.outline
+      ? plan.outline
+      : {
+          startDate: outline.startDate || "",
+          endDate: outline.endDate || "",
+          weeks: futureWeeks.map(w => ({
+            weekNumber: w.weekNumber,
+            startDate: w.startDate || "",
+            focus: w.focus || "",
+            ...(w.details ? { details: w.details } : {}),
+          })),
+        };
+    const lastGeneratedWeek = weeks[weeks.length - 1]?.weekNumber || 0;
+    const generatedThroughWeek = Math.max(isContinuation ? (plan?.generatedThroughWeek || 0) : 0, lastGeneratedWeek);
     const planDoc: Omit<TrainingPlan, "id"> = {
       userId,
       sessionId,
@@ -2125,7 +2189,9 @@ Respond: {"problems": []} or {"problems": ["which weeks + what's wrong + the fix
       startDate: outline.startDate || allRows[0]?.date || "",
       endDate: outline.endDate || allRows[allRows.length - 1]?.date || "",
       rows: allRows,
-      ...(phaseGoals.length > 0 ? { phaseGoals } : {}),
+      ...(mergedPhaseGoals.length > 0 ? { phaseGoals: mergedPhaseGoals } : {}),
+      outline: outlineForStore,
+      generatedThroughWeek,
       createdAt: plan?.createdAt || now,
       updatedAt: now,
     };
@@ -2140,6 +2206,9 @@ Respond: {"problems": []} or {"problems": ["which weeks + what's wrong + the fix
     const coherenceFindings = weeks.length >= 3 ? await critiquePlanCoherence(allRows) : [];
 
     let finalText = `${planMessage}\n\nYour plan table is ready: ${allRows.length} days (${planDoc.startDate} to ${planDoc.endDate}). Open "View Plan Table" above to review every row. Tell me what to change - or lock it in and I'll put it on your calendar.\n\nWeekly structure:\n${planWeekSummary(allRows)}`;
+    if (remainingAfterBlock.length > 0 && weeks.length > 0) {
+      finalText += `\n\n📦 Day-by-day programming covers weeks ${weeks[0].weekNumber}-${weeks[weeks.length - 1].weekNumber} (this block). The rest of the plan stays as the phase outline - when this block winds down, tap "Build my next block" and I'll write the next ${Math.min(remainingAfterBlock.length, 4)} weeks from what you actually logged.`;
+    }
     if (coherenceFindings.length > 0) {
       finalText += `\n\n🧐 My own review of the full block found:\n${coherenceFindings.map(f => `- ${f}`).join("\n")}\nSay "apply your self-review" and I'll patch these, or lock the plan as-is.`;
     }
@@ -2456,8 +2525,12 @@ Respond: {"problems": []} or {"problems": ["which weeks + what's wrong + the fix
     setError(null);
 
     try {
-      // Replace any AI-planned workouts already on the plan's dates
-      const targetDates = new Set(plan.rows.map(r => r.date).filter(Boolean));
+      // Replace any AI-planned workouts on the plan's dates - but never
+      // touch dates already behind us: past days may carry the athlete's
+      // logs, and rewriting history helps no one
+      const pubT = new Date();
+      const pubToday = `${pubT.getFullYear()}-${String(pubT.getMonth() + 1).padStart(2, "0")}-${String(pubT.getDate()).padStart(2, "0")}`;
+      const targetDates = new Set(plan.rows.map(r => r.date).filter(ds => ds && ds >= pubToday));
       const existingSnap = await getDocs(query(
         collection(db, "personalWorkouts"),
         where("userId", "==", userId)
@@ -2481,7 +2554,7 @@ Respond: {"problems": []} or {"problems": ["which weeks + what's wrong + the fix
       let pending = 0;
       let written = 0;
       for (const row of plan.rows) {
-        if (!row.date || row.session.toLowerCase().includes("rest")) continue;
+        if (!row.date || row.date < pubToday || row.session.toLowerCase().includes("rest")) continue;
         const [y, m, d] = row.date.split("-").map(Number);
         const workoutDate = new Date(y, m - 1, d, 12, 0, 0);
         if (isNaN(workoutDate.getTime())) continue;
@@ -3088,6 +3161,14 @@ Respond: {"problems": []} or {"problems": ["which weeks + what's wrong + the fix
                 📊 Check my progress & adjust the upcoming weeks
               </button>
             )}
+            {plan && nextBlockAvailable && !isLoading && (
+              <button
+                onClick={generateNextBlock}
+                className="w-full mb-3 py-2.5 bg-indigo-50 text-indigo-700 text-sm font-semibold rounded-lg hover:bg-indigo-100 transition-colors"
+              >
+                📦 Build my next block (written from what I&apos;ve logged)
+              </button>
+            )}
             <div className="flex gap-3">
               <input
                 type="text"
@@ -3320,6 +3401,11 @@ Respond: {"problems": []} or {"problems": ["which weeks + what's wrong + the fix
                         </p>
                       ))}
                     </div>
+                    {nextBlockAvailable && (
+                      <p className="text-xs text-purple-600 mt-2">
+                        📦 Day-by-day rows cover the current block (through week {plan.generatedThroughWeek}). Later weeks get written from your actual logs when you build the next block.
+                      </p>
+                    )}
                   </div>
                 );
               })()}
