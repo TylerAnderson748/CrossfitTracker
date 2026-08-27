@@ -1857,6 +1857,87 @@ PATCH RULES:
     return out;
   };
 
+  // Second-opinion pass: a fresh AI call with ONE job - judge a drafted
+  // week like a head coach reviewing an assistant's work. A focused critic
+  // catches judgment problems (wrong loads, junk volume, equipment misuse,
+  // filler reasons) that the writer's overloaded prompt misses and the
+  // deterministic validator can't check.
+  const critiqueWeek = async (candidate: PlanRow[], weekNumber: number): Promise<string[]> => {
+    try {
+      const serialized = candidate.map(r =>
+        `${r.date} ${r.day}: ${r.session}${r.targetRPE ? ` @ ${r.targetRPE}` : ""}${r.runMiles ? ` ${r.runMiles}mi` : ""} | ${(r.components || []).map(c => `[${c.type}] ${c.title}: ${c.description}`).join(" • ") || r.detail}${r.reason ? ` | Why: ${r.reason}` : ""}`
+      ).join("\n");
+      const text = await chatCompletion({
+        messages: [
+          { role: "system", content: "You are a sharp head coach reviewing an assistant coach's draft week. Respond with valid JSON only." },
+          { role: "user", content: `${buildPreferencesSection(preferences)}${athleteBlock}
+DRAFTED WEEK ${weekNumber}:
+${serialized}
+
+Review THIS WEEK ONLY as this athlete's head coach. Flag ONLY real, concrete problems:
+- Loads wrong for THIS athlete (contradict their PRs above, or fake precision on untested lifts)
+- Equipment misuse (movements their gear can't do; heavy sandbags back-racked or pressed overhead; implements they don't own)
+- Junk volume or nonsensical stimulus (two leg-crushing days back to back, a "recovery" day that isn't)
+- Generic filler reasons that ignore this athlete's data, goals, or check-ins
+- Movement monotony (same movement hammered day after day)
+Do NOT flag rest-day counts, class placement, or schedule structure - code already enforces those. Do NOT invent problems to seem thorough: a solid week deserves {"problems": []}.
+
+Respond: {"problems": []} or {"problems": ["date + what's wrong + the fix", ...]} (max 4).` }
+        ],
+        temperature: 0.3,
+        maxTokens: 2000,
+      });
+      const parsed = tryParseJson(text);
+      return parsed && Array.isArray(parsed.problems)
+        ? parsed.problems.map((p: unknown) => String(p)).filter(Boolean).slice(0, 4)
+        : [];
+    } catch (err) {
+      console.error("Critic pass failed (non-fatal):", err);
+      return [];
+    }
+  };
+
+  // Whole-plan review after assembly: cross-week judgment (does the
+  // progression actually build, do deloads land, does volume wave) that
+  // no single-week call can see. Findings go into the chat - the athlete
+  // can say "apply your self-review" to patch them.
+  const critiquePlanCoherence = async (rows: PlanRow[]): Promise<string[]> => {
+    try {
+      const byWeek = new Map<number, PlanRow[]>();
+      rows.forEach(r => byWeek.set(r.week, [...(byWeek.get(r.week) || []), r]));
+      const summary = Array.from(byWeek.entries())
+        .sort((a, b) => a[0] - b[0])
+        .map(([wk, wr]) => `Wk ${wk} (${wr[0]?.phase || ""}): ${wr.map(r => `${r.day.slice(0, 3)}=${r.session}${r.runMiles ? ` ${r.runMiles}mi` : ""}${r.targetRPE ? ` @${r.targetRPE}` : ""}`).join(", ")}`)
+        .join("\n");
+      const text = await chatCompletion({
+        messages: [
+          { role: "system", content: "You are a head coach reviewing a full training block for cross-week coherence. Respond with valid JSON only." },
+          { role: "user", content: `${buildPreferencesSection(preferences)}
+FULL BLOCK, WEEK BY WEEK:
+${summary}
+
+Judge the BLOCK as a whole (not individual days):
+- Does volume/intensity actually wave and build, or is every week the same?
+- Do deloads exist and land where fatigue would peak?
+- Does the block progress toward the athlete's stated events on time (long runs building, taper where it belongs)?
+- Any two adjacent weeks that would bury this athlete?
+Do NOT flag single-day details or schedule rules. A well-built block deserves {"problems": []}.
+
+Respond: {"problems": []} or {"problems": ["which weeks + what's wrong + the fix", ...]} (max 3).` }
+        ],
+        temperature: 0.3,
+        maxTokens: 1500,
+      });
+      const parsed = tryParseJson(text);
+      return parsed && Array.isArray(parsed.problems)
+        ? parsed.problems.map((p: unknown) => String(p)).filter(Boolean).slice(0, 3)
+        : [];
+    } catch (err) {
+      console.error("Coherence pass failed (non-fatal):", err);
+      return [];
+    }
+  };
+
   // Generate the full plan table: one API call per week, assembled and saved as a draft
   const generatePlanTable = async (
     sessionId: string,
@@ -1874,7 +1955,10 @@ PATCH RULES:
 
       let rows: PlanRow[] | null = null;
       let correction = "";
-      for (let attempt = 0; attempt < 3 && !rows; attempt++) {
+      // One head-coach critique per week: after the hard rules pass, a
+      // separate focused AI call judges the week and can send it back once
+      let critiqued = false;
+      for (let attempt = 0; attempt < 4 && !rows; attempt++) {
         try {
           const text = await chatCompletion({
             // Plan weeks get the stronger reasoning model - programming a
@@ -1894,9 +1978,18 @@ PATCH RULES:
             // Enforce hard schedule rules (rest-day count, class placement):
             // retry with an explicit correction instead of accepting a bad week
             const problems = validateWeekRows(candidate, datesForWeek(outline, weeks[i]));
-            if (attempt < 2 && problems.length > 0) {
+            if (attempt < 3 && problems.length > 0) {
               correction = `CORRECTION - YOUR PREVIOUS ATTEMPT WAS REJECTED for these violations:\n${problems.map(p => `- ${p}`).join("\n")}\nRegenerate the ENTIRE week and fix every violation.`;
               continue;
+            }
+            // Hard rules pass - run the head-coach critique (once per week)
+            if (!critiqued && attempt < 3) {
+              critiqued = true;
+              const critiques = await critiqueWeek(candidate, weeks[i].weekNumber);
+              if (critiques.length > 0) {
+                correction = `COACHING REVIEW - a head-coach review of your draft flagged these issues:\n${critiques.map(c => `- ${c}`).join("\n")}\nRegenerate the ENTIRE week fixing every issue. All schedule rules still apply.`;
+                continue;
+              }
             }
             rows = candidate;
           }
@@ -1938,7 +2031,13 @@ PATCH RULES:
     // on the assembled plan, same as chat patches
     const generationViolations = planWeekViolations(allRows);
 
+    // Cross-week self-review: progression, deloads, taper timing
+    const coherenceFindings = weeks.length >= 3 ? await critiquePlanCoherence(allRows) : [];
+
     let finalText = `${planMessage}\n\nYour plan table is ready: ${allRows.length} days (${planDoc.startDate} to ${planDoc.endDate}). Open "View Plan Table" above to review every row. Tell me what to change - or lock it in and I'll put it on your calendar.\n\nWeekly structure:\n${planWeekSummary(allRows)}`;
+    if (coherenceFindings.length > 0) {
+      finalText += `\n\n🧐 My own review of the full block found:\n${coherenceFindings.map(f => `- ${f}`).join("\n")}\nSay "apply your self-review" and I'll patch these, or lock the plan as-is.`;
+    }
     if (failedWeeks.length > 0) {
       finalText += `\n\n(Heads up: week${failedWeeks.length > 1 ? "s" : ""} ${failedWeeks.join(", ")} failed to generate - ask me to fill ${failedWeeks.length > 1 ? "them" : "it"} in.)`;
     }
