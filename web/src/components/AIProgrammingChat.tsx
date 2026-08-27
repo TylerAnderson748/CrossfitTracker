@@ -1619,6 +1619,7 @@ RULES:
 - "reason" (1-2 sentences): WHY this day is programmed this way given the phase, the surrounding days, and the athlete's goals. Every non-rest day gets one. The reason speaks to the ATHLETE about training intent - NEVER write rule bookkeeping ("to maintain exactly 2 rest days", "to satisfy the weekly cap") as a reason.
 - COACH THE PERSON, not the textbook: this plan is for ONE specific athlete whose data is above. Every week, several reasons and prescriptions must reference THEIR actual specifics - their PR numbers, their recent check-ins ("last week's squats felt very hard, so..."), their injuries, their goal race date, their class schedule. A reason that could appear in anyone's plan ("builds aerobic base", "maintains lifting skill") is filler - replace it with what this day does for THIS athlete right now.
 - THIN DATA = NO FAKE PRECISION: %-of-1RM prescriptions ONLY for lifts with solid logged data. For lifts marked [ROUGH] or unlogged, never invent derived rep-maxes or fabricated adjustments - prescribe by feel ("build to a hard but crisp set of 5 - log it, that becomes your baseline"), establish the baseline early in the block, and anchor later weeks to what the athlete actually logs.
+- VARIETY IS MANDATORY week to week: the previously-programmed days listed above are what already exists - NEVER copy an earlier workout or reuse its name. A recurring slot (e.g. Wednesday conditioning) keeps its GOAL but rotates movements, formats (EMOM / AMRAP / intervals / rounds / chipper), and rep schemes every week. Same goal, fresh workout.
 ${IMPLEMENT_KNOWLEDGE}
 - Rest days: session "Rest", components [] (or one light "cooldown" mobility component), runMiles 0. The reason states the RECOVERY PURPOSE in the context of the surrounding days (e.g., "Absorbs Sunday's long run so Tuesday's Oly class is quality lifting, not junk volume"). NEVER cite the rest-day rule, quota, settings, or "requirement" as the reason - the athlete wants to know what the rest accomplishes, not that a rule was followed.
 - Event days (competition, race): session in CAPS (e.g., "MARATHON", "CROSSFIT COMPETITION") with one component of race-day execution guidance.
@@ -1717,8 +1718,31 @@ PATCH RULES:
 
   // Deterministic checks a generated week must pass (rest-day count, class
   // placement, endurance structure when a race is on the calendar)
-  const validateWeekRows = (candidate: PlanRow[], weekDates: string[]): string[] => {
+  const validateWeekRows = (candidate: PlanRow[], weekDates: string[], priorRows: PlanRow[] = []): string[] => {
     const problems: string[] = [];
+
+    // Cross-week variety: a WOD that copies an earlier week's workout
+    // verbatim - or even reuses its name - is lazy programming and gets
+    // the week rejected before the athlete ever sees it
+    const priorWodDescs = new Map<string, string>();
+    const priorWodTitles = new Map<string, string>();
+    priorRows.forEach(r => (r.components || []).forEach(c => {
+      if (c.type !== "wod") return;
+      const nd = String(c.description || "").toLowerCase().replace(/\s+/g, " ").trim();
+      const nt = String(c.title || "").toLowerCase().trim();
+      if (nd) priorWodDescs.set(nd, r.date);
+      if (nt) priorWodTitles.set(nt, r.date);
+    }));
+    candidate.forEach(r => (r.components || []).forEach(c => {
+      if (c.type !== "wod") return;
+      const nd = String(c.description || "").toLowerCase().replace(/\s+/g, " ").trim();
+      const nt = String(c.title || "").toLowerCase().trim();
+      if (nd && priorWodDescs.has(nd)) {
+        problems.push(`${r.date} "${c.title}" is IDENTICAL to the workout already programmed on ${priorWodDescs.get(nd)} - write a genuinely different workout for this slot (different movements, format, or rep scheme serving the same goal)`);
+      } else if (nt && priorWodTitles.has(nt)) {
+        problems.push(`${r.date} reuses the workout name "${c.title}" from ${priorWodTitles.get(nt)} - recurring slots must rotate movements, formats, and names week to week`);
+      }
+    }));
     // Weeks containing a competition/race get looser structural rules
     const isEventWeek = candidate.some(r => /competition|marathon|race/i.test(r.session));
 
@@ -2115,7 +2139,7 @@ Respond: {"problems": []} or {"problems": ["which weeks + what's wrong + the fix
             const candidate = arr.map((r: Partial<PlanRow>) => sanitizePlanRow(r, weeks[i].weekNumber, weeks[i].focus));
             // Enforce hard schedule rules (rest-day count, class placement):
             // retry with an explicit correction instead of accepting a bad week
-            const problems = validateWeekRows(candidate, datesForWeek(outline, weeks[i]));
+            const problems = validateWeekRows(candidate, datesForWeek(outline, weeks[i]), allRows);
             if (attempt < 4 && problems.length > 0) {
               correction = `CORRECTION - YOUR PREVIOUS ATTEMPT WAS REJECTED for these violations:\n${problems.map(p => `- ${p}`).join("\n")}\nRegenerate the ENTIRE week and fix every violation.`;
               continue;
