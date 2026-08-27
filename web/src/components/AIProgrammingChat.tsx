@@ -1876,11 +1876,10 @@ ${serialized}
 
 Review THIS WEEK ONLY as this athlete's head coach. Flag ONLY real, concrete problems:
 - Loads wrong for THIS athlete (contradict their PRs above, or fake precision on untested lifts)
-- Equipment misuse (movements their gear can't do; heavy sandbags back-racked or pressed overhead; implements they don't own)
 - Junk volume or nonsensical stimulus (two leg-crushing days back to back, a "recovery" day that isn't)
 - Generic filler reasons that ignore this athlete's data, goals, or check-ins
 - Movement monotony (same movement hammered day after day)
-Do NOT flag rest-day counts, class placement, or schedule structure - code already enforces those. Do NOT invent problems to seem thorough: a solid week deserves {"problems": []}.
+Do NOT flag equipment usage (a separate reviewer covers that), rest-day counts, class placement, or schedule structure - code already enforces those. Do NOT invent problems to seem thorough: a solid week deserves {"problems": []}.
 
 Respond: {"problems": []} or {"problems": ["date + what's wrong + the fix", ...]} (max 4).` }
         ],
@@ -1893,6 +1892,49 @@ Respond: {"problems": []} or {"problems": ["date + what's wrong + the fix", ...]
         : [];
     } catch (err) {
       console.error("Critic pass failed (non-fatal):", err);
+      return [];
+    }
+  };
+
+  // Equipment analysis: a garage-gym athlete wants their gear USED, and
+  // used the way each implement is actually designed to be used. This
+  // reviewer has exactly that one job.
+  const critiqueEquipment = async (candidate: PlanRow[], weekNumber: number): Promise<string[]> => {
+    try {
+      const homeDays = candidate.filter(r => !(r.components || []).some(c => c.type === "class") && !r.session.toLowerCase().includes("rest"));
+      if (homeDays.length === 0) return [];
+      const serialized = homeDays.map(r =>
+        `${r.date} ${r.day}: ${(r.components || []).map(c => `[${c.type}] ${c.title}: ${c.description}`).join(" • ") || r.detail}`
+      ).join("\n");
+      const text = await chatCompletion({
+        messages: [
+          { role: "system", content: "You are an equipment specialist reviewing a home-gym training week. Respond with valid JSON only." },
+          { role: "user", content: `THE ATHLETE'S SAVED EQUIPMENT LIST (this is EVERYTHING they own at home):
+"${preferences.equipment || "(none saved)"}"
+
+${IMPLEMENT_KNOWLEDGE}
+
+THIS WEEK'S HOME SESSIONS (class days excluded - the class gym has full equipment):
+${serialized}
+
+Audit equipment use. Flag ONLY:
+- Movements requiring gear NOT on the list, or the wrong implement/weight for a listed item (e.g. a dumbbell weight they don't own)
+- Mechanically wrong use of an implement (violating the rules above - e.g. back-racked heavy sandbag, heavy-bag overhead press)
+- Prescriptions that don't NAME which implement/weight to use when the athlete owns several
+- Meaningful underuse: gear on the list that never appears all week when it clearly fits the programmed work (variety matters to a garage athlete)
+Do NOT flag class days, scheduling, or coaching philosophy. A week that uses the gear correctly deserves {"problems": []}.
+
+Respond: {"problems": []} or {"problems": ["date + the issue + the fix", ...]} (max 4).` }
+        ],
+        temperature: 0.2,
+        maxTokens: 2000,
+      });
+      const parsed = tryParseJson(text);
+      return parsed && Array.isArray(parsed.problems)
+        ? parsed.problems.map((p: unknown) => String(p)).filter(Boolean).slice(0, 4)
+        : [];
+    } catch (err) {
+      console.error("Equipment critique failed (non-fatal):", err);
       return [];
     }
   };
@@ -1946,7 +1988,19 @@ Respond: {"problems": []} or {"problems": ["which weeks + what's wrong + the fix
     conversationHistory: string,
     updatedMessages: AIChatMessage[]
   ) => {
-    const weeks = (outline.weeks || []).slice(0, 20);
+    // Never program the past: clamp the outline to start no earlier than
+    // today, and drop weeks whose entire range is already behind us
+    const t = new Date();
+    const todayStr = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
+    if (outline.startDate && outline.startDate < todayStr) outline.startDate = todayStr;
+    const allWeeks = (outline.weeks || []).slice(0, 20);
+    const weeks = allWeeks.filter((w, idx) => {
+      const end = allWeeks[idx + 1]?.startDate || outline.endDate || w.startDate;
+      return !end || end >= todayStr;
+    });
+    weeks.forEach(w => {
+      if (w.startDate && w.startDate < todayStr) w.startDate = todayStr;
+    });
     const allRows: PlanRow[] = [];
     const failedWeeks: number[] = [];
 
@@ -1982,12 +2036,18 @@ Respond: {"problems": []} or {"problems": ["which weeks + what's wrong + the fix
               correction = `CORRECTION - YOUR PREVIOUS ATTEMPT WAS REJECTED for these violations:\n${problems.map(p => `- ${p}`).join("\n")}\nRegenerate the ENTIRE week and fix every violation.`;
               continue;
             }
-            // Hard rules pass - run the head-coach critique (once per week)
+            // Hard rules pass - run both reviewers in parallel (once per
+            // week): the head coach judges the training, the equipment
+            // specialist audits gear usage
             if (!critiqued && attempt < 3) {
               critiqued = true;
-              const critiques = await critiqueWeek(candidate, weeks[i].weekNumber);
+              const [coachIssues, equipIssues] = await Promise.all([
+                critiqueWeek(candidate, weeks[i].weekNumber),
+                critiqueEquipment(candidate, weeks[i].weekNumber),
+              ]);
+              const critiques = [...coachIssues, ...equipIssues];
               if (critiques.length > 0) {
-                correction = `COACHING REVIEW - a head-coach review of your draft flagged these issues:\n${critiques.map(c => `- ${c}`).join("\n")}\nRegenerate the ENTIRE week fixing every issue. All schedule rules still apply.`;
+                correction = `COACHING REVIEW - a head-coach and equipment review of your draft flagged these issues:\n${critiques.map(c => `- ${c}`).join("\n")}\nRegenerate the ENTIRE week fixing every issue. All schedule rules still apply.`;
                 continue;
               }
             }
