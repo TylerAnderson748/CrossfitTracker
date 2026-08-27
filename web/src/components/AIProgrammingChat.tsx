@@ -1862,11 +1862,14 @@ PATCH RULES:
   // catches judgment problems (wrong loads, junk volume, equipment misuse,
   // filler reasons) that the writer's overloaded prompt misses and the
   // deterministic validator can't check.
+  const serializeWeekForReview = (candidate: PlanRow[]): string =>
+    candidate.map(r =>
+      `${r.date} ${r.day}: ${r.session}${r.targetRPE ? ` @ ${r.targetRPE}` : ""}${r.runMiles ? ` ${r.runMiles}mi` : ""} | ${(r.components || []).map(c => `[${c.type}] ${c.title}: ${c.description}`).join(" • ") || r.detail}${r.reason ? ` | Why: ${r.reason}` : ""}`
+    ).join("\n");
+
   const critiqueWeek = async (candidate: PlanRow[], weekNumber: number): Promise<string[]> => {
     try {
-      const serialized = candidate.map(r =>
-        `${r.date} ${r.day}: ${r.session}${r.targetRPE ? ` @ ${r.targetRPE}` : ""}${r.runMiles ? ` ${r.runMiles}mi` : ""} | ${(r.components || []).map(c => `[${c.type}] ${c.title}: ${c.description}`).join(" • ") || r.detail}${r.reason ? ` | Why: ${r.reason}` : ""}`
-      ).join("\n");
+      const serialized = serializeWeekForReview(candidate);
       const text = await chatCompletion({
         messages: [
           { role: "system", content: "You are a sharp head coach reviewing an assistant coach's draft week. Respond with valid JSON only." },
@@ -1935,6 +1938,36 @@ Respond: {"problems": []} or {"problems": ["date + the issue + the fix", ...]} (
         : [];
     } catch (err) {
       console.error("Equipment critique failed (non-fatal):", err);
+      return [];
+    }
+  };
+
+  // Verification round: after a critiqued week is rewritten, check ONLY
+  // whether the specific flagged issues were actually fixed. Narrow by
+  // design - it cannot raise new issues, so it can't ping-pong forever.
+  const verifyCritiqueFixes = async (candidate: PlanRow[], weekNumber: number, flagged: string[]): Promise<string[]> => {
+    try {
+      const text = await chatCompletion({
+        messages: [
+          { role: "system", content: "You verify whether specific flagged issues were fixed in a rewritten training week. Respond with valid JSON only." },
+          { role: "user", content: `A draft of week ${weekNumber} was rejected for these issues:
+${flagged.map(f => `- ${f}`).join("\n")}
+
+THE REWRITTEN WEEK:
+${serializeWeekForReview(candidate)}
+
+For each flagged issue, judge ONLY whether this rewrite fixed it. Do NOT raise new issues, and do not re-litigate issues that were addressed.
+Respond: {"unfixed": []} if every issue was addressed, or {"unfixed": ["the still-broken issue and what's still wrong", ...]}.` }
+        ],
+        temperature: 0.2,
+        maxTokens: 1500,
+      });
+      const parsed = tryParseJson(text);
+      return parsed && Array.isArray(parsed.unfixed)
+        ? parsed.unfixed.map((p: unknown) => String(p)).filter(Boolean).slice(0, 4)
+        : [];
+    } catch (err) {
+      console.error("Critique verification failed (non-fatal):", err);
       return [];
     }
   };
@@ -2009,10 +2042,13 @@ Respond: {"problems": []} or {"problems": ["which weeks + what's wrong + the fix
 
       let rows: PlanRow[] | null = null;
       let correction = "";
-      // One head-coach critique per week: after the hard rules pass, a
-      // separate focused AI call judges the week and can send it back once
+      // Review pipeline per week: draft -> hard-rule validation -> parallel
+      // head-coach + equipment critique (once) -> rewrite -> verification
+      // that the flagged issues were actually fixed (once) -> accept
       let critiqued = false;
-      for (let attempt = 0; attempt < 4 && !rows; attempt++) {
+      let pendingCritiques: string[] = [];
+      let verifiedOnce = false;
+      for (let attempt = 0; attempt < 5 && !rows; attempt++) {
         try {
           const text = await chatCompletion({
             // Plan weeks get the stronger reasoning model - programming a
@@ -2032,24 +2068,33 @@ Respond: {"problems": []} or {"problems": ["which weeks + what's wrong + the fix
             // Enforce hard schedule rules (rest-day count, class placement):
             // retry with an explicit correction instead of accepting a bad week
             const problems = validateWeekRows(candidate, datesForWeek(outline, weeks[i]));
-            if (attempt < 3 && problems.length > 0) {
+            if (attempt < 4 && problems.length > 0) {
               correction = `CORRECTION - YOUR PREVIOUS ATTEMPT WAS REJECTED for these violations:\n${problems.map(p => `- ${p}`).join("\n")}\nRegenerate the ENTIRE week and fix every violation.`;
               continue;
             }
             // Hard rules pass - run both reviewers in parallel (once per
             // week): the head coach judges the training, the equipment
             // specialist audits gear usage
-            if (!critiqued && attempt < 3) {
+            if (!critiqued && attempt < 4) {
               critiqued = true;
               const [coachIssues, equipIssues] = await Promise.all([
                 critiqueWeek(candidate, weeks[i].weekNumber),
                 critiqueEquipment(candidate, weeks[i].weekNumber),
               ]);
-              const critiques = [...coachIssues, ...equipIssues];
-              if (critiques.length > 0) {
-                correction = `COACHING REVIEW - a head-coach and equipment review of your draft flagged these issues:\n${critiques.map(c => `- ${c}`).join("\n")}\nRegenerate the ENTIRE week fixing every issue. All schedule rules still apply.`;
+              pendingCritiques = [...coachIssues, ...equipIssues];
+              if (pendingCritiques.length > 0) {
+                correction = `COACHING REVIEW - a head-coach and equipment review of your draft flagged these issues:\n${pendingCritiques.map(c => `- ${c}`).join("\n")}\nRegenerate the ENTIRE week fixing every issue. All schedule rules still apply.`;
                 continue;
               }
+            } else if (pendingCritiques.length > 0 && !verifiedOnce && attempt < 4) {
+              // The rewrite must actually fix what was flagged - verify it
+              verifiedOnce = true;
+              const unfixed = await verifyCritiqueFixes(candidate, weeks[i].weekNumber, pendingCritiques);
+              if (unfixed.length > 0) {
+                correction = `VERIFICATION FAILED - your rewrite did NOT fix these flagged issues:\n${unfixed.map(u => `- ${u}`).join("\n")}\nRegenerate the ENTIRE week and fix them completely this time. All schedule rules still apply.`;
+                continue;
+              }
+              pendingCritiques = [];
             }
             rows = candidate;
           }
