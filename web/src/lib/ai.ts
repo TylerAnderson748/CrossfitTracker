@@ -14,7 +14,7 @@
 import { auth } from "./firebase";
 import { FAST_MODEL, FALLBACK_MODEL } from "./aiModels";
 
-export { XAI_API_URL, FAST_MODEL, FALLBACK_MODEL, REVISION_MODEL } from "./aiModels";
+export { XAI_API_URL, FAST_MODEL, FALLBACK_MODEL, REVISION_MODEL, PLAN_MODEL } from "./aiModels";
 const PROXY_URL = "/api/ai/chat";
 
 

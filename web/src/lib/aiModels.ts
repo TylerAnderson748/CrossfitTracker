@@ -10,3 +10,7 @@ export const FALLBACK_MODEL = process.env.NEXT_PUBLIC_XAI_FALLBACK_MODEL || "gro
 // Stronger (reasoning) model for plan revisions - patching an existing table
 // correctly needs more care than speed; override with NEXT_PUBLIC_XAI_REVISION_MODEL
 export const REVISION_MODEL = process.env.NEXT_PUBLIC_XAI_REVISION_MODEL || FALLBACK_MODEL;
+// Week generation: fast-reasoning tier - deliberation without the full
+// reasoning model's latency (a plan runs many calls per block, and the
+// critic pipeline catches what a lighter writer misses)
+export const PLAN_MODEL = process.env.NEXT_PUBLIC_XAI_PLAN_MODEL || "grok-4-fast-reasoning";

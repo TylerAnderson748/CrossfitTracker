@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { XAI_API_URL, FAST_MODEL, FALLBACK_MODEL, REVISION_MODEL } from "@/lib/aiModels";
+import { XAI_API_URL, FAST_MODEL, FALLBACK_MODEL, REVISION_MODEL, PLAN_MODEL } from "@/lib/aiModels";
 
 // Server-side AI proxy: the xAI key lives here (Vercel env), never in the
 // browser. Clients authenticate with their Firebase ID token.
@@ -9,7 +9,7 @@ export const maxDuration = 60;
 // Firebase WEB API key - public by design, used only to verify ID tokens
 const FIREBASE_API_KEY = "AIzaSyAl9Dn4Q_Aj7FULt2cGKeaOOH7oQ5AjI8w";
 
-const ALLOWED_MODELS = new Set([FAST_MODEL, FALLBACK_MODEL, REVISION_MODEL]);
+const ALLOWED_MODELS = new Set([FAST_MODEL, FALLBACK_MODEL, REVISION_MODEL, PLAN_MODEL]);
 
 async function verifyFirebaseToken(idToken: string): Promise<string | null> {
   try {

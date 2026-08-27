@@ -5,7 +5,7 @@ import { collection, addDoc, updateDoc, doc, query, where, getDocs, getDoc, setD
 import { db } from "@/lib/firebase";
 import { AIProgrammingSession, AIChatMessage, AIGeneratedDay, AIProgrammingPreferences, AITrainerSubscription, TrainingEvent, TrainingEventType, WeekdayKey, AICoachPreferences, PlanRow, PlanRowComponent, TrainingPlan, workoutComponentColors, workoutComponentLabels, cardioActivityForComponent, hasAIProgramming, inferScoringType, rpeToPercentEffort, effortValueToPercent, PRICING } from "@/lib/types";
 import { getAllSkills, getAllLifts, getAllWods } from "@/lib/workoutData";
-import { chatCompletion, REVISION_MODEL } from "@/lib/ai";
+import { chatCompletion, REVISION_MODEL, PLAN_MODEL } from "@/lib/ai";
 import { computeBaselineStatus, buildBaselinePromptBlock, buildBaselineWeek, BaselineStatusInput, BaselineCategory } from "@/lib/baselines";
 import BaselineWizard from "./BaselineWizard";
 import AITrainerPaywall from "./AITrainerPaywall";
@@ -710,7 +710,7 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
   const [recentlyUsedWorkouts, setRecentlyUsedWorkouts] = useState<string[]>([]);
 
   // Progress while generating a multi-week program
-  const [generationProgress, setGenerationProgress] = useState<{ current: number; total: number } | null>(null);
+  const [generationProgress, setGenerationProgress] = useState<{ current: number; total: number; stage?: string } | null>(null);
 
   // Athlete data pulled from their training log (PRs, recent results, existing calendar)
   const [athleteContext, setAthleteContext] = useState<string>("");
@@ -2084,7 +2084,7 @@ Respond: {"problems": []} or {"problems": ["which weeks + what's wrong + the fix
     const failedWeeks: number[] = [];
 
     for (let i = 0; i < weeks.length; i++) {
-      setGenerationProgress({ current: i + 1, total: weeks.length });
+      setGenerationProgress({ current: i + 1, total: weeks.length, stage: "writing" });
 
       let rows: PlanRow[] | null = null;
       let correction = "";
@@ -2096,10 +2096,12 @@ Respond: {"problems": []} or {"problems": ["which weeks + what's wrong + the fix
       let verifiedOnce = false;
       for (let attempt = 0; attempt < 5 && !rows; attempt++) {
         try {
+          setGenerationProgress({ current: i + 1, total: weeks.length, stage: attempt === 0 ? "writing" : "rewriting" });
           const text = await chatCompletion({
-            // Plan weeks get the stronger reasoning model - programming a
-            // block for a specific athlete needs deliberation, not speed
-            model: REVISION_MODEL,
+            // Fast-reasoning tier: deliberate enough for programming, a
+            // fraction of the full reasoning model's latency - the critic
+            // pipeline catches what a lighter writer misses
+            model: PLAN_MODEL,
             messages: [
               { role: "system", content: "You are Oddo, an expert CrossFit and endurance programming coach. Always respond with valid JSON only." },
               { role: "user", content: buildWeekRowsPrompt(outline, weeks[i], conversationHistory, allRows, correction) }
@@ -2123,6 +2125,7 @@ Respond: {"problems": []} or {"problems": ["which weeks + what's wrong + the fix
             // specialist audits gear usage
             if (!critiqued && attempt < 4) {
               critiqued = true;
+              setGenerationProgress({ current: i + 1, total: weeks.length, stage: "coach + equipment review" });
               const [coachIssues, equipIssues] = await Promise.all([
                 critiqueWeek(candidate, weeks[i].weekNumber),
                 critiqueEquipment(candidate, weeks[i].weekNumber),
@@ -2135,6 +2138,7 @@ Respond: {"problems": []} or {"problems": ["which weeks + what's wrong + the fix
             } else if (pendingCritiques.length > 0 && !verifiedOnce && attempt < 4) {
               // The rewrite must actually fix what was flagged - verify it
               verifiedOnce = true;
+              setGenerationProgress({ current: i + 1, total: weeks.length, stage: "verifying fixes" });
               const unfixed = await verifyCritiqueFixes(candidate, weeks[i].weekNumber, pendingCritiques);
               if (unfixed.length > 0) {
                 correction = `VERIFICATION FAILED - your rewrite did NOT fix these flagged issues:\n${unfixed.map(u => `- ${u}`).join("\n")}\nRegenerate the ENTIRE week and fix them completely this time. All schedule rules still apply.`;
@@ -3122,9 +3126,9 @@ Respond: {"problems": []} or {"problems": ["which weeks + what's wrong + the fix
                       <div className="w-4 h-4 border-2 border-purple-200 border-t-purple-600 rounded-full animate-spin" />
                       <div>
                         <p className="text-sm font-medium text-gray-700">
-                          Building week {generationProgress.current} of {generationProgress.total}...
+                          Week {generationProgress.current} of {generationProgress.total}: {generationProgress.stage || "writing"}...
                         </p>
-                        <p className="text-xs text-gray-400">Long programs are written one week at a time - hang tight</p>
+                        <p className="text-xs text-gray-400">Each week is written, reviewed by two critics, and verified - hang tight</p>
                       </div>
                     </div>
                   ) : (
