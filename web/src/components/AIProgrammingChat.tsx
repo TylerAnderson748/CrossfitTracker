@@ -710,7 +710,6 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
   // Equipment bank: the athlete ticks known CrossFit gear (with weights
   // and variants) instead of describing it in prose
   const [equipBank, setEquipBank] = useState<Record<string, { weightsText: string; variant: string }>>({});
-  const [customEquipment, setCustomEquipment] = useState("");
   const equipBankInitialized = useRef(false);
   // Chat-style entry: describe the gym in prose, AI suggests catalog
   // matches as chips, tapping a chip confirms it into the bank
@@ -2458,25 +2457,18 @@ Respond: {"problems": []} or {"problems": ["which weeks + what's wrong + the fix
     if (equipBankInitialized.current) return;
     equipBankInitialized.current = true;
     const bank: Record<string, { weightsText: string; variant: string }> = {};
-    const custom: string[] = [];
     (preferences.equipmentItems || []).forEach(it => {
       if (CATALOG_BY_KEY[it.category]) {
         bank[it.category] = { weightsText: (it.weightsLb || []).join(", "), variant: it.variant || "" };
-      } else if (it.label) {
-        custom.push(it.label);
       }
     });
-    if ((preferences.equipmentItems || []).length === 0 && preferences.equipment) {
-      custom.push(preferences.equipment);
-    }
     setEquipBank(bank);
-    setCustomEquipment(custom.join(", "));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showSettings]);
 
   // Any bank change rewrites the structured items AND the canonical string
   // every AI prompt reads - selection IS confirmation
-  const syncEquipmentToPrefs = (bank: Record<string, { weightsText: string; variant: string }>, custom: string) => {
+  const syncEquipmentToPrefs = (bank: Record<string, { weightsText: string; variant: string }>) => {
     const items: EquipmentItem[] = Object.entries(bank).map(([key, v]) => {
       const cat = CATALOG_BY_KEY[key];
       return {
@@ -2488,10 +2480,6 @@ Respond: {"problems": []} or {"problems": ["which weeks + what's wrong + the fix
         confirmed: true,
       };
     });
-    const customTrimmed = custom.trim();
-    if (customTrimmed) {
-      items.push({ id: "eq_custom", category: "other", label: customTrimmed, confirmed: true });
-    }
     setPreferences(prev => ({ ...prev, equipmentItems: items, equipment: equipmentItemsToText(items) }));
   };
 
@@ -2500,7 +2488,7 @@ Respond: {"problems": []} or {"problems": ["which weeks + what's wrong + the fix
       const next = { ...prev };
       if (next[key]) delete next[key];
       else next[key] = { weightsText: "", variant: "" };
-      syncEquipmentToPrefs(next, customEquipment);
+      syncEquipmentToPrefs(next);
       return next;
     });
   };
@@ -2508,14 +2496,9 @@ Respond: {"problems": []} or {"problems": ["which weeks + what's wrong + the fix
   const updateEquip = (key: string, field: "weightsText" | "variant", value: string) => {
     setEquipBank(prev => {
       const next = { ...prev, [key]: { ...prev[key], [field]: value } };
-      syncEquipmentToPrefs(next, customEquipment);
+      syncEquipmentToPrefs(next);
       return next;
     });
-  };
-
-  const updateCustomEquipment = (value: string) => {
-    setCustomEquipment(value);
-    syncEquipmentToPrefs(equipBank, value);
   };
 
   const buildEquipCatalogPrompt = () => EQUIPMENT_CATALOG
@@ -2683,7 +2666,7 @@ Respond: {"matches": [{"key": "...", "weightsLb": [], "variant": ""}], "ambiguou
       if (s) {
         setEquipBank(bankPrev => {
           const next = { ...bankPrev, [s.key]: { weightsText: s.weightsText, variant: s.variant } };
-          syncEquipmentToPrefs(next, customEquipment);
+          syncEquipmentToPrefs(next);
           return next;
         });
       }
@@ -2706,7 +2689,7 @@ Respond: {"matches": [{"key": "...", "weightsLb": [], "variant": ""}], "ambiguou
       if (a) {
         setEquipBank(bankPrev => {
           const next = { ...bankPrev, [key]: { weightsText: a.weightsText, variant: "" } };
-          syncEquipmentToPrefs(next, customEquipment);
+          syncEquipmentToPrefs(next);
           return next;
         });
       }
@@ -2720,7 +2703,7 @@ Respond: {"matches": [{"key": "...", "weightsLb": [], "variant": ""}], "ambiguou
       setEquipBank(bankPrev => {
         const next = { ...bankPrev };
         prev.forEach(s => { next[s.key] = { weightsText: s.weightsText, variant: s.variant }; });
-        syncEquipmentToPrefs(next, customEquipment);
+        syncEquipmentToPrefs(next);
         return next;
       });
       return [];
@@ -4177,19 +4160,9 @@ Respond: {"matches": [{"key": "...", "weightsLb": [], "variant": ""}], "ambiguou
                         </div>
                       )}
                       {unmatchedSuggestion && (
-                        <div className="mt-2 flex items-center gap-2 flex-wrap">
-                          <span className="text-xs text-gray-500">Not in the bank: &quot;{unmatchedSuggestion}&quot;</span>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              updateCustomEquipment(customEquipment ? `${customEquipment}, ${unmatchedSuggestion}` : unmatchedSuggestion);
-                              setUnmatchedSuggestion("");
-                            }}
-                            className="px-2 py-1 bg-white border border-gray-300 rounded-full text-xs text-gray-700 hover:border-purple-300"
-                          >
-                            + Add as custom gear
-                          </button>
-                        </div>
+                        <p className="mt-2 text-xs text-gray-500">
+                          Not in the equipment bank (won&apos;t be programmed): &quot;{unmatchedSuggestion}&quot;
+                        </p>
                       )}
                     </div>
                     <p className="text-xs text-gray-500">Or browse the bank - roll a section down and tap what you own. Weights are in lbs (e.g. &quot;35, 53&quot;).</p>
@@ -4270,20 +4243,6 @@ Respond: {"matches": [{"key": "...", "weightsLb": [], "variant": ""}], "ambiguou
                           </div>
                         );
                       })}
-                    </div>
-                    <div>
-                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
-                        {(preferences.trainingEnvironment || "home") === "commercial" ? "Anything special or missing at your gym" : "Anything not listed"}
-                      </p>
-                      <input
-                        type="text"
-                        value={customEquipment}
-                        onChange={(e) => updateCustomEquipment(e.target.value)}
-                        placeholder={(preferences.trainingEnvironment || "home") === "commercial"
-                          ? "e.g. no squat rack, pool available, turf strip..."
-                          : "e.g. 60lb odd-shaped stone, homemade sled..."}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                      />
                     </div>
                     <p className="text-xs text-gray-500">
                       {(preferences.trainingEnvironment || "home") === "commercial"
