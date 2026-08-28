@@ -1766,7 +1766,9 @@ RULES:
 - THIN DATA = NO FAKE PRECISION: %-of-1RM prescriptions ONLY for lifts with solid logged data. For lifts marked [ROUGH] or unlogged, never invent derived rep-maxes or fabricated adjustments - prescribe by feel ("build to a hard but crisp set of 5 - log it, that becomes your baseline"), establish the baseline early in the block, and anchor later weeks to what the athlete actually logs.
 - VARIETY IS MANDATORY week to week: the previously-programmed days listed above are what already exists - NEVER copy an earlier workout or reuse its name. A recurring slot (e.g. Wednesday conditioning) keeps its GOAL but rotates movements, formats (EMOM / AMRAP / intervals / rounds / chipper), and rep schemes every week. Same goal, fresh workout.
 - WOD NAMES ARE PART OF THE FUN: give every original WOD a short, memorable NAME with seasonal or topical flavor drawn from its actual calendar date - playoff and bowl season, March brackets, marathon season, the CrossFit Open, holidays, summer heat, first snow (e.g. "Bracket Buster" in March, "Turkey Burner" late November, "Dog Days" in August). A title built from the movements, format, or body parts in the workout ("Wall Ball Prep", "DB Upper Circuit", "Leg Conditioning") is a DESCRIPTION, not a name, and gets the week rejected. NEVER a classic benchmark's name (Fran, Cindy, Murph, ...) on an original workout - benchmark names are reserved for the real prescriptions.
-- ROTATE SCORING FORMATS across the week: when a week has 2+ WODs they must NOT all be the same format - mix AMRAPs, EMOMs, for-time pieces, intervals, and chippers. An all-AMRAP week gets rejected.${benchmarkRule}
+- ROTATE SCORING FORMATS - across weeks, not just within one: a WOD must never use the same format as the most recent WOD already in the table (listed above), even when that was last week. Mix AMRAPs, EMOMs, for-time pieces, intervals, and chippers. Back-to-back same-format WODs get the week rejected.
+- A benchmark day is a clean TEST day: warm-up, the benchmark, optional easy cooldown - never stack lift components or other hard training on it.
+- EQUIPMENT IS A HARD WALL: an athlete with NO barbell gets NO barbell movements (no back/front squats, barbell deadlifts, bench press) - build strength from what they own (dumbbells, kettlebells, sandbags: goblet squats, sandbag bear-hug squats, DB deadlifts), and NEVER prescribe any load heavier than their heaviest ownable setup.${benchmarkRule}
 - SAFETY IS NON-NEGOTIABLE: never prescribe above 100% of a known max, and respect rep-max physiology (1 rep=100%, 2=95%, 3=92%, 5=87%, 8=80%, 10=75%, 12=70% of 1RM - a 10-rep set near max is an injury, not training). A goal like "improve my back squat" NEVER means loading beyond the current max - it means building submaximal volume until a scheduled RE-TEST day establishes a new max. Every max-test day includes explicit safety protocol in its description ("only take attempts that move crisply; stop at technical breakdown; set rack safeties"). Injuries/limitations above get modifications, never the aggravating movement. Solo home training: no heavy barbell bench or near-max squats without rack safeties in their equipment - substitute dumbbells or cap the load.
 ${IMPLEMENT_KNOWLEDGE}
 - Rest days: session "Rest", components [] (or one light "cooldown" mobility component), runMiles 0. The reason states the RECOVERY PURPOSE in the context of the surrounding days (e.g., "Absorbs Sunday's long run so Tuesday's Oly class is quality lifting, not junk volume"). NEVER cite the rest-day rule, quota, settings, or "requirement" as the reason - the athlete wants to know what the rest accomplishes, not that a rule was followed.
@@ -2073,6 +2075,80 @@ PATCH RULES:
       .filter((f): f is string => f !== null));
     if (weekWodFormats.length >= 2 && new Set(weekWodFormats).size === 1) {
       problems.push(`all ${weekWodFormats.length} WODs this week are ${weekWodFormats[0]}s - rotate scoring formats across the week (EMOM / AMRAP / for-time / intervals / chipper); at least two different formats when a week has multiple WODs`);
+    }
+
+    // Format rotation ACROSS weeks too: with ~1 WOD per week the
+    // within-week check never fires, so consecutive WODs must differ in
+    // format even across a week boundary. Benchmarks are skipped as the
+    // "later" WOD - their format is fixed, only originals can rotate.
+    const chronoWods = [...priorRows, ...candidate].flatMap(r => (r.components || [])
+      .filter(c => c.type === "wod")
+      .map(c => ({
+        date: r.date,
+        title: c.title,
+        fmt: detectWodFormat(`${c.title} ${c.description}`),
+        isCandidate: candidate.includes(r),
+        isBenchmark: !!benchmarkByTitle(c.title),
+      }))
+    ).filter(w => w.fmt !== null);
+    for (let wi = 1; wi < chronoWods.length; wi++) {
+      const prev = chronoWods[wi - 1];
+      const cur = chronoWods[wi];
+      if (cur.isCandidate && !cur.isBenchmark && cur.fmt === prev.fmt) {
+        problems.push(`${cur.date} "${cur.title}" is another ${cur.fmt} immediately after the ${prev.fmt} on ${prev.date} ("${prev.title}") - consecutive WODs must use different scoring formats even across weeks; make this one an ${prev.fmt === "EMOM" ? "AMRAP, for-time piece, or intervals" : "EMOM, intervals, or a different format"}`);
+      }
+    }
+
+    // Benchmark days are TEST days: stacking heavy lifting next to a
+    // benchmark invalidates the test and overloads the day
+    candidate.forEach(r => {
+      const comps = r.components || [];
+      const bmComp = comps.find(c => c.type === "wod" && benchmarkByTitle(c.title));
+      if (!bmComp) return;
+      const lifts = comps.filter(c => c.type === "lift");
+      if (lifts.length > 0) {
+        problems.push(`${r.date} programs ${lifts.length} lift component${lifts.length > 1 ? "s" : ""} (${lifts.map(l => `"${l.title}"`).join(", ")}) alongside the benchmark ${benchmarkByTitle(bmComp.title)!.name} - a benchmark is a TEST and gets a clean day: warm-up, the benchmark, an optional easy cooldown, nothing heavy; move the lifting to another day`);
+      }
+    });
+
+    // Equipment reality - the deterministic backstop behind the AI
+    // equipment critic. Home athletes: no barbell movements without a
+    // barbell, and no load heavier than anything they own can produce.
+    const equipItems = (preferences.equipmentItems || []).filter(i => i.confirmed !== false);
+    if ((preferences.trainingEnvironment || "home") !== "commercial" && equipItems.length > 0) {
+      const equipKeys = new Set(equipItems.map(i => i.category));
+      const hasBarbell = equipKeys.has("barbell");
+      const loadable: number[] = [];
+      equipItems.forEach(i => {
+        const ws = (i.weightsLb || []).filter(w => w > 0);
+        if (ws.length === 0) return;
+        const m = Math.max(...ws);
+        // A dumbbell pair doubles; single-implement odd objects don't
+        if (i.category === "dumbbells") loadable.push(m * 2);
+        else loadable.push(m);
+      });
+      const maxLoadLb = loadable.length > 0 ? Math.max(...loadable) : 0;
+      const barbellMoveRe = /\b(?:back|front|overhead)\s+squat|\bbench press|\bgood morning|\bbarbell|\bdeadlift|\bpower clean|\bsquat clean|\bhang clean|\bclean\s*(?:&|and)\s*jerk|\bsnatch|\bthruster|\bpush press|\bstrict press|\boverhead press|\bpush jerk|\bsplit jerk/i;
+      const nonBarbellQualifierRe = /\b(?:db|dumbbell|kb|kettlebell|sandbag|goblet|landmine|smith|bag|med|ball|plate|single-?arm|one-?arm|banded)\b/i;
+      candidate.forEach(r => (r.components || []).forEach(c => {
+        if (c.type === "class" || c.type === "warmup" || c.type === "cooldown") return;
+        // Canonical benchmarks carry Rx numbers with scaling guidance
+        // baked in - the prompt already restricts benchmark CHOICE to the
+        // athlete's equipment, and rewriting their text is forbidden
+        if (c.type === "wod" && benchmarkByTitle(c.title)) return;
+        const text = `${c.title} ${c.description}`;
+        if (!hasBarbell && barbellMoveRe.test(text) && !nonBarbellQualifierRe.test(text)) {
+          problems.push(`${r.date} "${c.title}" prescribes a barbell movement but the athlete owns NO barbell - rebuild it from implements they actually own (their dumbbells, kettlebell, sandbags) or choose a different movement`);
+        }
+        if (!hasBarbell && maxLoadLb > 0) {
+          const over = [...text.matchAll(/(\d{2,4})\s*lbs?\b/gi)]
+            .map(mm => parseInt(mm[1], 10))
+            .filter(n => n > maxLoadLb);
+          if (over.length > 0) {
+            problems.push(`${r.date} "${c.title}" prescribes ${Math.max(...over)}lb but the heaviest load buildable from the athlete's equipment is ${maxLoadLb}lb - every prescribed load must be achievable with gear they own`);
+          }
+        }
+      }));
     }
 
     // Weeks containing a competition/race get looser structural rules
