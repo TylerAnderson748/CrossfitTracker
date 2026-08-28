@@ -716,6 +716,9 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
   // matches as chips, tapping a chip confirms it into the bank
   const [equipFreeText, setEquipFreeText] = useState("");
   const [equipSuggestions, setEquipSuggestions] = useState<{ key: string; weightsText: string; variant: string }[] | null>(null);
+  // Mentions that could be two catalog items ("sandbag" -> strongman or
+  // handled): the athlete answers "which one?" instead of the AI guessing
+  const [equipAmbiguous, setEquipAmbiguous] = useState<{ mention: string; weightsText: string; options: string[] }[]>([]);
   const [unmatchedSuggestion, setUnmatchedSuggestion] = useState("");
   const [suggestingEquip, setSuggestingEquip] = useState(false);
 
@@ -2535,27 +2538,57 @@ ${catalogForPrompt}
 Rules:
 - weightsLb: numbers in POUNDS (convert kg at 1kg = 2.2lb) for items that take weights.
 - variant: must be one of that item's listed variants; omit when the text doesn't say.
-- A plain "sandbag" with no detail matches sandbag_strongman OR sandbag_training - pick the more likely and note nothing; the athlete corrects by chip.
+- AT MOST ONE match per catalog key, and each mentioned item appears EXACTLY ONCE in the whole response. If several owned items truly map to the same key, merge their weights into that one match. NEVER repeat a match.
+- If a mention could be MORE THAN ONE catalog item, do NOT guess - put it in "ambiguous" with its candidate keys so the athlete picks. A bare "sandbag" is ambiguous between sandbag_strongman and sandbag_training. Brand cues resolve it: 5.11/GORUCK-style tactical bags have handles (sandbag_training); a bag explicitly called strongman/no-handles is sandbag_strongman.
 - "unmatched": things they mentioned that fit NO catalog item.
 - NEVER invent gear that isn't mentioned.
-Respond: {"matches": [{"key": "...", "weightsLb": [], "variant": ""}], "unmatched": ["..."]}` }
+Respond: {"matches": [{"key": "...", "weightsLb": [], "variant": ""}], "ambiguous": [{"mention": "their words", "weightsLb": [], "options": ["key1", "key2"]}], "unmatched": ["..."]}` }
         ],
         temperature: 0.1,
         maxTokens: 1500,
       });
       const parsed = tryParseJson(text);
       const matches = parsed && Array.isArray(parsed.matches) ? parsed.matches : [];
-      const suggestions = matches
-        .filter((m: Record<string, unknown>) => typeof m.key === "string" && CATALOG_BY_KEY[m.key as string] && !equipBank[m.key as string])
-        .map((m: Record<string, unknown>) => ({
-          key: String(m.key),
-          weightsText: Array.isArray(m.weightsLb) ? (m.weightsLb as unknown[]).map(Number).filter(n => n > 0).join(", ") : "",
-          variant: m.variant && CATALOG_BY_KEY[String(m.key)]?.variants?.includes(String(m.variant)) ? String(m.variant) : "",
-        }));
+      // Dedupe by catalog key no matter what the model returned, merging
+      // any weights it split across duplicates
+      const byKey = new Map<string, { key: string; weights: number[]; variant: string }>();
+      matches.forEach((m: Record<string, unknown>) => {
+        const key = String(m.key || "");
+        if (!CATALOG_BY_KEY[key] || equipBank[key]) return;
+        const weights = Array.isArray(m.weightsLb) ? (m.weightsLb as unknown[]).map(Number).filter(n => n > 0) : [];
+        const variant = m.variant && CATALOG_BY_KEY[key]?.variants?.includes(String(m.variant)) ? String(m.variant) : "";
+        const existing = byKey.get(key);
+        if (existing) {
+          existing.weights = Array.from(new Set([...existing.weights, ...weights])).sort((a, b) => a - b);
+          if (!existing.variant && variant) existing.variant = variant;
+        } else {
+          byKey.set(key, { key, weights, variant });
+        }
+      });
+      const suggestions = Array.from(byKey.values()).map(s => ({
+        key: s.key,
+        weightsText: s.weights.join(", "),
+        variant: s.variant,
+      }));
+      // "Which one did you mean?" entries - only real, still-unowned options
+      const ambiguousRaw = parsed && Array.isArray(parsed.ambiguous) ? parsed.ambiguous : [];
+      const ambiguous: { mention: string; weightsText: string; options: string[] }[] = [];
+      ambiguousRaw.forEach((a: Record<string, unknown>) => {
+        const options = (Array.isArray(a.options) ? a.options : [])
+          .map(o => String(o))
+          .filter(k => CATALOG_BY_KEY[k] && !equipBank[k] && !byKey.has(k));
+        const weights = Array.isArray(a.weightsLb) ? (a.weightsLb as unknown[]).map(Number).filter(n => n > 0) : [];
+        if (options.length >= 2) {
+          ambiguous.push({ mention: String(a.mention || "this item"), weightsText: weights.join(", "), options });
+        } else if (options.length === 1) {
+          suggestions.push({ key: options[0], weightsText: weights.join(", "), variant: "" });
+        }
+      });
       const unmatched = parsed && Array.isArray(parsed.unmatched) ? parsed.unmatched.map((u: unknown) => String(u)).filter(Boolean) : [];
       setEquipSuggestions(suggestions);
+      setEquipAmbiguous(ambiguous);
       setUnmatchedSuggestion(unmatched.join(", "));
-      if (suggestions.length === 0 && unmatched.length === 0) {
+      if (suggestions.length === 0 && ambiguous.length === 0 && unmatched.length === 0) {
         setError("Couldn't match anything from that - try naming the gear a bit more directly.");
       }
     } catch (err) {
@@ -2573,6 +2606,21 @@ Respond: {"matches": [{"key": "...", "weightsLb": [], "variant": ""}], "unmatche
       if (s) {
         setEquipBank(bankPrev => {
           const next = { ...bankPrev, [s.key]: { weightsText: s.weightsText, variant: s.variant } };
+          syncEquipmentToPrefs(next, customEquipment);
+          return next;
+        });
+      }
+      return prev.filter((_, i) => i !== idx);
+    });
+  };
+
+  // The athlete answered a "which one?" question - that key joins the bank
+  const resolveAmbiguousEquip = (idx: number, key: string) => {
+    setEquipAmbiguous(prev => {
+      const a = prev[idx];
+      if (a) {
+        setEquipBank(bankPrev => {
+          const next = { ...bankPrev, [key]: { weightsText: a.weightsText, variant: "" } };
           syncEquipmentToPrefs(next, customEquipment);
           return next;
         });
@@ -3968,7 +4016,7 @@ Respond: {"matches": [{"key": "...", "weightsLb": [], "variant": ""}], "unmatche
                           <div className="flex flex-wrap gap-1.5">
                             {equipSuggestions.map((s, idx) => (
                               <button
-                                key={s.key}
+                                key={`${s.key}-${idx}`}
                                 type="button"
                                 onClick={() => acceptEquipSuggestion(idx)}
                                 className="px-2.5 py-1.5 bg-white border border-purple-300 rounded-full text-xs font-medium text-purple-800 hover:bg-purple-100 transition-colors"
@@ -3988,6 +4036,28 @@ Respond: {"matches": [{"key": "...", "weightsLb": [], "variant": ""}], "unmatche
                               </button>
                             )}
                           </div>
+                        </div>
+                      )}
+                      {equipAmbiguous.length > 0 && (
+                        <div className="mt-2 space-y-2">
+                          {equipAmbiguous.map((a, idx) => (
+                            <div key={`amb-${idx}`}>
+                              <p className="text-xs text-gray-700 mb-1">❓ &quot;{a.mention}&quot; - which one did you mean?</p>
+                              <div className="flex flex-wrap gap-1.5">
+                                {a.options.map(k => (
+                                  <button
+                                    key={k}
+                                    type="button"
+                                    onClick={() => resolveAmbiguousEquip(idx, k)}
+                                    className="px-2.5 py-1.5 bg-white border border-amber-300 rounded-full text-xs font-medium text-amber-800 hover:bg-amber-50 transition-colors"
+                                  >
+                                    {CATALOG_BY_KEY[k]?.label || k}
+                                    {a.weightsText && <span className="text-amber-500"> · {a.weightsText}lb</span>}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       )}
                       {unmatchedSuggestion && (
