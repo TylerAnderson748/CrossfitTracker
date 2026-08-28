@@ -5,6 +5,7 @@ import { collection, addDoc, updateDoc, doc, query, where, getDocs, getDoc, setD
 import { db } from "@/lib/firebase";
 import { AIProgrammingSession, AIChatMessage, AIGeneratedDay, AIProgrammingPreferences, AITrainerSubscription, TrainingEvent, TrainingEventType, WeekdayKey, AICoachPreferences, PlanRow, PlanRowComponent, TrainingPlan, workoutComponentColors, workoutComponentLabels, cardioActivityForComponent, hasAIProgramming, inferScoringType, rpeToPercentEffort, effortValueToPercent, EquipmentItem, equipmentItemsToText, PRICING } from "@/lib/types";
 import { getAllSkills, getAllLifts, getAllWods } from "@/lib/workoutData";
+import { EQUIPMENT_CATALOG, CATALOG_BY_KEY } from "@/lib/equipmentCatalog";
 import { chatCompletion, REVISION_MODEL, PLAN_MODEL } from "@/lib/ai";
 import { computeBaselineStatus, buildBaselinePromptBlock, buildBaselineWeek, BaselineStatusInput, BaselineCategory } from "@/lib/baselines";
 import BaselineWizard from "./BaselineWizard";
@@ -706,10 +707,11 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
   // athlete scroll down past the whole history
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const [savingPreferences, setSavingPreferences] = useState(false);
-  // Equipment normalization: AI proposes structured items from the free
-  // text, the athlete confirms/corrects them before they're saved
-  const [equipmentDraft, setEquipmentDraft] = useState<{ id: string; category: string; label: string; weightsText: string; variant: string; question?: string }[] | null>(null);
-  const [parsingEquipment, setParsingEquipment] = useState(false);
+  // Equipment bank: the athlete ticks known CrossFit gear (with weights
+  // and variants) instead of describing it in prose
+  const [equipBank, setEquipBank] = useState<Record<string, { weightsText: string; variant: string }>>({});
+  const [customEquipment, setCustomEquipment] = useState("");
+  const equipBankInitialized = useRef(false);
 
   // Recently used workouts (last 6 months) - to avoid repetition
   const [recentlyUsedWorkouts, setRecentlyUsedWorkouts] = useState<string[]>([]);
@@ -2434,70 +2436,74 @@ Respond: {"problems": []} or {"problems": ["which weeks + what's wrong + the fix
     } : prev);
   };
 
-  // Parse the free-text equipment description into structured items the
-  // athlete confirms - so nothing downstream re-interprets a sentence
-  const organizeEquipment = async () => {
-    const raw = preferences.equipment.trim();
-    if (!raw || parsingEquipment) return;
-    setParsingEquipment(true);
-    setError(null);
-    try {
-      const text = await chatCompletion({
-        messages: [
-          { role: "system", content: "You normalize home-gym equipment descriptions into structured items. Respond with valid JSON only." },
-          { role: "user", content: `The athlete describes their home gym as:
-"${raw}"
-
-Parse it into structured items. Categories: barbell, plates, squat_rack, dumbbells, kettlebells, sandbag, med_ball, wall_ball_target, pull_up_bar, rings, plyo_box, jump_rope, rower, bike, ski_erg, weight_vest, bands, bench, ghd, sled, other.
-Rules:
-- One item per distinct piece of gear; combine same-category weights into one item (kettlebells -> weightsLb [35, 53]).
-- weightsLb: numbers in POUNDS (convert kg at 1kg = 2.2lb). Omit for weightless gear (jump rope, pull-up bar, rings).
-- variant: only what the text supports ("with handles", "doorway-mounted", "adjustable").
-- question: when an item is ambiguous in a way that CHANGES PROGRAMMING, ask ONE short question (sandbag -> "Strongman bag with no handles, or training bag with handles?"; pull-up bar -> "Doorway bar or wall/rig mounted?"). Otherwise omit.
-- NEVER invent gear that isn't mentioned.
-Respond: {"items": [{"category": "...", "label": "...", "weightsLb": [], "variant": "...", "question": "..."}]}` }
-        ],
-        temperature: 0.1,
-        maxTokens: 2000,
-      });
-      const parsed = tryParseJson(text);
-      const items = parsed && Array.isArray(parsed.items) ? parsed.items : [];
-      if (items.length === 0) {
-        setError("Couldn't make sense of the equipment text - try describing it a bit more plainly, then Organize again.");
-        return;
-      }
-      setEquipmentDraft(items.map((it: Record<string, unknown>, idx: number) => ({
-        id: `eq_${Date.now()}_${idx}`,
-        category: String(it.category || "other"),
-        label: String(it.label || "Item"),
-        weightsText: Array.isArray(it.weightsLb) ? (it.weightsLb as unknown[]).map(Number).filter(n => n > 0).join(", ") : "",
-        variant: it.variant ? String(it.variant) : "",
-        question: it.question ? String(it.question) : "",
-      })));
-    } catch (err) {
-      console.error("Error organizing equipment:", err);
-      setError("Couldn't organize the equipment list. Please try again.");
-    } finally {
-      setParsingEquipment(false);
+  // When the settings modal opens, seed the bank from the saved structured
+  // items (legacy free text lands in the "anything else" box untouched)
+  useEffect(() => {
+    if (!showSettings) {
+      equipBankInitialized.current = false;
+      return;
     }
+    if (equipBankInitialized.current) return;
+    equipBankInitialized.current = true;
+    const bank: Record<string, { weightsText: string; variant: string }> = {};
+    const custom: string[] = [];
+    (preferences.equipmentItems || []).forEach(it => {
+      if (CATALOG_BY_KEY[it.category]) {
+        bank[it.category] = { weightsText: (it.weightsLb || []).join(", "), variant: it.variant || "" };
+      } else if (it.label) {
+        custom.push(it.label);
+      }
+    });
+    if ((preferences.equipmentItems || []).length === 0 && preferences.equipment) {
+      custom.push(preferences.equipment);
+    }
+    setEquipBank(bank);
+    setCustomEquipment(custom.join(", "));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showSettings]);
+
+  // Any bank change rewrites the structured items AND the canonical string
+  // every AI prompt reads - selection IS confirmation
+  const syncEquipmentToPrefs = (bank: Record<string, { weightsText: string; variant: string }>, custom: string) => {
+    const items: EquipmentItem[] = Object.entries(bank).map(([key, v]) => {
+      const cat = CATALOG_BY_KEY[key];
+      return {
+        id: `eq_${key}`,
+        category: key,
+        label: cat?.label || key,
+        weightsLb: v.weightsText.split(/[,/&+]+/).map(s => parseFloat(s)).filter(n => !isNaN(n) && n > 0),
+        ...(v.variant.trim() ? { variant: v.variant.trim() } : {}),
+        confirmed: true,
+      };
+    });
+    const customTrimmed = custom.trim();
+    if (customTrimmed) {
+      items.push({ id: "eq_custom", category: "other", label: customTrimmed, confirmed: true });
+    }
+    setPreferences(prev => ({ ...prev, equipmentItems: items, equipment: equipmentItemsToText(items) }));
   };
 
-  // Athlete confirmed the structured list: it becomes the source of truth,
-  // and the canonical string rendering is what every AI prompt reads
-  const confirmEquipmentDraft = () => {
-    if (!equipmentDraft) return;
-    const items: EquipmentItem[] = equipmentDraft
-      .filter(d => d.label.trim())
-      .map(d => ({
-        id: d.id,
-        category: d.category,
-        label: d.label.trim(),
-        weightsLb: d.weightsText.split(/[,/&+]+/).map(s => parseFloat(s)).filter(n => !isNaN(n) && n > 0),
-        ...(d.variant.trim() ? { variant: d.variant.trim() } : {}),
-        confirmed: true,
-      }));
-    setPreferences(prev => ({ ...prev, equipmentItems: items, equipment: equipmentItemsToText(items) }));
-    setEquipmentDraft(null);
+  const toggleEquip = (key: string) => {
+    setEquipBank(prev => {
+      const next = { ...prev };
+      if (next[key]) delete next[key];
+      else next[key] = { weightsText: "", variant: "" };
+      syncEquipmentToPrefs(next, customEquipment);
+      return next;
+    });
+  };
+
+  const updateEquip = (key: string, field: "weightsText" | "variant", value: string) => {
+    setEquipBank(prev => {
+      const next = { ...prev, [key]: { ...prev[key], [field]: value } };
+      syncEquipmentToPrefs(next, customEquipment);
+      return next;
+    });
+  };
+
+  const updateCustomEquipment = (value: string) => {
+    setCustomEquipment(value);
+    syncEquipmentToPrefs(equipBank, value);
   };
 
   // Chat mentioned new gear: append it to the saved equipment list so the
@@ -3834,131 +3840,87 @@ Respond: {"items": [{"category": "...", "label": "...", "weightsLb": [], "varian
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   {(preferences.trainingEnvironment || "home") === "commercial" ? "Anything Special About Your Gym? (optional)" : "Your Garage Gym Equipment"}
                 </label>
-                {(preferences.trainingEnvironment || "home") !== "commercial" && (preferences.equipmentItems?.length || 0) > 0 && !equipmentDraft ? (
-                  <div>
-                    <div className="flex flex-wrap gap-1.5 mb-2">
-                      {(preferences.equipmentItems || []).map(it => (
-                        <span key={it.id} className="px-2.5 py-1 bg-purple-50 border border-purple-200 rounded-full text-xs font-medium text-purple-800">
-                          {it.label}
-                          {it.weightsLb && it.weightsLb.length > 0 && <span className="text-purple-500"> · {it.weightsLb.map(w => `${w}lb`).join("/")}</span>}
-                          {it.variant && <span className="text-purple-400"> · {it.variant}</span>}
-                        </span>
-                      ))}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setEquipmentDraft((preferences.equipmentItems || []).map(it => ({
-                        id: it.id,
-                        category: it.category,
-                        label: it.label,
-                        weightsText: (it.weightsLb || []).join(", "),
-                        variant: it.variant || "",
-                      })))}
-                      className="text-xs font-semibold text-purple-600 hover:text-purple-800"
-                    >
-                      ✏️ Edit equipment
-                    </button>
-                  </div>
-                ) : (
+                {(preferences.trainingEnvironment || "home") === "commercial" ? (
                   <>
                     <textarea
                       value={preferences.equipment}
                       onChange={(e) => setPreferences(prev => ({ ...prev, equipment: e.target.value }))}
-                      placeholder={(preferences.trainingEnvironment || "home") === "commercial"
-                        ? "e.g., No squat rack at my gym, great cable setup, pool available..."
-                        : "e.g., Barbell + 300lb plates, squat rack, pull-up bar, one 53lb kettlebell, jump rope, rower. No dumbbells, no rings..."}
+                      placeholder="e.g., No squat rack at my gym, great cable setup, pool available..."
                       rows={3}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
                     />
-                    {(preferences.trainingEnvironment || "home") !== "commercial" && !equipmentDraft && (
-                      <button
-                        type="button"
-                        onClick={organizeEquipment}
-                        disabled={parsingEquipment || !preferences.equipment.trim()}
-                        className="mt-2 px-3 py-1.5 bg-purple-600 text-white text-xs font-semibold rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-colors"
-                      >
-                        {parsingEquipment ? "Reading your list..." : "✨ Organize my equipment"}
-                      </button>
-                    )}
+                    <p className="text-xs text-gray-500 mt-1">Full standard gym equipment is assumed - note anything missing or extra</p>
                   </>
-                )}
-                {equipmentDraft && (
-                  <div className="mt-3 border border-purple-200 bg-purple-50 rounded-lg p-3 space-y-3">
-                    <p className="text-xs font-semibold text-purple-800">
-                      Confirm each item - fix anything I got wrong. This list is exactly what your coach will program with.
-                    </p>
-                    {equipmentDraft.map((d, idx) => (
-                      <div key={d.id} className="bg-white border border-gray-200 rounded-lg p-2.5">
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="text"
-                            value={d.label}
-                            onChange={(e) => setEquipmentDraft(prev => prev ? prev.map((x, i) => i === idx ? { ...x, label: e.target.value } : x) : prev)}
-                            placeholder="What is it?"
-                            className="flex-1 px-2 py-1.5 border border-gray-300 rounded text-sm text-gray-900 font-medium"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setEquipmentDraft(prev => prev ? prev.filter((_, i) => i !== idx) : prev)}
-                            className="p-1 text-gray-400 hover:text-red-600"
-                            title="Remove"
-                          >
-                            ✕
-                          </button>
+                ) : (
+                  <div className="space-y-3">
+                    <p className="text-xs text-gray-500">Tap everything you own. Weights are in lbs - list each one you have (e.g. &quot;35, 53&quot;).</p>
+                    {EQUIPMENT_CATALOG.map(group => (
+                      <div key={group.group}>
+                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">{group.group}</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {group.items.map(item => {
+                            const selected = !!equipBank[item.key];
+                            return (
+                              <button
+                                key={item.key}
+                                type="button"
+                                onClick={() => toggleEquip(item.key)}
+                                className={`px-2.5 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                                  selected
+                                    ? "bg-purple-600 border-purple-600 text-white"
+                                    : "bg-white border-gray-300 text-gray-600 hover:border-purple-300"
+                                }`}
+                              >
+                                {selected ? "✓ " : ""}{item.label}
+                              </button>
+                            );
+                          })}
                         </div>
-                        <div className="flex items-center gap-2 mt-2">
-                          <input
-                            type="text"
-                            value={d.weightsText}
-                            onChange={(e) => setEquipmentDraft(prev => prev ? prev.map((x, i) => i === idx ? { ...x, weightsText: e.target.value } : x) : prev)}
-                            placeholder="Weights (lb)"
-                            className="w-28 px-2 py-1.5 border border-gray-300 rounded text-sm text-gray-900"
-                          />
-                          <input
-                            type="text"
-                            value={d.variant}
-                            onChange={(e) => setEquipmentDraft(prev => prev ? prev.map((x, i) => i === idx ? { ...x, variant: e.target.value } : x) : prev)}
-                            placeholder="Type/variant (optional)"
-                            className="flex-1 px-2 py-1.5 border border-gray-300 rounded text-sm text-gray-900"
-                          />
-                        </div>
-                        {d.question && (
-                          <p className="mt-2 text-xs text-amber-700 bg-amber-50 border-l-2 border-amber-300 px-2 py-1 rounded-r">
-                            ❓ {d.question} <span className="text-amber-500">(answer in the type/variant box)</span>
-                          </p>
-                        )}
+                        {group.items.filter(it => equipBank[it.key] && (it.hasWeights || it.variants)).map(item => (
+                          <div key={`${item.key}-detail`} className="mt-2 ml-1 pl-2 border-l-2 border-purple-200">
+                            <p className="text-xs font-medium text-gray-700 mb-1">{item.label}</p>
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              {item.hasWeights && (
+                                <input
+                                  type="text"
+                                  value={equipBank[item.key]?.weightsText || ""}
+                                  onChange={(e) => updateEquip(item.key, "weightsText", e.target.value)}
+                                  placeholder={item.weightHint || "weights (lb)"}
+                                  className="w-28 px-2 py-1 border border-gray-300 rounded text-xs text-gray-900"
+                                />
+                              )}
+                              {(item.variants || []).map(v => (
+                                <button
+                                  key={v}
+                                  type="button"
+                                  onClick={() => updateEquip(item.key, "variant", equipBank[item.key]?.variant === v ? "" : v)}
+                                  className={`px-2 py-1 rounded-full text-[11px] border transition-colors ${
+                                    equipBank[item.key]?.variant === v
+                                      ? "bg-purple-100 border-purple-400 text-purple-800 font-semibold"
+                                      : "bg-white border-gray-200 text-gray-500 hover:border-purple-300"
+                                  }`}
+                                >
+                                  {v}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     ))}
-                    <button
-                      type="button"
-                      onClick={() => setEquipmentDraft(prev => prev ? [...prev, { id: `eq_new_${Date.now()}`, category: "other", label: "", weightsText: "", variant: "" }] : prev)}
-                      className="text-xs font-semibold text-purple-600 hover:text-purple-800"
-                    >
-                      + Add an item
-                    </button>
-                    <div className="flex gap-2 pt-1">
-                      <button
-                        type="button"
-                        onClick={() => setEquipmentDraft(null)}
-                        className="flex-1 py-2 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="button"
-                        onClick={confirmEquipmentDraft}
-                        className="flex-1 py-2 bg-purple-600 text-white text-sm font-semibold rounded-lg hover:bg-purple-700"
-                      >
-                        ✓ Confirm equipment
-                      </button>
+                    <div>
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Anything not listed</p>
+                      <input
+                        type="text"
+                        value={customEquipment}
+                        onChange={(e) => updateCustomEquipment(e.target.value)}
+                        placeholder="e.g. 60lb odd-shaped stone, homemade sled..."
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      />
                     </div>
+                    <p className="text-xs text-gray-500">The AI programs only with gear selected here, used the way each implement is designed to be used.</p>
                   </div>
                 )}
-                <p className="text-xs text-gray-500 mt-1">
-                  {(preferences.trainingEnvironment || "home") === "commercial"
-                    ? "Full standard gym equipment is assumed - note anything missing or extra"
-                    : "The AI programs only with gear on this list - confirmed items are used exactly as written"}
-                </p>
               </div>
 
               {/* Workout Duration */}
