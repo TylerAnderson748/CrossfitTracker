@@ -646,6 +646,7 @@ HOW LONG TO PROGRAM (deterministic - never guess the horizon):
 1. The athlete named a length ("program my next week", "give me 3 weeks") -> exactly that length.
 2. No length named, but they have SAVED EVENTS (competition, race): any request for programming ("make me a program", "get me ready") means a plan outline from TODAY through their FURTHEST future event, with recovery after it when space allows. An athlete with a marathon on file NEVER gets a bare week - they get the block that gets them to the start line.
 3. No length named and no events: default to a 4-week outline.
+4. startDate is ALWAYS today (${todayStr}) unless the athlete EXPLICITLY asks to start later. NEVER continue from where an earlier draft or plan ended - a new program request replaces the draft and starts today.
 Direct day-by-day generation without an outline is ONLY for explicit requests of 14 days or fewer - everything else goes through the outline below.
 
 If the programming spans MORE than 14 days, DO NOT generate the days directly. Instead respond with a week-by-week training plan outline in this exact JSON format:
@@ -1519,6 +1520,36 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
         // Long-range program (or full rebuild): the AI returned a week-by-week
         // outline - fill in the plan table one week at a time.
         if (parsed.outline && Array.isArray(parsed.outline.weeks) && parsed.outline.weeks.length > 0) {
+          // Backstop: a fresh outline must start NOW, not where the last
+          // draft ended. Unless the athlete explicitly asked for a delayed
+          // start, a future start date gets one forced redo from today.
+          const bt = new Date();
+          const btToday = `${bt.getFullYear()}-${String(bt.getMonth() + 1).padStart(2, "0")}-${String(bt.getDate()).padStart(2, "0")}`;
+          const btSoon = (() => { const d = new Date(bt.getTime() + 2 * 86400000); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; })();
+          const oStart = String(parsed.outline.startDate || "");
+          const lastUserStart = String([...updatedMessages].reverse().find(m => m.role === "user")?.content || "");
+          const askedDelayedStart = /\b(start(?:ing)?\s+(?:on|in|after|next)|from\s+\d{4}-\d{2}|after\s+(?:my|the)|beginning\s+(?:on|in|next))\b/i.test(lastUserStart);
+          if (oStart && oStart > btSoon && !askedDelayedStart) {
+            try {
+              const redoText = await chatCompletion({
+                messages: [
+                  { role: "system", content: "You are Oddo, an expert CrossFit and endurance programming coach. Always respond with valid JSON only." },
+                  { role: "user", content: prompt },
+                  { role: "assistant", content: text },
+                  { role: "user", content: `Your outline starts on ${oStart}, but TODAY is ${btToday} and the athlete did not ask for a delayed start. A new program starts TODAY - never where an earlier draft ended. Regenerate the FULL outline (phases + weeks) starting ${btToday}, still building toward the same events.` }
+                ],
+                temperature: 0.5,
+                maxTokens: 16000,
+              });
+              const redo = tryParseJson(redoText);
+              if (redo?.outline && Array.isArray(redo.outline.weeks) && redo.outline.weeks.length > 0) {
+                parsed.outline = redo.outline;
+                parsed.message = redo.message || parsed.message;
+              }
+            } catch (redoErr) {
+              console.error("Start-date redo failed:", redoErr);
+            }
+          }
           await generatePlanTable(
             activeSession.id,
             parsed.message || "Here's your training plan.",
