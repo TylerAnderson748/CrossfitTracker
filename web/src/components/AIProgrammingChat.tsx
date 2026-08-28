@@ -1654,18 +1654,19 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
       .map(r => `${r.date} (${r.day}): ${r.session}${r.runMiles ? ` ${r.runMiles}mi` : ""} - ${(r.detail || "").slice(0, 80)}`)
       .join("\n");
 
-    // Benchmark cadence: roughly one classic benchmark every ~2 weeks keeps
-    // the app-wide leaderboard alive and gives the athlete repeatable
-    // progress tests - but never two benchmarks stacked close together
-    const benchmarkRanRecently = previousRows.slice(-14).some(r =>
+    // Benchmark cadence: roughly one classic benchmark per 4-week block, as
+    // the block's natural progress check - never forced. Skipped for
+    // general-strength athletes, skipped when one ran recently, and the
+    // prompt tells the model to skip when equipment/focus/athlete say no.
+    const benchmarkRanRecently = previousRows.slice(-28).some(r =>
       (r.components || []).some(c => c.type === "wod" && benchmarkByTitle(c.title))
     );
     const wantsBenchmarks = (preferences.trainingStyle || "crossfit") !== "general";
     const benchmarkRule = !wantsBenchmarks
       ? ""
       : benchmarkRanRecently
-        ? `\n- BENCHMARK WODS: a classic benchmark already ran within the last two weeks - do NOT program another benchmark this week unless this week's outline focus explicitly calls for a re-test.`
-        : `\n- BENCHMARK WODS FEED THE LEADERBOARD: program EXACTLY ONE classic benchmark WOD from the list below somewhere in this week, as the conditioning piece on a day where it fits the week's focus. Pick one whose equipment the athlete actually has and title it EXACTLY by its canonical name with its canonical prescription (scaling guidance included) - these are the app-wide leaderboard workouts and the athlete's repeatable progress tests, so the name and prescription must match verbatim. Re-testing a benchmark the athlete logged 6+ weeks ago beats introducing a new one.\n${benchmarkListForPrompt()}`;
+        ? `\n- BENCHMARK WODS: a classic benchmark already ran within the last four weeks - do NOT program another benchmark this week unless this week's outline focus explicitly calls for a re-test.`
+        : `\n- BENCHMARK WODS (roughly one per training block): IF a classic benchmark from the list below genuinely fits this week - the athlete has its equipment, the week's focus suits a tested conditioning piece (not a deload or race week), and the athlete has never said they dislike benchmarks - program ONE as that day's conditioning, titled EXACTLY by its canonical name with its canonical prescription (scaling guidance included). Benchmarks are the app-wide leaderboard workouts and the athlete's repeatable progress tests, so name and prescription must match verbatim; re-testing one the athlete logged 6+ weeks ago beats introducing a new one. If none fits, skip it silently - NEVER force a benchmark the athlete can't do or didn't sign up for.\n${benchmarkListForPrompt()}`;
 
     // Enumerate this week's exact dates with their true weekday names - the model
     // must not do calendar math itself (it gets weekdays wrong and then places
