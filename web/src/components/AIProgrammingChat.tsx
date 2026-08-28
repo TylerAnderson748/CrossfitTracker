@@ -1475,8 +1475,8 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
           const lastUserText = String([...updatedMessages].reverse().find(m => m.role === "user")?.content || "");
           const askedShort = /\b(\d+\s*(?:day|days)|(?:a|one|1|this|next)\s*week|week of)\b/i.test(lastUserText);
           const furthestEvent = (freshPrefs.events || [])
-            .map(ev => ev.date)
-            .filter(d => d && d > new Date().toISOString().split("T")[0])
+            .map((ev: TrainingEvent) => ev.date || "")
+            .filter((d: string) => d && d > new Date().toISOString().split("T")[0])
             .sort()
             .pop();
           const eventFarOut = furthestEvent && (new Date(furthestEvent).getTime() - Date.now()) / 86400000 > 21;
