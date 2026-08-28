@@ -641,7 +641,13 @@ SCALING MOVEMENT EXAMPLES:
 - Toes-to-Bar: "Rx: TTB, Scaled: Knees-to-Elbows, Foundations: Hanging Knee Raises or V-ups"
 
 LONG-RANGE PROGRAMS (more than 2 weeks):
-If the user asks for programming spanning MORE than 14 days (e.g., "program every day until my marathon", "12 weeks of training"), DO NOT generate the days directly. Instead respond with a week-by-week training plan outline in this exact JSON format:
+HOW LONG TO PROGRAM (deterministic - never guess the horizon):
+1. The athlete named a length ("program my next week", "give me 3 weeks") -> exactly that length.
+2. No length named, but they have SAVED EVENTS (competition, race): any request for programming ("make me a program", "get me ready") means a plan outline from TODAY through their FURTHEST future event, with recovery after it when space allows. An athlete with a marathon on file NEVER gets a bare week - they get the block that gets them to the start line.
+3. No length named and no events: default to a 4-week outline.
+Direct day-by-day generation without an outline is ONLY for explicit requests of 14 days or fewer - everything else goes through the outline below.
+
+If the programming spans MORE than 14 days, DO NOT generate the days directly. Instead respond with a week-by-week training plan outline in this exact JSON format:
 {
   "message": "Explain the overall plan: the phases, the standard weekly structure, how you're building toward their events, and where the rest days are",
   "outline": {
@@ -1457,6 +1463,39 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
               parsed.message = `I wasn't able to produce that change automatically. Nothing in the plan was modified - tell me exactly which day(s) to change (e.g., "make every Friday a rest day and move that workout to Wednesday") and I'll patch the table.`;
             } else {
               parsed.message = `${parsed.message}\n\n(No table changes were applied. If you expected a change, tell me the exact days - e.g., "re-anchor week 3's bench to my logged 165x5".)`;
+            }
+          }
+        }
+
+        // Backstop: an athlete with a distant saved event asked for
+        // programming and got a bare handful of days with no outline.
+        // Unless they named a short horizon themselves, demand the full
+        // block - the horizon is a rule, not a model mood.
+        if (!plan && Array.isArray(parsed.workouts) && parsed.workouts.length > 0 && !parsed.outline) {
+          const lastUserText = String([...updatedMessages].reverse().find(m => m.role === "user")?.content || "");
+          const askedShort = /\b(\d+\s*(?:day|days)|(?:a|one|1|this|next)\s*week|week of)\b/i.test(lastUserText);
+          const furthestEvent = (freshPrefs.events || [])
+            .map(ev => ev.date)
+            .filter(d => d && d > new Date().toISOString().split("T")[0])
+            .sort()
+            .pop();
+          const eventFarOut = furthestEvent && (new Date(furthestEvent).getTime() - Date.now()) / 86400000 > 21;
+          if (!askedShort && eventFarOut) {
+            const redoText = await chatCompletion({
+              messages: [
+                { role: "system", content: "You are Oddo, an expert CrossFit and endurance programming coach. Always respond with valid JSON only." },
+                { role: "user", content: prompt },
+                { role: "assistant", content: text },
+                { role: "user", content: `You returned only ${parsed.workouts.length} days, but this athlete has an event on ${furthestEvent} and did not ask for a short horizon. Per the HOW LONG TO PROGRAM rules, respond NOW with the full week-by-week "outline" (with "phases") from today through that event. No direct "workouts" array.` }
+              ],
+              temperature: 0.5,
+              maxTokens: 16000,
+            });
+            const redo = tryParseJson(redoText);
+            if (redo?.outline && Array.isArray(redo.outline.weeks) && redo.outline.weeks.length > 0) {
+              parsed.outline = redo.outline;
+              parsed.message = redo.message || parsed.message;
+              parsed.workouts = undefined;
             }
           }
         }
