@@ -717,6 +717,7 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
   const [equipFreeText, setEquipFreeText] = useState("");
   // Collapsible catalog groups - the bank is long, so sections roll down
   const [openEquipGroups, setOpenEquipGroups] = useState<Record<string, boolean>>({});
+  const equipPhotoInputRef = useRef<HTMLInputElement>(null);
   const [equipSuggestions, setEquipSuggestions] = useState<{ key: string; weightsText: string; variant: string }[] | null>(null);
   // Mentions that could be two catalog items ("sandbag" -> strongman or
   // handled): the athlete answers "which one?" instead of the AI guessing
@@ -2517,6 +2518,36 @@ Respond: {"problems": []} or {"problems": ["which weeks + what's wrong + the fix
     syncEquipmentToPrefs(equipBank, value);
   };
 
+  const buildEquipCatalogPrompt = () => EQUIPMENT_CATALOG
+    .flatMap(g => g.items)
+    .map(it => `${it.key}: ${it.label}${it.variants ? ` (variants: ${it.variants.join(" | ")})` : ""}${it.hasWeights ? " [takes weights in lb]" : ""}`)
+    .join("\n");
+
+  // Downscale a photo before sending it to the matcher - phone photos are
+  // huge, and the proxy caps request bodies
+  const compressImageToDataUrl = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const img = new Image();
+        img.onload = () => {
+          const maxDim = 1280;
+          const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+          const canvas = document.createElement("canvas");
+          canvas.width = Math.round(img.width * scale);
+          canvas.height = Math.round(img.height * scale);
+          const ctx = canvas.getContext("2d");
+          if (!ctx) { reject(new Error("Canvas unavailable")); return; }
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          resolve(canvas.toDataURL("image/jpeg", 0.8));
+        };
+        img.onerror = () => reject(new Error("Couldn't read image"));
+        img.src = String(reader.result);
+      };
+      reader.onerror = () => reject(new Error("Couldn't read file"));
+      reader.readAsDataURL(file);
+    });
+
   // Read the athlete's chat-style description and propose catalog matches
   const suggestEquipment = async () => {
     const raw = equipFreeText.trim();
@@ -2524,10 +2555,7 @@ Respond: {"problems": []} or {"problems": ["which weeks + what's wrong + the fix
     setSuggestingEquip(true);
     setError(null);
     try {
-      const catalogForPrompt = EQUIPMENT_CATALOG
-        .flatMap(g => g.items)
-        .map(it => `${it.key}: ${it.label}${it.variants ? ` (variants: ${it.variants.join(" | ")})` : ""}${it.hasWeights ? " [takes weights in lb]" : ""}`)
-        .join("\n");
+      const catalogForPrompt = buildEquipCatalogPrompt();
       const text = await chatCompletion({
         messages: [
           { role: "system", content: "You match a home-gym description to a fixed equipment catalog. Respond with valid JSON only." },
@@ -2549,53 +2577,97 @@ Respond: {"matches": [{"key": "...", "weightsLb": [], "variant": ""}], "ambiguou
         temperature: 0.1,
         maxTokens: 1500,
       });
-      const parsed = tryParseJson(text);
-      const matches = parsed && Array.isArray(parsed.matches) ? parsed.matches : [];
-      // Dedupe by catalog key no matter what the model returned, merging
-      // any weights it split across duplicates
-      const byKey = new Map<string, { key: string; weights: number[]; variant: string }>();
-      matches.forEach((m: Record<string, unknown>) => {
-        const key = String(m.key || "");
-        if (!CATALOG_BY_KEY[key] || equipBank[key]) return;
-        const weights = Array.isArray(m.weightsLb) ? (m.weightsLb as unknown[]).map(Number).filter(n => n > 0) : [];
-        const variant = m.variant && CATALOG_BY_KEY[key]?.variants?.includes(String(m.variant)) ? String(m.variant) : "";
-        const existing = byKey.get(key);
-        if (existing) {
-          existing.weights = Array.from(new Set([...existing.weights, ...weights])).sort((a, b) => a - b);
-          if (!existing.variant && variant) existing.variant = variant;
-        } else {
-          byKey.set(key, { key, weights, variant });
-        }
-      });
-      const suggestions = Array.from(byKey.values()).map(s => ({
-        key: s.key,
-        weightsText: s.weights.join(", "),
-        variant: s.variant,
-      }));
-      // "Which one did you mean?" entries - only real, still-unowned options
-      const ambiguousRaw = parsed && Array.isArray(parsed.ambiguous) ? parsed.ambiguous : [];
-      const ambiguous: { mention: string; weightsText: string; options: string[] }[] = [];
-      ambiguousRaw.forEach((a: Record<string, unknown>) => {
-        const options = (Array.isArray(a.options) ? a.options : [])
-          .map(o => String(o))
-          .filter(k => CATALOG_BY_KEY[k] && !equipBank[k] && !byKey.has(k));
-        const weights = Array.isArray(a.weightsLb) ? (a.weightsLb as unknown[]).map(Number).filter(n => n > 0) : [];
-        if (options.length >= 2) {
-          ambiguous.push({ mention: String(a.mention || "this item"), weightsText: weights.join(", "), options });
-        } else if (options.length === 1) {
-          suggestions.push({ key: options[0], weightsText: weights.join(", "), variant: "" });
-        }
-      });
-      const unmatched = parsed && Array.isArray(parsed.unmatched) ? parsed.unmatched.map((u: unknown) => String(u)).filter(Boolean) : [];
-      setEquipSuggestions(suggestions);
-      setEquipAmbiguous(ambiguous);
-      setUnmatchedSuggestion(unmatched.join(", "));
-      if (suggestions.length === 0 && ambiguous.length === 0 && unmatched.length === 0) {
-        setError("Couldn't match anything from that - try naming the gear a bit more directly.");
-      }
+      processEquipMatchResponse(text, "Couldn't match anything from that - try naming the gear a bit more directly.");
     } catch (err) {
       console.error("Error suggesting equipment:", err);
       setError("Couldn't read the equipment description. Please try again.");
+    } finally {
+      setSuggestingEquip(false);
+    }
+  };
+
+  // Shared by text and photo matching: dedupe, disambiguate, set state
+  const processEquipMatchResponse = (text: string, emptyMessage: string) => {
+    const parsed = tryParseJson(text);
+    const matches = parsed && Array.isArray(parsed.matches) ? parsed.matches : [];
+    // Dedupe by catalog key no matter what the model returned, merging
+    // any weights it split across duplicates
+    const byKey = new Map<string, { key: string; weights: number[]; variant: string }>();
+    matches.forEach((m: Record<string, unknown>) => {
+      const key = String(m.key || "");
+      if (!CATALOG_BY_KEY[key] || equipBank[key]) return;
+      const weights = Array.isArray(m.weightsLb) ? (m.weightsLb as unknown[]).map(Number).filter(n => n > 0) : [];
+      const variant = m.variant && CATALOG_BY_KEY[key]?.variants?.includes(String(m.variant)) ? String(m.variant) : "";
+      const existing = byKey.get(key);
+      if (existing) {
+        existing.weights = Array.from(new Set([...existing.weights, ...weights])).sort((a, b) => a - b);
+        if (!existing.variant && variant) existing.variant = variant;
+      } else {
+        byKey.set(key, { key, weights, variant });
+      }
+    });
+    const suggestions = Array.from(byKey.values()).map(s => ({
+      key: s.key,
+      weightsText: s.weights.join(", "),
+      variant: s.variant,
+    }));
+    // "Which one did you mean?" entries - only real, still-unowned options
+    const ambiguousRaw = parsed && Array.isArray(parsed.ambiguous) ? parsed.ambiguous : [];
+    const ambiguous: { mention: string; weightsText: string; options: string[] }[] = [];
+    ambiguousRaw.forEach((a: Record<string, unknown>) => {
+      const options = (Array.isArray(a.options) ? a.options : [])
+        .map(o => String(o))
+        .filter(k => CATALOG_BY_KEY[k] && !equipBank[k] && !byKey.has(k));
+      const weights = Array.isArray(a.weightsLb) ? (a.weightsLb as unknown[]).map(Number).filter(n => n > 0) : [];
+      if (options.length >= 2) {
+        ambiguous.push({ mention: String(a.mention || "this item"), weightsText: weights.join(", "), options });
+      } else if (options.length === 1) {
+        suggestions.push({ key: options[0], weightsText: weights.join(", "), variant: "" });
+      }
+    });
+    const unmatched = parsed && Array.isArray(parsed.unmatched) ? parsed.unmatched.map((u: unknown) => String(u)).filter(Boolean) : [];
+    setEquipSuggestions(suggestions);
+    setEquipAmbiguous(ambiguous);
+    setUnmatchedSuggestion(unmatched.join(", "));
+    if (suggestions.length === 0 && ambiguous.length === 0 && unmatched.length === 0) {
+      setError(emptyMessage);
+    }
+  };
+
+  // Photo of the gym runs through the SAME matcher: the vision model may
+  // only report gear it can actually see, mapped to the same catalog keys
+  const suggestEquipmentFromPhoto = async (file: File) => {
+    if (suggestingEquip) return;
+    setSuggestingEquip(true);
+    setError(null);
+    try {
+      const dataUrl = await compressImageToDataUrl(file);
+      const text = await chatCompletion({
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "text", text: `This is a photo of an athlete's gym. Identify equipment you can ACTUALLY SEE in the photo and match it to this catalog (use ONLY these keys):
+${buildEquipCatalogPrompt()}
+
+Rules:
+- Only report gear clearly visible - NEVER guess at things that might be out of frame.
+- weightsLb: only weights you can read off the equipment (plates, bells, printed numbers). Omit when unreadable.
+- variant: only when visually determinable (handles on a sandbag, doorway vs rig pull-up bar).
+- AT MOST ONE match per catalog key; merge weights. If an item could be two catalog entries, put it in "ambiguous" with candidate keys.
+- "unmatched": visible training gear that fits no catalog item.
+Respond: {"matches": [{"key": "...", "weightsLb": [], "variant": ""}], "ambiguous": [{"mention": "what you see", "weightsLb": [], "options": ["key1", "key2"]}], "unmatched": ["..."]}` },
+              { type: "image_url", image_url: { url: dataUrl } },
+            ],
+          },
+        ],
+        temperature: 0.1,
+        maxTokens: 1500,
+      });
+      processEquipMatchResponse(text, "Couldn't spot recognizable equipment in that photo - try a clearer, wider shot.");
+    } catch (err) {
+      console.error("Error matching equipment photo:", err);
+      setError("Couldn't read that photo. Please try again.");
     } finally {
       setSuggestingEquip(false);
     }
@@ -3978,19 +4050,10 @@ Respond: {"matches": [{"key": "...", "weightsLb": [], "variant": ""}], "ambiguou
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   {(preferences.trainingEnvironment || "home") === "commercial" ? "Anything Special About Your Gym? (optional)" : "Your Garage Gym Equipment"}
                 </label>
-                {(preferences.trainingEnvironment || "home") === "commercial" ? (
-                  <>
-                    <textarea
-                      value={preferences.equipment}
-                      onChange={(e) => setPreferences(prev => ({ ...prev, equipment: e.target.value }))}
-                      placeholder="e.g., No squat rack at my gym, great cable setup, pool available..."
-                      rows={3}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">Full standard gym equipment is assumed - note anything missing or extra</p>
-                  </>
-                ) : (
-                  <div className="space-y-3">
+                <div className="space-y-3">
+                    {(preferences.trainingEnvironment || "home") === "commercial" && (
+                      <p className="text-xs text-gray-500">Full standard gym equipment is assumed. Tick the machines and specialty gear your gym has so the coach programs with them - and note anything your gym is missing at the bottom.</p>
+                    )}
                     {/* Chat-style entry: describe it, get catalog chips back */}
                     <div className="bg-purple-50 border border-purple-100 rounded-lg p-2.5">
                       <p className="text-xs text-gray-600 mb-1.5">Just tell me what you&apos;ve got - I&apos;ll pick the matches for you to confirm:</p>
@@ -4010,6 +4073,26 @@ Respond: {"matches": [{"key": "...", "weightsLb": [], "variant": ""}], "ambiguou
                           className="px-3 py-2 bg-purple-600 text-white text-xs font-semibold rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-colors whitespace-nowrap"
                         >
                           {suggestingEquip ? "Reading..." : "✨ Match"}
+                        </button>
+                        <input
+                          ref={equipPhotoInputRef}
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            if (f) suggestEquipmentFromPhoto(f);
+                            e.target.value = "";
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => equipPhotoInputRef.current?.click()}
+                          disabled={suggestingEquip}
+                          title="Photograph your gym - I'll identify the equipment I can see"
+                          className="px-3 py-2 border border-purple-300 text-purple-700 text-xs font-semibold rounded-lg hover:bg-purple-100 disabled:opacity-50 transition-colors"
+                        >
+                          📷
                         </button>
                       </div>
                       {equipSuggestions && equipSuggestions.length > 0 && (
@@ -4158,18 +4241,25 @@ Respond: {"matches": [{"key": "...", "weightsLb": [], "variant": ""}], "ambiguou
                       })}
                     </div>
                     <div>
-                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Anything not listed</p>
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+                        {(preferences.trainingEnvironment || "home") === "commercial" ? "Anything special or missing at your gym" : "Anything not listed"}
+                      </p>
                       <input
                         type="text"
                         value={customEquipment}
                         onChange={(e) => updateCustomEquipment(e.target.value)}
-                        placeholder="e.g. 60lb odd-shaped stone, homemade sled..."
+                        placeholder={(preferences.trainingEnvironment || "home") === "commercial"
+                          ? "e.g. no squat rack, pool available, turf strip..."
+                          : "e.g. 60lb odd-shaped stone, homemade sled..."}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                       />
                     </div>
-                    <p className="text-xs text-gray-500">The AI programs only with gear selected here, used the way each implement is designed to be used.</p>
+                    <p className="text-xs text-gray-500">
+                      {(preferences.trainingEnvironment || "home") === "commercial"
+                        ? "Standard barbells, racks, benches, and dumbbells are always assumed at a commercial gym."
+                        : "The AI programs only with gear selected here, used the way each implement is designed to be used."}
+                    </p>
                   </div>
-                )}
               </div>
 
               {/* Workout Duration */}
