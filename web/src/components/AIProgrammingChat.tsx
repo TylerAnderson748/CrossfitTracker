@@ -1705,6 +1705,7 @@ ${IMPLEMENT_KNOWLEDGE}
 - Time budgets are CAPS, not targets: do NOT fill every available minute. Distribute training load across the whole week - never schedule two maximal days back-to-back, and keep most sessions comfortably under their cap.
 - FATIGUE MANAGEMENT: wave the intensity. Never stack more than 2 hard days in a row - follow them with an easy day, skill day, or rest, and prefer an extra rest day after a demanding stretch over forcing volume. Harder and easier weeks alternate within a block, with every 3rd-4th week a genuine deload (volume AND intensity down 30-40%). Calibrate to the athlete's recent check-ins: repeated "very hard" means ease the coming days; repeated "too easy" means push.
 - REST PLACEMENT anchors to the week's biggest sessions: rest or easy movement immediately before AND after the long run / heaviest day whenever fixed classes allow - never a hard metcon or heavy lifting adjacent to a 8+ mile run. Rest-day reasons must describe their ACTUAL neighbors - never claim a rest protects a session when a hard day sits between them; if the fixed class schedule forces that layout, say so honestly.
+- REASONS DESCRIBE THE FINAL TABLE: when a correction changes any day, REWRITE every reason that referenced that day. Never mention a session ("Saturday chipper") that does not exist in your final rows - the story must match the table exactly.
 - If the athlete is training for a running race: program 3-4 run days per week - ONE long run plus easy midweek runs (easy runs fit inside weekday caps). Weekly total mileage progresses roughly 10% week over week with a lighter cutback week every 3rd-4th week; the long run builds toward the race distance, then tapers.
 - The LONG RUN is its own session on the athlete's long-run day: nothing else that day beyond a short warm-up and cool-down. NEVER stack the long run after a class or metcon.
 - Conditioning pieces stay in the 8-20 minute range (base phase toward the lower end). No 30-minute heavy-implement EMOMs.
@@ -1870,6 +1871,37 @@ PATCH RULES:
 
     // Safety first: unsafe loads reject the week before anything else
     problems.push(...loadSafetyViolations(candidate));
+
+    // Reasons must describe the table as ACTUALLY written: a reason citing
+    // a "Saturday chipper" while Saturday is an easy run means a rewrite
+    // changed the day but kept the old story
+    const dayRowByName = new Map<string, PlanRow>();
+    candidate.forEach(r => dayRowByName.set((r.day || "").toLowerCase(), r));
+    const reasonClaims: { re: RegExp; ok: (row: PlanRow) => boolean; what: string }[] = [
+      { re: /(chipper|metcon|amrap|emom|conditioning|wod)/i, ok: row => (row.components || []).some(c => c.type === "wod") || /wod|metcon|chipper|amrap|emom|conditioning/i.test(row.session), what: "a metcon/chipper" },
+      { re: /long run/i, ok: row => (row.runMiles || 0) >= 5 || /long run/i.test(row.session), what: "the long run" },
+      { re: /\bclass\b/i, ok: row => (row.components || []).some(c => c.type === "class") || /class/i.test(row.session), what: "a class" },
+      { re: /\brest\b/i, ok: row => row.session.toLowerCase().includes("rest"), what: "rest" },
+      { re: /(heavy|lifting|squat|deadlift|press|strength)/i, ok: row => (row.components || []).some(c => c.type === "lift" || c.type === "class" || c.type === "wod") || /lift|strength|class/i.test(row.session), what: "lifting" },
+    ];
+    candidate.forEach(r => {
+      if (!r.reason) return;
+      WEEKDAY_NAMES.forEach(dayName => {
+        const idx = r.reason!.toLowerCase().indexOf(dayName.toLowerCase());
+        if (idx === -1) return;
+        const windowText = r.reason!.slice(idx, idx + 55);
+        const target = dayRowByName.get(dayName.toLowerCase());
+        if (!target || target.date === r.date) return;
+        for (const chk of reasonClaims) {
+          if (chk.re.test(windowText)) {
+            if (!chk.ok(target)) {
+              problems.push(`${r.date} reason claims ${dayName} has ${chk.what} ("${windowText.trim()}...") but ${dayName} (${target.date}) does not - reasons must describe the days as ACTUALLY programmed; fix the reason or the day so the story matches the table`);
+            }
+            break;
+          }
+        }
+      });
+    });
 
     // Cross-week variety: a WOD that copies an earlier week's workout
     // verbatim - or even reuses its name - is lazy programming and gets
