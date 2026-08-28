@@ -715,6 +715,8 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
   // Chat-style entry: describe the gym in prose, AI suggests catalog
   // matches as chips, tapping a chip confirms it into the bank
   const [equipFreeText, setEquipFreeText] = useState("");
+  // Collapsible catalog groups - the bank is long, so sections roll down
+  const [openEquipGroups, setOpenEquipGroups] = useState<Record<string, boolean>>({});
   const [equipSuggestions, setEquipSuggestions] = useState<{ key: string; weightsText: string; variant: string }[] | null>(null);
   // Mentions that could be two catalog items ("sandbag" -> strongman or
   // handled): the athlete answers "which one?" instead of the AI guessing
@@ -4076,61 +4078,85 @@ Respond: {"matches": [{"key": "...", "weightsLb": [], "variant": ""}], "ambiguou
                         </div>
                       )}
                     </div>
-                    <p className="text-xs text-gray-500">Or tap everything you own. Weights are in lbs - list each one you have (e.g. &quot;35, 53&quot;).</p>
-                    {EQUIPMENT_CATALOG.map(group => (
-                      <div key={group.group}>
-                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">{group.group}</p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {group.items.map(item => {
-                            const selected = !!equipBank[item.key];
-                            return (
-                              <button
-                                key={item.key}
-                                type="button"
-                                onClick={() => toggleEquip(item.key)}
-                                className={`px-2.5 py-1.5 rounded-full text-xs font-medium border transition-colors ${
-                                  selected
-                                    ? "bg-purple-600 border-purple-600 text-white"
-                                    : "bg-white border-gray-300 text-gray-600 hover:border-purple-300"
-                                }`}
-                              >
-                                {selected ? "✓ " : ""}{item.label}
-                              </button>
-                            );
-                          })}
-                        </div>
-                        {group.items.filter(it => equipBank[it.key] && (it.hasWeights || it.variants)).map(item => (
-                          <div key={`${item.key}-detail`} className="mt-2 ml-1 pl-2 border-l-2 border-purple-200">
-                            <p className="text-xs font-medium text-gray-700 mb-1">{item.label}</p>
-                            <div className="flex flex-wrap items-center gap-1.5">
-                              {item.hasWeights && (
-                                <input
-                                  type="text"
-                                  value={equipBank[item.key]?.weightsText || ""}
-                                  onChange={(e) => updateEquip(item.key, "weightsText", e.target.value)}
-                                  placeholder={item.weightHint || "weights (lb)"}
-                                  className="w-28 px-2 py-1 border border-gray-300 rounded text-xs text-gray-900"
-                                />
-                              )}
-                              {(item.variants || []).map(v => (
-                                <button
-                                  key={v}
-                                  type="button"
-                                  onClick={() => updateEquip(item.key, "variant", equipBank[item.key]?.variant === v ? "" : v)}
-                                  className={`px-2 py-1 rounded-full text-[11px] border transition-colors ${
-                                    equipBank[item.key]?.variant === v
-                                      ? "bg-purple-100 border-purple-400 text-purple-800 font-semibold"
-                                      : "bg-white border-gray-200 text-gray-500 hover:border-purple-300"
-                                  }`}
-                                >
-                                  {v}
-                                </button>
-                              ))}
-                            </div>
+                    <p className="text-xs text-gray-500">Or browse the bank - roll a section down and tap what you own. Weights are in lbs (e.g. &quot;35, 53&quot;).</p>
+                    <div className="border border-gray-200 rounded-lg divide-y divide-gray-100 overflow-hidden">
+                      {EQUIPMENT_CATALOG.map(group => {
+                        const selectedCount = group.items.filter(it => equipBank[it.key]).length;
+                        const open = !!openEquipGroups[group.group];
+                        return (
+                          <div key={group.group}>
+                            <button
+                              type="button"
+                              onClick={() => setOpenEquipGroups(prev => ({ ...prev, [group.group]: !prev[group.group] }))}
+                              className="w-full px-3 py-2.5 flex items-center justify-between bg-white hover:bg-gray-50 transition-colors"
+                            >
+                              <span className="text-xs font-semibold text-gray-700 uppercase tracking-wide">{group.group}</span>
+                              <span className="flex items-center gap-2">
+                                {selectedCount > 0 && (
+                                  <span className="px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded-full text-[11px] font-bold">{selectedCount}</span>
+                                )}
+                                <svg className={`w-4 h-4 text-gray-400 transition-transform ${open ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                </svg>
+                              </span>
+                            </button>
+                            {open && (
+                              <div className="px-3 pb-3 bg-gray-50/50">
+                                <div className="flex flex-wrap gap-1.5 pt-1">
+                                  {group.items.map(item => {
+                                    const selected = !!equipBank[item.key];
+                                    return (
+                                      <button
+                                        key={item.key}
+                                        type="button"
+                                        onClick={() => toggleEquip(item.key)}
+                                        className={`px-2.5 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                                          selected
+                                            ? "bg-purple-600 border-purple-600 text-white"
+                                            : "bg-white border-gray-300 text-gray-600 hover:border-purple-300"
+                                        }`}
+                                      >
+                                        {selected ? "✓ " : ""}{item.label}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                                {group.items.filter(it => equipBank[it.key] && (it.hasWeights || it.variants)).map(item => (
+                                  <div key={`${item.key}-detail`} className="mt-2 ml-1 pl-2 border-l-2 border-purple-200">
+                                    <p className="text-xs font-medium text-gray-700 mb-1">{item.label}</p>
+                                    <div className="flex flex-wrap items-center gap-1.5">
+                                      {item.hasWeights && (
+                                        <input
+                                          type="text"
+                                          value={equipBank[item.key]?.weightsText || ""}
+                                          onChange={(e) => updateEquip(item.key, "weightsText", e.target.value)}
+                                          placeholder={item.weightHint || "weights (lb)"}
+                                          className="w-28 px-2 py-1 border border-gray-300 rounded text-xs text-gray-900"
+                                        />
+                                      )}
+                                      {(item.variants || []).map(v => (
+                                        <button
+                                          key={v}
+                                          type="button"
+                                          onClick={() => updateEquip(item.key, "variant", equipBank[item.key]?.variant === v ? "" : v)}
+                                          className={`px-2 py-1 rounded-full text-[11px] border transition-colors ${
+                                            equipBank[item.key]?.variant === v
+                                              ? "bg-purple-100 border-purple-400 text-purple-800 font-semibold"
+                                              : "bg-white border-gray-200 text-gray-500 hover:border-purple-300"
+                                          }`}
+                                        >
+                                          {v}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
-                        ))}
-                      </div>
-                    ))}
+                        );
+                      })}
+                    </div>
                     <div>
                       <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Anything not listed</p>
                       <input
