@@ -66,6 +66,34 @@ export const wodScoringTypeLabels: Record<WODScoringType, string> = {
   amrap: "AMRAP",
 };
 
+// One piece of home-gym equipment, normalized: the athlete types gear as
+// free text, the AI proposes structured items against this shape, and the
+// athlete confirms/corrects them - so nothing downstream ever has to
+// re-interpret a sentence.
+export interface EquipmentItem {
+  id: string;
+  // Canonical category: barbell, plates, squat_rack, dumbbells, kettlebells,
+  // sandbag, med_ball, wall_ball_target, pull_up_bar, rings, plyo_box,
+  // jump_rope, rower, bike, ski_erg, weight_vest, bands, bench, ghd, sled, other
+  category: string;
+  label: string;         // display name, e.g. "Strongman sandbag"
+  weightsLb?: number[];  // e.g. [35, 53] for kettlebells, [150] for a sandbag
+  variant?: string;      // e.g. "no handles", "doorway-mounted", "adjustable"
+  confirmed: boolean;
+}
+
+// Canonical text rendering of structured equipment - the single string
+// every AI prompt consumes, so prompts and UI can never disagree
+export function equipmentItemsToText(items: EquipmentItem[]): string {
+  return items
+    .map(it => {
+      const w = it.weightsLb && it.weightsLb.length > 0 ? ` (${it.weightsLb.map(x => `${x}lb`).join(", ")})` : "";
+      const v = it.variant ? ` [${it.variant}]` : "";
+      return `${it.label}${w}${v}`;
+    })
+    .join("; ");
+}
+
 // Convert RPE mentions to percent effort ("RPE 3-5" -> "30-50% effort").
 // The athlete thinks in % effort; also cleans up plans generated before
 // the switch away from RPE.
@@ -408,6 +436,9 @@ export interface AIProgrammingPreferences {
   trainingEnvironment?: TrainingEnvironment;
   philosophy: string; // Free-form text describing the athlete's training philosophy
   equipment: string; // Available equipment (home) or notes about their gym (commercial)
+  // Structured equipment (AI-parsed from free text, confirmed by the
+  // athlete). When present, `equipment` holds its canonical rendering.
+  equipmentItems?: EquipmentItem[];
   // Races/competitions the plan should build toward
   events?: TrainingEvent[];
   // Fixed weekly structure (class days, rest days)

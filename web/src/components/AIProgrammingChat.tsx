@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { collection, addDoc, updateDoc, doc, query, where, getDocs, getDoc, setDoc, limit, Timestamp, serverTimestamp, deleteDoc, writeBatch } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { AIProgrammingSession, AIChatMessage, AIGeneratedDay, AIProgrammingPreferences, AITrainerSubscription, TrainingEvent, TrainingEventType, WeekdayKey, AICoachPreferences, PlanRow, PlanRowComponent, TrainingPlan, workoutComponentColors, workoutComponentLabels, cardioActivityForComponent, hasAIProgramming, inferScoringType, rpeToPercentEffort, effortValueToPercent, PRICING } from "@/lib/types";
+import { AIProgrammingSession, AIChatMessage, AIGeneratedDay, AIProgrammingPreferences, AITrainerSubscription, TrainingEvent, TrainingEventType, WeekdayKey, AICoachPreferences, PlanRow, PlanRowComponent, TrainingPlan, workoutComponentColors, workoutComponentLabels, cardioActivityForComponent, hasAIProgramming, inferScoringType, rpeToPercentEffort, effortValueToPercent, EquipmentItem, equipmentItemsToText, PRICING } from "@/lib/types";
 import { getAllSkills, getAllLifts, getAllWods } from "@/lib/workoutData";
 import { chatCompletion, REVISION_MODEL, PLAN_MODEL } from "@/lib/ai";
 import { computeBaselineStatus, buildBaselinePromptBlock, buildBaselineWeek, BaselineStatusInput, BaselineCategory } from "@/lib/baselines";
@@ -22,6 +22,7 @@ const defaultPreferences: Omit<AIProgrammingPreferences, "userId" | "updatedAt">
   trainingEnvironment: "home",
   philosophy: "",
   equipment: "",
+  equipmentItems: [],
   events: [],
   weeklySchedule: {},
   longRunDay: "",
@@ -705,6 +706,10 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
   // athlete scroll down past the whole history
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const [savingPreferences, setSavingPreferences] = useState(false);
+  // Equipment normalization: AI proposes structured items from the free
+  // text, the athlete confirms/corrects them before they're saved
+  const [equipmentDraft, setEquipmentDraft] = useState<{ id: string; category: string; label: string; weightsText: string; variant: string; question?: string }[] | null>(null);
+  const [parsingEquipment, setParsingEquipment] = useState(false);
 
   // Recently used workouts (last 6 months) - to avoid repetition
   const [recentlyUsedWorkouts, setRecentlyUsedWorkouts] = useState<string[]>([]);
@@ -999,6 +1004,7 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
         trainingEnvironment: prefData.trainingEnvironment || "home",
         philosophy: prefData.philosophy || "",
         equipment: prefData.equipment || "",
+        equipmentItems: prefData.equipmentItems || [],
         events: prefData.events || [],
         weeklySchedule: prefData.weeklySchedule || {},
         longRunDay: prefData.longRunDay || "",
@@ -2428,6 +2434,72 @@ Respond: {"problems": []} or {"problems": ["which weeks + what's wrong + the fix
     } : prev);
   };
 
+  // Parse the free-text equipment description into structured items the
+  // athlete confirms - so nothing downstream re-interprets a sentence
+  const organizeEquipment = async () => {
+    const raw = preferences.equipment.trim();
+    if (!raw || parsingEquipment) return;
+    setParsingEquipment(true);
+    setError(null);
+    try {
+      const text = await chatCompletion({
+        messages: [
+          { role: "system", content: "You normalize home-gym equipment descriptions into structured items. Respond with valid JSON only." },
+          { role: "user", content: `The athlete describes their home gym as:
+"${raw}"
+
+Parse it into structured items. Categories: barbell, plates, squat_rack, dumbbells, kettlebells, sandbag, med_ball, wall_ball_target, pull_up_bar, rings, plyo_box, jump_rope, rower, bike, ski_erg, weight_vest, bands, bench, ghd, sled, other.
+Rules:
+- One item per distinct piece of gear; combine same-category weights into one item (kettlebells -> weightsLb [35, 53]).
+- weightsLb: numbers in POUNDS (convert kg at 1kg = 2.2lb). Omit for weightless gear (jump rope, pull-up bar, rings).
+- variant: only what the text supports ("with handles", "doorway-mounted", "adjustable").
+- question: when an item is ambiguous in a way that CHANGES PROGRAMMING, ask ONE short question (sandbag -> "Strongman bag with no handles, or training bag with handles?"; pull-up bar -> "Doorway bar or wall/rig mounted?"). Otherwise omit.
+- NEVER invent gear that isn't mentioned.
+Respond: {"items": [{"category": "...", "label": "...", "weightsLb": [], "variant": "...", "question": "..."}]}` }
+        ],
+        temperature: 0.1,
+        maxTokens: 2000,
+      });
+      const parsed = tryParseJson(text);
+      const items = parsed && Array.isArray(parsed.items) ? parsed.items : [];
+      if (items.length === 0) {
+        setError("Couldn't make sense of the equipment text - try describing it a bit more plainly, then Organize again.");
+        return;
+      }
+      setEquipmentDraft(items.map((it: Record<string, unknown>, idx: number) => ({
+        id: `eq_${Date.now()}_${idx}`,
+        category: String(it.category || "other"),
+        label: String(it.label || "Item"),
+        weightsText: Array.isArray(it.weightsLb) ? (it.weightsLb as unknown[]).map(Number).filter(n => n > 0).join(", ") : "",
+        variant: it.variant ? String(it.variant) : "",
+        question: it.question ? String(it.question) : "",
+      })));
+    } catch (err) {
+      console.error("Error organizing equipment:", err);
+      setError("Couldn't organize the equipment list. Please try again.");
+    } finally {
+      setParsingEquipment(false);
+    }
+  };
+
+  // Athlete confirmed the structured list: it becomes the source of truth,
+  // and the canonical string rendering is what every AI prompt reads
+  const confirmEquipmentDraft = () => {
+    if (!equipmentDraft) return;
+    const items: EquipmentItem[] = equipmentDraft
+      .filter(d => d.label.trim())
+      .map(d => ({
+        id: d.id,
+        category: d.category,
+        label: d.label.trim(),
+        weightsLb: d.weightsText.split(/[,/&+]+/).map(s => parseFloat(s)).filter(n => !isNaN(n) && n > 0),
+        ...(d.variant.trim() ? { variant: d.variant.trim() } : {}),
+        confirmed: true,
+      }));
+    setPreferences(prev => ({ ...prev, equipmentItems: items, equipment: equipmentItemsToText(items) }));
+    setEquipmentDraft(null);
+  };
+
   // Chat mentioned new gear: append it to the saved equipment list so the
   // whole app (programming, daily advice, % hints) knows about it
   const applyEquipmentAdditions = async (items: string[]) => {
@@ -2436,10 +2508,25 @@ Respond: {"problems": []} or {"problems": ["which weeks + what's wrong + the fix
       const existingLower = (current.equipment || "").toLowerCase();
       const newItems = items.map(s => s.trim()).filter(s => s && !existingLower.includes(s.toLowerCase()));
       if (newItems.length === 0) return;
-      const equipment = current.equipment ? `${current.equipment}, ${newItems.join(", ")}` : newItems.join(", ");
-      setPreferences(prev => ({ ...prev, equipment }));
-      if (preferencesDocId) {
-        await updateDoc(doc(db, "aiProgrammingPreferences", preferencesDocId), { equipment, updatedAt: serverTimestamp() });
+      const structured = current.equipmentItems || [];
+      if (structured.length > 0) {
+        // Structured list is the source of truth - append there and
+        // re-render the canonical string
+        const appended: EquipmentItem[] = [
+          ...structured,
+          ...newItems.map((label, i) => ({ id: `eq_add_${Date.now()}_${i}`, category: "other", label, confirmed: true })),
+        ];
+        const equipment = equipmentItemsToText(appended);
+        setPreferences(prev => ({ ...prev, equipment, equipmentItems: appended }));
+        if (preferencesDocId) {
+          await updateDoc(doc(db, "aiProgrammingPreferences", preferencesDocId), { equipment, equipmentItems: appended, updatedAt: serverTimestamp() });
+        }
+      } else {
+        const equipment = current.equipment ? `${current.equipment}, ${newItems.join(", ")}` : newItems.join(", ");
+        setPreferences(prev => ({ ...prev, equipment }));
+        if (preferencesDocId) {
+          await updateDoc(doc(db, "aiProgrammingPreferences", preferencesDocId), { equipment, updatedAt: serverTimestamp() });
+        }
       }
     } catch (err) {
       console.error("Error saving equipment additions:", err);
@@ -3747,19 +3834,130 @@ Respond: {"problems": []} or {"problems": ["which weeks + what's wrong + the fix
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   {(preferences.trainingEnvironment || "home") === "commercial" ? "Anything Special About Your Gym? (optional)" : "Your Garage Gym Equipment"}
                 </label>
-                <textarea
-                  value={preferences.equipment}
-                  onChange={(e) => setPreferences(prev => ({ ...prev, equipment: e.target.value }))}
-                  placeholder={(preferences.trainingEnvironment || "home") === "commercial"
-                    ? "e.g., No squat rack at my gym, great cable setup, pool available..."
-                    : "e.g., Barbell + 300lb plates, squat rack, pull-up bar, one 53lb kettlebell, jump rope, rower. No dumbbells, no rings..."}
-                  rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
-                />
+                {(preferences.trainingEnvironment || "home") !== "commercial" && (preferences.equipmentItems?.length || 0) > 0 && !equipmentDraft ? (
+                  <div>
+                    <div className="flex flex-wrap gap-1.5 mb-2">
+                      {(preferences.equipmentItems || []).map(it => (
+                        <span key={it.id} className="px-2.5 py-1 bg-purple-50 border border-purple-200 rounded-full text-xs font-medium text-purple-800">
+                          {it.label}
+                          {it.weightsLb && it.weightsLb.length > 0 && <span className="text-purple-500"> · {it.weightsLb.map(w => `${w}lb`).join("/")}</span>}
+                          {it.variant && <span className="text-purple-400"> · {it.variant}</span>}
+                        </span>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setEquipmentDraft((preferences.equipmentItems || []).map(it => ({
+                        id: it.id,
+                        category: it.category,
+                        label: it.label,
+                        weightsText: (it.weightsLb || []).join(", "),
+                        variant: it.variant || "",
+                      })))}
+                      className="text-xs font-semibold text-purple-600 hover:text-purple-800"
+                    >
+                      ✏️ Edit equipment
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <textarea
+                      value={preferences.equipment}
+                      onChange={(e) => setPreferences(prev => ({ ...prev, equipment: e.target.value }))}
+                      placeholder={(preferences.trainingEnvironment || "home") === "commercial"
+                        ? "e.g., No squat rack at my gym, great cable setup, pool available..."
+                        : "e.g., Barbell + 300lb plates, squat rack, pull-up bar, one 53lb kettlebell, jump rope, rower. No dumbbells, no rings..."}
+                      rows={3}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
+                    />
+                    {(preferences.trainingEnvironment || "home") !== "commercial" && !equipmentDraft && (
+                      <button
+                        type="button"
+                        onClick={organizeEquipment}
+                        disabled={parsingEquipment || !preferences.equipment.trim()}
+                        className="mt-2 px-3 py-1.5 bg-purple-600 text-white text-xs font-semibold rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-colors"
+                      >
+                        {parsingEquipment ? "Reading your list..." : "✨ Organize my equipment"}
+                      </button>
+                    )}
+                  </>
+                )}
+                {equipmentDraft && (
+                  <div className="mt-3 border border-purple-200 bg-purple-50 rounded-lg p-3 space-y-3">
+                    <p className="text-xs font-semibold text-purple-800">
+                      Confirm each item - fix anything I got wrong. This list is exactly what your coach will program with.
+                    </p>
+                    {equipmentDraft.map((d, idx) => (
+                      <div key={d.id} className="bg-white border border-gray-200 rounded-lg p-2.5">
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={d.label}
+                            onChange={(e) => setEquipmentDraft(prev => prev ? prev.map((x, i) => i === idx ? { ...x, label: e.target.value } : x) : prev)}
+                            placeholder="What is it?"
+                            className="flex-1 px-2 py-1.5 border border-gray-300 rounded text-sm text-gray-900 font-medium"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setEquipmentDraft(prev => prev ? prev.filter((_, i) => i !== idx) : prev)}
+                            className="p-1 text-gray-400 hover:text-red-600"
+                            title="Remove"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                        <div className="flex items-center gap-2 mt-2">
+                          <input
+                            type="text"
+                            value={d.weightsText}
+                            onChange={(e) => setEquipmentDraft(prev => prev ? prev.map((x, i) => i === idx ? { ...x, weightsText: e.target.value } : x) : prev)}
+                            placeholder="Weights (lb)"
+                            className="w-28 px-2 py-1.5 border border-gray-300 rounded text-sm text-gray-900"
+                          />
+                          <input
+                            type="text"
+                            value={d.variant}
+                            onChange={(e) => setEquipmentDraft(prev => prev ? prev.map((x, i) => i === idx ? { ...x, variant: e.target.value } : x) : prev)}
+                            placeholder="Type/variant (optional)"
+                            className="flex-1 px-2 py-1.5 border border-gray-300 rounded text-sm text-gray-900"
+                          />
+                        </div>
+                        {d.question && (
+                          <p className="mt-2 text-xs text-amber-700 bg-amber-50 border-l-2 border-amber-300 px-2 py-1 rounded-r">
+                            ❓ {d.question} <span className="text-amber-500">(answer in the type/variant box)</span>
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => setEquipmentDraft(prev => prev ? [...prev, { id: `eq_new_${Date.now()}`, category: "other", label: "", weightsText: "", variant: "" }] : prev)}
+                      className="text-xs font-semibold text-purple-600 hover:text-purple-800"
+                    >
+                      + Add an item
+                    </button>
+                    <div className="flex gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setEquipmentDraft(null)}
+                        className="flex-1 py-2 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={confirmEquipmentDraft}
+                        className="flex-1 py-2 bg-purple-600 text-white text-sm font-semibold rounded-lg hover:bg-purple-700"
+                      >
+                        ✓ Confirm equipment
+                      </button>
+                    </div>
+                  </div>
+                )}
                 <p className="text-xs text-gray-500 mt-1">
                   {(preferences.trainingEnvironment || "home") === "commercial"
                     ? "Full standard gym equipment is assumed - note anything missing or extra"
-                    : "The AI will only program movements you can actually do"}
+                    : "The AI programs only with gear on this list - confirmed items are used exactly as written"}
                 </p>
               </div>
 
