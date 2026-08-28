@@ -501,6 +501,9 @@ export interface TrainingPlan {
   };
   // Highest outline week that has day-level rows generated so far
   generatedThroughWeek?: number;
+  // Set while day rows are being generated; an interrupted generation
+  // (closed phone, lost connection) resumes from the saved progress
+  generation?: { status: "in_progress" | "done" };
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }

@@ -1773,6 +1773,16 @@ PATCH RULES:
 
   // True when the plan has outline weeks beyond what's been generated
   const nextBlockAvailable = !!(plan?.outline && (plan.outline.weeks || []).some(w => w.weekNumber > (plan.generatedThroughWeek || 0)));
+  // Interrupted generation (closed phone/tab) - resumable from the saved weeks
+  const generationInterrupted = plan?.generation?.status === "in_progress" && nextBlockAvailable && !isLoading;
+  // Rolling programming for athletes with no event: their outline has no
+  // more weeks and the current block is winding down - time to plan anew
+  const lastPlanDate = plan?.rows?.[plan.rows.length - 1]?.date || "";
+  const soonCutoff = (() => {
+    const d = new Date(Date.now() + 3 * 86400000);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  })();
+  const blockEndingNoOutline = !!(plan && plan.status === "locked" && !nextBlockAvailable && lastPlanDate && lastPlanDate <= soonCutoff);
 
   // Deterministic checks a generated week must pass (rest-day count, class
   // placement, endurance structure when a race is on the calendar)
@@ -2165,6 +2175,42 @@ Respond: {"problems": []} or {"problems": ["which weeks + what's wrong + the fix
     const allRows: PlanRow[] = [...existingRows];
     const failedWeeks: number[] = [];
 
+    // Everything needed to persist progress, computed up front so the plan
+    // saves after EVERY completed week - a closed phone loses nothing and
+    // generation resumes from the last saved week
+    const phaseGoals = (outline.phases || [])
+      .map(p => ({ phase: String(p.name || p.phase || "").trim(), weeks: String(p.weeks || "").trim(), goal: String(p.goal || "").trim() }))
+      .filter(p => p.phase && p.goal);
+    const mergedPhaseGoals = phaseGoals.length > 0 ? phaseGoals : (plan?.phaseGoals || []);
+    const isContinuation = existingRows.length > 0;
+    const outlineForStore = isContinuation && plan?.outline
+      ? plan.outline
+      : {
+          startDate: outline.startDate || "",
+          endDate: outline.endDate || "",
+          weeks: futureWeeks.map(w => ({
+            weekNumber: w.weekNumber,
+            startDate: w.startDate || "",
+            focus: w.focus || "",
+            ...(w.details ? { details: w.details } : {}),
+          })),
+        };
+    const buildPlanDoc = (rowsSoFar: PlanRow[], throughWeek: number, generating: boolean): Omit<TrainingPlan, "id"> => ({
+      userId,
+      sessionId,
+      title: activeSession?.title || "Training Plan",
+      status: "draft",
+      startDate: outline.startDate || rowsSoFar[0]?.date || "",
+      endDate: outline.endDate || rowsSoFar[rowsSoFar.length - 1]?.date || "",
+      rows: rowsSoFar,
+      ...(mergedPhaseGoals.length > 0 ? { phaseGoals: mergedPhaseGoals } : {}),
+      outline: outlineForStore,
+      generatedThroughWeek: Math.max(isContinuation ? (plan?.generatedThroughWeek || 0) : 0, throughWeek),
+      generation: { status: generating ? "in_progress" : "done" },
+      createdAt: plan?.createdAt || Timestamp.now(),
+      updatedAt: Timestamp.now(),
+    });
+
     for (let i = 0; i < weeks.length; i++) {
       setGenerationProgress({ current: i + 1, total: weeks.length, stage: "writing" });
 
@@ -2237,6 +2283,14 @@ Respond: {"problems": []} or {"problems": ["which weeks + what's wrong + the fix
 
       if (rows) {
         allRows.push(...rows.filter(r => r.date));
+        // Persist progress after every week - interruptions resume here
+        try {
+          const snapshot = buildPlanDoc(allRows, weeks[i].weekNumber, true);
+          await setDoc(doc(db, "trainingPlans", sessionId), snapshot);
+          setPlan({ id: sessionId, ...snapshot });
+        } catch (saveErr) {
+          console.error("Error saving week snapshot:", saveErr);
+        }
       } else {
         failedWeeks.push(weeks[i].weekNumber);
       }
@@ -2244,43 +2298,8 @@ Respond: {"problems": []} or {"problems": ["which weeks + what's wrong + the fix
 
     setGenerationProgress(null);
 
-    // Save the table as a draft plan (doc id = session id)
-    const now = Timestamp.now();
-    const phaseGoals = (outline.phases || [])
-      .map(p => ({ phase: String(p.name || p.phase || "").trim(), weeks: String(p.weeks || "").trim(), goal: String(p.goal || "").trim() }))
-      .filter(p => p.phase && p.goal);
-    const mergedPhaseGoals = phaseGoals.length > 0 ? phaseGoals : (plan?.phaseGoals || []);
-    // Persist the macro outline so later blocks can be generated from it;
-    // continuations keep the original full outline
-    const isContinuation = existingRows.length > 0;
-    const outlineForStore = isContinuation && plan?.outline
-      ? plan.outline
-      : {
-          startDate: outline.startDate || "",
-          endDate: outline.endDate || "",
-          weeks: futureWeeks.map(w => ({
-            weekNumber: w.weekNumber,
-            startDate: w.startDate || "",
-            focus: w.focus || "",
-            ...(w.details ? { details: w.details } : {}),
-          })),
-        };
-    const lastGeneratedWeek = weeks[weeks.length - 1]?.weekNumber || 0;
-    const generatedThroughWeek = Math.max(isContinuation ? (plan?.generatedThroughWeek || 0) : 0, lastGeneratedWeek);
-    const planDoc: Omit<TrainingPlan, "id"> = {
-      userId,
-      sessionId,
-      title: activeSession?.title || "Training Plan",
-      status: "draft",
-      startDate: outline.startDate || allRows[0]?.date || "",
-      endDate: outline.endDate || allRows[allRows.length - 1]?.date || "",
-      rows: allRows,
-      ...(mergedPhaseGoals.length > 0 ? { phaseGoals: mergedPhaseGoals } : {}),
-      outline: outlineForStore,
-      generatedThroughWeek,
-      createdAt: plan?.createdAt || now,
-      updatedAt: now,
-    };
+    // Final save marks generation complete
+    const planDoc = buildPlanDoc(allRows, weeks[weeks.length - 1]?.weekNumber || 0, false);
     await setDoc(doc(db, "trainingPlans", sessionId), planDoc);
     setPlan({ id: sessionId, ...planDoc });
 
@@ -3530,7 +3549,17 @@ Respond: {"matches": [{"key": "...", "weightsLb": [], "variant": ""}], "ambiguou
                 onClick={generateNextBlock}
                 className="w-full mb-3 py-2.5 bg-indigo-50 text-indigo-700 text-sm font-semibold rounded-lg hover:bg-indigo-100 transition-colors"
               >
-                📦 Build my next block (written from what I&apos;ve logged)
+                {generationInterrupted
+                  ? `▶️ Resume building my plan (saved through week ${plan.generatedThroughWeek || 0})`
+                  : "📦 Build my next block (written from what I've logged)"}
+              </button>
+            )}
+            {blockEndingNoOutline && !isLoading && (
+              <button
+                onClick={() => sendMessage("My current training block is ending. Review everything I logged and how sessions felt, then build my NEXT 4-week block as a NEW outline with phases that progresses from those results - keep what worked, advance loads from my logged numbers, and rotate movements for variety.")}
+                className="w-full mb-3 py-2.5 bg-indigo-50 text-indigo-700 text-sm font-semibold rounded-lg hover:bg-indigo-100 transition-colors"
+              >
+                🔄 Plan my next training block
               </button>
             )}
             <div className="flex gap-3">
