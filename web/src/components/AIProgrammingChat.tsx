@@ -2688,6 +2688,14 @@ Respond: {"matches": [{"key": "...", "weightsLb": [], "variant": ""}], "ambiguou
     });
   };
 
+  // Weight is verified ON the suggestion card, not after the fact
+  const updateSuggestionWeight = (idx: number, value: string) => {
+    setEquipSuggestions(prev => prev ? prev.map((s, i) => i === idx ? { ...s, weightsText: value } : s) : prev);
+  };
+  const updateAmbiguousWeight = (idx: number, value: string) => {
+    setEquipAmbiguous(prev => prev.map((a, i) => i === idx ? { ...a, weightsText: value } : a));
+  };
+
   // The athlete answered a "which one?" question - that key joins the bank
   const resolveAmbiguousEquip = (idx: number, key: string) => {
     setEquipAmbiguous(prev => {
@@ -4097,19 +4105,31 @@ Respond: {"matches": [{"key": "...", "weightsLb": [], "variant": ""}], "ambiguou
                       </div>
                       {equipSuggestions && equipSuggestions.length > 0 && (
                         <div className="mt-2">
-                          <p className="text-xs font-semibold text-purple-800 mb-1.5">Sounds like you have - tap to confirm each:</p>
-                          <div className="flex flex-wrap gap-1.5">
+                          <p className="text-xs font-semibold text-purple-800 mb-1.5">Sounds like you have - check the weight, then add:</p>
+                          <div className="space-y-1.5">
                             {equipSuggestions.map((s, idx) => (
-                              <button
-                                key={`${s.key}-${idx}`}
-                                type="button"
-                                onClick={() => acceptEquipSuggestion(idx)}
-                                className="px-2.5 py-1.5 bg-white border border-purple-300 rounded-full text-xs font-medium text-purple-800 hover:bg-purple-100 transition-colors"
-                              >
-                                + {CATALOG_BY_KEY[s.key]?.label || s.key}
-                                {s.weightsText && <span className="text-purple-500"> · {s.weightsText}lb</span>}
-                                {s.variant && <span className="text-purple-400"> · {s.variant}</span>}
-                              </button>
+                              <div key={`${s.key}-${idx}`} className="flex items-center gap-2 bg-white border border-purple-200 rounded-lg px-2.5 py-1.5">
+                                <span className="flex-1 min-w-0 text-xs font-medium text-purple-900">
+                                  {CATALOG_BY_KEY[s.key]?.label || s.key}
+                                  {s.variant && <span className="text-purple-400"> · {s.variant}</span>}
+                                </span>
+                                {CATALOG_BY_KEY[s.key]?.hasWeights && (
+                                  <input
+                                    type="text"
+                                    value={s.weightsText}
+                                    onChange={(e) => updateSuggestionWeight(idx, e.target.value)}
+                                    placeholder="lb?"
+                                    className="w-20 px-2 py-1 border border-gray-300 rounded text-xs text-gray-900 text-center"
+                                  />
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => acceptEquipSuggestion(idx)}
+                                  className="px-2.5 py-1 bg-purple-600 text-white rounded-full text-xs font-semibold hover:bg-purple-700 transition-colors whitespace-nowrap"
+                                >
+                                  ✓ Add
+                                </button>
+                              </div>
                             ))}
                             {equipSuggestions.length > 1 && (
                               <button
@@ -4117,7 +4137,7 @@ Respond: {"matches": [{"key": "...", "weightsLb": [], "variant": ""}], "ambiguou
                                 onClick={acceptAllEquipSuggestions}
                                 className="px-2.5 py-1.5 bg-purple-600 border border-purple-600 rounded-full text-xs font-semibold text-white hover:bg-purple-700 transition-colors"
                               >
-                                ✓ Add all
+                                ✓ Add all (with the weights shown)
                               </button>
                             )}
                           </div>
@@ -4126,8 +4146,17 @@ Respond: {"matches": [{"key": "...", "weightsLb": [], "variant": ""}], "ambiguou
                       {equipAmbiguous.length > 0 && (
                         <div className="mt-2 space-y-2">
                           {equipAmbiguous.map((a, idx) => (
-                            <div key={`amb-${idx}`}>
-                              <p className="text-xs text-gray-700 mb-1">❓ &quot;{a.mention}&quot; - which one did you mean?</p>
+                            <div key={`amb-${idx}`} className="bg-white border border-amber-200 rounded-lg px-2.5 py-2">
+                              <div className="flex items-center gap-2 mb-1.5">
+                                <p className="flex-1 min-w-0 text-xs text-gray-700">❓ &quot;{a.mention}&quot; - which one?</p>
+                                <input
+                                  type="text"
+                                  value={a.weightsText}
+                                  onChange={(e) => updateAmbiguousWeight(idx, e.target.value)}
+                                  placeholder="lb?"
+                                  className="w-20 px-2 py-1 border border-gray-300 rounded text-xs text-gray-900 text-center"
+                                />
+                              </div>
                               <div className="flex flex-wrap gap-1.5">
                                 {a.options.map(k => (
                                   <button
@@ -4136,8 +4165,7 @@ Respond: {"matches": [{"key": "...", "weightsLb": [], "variant": ""}], "ambiguou
                                     onClick={() => resolveAmbiguousEquip(idx, k)}
                                     className="px-2.5 py-1.5 bg-white border border-amber-300 rounded-full text-xs font-medium text-amber-800 hover:bg-amber-50 transition-colors"
                                   >
-                                    {CATALOG_BY_KEY[k]?.label || k}
-                                    {a.weightsText && <span className="text-amber-500"> · {a.weightsText}lb</span>}
+                                    ✓ {CATALOG_BY_KEY[k]?.label || k}
                                   </button>
                                 ))}
                               </div>
