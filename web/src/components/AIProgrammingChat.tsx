@@ -389,6 +389,31 @@ ${prefParts.join("\n")}
 }
 
 // How odd implements are actually used - shared by plan generation and
+// A WOD title made ONLY of these words (movements, equipment, body parts,
+// formats, generic training nouns) is a description, not a name - the
+// validator rejects it so every original WOD gets a real, fun name
+const DESCRIPTIVE_TITLE_WORDS = new Set([
+  // movements & equipment
+  "wall", "ball", "wallball", "thruster", "thrusters", "squat", "squats", "press", "presses",
+  "push", "pull", "up", "ups", "pushup", "pushups", "pullup", "pullups", "row", "rows", "rowing",
+  "run", "running", "bike", "biking", "ski", "erg", "burpee", "burpees", "lunge", "lunges",
+  "swing", "swings", "clean", "cleans", "jerk", "jerks", "snatch", "snatches", "deadlift", "deadlifts",
+  "db", "dumbbell", "dumbbells", "kb", "kettlebell", "kettlebells", "barbell", "sandbag", "bag",
+  "box", "jump", "jumps", "rope", "double", "single", "under", "unders", "situp", "situps", "sit",
+  "carry", "carries", "sled", "med", "medball", "slam", "sprint", "sprints", "muscle", "ring", "rings",
+  "dip", "dips", "hspu", "handstand", "pistol", "pistols", "ohs", "overhead", "front", "back",
+  "bench", "step", "steps", "vest", "plate", "toes", "bar", "rope", "climb", "climbs",
+  // body parts & qualities
+  "hip", "glute", "glutes", "leg", "legs", "arm", "arms", "upper", "lower", "body", "full", "total",
+  "grip", "calf", "shoulder", "shoulders", "chest", "core", "ab", "abs", "posterior", "chain",
+  "aerobic", "anaerobic", "cardio", "strength", "power", "speed", "endurance", "capacity", "engine",
+  // formats & generic training nouns
+  "amrap", "emom", "e2mom", "rft", "wod", "metcon", "conditioning", "circuit", "circuits",
+  "interval", "intervals", "tabata", "chipper", "ladder", "prep", "primer", "builder", "work",
+  "workout", "session", "training", "finisher", "warmup", "volume", "intensity", "day", "test",
+  "min", "minute", "rounds", "reps", "and", "the", "of", "a", "plus", "with", "n",
+]);
+
 // revisions so the coach never programs impossible movements (e.g.,
 // back-racking a 150 lb soft sandbag)
 const IMPLEMENT_KNOWLEDGE = `SANDBAG & ODD-IMPLEMENT RULES (get these right):
@@ -1724,7 +1749,7 @@ Respond with valid JSON in this exact format:
       "reason": "Easy aerobic volume plus an upper-body-biased WOD keeps the legs fresh for Tuesday's lifting class while building the weekly base.",
       "components": [
         { "type": "warmup", "title": "Warm-up", "description": "3 min easy movement; 10 air squats + 10 glute bridges; wrist/ankle/hip mobility." },
-        { "type": "wod", "title": "DB Upper Circuit", "description": "12-min AMRAP: 8 DB floor presses (50s), 12 KB swings (53), 10 sit-ups." },
+        { "type": "wod", "title": "Heat Wave", "description": "12-min AMRAP: 8 DB floor presses (50s), 12 KB swings (53), 10 sit-ups." },
         { "type": "run", "title": "Easy Run", "description": "4 mi easy at a conversational pace (~40% effort); finish with 4x20-sec relaxed strides." }
       ]
     }
@@ -1740,7 +1765,8 @@ RULES:
 - COACH THE PERSON, not the textbook: this plan is for ONE specific athlete whose data is above. Every week, several reasons and prescriptions must reference THEIR actual specifics - their PR numbers, their recent check-ins ("last week's squats felt very hard, so..."), their injuries, their goal race date, their class schedule. A reason that could appear in anyone's plan ("builds aerobic base", "maintains lifting skill") is filler - replace it with what this day does for THIS athlete right now.
 - THIN DATA = NO FAKE PRECISION: %-of-1RM prescriptions ONLY for lifts with solid logged data. For lifts marked [ROUGH] or unlogged, never invent derived rep-maxes or fabricated adjustments - prescribe by feel ("build to a hard but crisp set of 5 - log it, that becomes your baseline"), establish the baseline early in the block, and anchor later weeks to what the athlete actually logs.
 - VARIETY IS MANDATORY week to week: the previously-programmed days listed above are what already exists - NEVER copy an earlier workout or reuse its name. A recurring slot (e.g. Wednesday conditioning) keeps its GOAL but rotates movements, formats (EMOM / AMRAP / intervals / rounds / chipper), and rep schemes every week. Same goal, fresh workout.
-- WOD NAMES ARE PART OF THE FUN: give every original WOD a short, memorable title with seasonal or topical flavor drawn from its actual calendar date - playoff and bowl season, March brackets, marathon season, the CrossFit Open, holidays, summer heat, first snow (e.g. "Bracket Buster" in March, "Turkey Burner" late November, "Dog Days" in August). Never a bland label ("Conditioning", "Metcon #3"), and NEVER a classic benchmark's name (Fran, Cindy, Murph, ...) on an original workout - benchmark names are reserved for the real prescriptions.${benchmarkRule}
+- WOD NAMES ARE PART OF THE FUN: give every original WOD a short, memorable NAME with seasonal or topical flavor drawn from its actual calendar date - playoff and bowl season, March brackets, marathon season, the CrossFit Open, holidays, summer heat, first snow (e.g. "Bracket Buster" in March, "Turkey Burner" late November, "Dog Days" in August). A title built from the movements, format, or body parts in the workout ("Wall Ball Prep", "DB Upper Circuit", "Leg Conditioning") is a DESCRIPTION, not a name, and gets the week rejected. NEVER a classic benchmark's name (Fran, Cindy, Murph, ...) on an original workout - benchmark names are reserved for the real prescriptions.
+- ROTATE SCORING FORMATS across the week: when a week has 2+ WODs they must NOT all be the same format - mix AMRAPs, EMOMs, for-time pieces, intervals, and chippers. An all-AMRAP week gets rejected.${benchmarkRule}
 - SAFETY IS NON-NEGOTIABLE: never prescribe above 100% of a known max, and respect rep-max physiology (1 rep=100%, 2=95%, 3=92%, 5=87%, 8=80%, 10=75%, 12=70% of 1RM - a 10-rep set near max is an injury, not training). A goal like "improve my back squat" NEVER means loading beyond the current max - it means building submaximal volume until a scheduled RE-TEST day establishes a new max. Every max-test day includes explicit safety protocol in its description ("only take attempts that move crisply; stop at technical breakdown; set rack safeties"). Injuries/limitations above get modifications, never the aggravating movement. Solo home training: no heavy barbell bench or near-max squats without rack safeties in their equipment - substitute dumbbells or cap the load.
 ${IMPLEMENT_KNOWLEDGE}
 - Rest days: session "Rest", components [] (or one light "cooldown" mobility component), runMiles 0. The reason states the RECOVERY PURPOSE in the context of the surrounding days (e.g., "Absorbs Sunday's long run so Tuesday's Oly class is quality lifting, not junk volume"). NEVER cite the rest-day rule, quota, settings, or "requirement" as the reason - the athlete wants to know what the rest accomplishes, not that a rule was followed.
@@ -2002,6 +2028,39 @@ PATCH RULES:
         problems.push(`${r.date} reuses the workout name "${c.title}" from ${priorWodTitles.get(nt)} - recurring slots must rotate movements, formats, and names week to week`);
       }
     }));
+
+    // WOD titles must be NAMES, not descriptions: a title built entirely
+    // from movement/equipment/body-part/format words ("Wall Ball Prep",
+    // "DB Upper Circuit") is a description wearing a name tag
+    const namedWods: string[] = [];
+    candidate.forEach(r => (r.components || []).forEach(c => {
+      if (c.type !== "wod" || benchmarkByTitle(c.title)) return;
+      const words = String(c.title || "").toLowerCase().replace(/[^a-z0-9\s-]/g, "").split(/[\s-]+/).filter(Boolean);
+      if (words.length > 0 && words.every(w => /^\d+$/.test(w) || DESCRIPTIVE_TITLE_WORDS.has(w))) {
+        namedWods.push(`${r.date} "${c.title}"`);
+      }
+    }));
+    if (namedWods.length > 0) {
+      problems.push(`these WOD titles are descriptions, not names: ${namedWods.join(", ")} - every original WOD gets a short, fun, memorable NAME with seasonal/topical flavor from its calendar date (like "Heat Wave" or "Turkey Burner"), never a label built from the movements or format in it`);
+    }
+
+    // Format monotony: a week where every WOD is the same format (all
+    // AMRAPs, all EMOMs...) is not variety no matter how the movements rotate
+    const detectWodFormat = (text: string): string | null => {
+      if (/amrap|as many (rounds|reps)/i.test(text)) return "AMRAP";
+      if (/emom|e\dmom|every (\d+ )?(min|minute|:\d+)/i.test(text)) return "EMOM";
+      if (/interval|on\s*\/\s*off|work\s*\/\s*rest|tabata/i.test(text)) return "interval";
+      if (/for time|\brft\b|rounds for time|21-15-9|chipper/i.test(text)) return "for-time";
+      return null;
+    };
+    const weekWodFormats = candidate.flatMap(r => (r.components || [])
+      .filter(c => c.type === "wod")
+      .map(c => detectWodFormat(`${c.title} ${c.description}`))
+      .filter((f): f is string => f !== null));
+    if (weekWodFormats.length >= 2 && new Set(weekWodFormats).size === 1) {
+      problems.push(`all ${weekWodFormats.length} WODs this week are ${weekWodFormats[0]}s - rotate scoring formats across the week (EMOM / AMRAP / for-time / intervals / chipper); at least two different formats when a week has multiple WODs`);
+    }
+
     // Weeks containing a competition/race get looser structural rules
     const isEventWeek = candidate.some(r => /competition|marathon|race/i.test(r.session));
 
