@@ -712,6 +712,12 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
   const [equipBank, setEquipBank] = useState<Record<string, { weightsText: string; variant: string }>>({});
   const [customEquipment, setCustomEquipment] = useState("");
   const equipBankInitialized = useRef(false);
+  // Chat-style entry: describe the gym in prose, AI suggests catalog
+  // matches as chips, tapping a chip confirms it into the bank
+  const [equipFreeText, setEquipFreeText] = useState("");
+  const [equipSuggestions, setEquipSuggestions] = useState<{ key: string; weightsText: string; variant: string }[] | null>(null);
+  const [unmatchedSuggestion, setUnmatchedSuggestion] = useState("");
+  const [suggestingEquip, setSuggestingEquip] = useState(false);
 
   // Recently used workouts (last 6 months) - to avoid repetition
   const [recentlyUsedWorkouts, setRecentlyUsedWorkouts] = useState<string[]>([]);
@@ -2506,6 +2512,88 @@ Respond: {"problems": []} or {"problems": ["which weeks + what's wrong + the fix
     syncEquipmentToPrefs(equipBank, value);
   };
 
+  // Read the athlete's chat-style description and propose catalog matches
+  const suggestEquipment = async () => {
+    const raw = equipFreeText.trim();
+    if (!raw || suggestingEquip) return;
+    setSuggestingEquip(true);
+    setError(null);
+    try {
+      const catalogForPrompt = EQUIPMENT_CATALOG
+        .flatMap(g => g.items)
+        .map(it => `${it.key}: ${it.label}${it.variants ? ` (variants: ${it.variants.join(" | ")})` : ""}${it.hasWeights ? " [takes weights in lb]" : ""}`)
+        .join("\n");
+      const text = await chatCompletion({
+        messages: [
+          { role: "system", content: "You match a home-gym description to a fixed equipment catalog. Respond with valid JSON only." },
+          { role: "user", content: `The athlete describes their gym:
+"${raw}"
+
+Match ONLY what they mention to this catalog (use ONLY these keys):
+${catalogForPrompt}
+
+Rules:
+- weightsLb: numbers in POUNDS (convert kg at 1kg = 2.2lb) for items that take weights.
+- variant: must be one of that item's listed variants; omit when the text doesn't say.
+- A plain "sandbag" with no detail matches sandbag_strongman OR sandbag_training - pick the more likely and note nothing; the athlete corrects by chip.
+- "unmatched": things they mentioned that fit NO catalog item.
+- NEVER invent gear that isn't mentioned.
+Respond: {"matches": [{"key": "...", "weightsLb": [], "variant": ""}], "unmatched": ["..."]}` }
+        ],
+        temperature: 0.1,
+        maxTokens: 1500,
+      });
+      const parsed = tryParseJson(text);
+      const matches = parsed && Array.isArray(parsed.matches) ? parsed.matches : [];
+      const suggestions = matches
+        .filter((m: Record<string, unknown>) => typeof m.key === "string" && CATALOG_BY_KEY[m.key as string] && !equipBank[m.key as string])
+        .map((m: Record<string, unknown>) => ({
+          key: String(m.key),
+          weightsText: Array.isArray(m.weightsLb) ? (m.weightsLb as unknown[]).map(Number).filter(n => n > 0).join(", ") : "",
+          variant: m.variant && CATALOG_BY_KEY[String(m.key)]?.variants?.includes(String(m.variant)) ? String(m.variant) : "",
+        }));
+      const unmatched = parsed && Array.isArray(parsed.unmatched) ? parsed.unmatched.map((u: unknown) => String(u)).filter(Boolean) : [];
+      setEquipSuggestions(suggestions);
+      setUnmatchedSuggestion(unmatched.join(", "));
+      if (suggestions.length === 0 && unmatched.length === 0) {
+        setError("Couldn't match anything from that - try naming the gear a bit more directly.");
+      }
+    } catch (err) {
+      console.error("Error suggesting equipment:", err);
+      setError("Couldn't read the equipment description. Please try again.");
+    } finally {
+      setSuggestingEquip(false);
+    }
+  };
+
+  const acceptEquipSuggestion = (idx: number) => {
+    setEquipSuggestions(prev => {
+      if (!prev) return prev;
+      const s = prev[idx];
+      if (s) {
+        setEquipBank(bankPrev => {
+          const next = { ...bankPrev, [s.key]: { weightsText: s.weightsText, variant: s.variant } };
+          syncEquipmentToPrefs(next, customEquipment);
+          return next;
+        });
+      }
+      return prev.filter((_, i) => i !== idx);
+    });
+  };
+
+  const acceptAllEquipSuggestions = () => {
+    setEquipSuggestions(prev => {
+      if (!prev || prev.length === 0) return prev;
+      setEquipBank(bankPrev => {
+        const next = { ...bankPrev };
+        prev.forEach(s => { next[s.key] = { weightsText: s.weightsText, variant: s.variant }; });
+        syncEquipmentToPrefs(next, customEquipment);
+        return next;
+      });
+      return [];
+    });
+  };
+
   // Chat mentioned new gear: append it to the saved equipment list so the
   // whole app (programming, daily advice, % hints) knows about it
   const applyEquipmentAdditions = async (items: string[]) => {
@@ -3853,7 +3941,72 @@ Respond: {"problems": []} or {"problems": ["which weeks + what's wrong + the fix
                   </>
                 ) : (
                   <div className="space-y-3">
-                    <p className="text-xs text-gray-500">Tap everything you own. Weights are in lbs - list each one you have (e.g. &quot;35, 53&quot;).</p>
+                    {/* Chat-style entry: describe it, get catalog chips back */}
+                    <div className="bg-purple-50 border border-purple-100 rounded-lg p-2.5">
+                      <p className="text-xs text-gray-600 mb-1.5">Just tell me what you&apos;ve got - I&apos;ll pick the matches for you to confirm:</p>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={equipFreeText}
+                          onChange={(e) => setEquipFreeText(e.target.value)}
+                          onKeyDown={(e) => e.key === "Enter" && suggestEquipment()}
+                          placeholder='e.g. "pull-up bar, 150lb sandbag, a couple KBs 35 and 53"'
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-gray-900 text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        />
+                        <button
+                          type="button"
+                          onClick={suggestEquipment}
+                          disabled={suggestingEquip || !equipFreeText.trim()}
+                          className="px-3 py-2 bg-purple-600 text-white text-xs font-semibold rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-colors whitespace-nowrap"
+                        >
+                          {suggestingEquip ? "Reading..." : "✨ Match"}
+                        </button>
+                      </div>
+                      {equipSuggestions && equipSuggestions.length > 0 && (
+                        <div className="mt-2">
+                          <p className="text-xs font-semibold text-purple-800 mb-1.5">Sounds like you have - tap to confirm each:</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {equipSuggestions.map((s, idx) => (
+                              <button
+                                key={s.key}
+                                type="button"
+                                onClick={() => acceptEquipSuggestion(idx)}
+                                className="px-2.5 py-1.5 bg-white border border-purple-300 rounded-full text-xs font-medium text-purple-800 hover:bg-purple-100 transition-colors"
+                              >
+                                + {CATALOG_BY_KEY[s.key]?.label || s.key}
+                                {s.weightsText && <span className="text-purple-500"> · {s.weightsText}lb</span>}
+                                {s.variant && <span className="text-purple-400"> · {s.variant}</span>}
+                              </button>
+                            ))}
+                            {equipSuggestions.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={acceptAllEquipSuggestions}
+                                className="px-2.5 py-1.5 bg-purple-600 border border-purple-600 rounded-full text-xs font-semibold text-white hover:bg-purple-700 transition-colors"
+                              >
+                                ✓ Add all
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      {unmatchedSuggestion && (
+                        <div className="mt-2 flex items-center gap-2 flex-wrap">
+                          <span className="text-xs text-gray-500">Not in the bank: &quot;{unmatchedSuggestion}&quot;</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              updateCustomEquipment(customEquipment ? `${customEquipment}, ${unmatchedSuggestion}` : unmatchedSuggestion);
+                              setUnmatchedSuggestion("");
+                            }}
+                            className="px-2 py-1 bg-white border border-gray-300 rounded-full text-xs text-gray-700 hover:border-purple-300"
+                          >
+                            + Add as custom gear
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-500">Or tap everything you own. Weights are in lbs - list each one you have (e.g. &quot;35, 53&quot;).</p>
                     {EQUIPMENT_CATALOG.map(group => (
                       <div key={group.group}>
                         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">{group.group}</p>
