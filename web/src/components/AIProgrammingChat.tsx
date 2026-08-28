@@ -2596,7 +2596,10 @@ Respond: {"matches": [{"key": "...", "weightsLb": [], "variant": ""}], "ambiguou
     matches.forEach((m: Record<string, unknown>) => {
       const key = String(m.key || "");
       if (!CATALOG_BY_KEY[key] || equipBank[key]) return;
-      const weights = Array.isArray(m.weightsLb) ? (m.weightsLb as unknown[]).map(Number).filter(n => n > 0) : [];
+      // A pair of 50s is one weight, not "50, 50"
+      const weights = Array.isArray(m.weightsLb)
+        ? Array.from(new Set((m.weightsLb as unknown[]).map(Number).filter(n => n > 0)))
+        : [];
       const variant = m.variant && CATALOG_BY_KEY[key]?.variants?.includes(String(m.variant)) ? String(m.variant) : "";
       const existing = byKey.get(key);
       if (existing) {
