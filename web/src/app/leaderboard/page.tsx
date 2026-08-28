@@ -6,6 +6,7 @@ import { collection, query, getDocs } from "firebase/firestore";
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
 import { LeaderboardEntry, formatResult, Gender } from "@/lib/types";
+import { isLeaderboardWod } from "@/lib/benchmarkWods";
 import Navigation from "@/components/Navigation";
 
 function LeaderboardContent() {
@@ -45,10 +46,12 @@ function LeaderboardContent() {
         collection(db, "leaderboardEntries")
       );
       const snapshot = await getDocs(leaderboardQuery);
-      const data = snapshot.docs.map((doc) => ({
+      // Only canonical workouts (benchmarks + presets) rank cross-user -
+      // legacy entries for custom one-off workouts stay stored but hidden
+      const data = (snapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
-      })) as LeaderboardEntry[];
+      })) as LeaderboardEntry[]).filter((e) => isLeaderboardWod(e.originalWorkoutName));
 
       // Sort by createdAt descending client-side
       data.sort((a, b) => {

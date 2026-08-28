@@ -4,6 +4,9 @@
 // normalizeWorkoutName into the same leaderboard rows for every user, and
 // repeating one months later is a progress re-test, not lazy programming.
 
+import { getAllWods } from "./workoutData";
+import { normalizeWorkoutName } from "./types";
+
 export interface BenchmarkWod {
   name: string;
   // Canonical Rx prescription with scaling guidance - complete enough to
@@ -140,4 +143,20 @@ export function benchmarkListForPrompt(): string {
   return BENCHMARK_WODS
     .map(b => `  - ${b.name} (needs: ${b.needs}): ${b.description}`)
     .join("\n");
+}
+
+// Cross-user leaderboards only make sense for workouts that never change:
+// the classic benchmarks above plus the app's preset WOD library. A custom
+// one-off workout is personal history, not a competition.
+let leaderboardNames: Set<string> | null = null;
+
+export function isLeaderboardWod(name: string | undefined): boolean {
+  if (!name || !name.trim()) return false;
+  if (!leaderboardNames) {
+    leaderboardNames = new Set([
+      ...BENCHMARK_WODS.map(b => normalizeWorkoutName(b.name)),
+      ...getAllWods().map(w => normalizeWorkoutName(w.name)),
+    ]);
+  }
+  return leaderboardNames.has(normalizeWorkoutName(name.trim()));
 }

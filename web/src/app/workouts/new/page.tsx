@@ -6,6 +6,7 @@ import { collection, addDoc, query, where, orderBy, getDocs, getDoc, Timestamp, 
 import { useAuth } from "@/lib/AuthContext";
 import { db } from "@/lib/firebase";
 import { WODCategory, normalizeWorkoutName, LeaderboardEntry, categoryOrder, categoryColors, WODScoringType, wodScoringTypeLabels, wodScoringTypeColors, inferScoringType } from "@/lib/types";
+import { isLeaderboardWod } from "@/lib/benchmarkWods";
 import Navigation from "@/components/Navigation";
 import { getAllWods } from "@/lib/workoutData";
 
@@ -423,10 +424,9 @@ function NewWorkoutContent() {
       let entries: LeaderboardEntry[] = [];
       const normalized = normalizeWorkoutName(wodTitle.trim());
 
-      // Check if this is a preset workout (standard benchmark)
-      const isPresetWorkout = allWods.some(w =>
-        normalizeWorkoutName(w.name) === normalized
-      );
+      // Canonical workouts (benchmarks + presets) rank cross-user; custom
+      // one-off workouts show only your own history
+      const isPresetWorkout = isLeaderboardWod(wodTitle);
 
       // First try leaderboardEntries collection
       const allQuery = query(
@@ -698,30 +698,34 @@ function NewWorkoutContent() {
 
       const workoutLogRef = await addDoc(collection(db, "workoutLogs"), workoutLogData);
 
-      const leaderboardData: Record<string, unknown> = {
-        userId: user!.id,
-        userName: user!.displayName || `${user!.firstName} ${user!.lastName}`,
-        userGender: user!.gender,
-        workoutLogId: workoutLogRef.id,
-        normalizedWorkoutName: normalizeWorkoutName(wodTitle.trim()),
-        originalWorkoutName: wodTitle.trim(),
-        resultType,
-        scoringType,
-        category,
-        completedDate: workoutDate,
-        createdAt: now,
-      };
+      // Only canonical workouts (benchmarks + presets) compete cross-user;
+      // a custom one-off workout is personal history in workoutLogs only
+      if (isLeaderboardWod(wodTitle)) {
+        const leaderboardData: Record<string, unknown> = {
+          userId: user!.id,
+          userName: user!.displayName || `${user!.firstName} ${user!.lastName}`,
+          userGender: user!.gender,
+          workoutLogId: workoutLogRef.id,
+          normalizedWorkoutName: normalizeWorkoutName(wodTitle.trim()),
+          originalWorkoutName: wodTitle.trim(),
+          resultType,
+          scoringType,
+          category,
+          completedDate: workoutDate,
+          createdAt: now,
+        };
 
-      // Add appropriate scoring data to leaderboard
-      if (scoringType === "amrap") {
-        leaderboardData.rounds = rounds || 0;
-        leaderboardData.reps = reps || 0;
-        leaderboardData.timeInSeconds = timeInSeconds;
-      } else {
-        leaderboardData.timeInSeconds = timeInSeconds;
+        // Add appropriate scoring data to leaderboard
+        if (scoringType === "amrap") {
+          leaderboardData.rounds = rounds || 0;
+          leaderboardData.reps = reps || 0;
+          leaderboardData.timeInSeconds = timeInSeconds;
+        } else {
+          leaderboardData.timeInSeconds = timeInSeconds;
+        }
+
+        await addDoc(collection(db, "leaderboardEntries"), leaderboardData);
       }
-
-      await addDoc(collection(db, "leaderboardEntries"), leaderboardData);
 
       // Stay on page - reset inputs and refresh data
       setManualMinutes("");
