@@ -8,6 +8,7 @@ import { getAllSkills, getAllLifts, getAllWods } from "@/lib/workoutData";
 import { EQUIPMENT_CATALOG, CATALOG_BY_KEY } from "@/lib/equipmentCatalog";
 import { chatCompletion, REVISION_MODEL, PLAN_MODEL } from "@/lib/ai";
 import { computeBaselineStatus, buildBaselinePromptBlock, buildBaselineWeek, BaselineStatusInput, BaselineCategory } from "@/lib/baselines";
+import { benchmarkByTitle, benchmarkListForPrompt } from "@/lib/benchmarkWods";
 import BaselineWizard from "./BaselineWizard";
 import AITrainerPaywall from "./AITrainerPaywall";
 import PlanTable from "./PlanTable";
@@ -1653,6 +1654,19 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
       .map(r => `${r.date} (${r.day}): ${r.session}${r.runMiles ? ` ${r.runMiles}mi` : ""} - ${(r.detail || "").slice(0, 80)}`)
       .join("\n");
 
+    // Benchmark cadence: roughly one classic benchmark every ~2 weeks keeps
+    // the app-wide leaderboard alive and gives the athlete repeatable
+    // progress tests - but never two benchmarks stacked close together
+    const benchmarkRanRecently = previousRows.slice(-14).some(r =>
+      (r.components || []).some(c => c.type === "wod" && benchmarkByTitle(c.title))
+    );
+    const wantsBenchmarks = (preferences.trainingStyle || "crossfit") !== "general";
+    const benchmarkRule = !wantsBenchmarks
+      ? ""
+      : benchmarkRanRecently
+        ? `\n- BENCHMARK WODS: a classic benchmark already ran within the last two weeks - do NOT program another benchmark this week unless this week's outline focus explicitly calls for a re-test.`
+        : `\n- BENCHMARK WODS FEED THE LEADERBOARD: program EXACTLY ONE classic benchmark WOD from the list below somewhere in this week, as the conditioning piece on a day where it fits the week's focus. Pick one whose equipment the athlete actually has and title it EXACTLY by its canonical name with its canonical prescription (scaling guidance included) - these are the app-wide leaderboard workouts and the athlete's repeatable progress tests, so the name and prescription must match verbatim. Re-testing a benchmark the athlete logged 6+ weeks ago beats introducing a new one.\n${benchmarkListForPrompt()}`;
+
     // Enumerate this week's exact dates with their true weekday names - the model
     // must not do calendar math itself (it gets weekdays wrong and then places
     // class/rest days on the wrong real days)
@@ -1725,6 +1739,7 @@ RULES:
 - COACH THE PERSON, not the textbook: this plan is for ONE specific athlete whose data is above. Every week, several reasons and prescriptions must reference THEIR actual specifics - their PR numbers, their recent check-ins ("last week's squats felt very hard, so..."), their injuries, their goal race date, their class schedule. A reason that could appear in anyone's plan ("builds aerobic base", "maintains lifting skill") is filler - replace it with what this day does for THIS athlete right now.
 - THIN DATA = NO FAKE PRECISION: %-of-1RM prescriptions ONLY for lifts with solid logged data. For lifts marked [ROUGH] or unlogged, never invent derived rep-maxes or fabricated adjustments - prescribe by feel ("build to a hard but crisp set of 5 - log it, that becomes your baseline"), establish the baseline early in the block, and anchor later weeks to what the athlete actually logs.
 - VARIETY IS MANDATORY week to week: the previously-programmed days listed above are what already exists - NEVER copy an earlier workout or reuse its name. A recurring slot (e.g. Wednesday conditioning) keeps its GOAL but rotates movements, formats (EMOM / AMRAP / intervals / rounds / chipper), and rep schemes every week. Same goal, fresh workout.
+- WOD NAMES ARE PART OF THE FUN: give every original WOD a short, memorable title with seasonal or topical flavor drawn from its actual calendar date - playoff and bowl season, March brackets, marathon season, the CrossFit Open, holidays, summer heat, first snow (e.g. "Bracket Buster" in March, "Turkey Burner" late November, "Dog Days" in August). Never a bland label ("Conditioning", "Metcon #3"), and NEVER a classic benchmark's name (Fran, Cindy, Murph, ...) on an original workout - benchmark names are reserved for the real prescriptions.${benchmarkRule}
 - SAFETY IS NON-NEGOTIABLE: never prescribe above 100% of a known max, and respect rep-max physiology (1 rep=100%, 2=95%, 3=92%, 5=87%, 8=80%, 10=75%, 12=70% of 1RM - a 10-rep set near max is an injury, not training). A goal like "improve my back squat" NEVER means loading beyond the current max - it means building submaximal volume until a scheduled RE-TEST day establishes a new max. Every max-test day includes explicit safety protocol in its description ("only take attempts that move crisply; stop at technical breakdown; set rack safeties"). Injuries/limitations above get modifications, never the aggravating movement. Solo home training: no heavy barbell bench or near-max squats without rack safeties in their equipment - substitute dumbbells or cap the load.
 ${IMPLEMENT_KNOWLEDGE}
 - Rest days: session "Rest", components [] (or one light "cooldown" mobility component), runMiles 0. The reason states the RECOVERY PURPOSE in the context of the surrounding days (e.g., "Absorbs Sunday's long run so Tuesday's Oly class is quality lifting, not junk volume"). NEVER cite the rest-day rule, quota, settings, or "requirement" as the reason - the athlete wants to know what the rest accomplishes, not that a rule was followed.
@@ -1966,6 +1981,18 @@ PATCH RULES:
     }));
     candidate.forEach(r => (r.components || []).forEach(c => {
       if (c.type !== "wod") return;
+      // Canonical benchmarks repeat by design - a repeat is a progress
+      // re-test feeding the shared leaderboard, not lazy programming. But a
+      // workout WEARING a benchmark name must actually BE that benchmark, or
+      // it would corrupt every user's leaderboard for that workout.
+      const bm = benchmarkByTitle(c.title);
+      if (bm) {
+        const desc = String(c.description || "");
+        if (bm.signature.some(re => !re.test(desc))) {
+          problems.push(`${r.date} "${c.title}" uses the canonical benchmark name "${bm.name}" but the prescription is not ${bm.name} (canonical: ${bm.description}) - use the canonical prescription verbatim, or give this original workout a different name (benchmark names are reserved)`);
+        }
+        return;
+      }
       const nd = String(c.description || "").toLowerCase().replace(/\s+/g, " ").trim();
       const nt = String(c.title || "").toLowerCase().trim();
       if (nd && priorWodDescs.has(nd)) {
@@ -2133,6 +2160,7 @@ PATCH RULES:
     rows.forEach(r => {
       (r.components || []).forEach(c => {
         if (c.type !== "wod" && c.type !== "lift") return;
+        if (c.type === "wod" && benchmarkByTitle(c.title)) return; // benchmark repeats are re-tests
         const norm = c.description.toLowerCase().replace(/\s+/g, " ").trim();
         if (norm.length < 60) return;
         const prevDate = seenDescriptions.get(norm);
@@ -3183,8 +3211,9 @@ Respond: {"matches": [{"key": "...", "weightsLb": [], "variant": ""}], "ambiguou
                 title: c.title,
                 description: rpeToPercentEffort(c.description || ""),
                 // WODs need a scoring type so the logger offers the right
-                // score entry (AMRAP = rounds+reps, not a time)
-                ...(type === "wod" ? { scoringType: inferScoringType(`${c.title} ${c.description}`) } : {}),
+                // score entry (AMRAP = rounds+reps, not a time); canonical
+                // benchmarks carry their known scoring type
+                ...(type === "wod" ? { scoringType: benchmarkByTitle(c.title)?.scoringType || inferScoringType(`${c.title} ${c.description}`) } : {}),
                 notes: idx === 0 ? noteBits : "",
               };
             })
