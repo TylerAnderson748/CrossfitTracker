@@ -567,6 +567,7 @@ Guidelines:
 - REST PLACEMENT is anchored to the week's biggest sessions: rest or easy movement goes immediately before AND after the long run / heaviest day whenever the fixed class schedule allows - never a hard metcon or heavy lifting adjacent to a 8+ mile run. A rest day's reason must describe its ACTUAL neighbors: never claim it protects a session when a hard day sits in between - if fixed classes force that layout, say so honestly (e.g., "Thursday is the last open day to rest before Sunday's 17-miler since Saturday's class is fixed").
 - Blocks of 6+ weeks: re-test 1-2 of the athlete's baselines most relevant to the block's goal in the final or penultimate week (never race week) so progress is measured, not assumed.
 - THIN DATA = NO FAKE PRECISION: prescribe %-of-1RM ONLY for lifts with solid logged data. For lifts marked [ROUGH] or with no data at all, NEVER invent derived rep-maxes or precise adjustments ("~11RM", "8-9% intensity increase") - prescribe by feel ("build to a hard but crisp set of 5 - log it, that becomes your baseline") and make the block's FIRST week establish those baselines explicitly, with later weeks anchored to what gets logged.
+- SAFETY IS NON-NEGOTIABLE: never above 100% of a known max; respect rep-max physiology (2 reps=95%, 3=92%, 5=87%, 8=80%, 10=75%, 12=70% of 1RM). Improving a lift means submaximal volume until a scheduled RE-TEST day - never loading past the current max. Max-test days carry explicit safety protocol ("only crisp attempts; stop at technical breakdown; set rack safeties"); injuries get modifications; no heavy bench or near-max squats alone at home without rack safeties.
 - UNKNOWNS: if a movement is central to this plan and you have no data for it, either ask the athlete for a rough number in your ONE clarifying message before generating, or schedule its baseline in week 1 and say so in that day's reason.
 - If the athlete is training for a running race: 3-4 run days per week (one long run + easy midweek runs). The long run is its OWN session on its own day - never stacked after a class or metcon
 - If the athlete asks for a multi-week program but their weekly availability, goals, or schedule are unknown, ask for those essentials in ONE concise message BEFORE generating - do not guess a schedule for someone you know nothing about
@@ -738,6 +739,9 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
 
   // Athlete data pulled from their training log (PRs, recent results, existing calendar)
   const [athleteContext, setAthleteContext] = useState<string>("");
+  // Numeric 1RM reference per lift (lowercased name) for DETERMINISTIC
+  // load-safety checks - tested single when one exists, else Epley estimate
+  const [athleteMaxRef, setAthleteMaxRef] = useState<Record<string, number>>({});
   const [baselineRaw, setBaselineRaw] = useState<Omit<BaselineStatusInput, "trainingStyle"> | null>(null);
 
   useEffect(() => {
@@ -750,14 +754,26 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
         const liftSnap = await getDocs(query(collection(db, "liftResults"), where("userId", "==", userId), limit(150)));
         const bests = new Map<string, number>();
         const countByLift = new Map<string, number>();
+        const testedSingles: Record<string, number> = {};
+        const estMaxes: Record<string, number> = {};
         liftSnap.docs.forEach(d => {
           const x = d.data();
           if (x.liftTitle && x.weight) {
             const k = `${x.liftTitle}|${x.reps || 1}`;
             if ((bests.get(k) || 0) < x.weight) bests.set(k, x.weight);
             countByLift.set(x.liftTitle, (countByLift.get(x.liftTitle) || 0) + 1);
+            // Numeric max reference for load-safety math
+            const lt = String(x.liftTitle).toLowerCase().trim();
+            const reps = Number(x.reps) || 1;
+            const w = Number(x.weight) || 0;
+            if (reps === 1 && (x.setType || "max") !== "working") {
+              testedSingles[lt] = Math.max(testedSingles[lt] || 0, w);
+            }
+            estMaxes[lt] = Math.max(estMaxes[lt] || 0, Math.round(w * (1 + reps / 30)));
           }
         });
+        const maxRef: Record<string, number> = { ...estMaxes, ...testedSingles };
+        setAthleteMaxRef(maxRef);
         if (bests.size > 0) {
           const lines = Array.from(bests.entries())
             .sort((a, b) => b[1] - a[1])
@@ -1678,6 +1694,7 @@ RULES:
 - COACH THE PERSON, not the textbook: this plan is for ONE specific athlete whose data is above. Every week, several reasons and prescriptions must reference THEIR actual specifics - their PR numbers, their recent check-ins ("last week's squats felt very hard, so..."), their injuries, their goal race date, their class schedule. A reason that could appear in anyone's plan ("builds aerobic base", "maintains lifting skill") is filler - replace it with what this day does for THIS athlete right now.
 - THIN DATA = NO FAKE PRECISION: %-of-1RM prescriptions ONLY for lifts with solid logged data. For lifts marked [ROUGH] or unlogged, never invent derived rep-maxes or fabricated adjustments - prescribe by feel ("build to a hard but crisp set of 5 - log it, that becomes your baseline"), establish the baseline early in the block, and anchor later weeks to what the athlete actually logs.
 - VARIETY IS MANDATORY week to week: the previously-programmed days listed above are what already exists - NEVER copy an earlier workout or reuse its name. A recurring slot (e.g. Wednesday conditioning) keeps its GOAL but rotates movements, formats (EMOM / AMRAP / intervals / rounds / chipper), and rep schemes every week. Same goal, fresh workout.
+- SAFETY IS NON-NEGOTIABLE: never prescribe above 100% of a known max, and respect rep-max physiology (1 rep=100%, 2=95%, 3=92%, 5=87%, 8=80%, 10=75%, 12=70% of 1RM - a 10-rep set near max is an injury, not training). A goal like "improve my back squat" NEVER means loading beyond the current max - it means building submaximal volume until a scheduled RE-TEST day establishes a new max. Every max-test day includes explicit safety protocol in its description ("only take attempts that move crisply; stop at technical breakdown; set rack safeties"). Injuries/limitations above get modifications, never the aggravating movement. Solo home training: no heavy barbell bench or near-max squats without rack safeties in their equipment - substitute dumbbells or cap the load.
 ${IMPLEMENT_KNOWLEDGE}
 - Rest days: session "Rest", components [] (or one light "cooldown" mobility component), runMiles 0. The reason states the RECOVERY PURPOSE in the context of the surrounding days (e.g., "Absorbs Sunday's long run so Tuesday's Oly class is quality lifting, not junk volume"). NEVER cite the rest-day rule, quota, settings, or "requirement" as the reason - the athlete wants to know what the rest accomplishes, not that a rule was followed.
 - Event days (competition, race): session in CAPS (e.g., "MARATHON", "CROSSFIT COMPETITION") with one component of race-day execution guidance.
@@ -1784,10 +1801,75 @@ PATCH RULES:
   })();
   const blockEndingNoOutline = !!(plan && plan.status === "locked" && !nextBlockAvailable && lastPlanDate && lastPlanDate <= soonCutoff);
 
+  // What percent of 1RM a human can actually lift for N reps (with a small
+  // safety margin already applied). Programming above this is dangerous.
+  const repMaxCeilingPct = (reps: number): number => {
+    if (reps <= 1) return 100;
+    if (reps === 2) return 95;
+    if (reps === 3) return 92;
+    if (reps === 4) return 90;
+    if (reps === 5) return 87;
+    if (reps <= 6) return 85;
+    if (reps <= 8) return 80;
+    if (reps <= 10) return 75;
+    if (reps <= 12) return 70;
+    return 65;
+  };
+
+  // DETERMINISTIC load-safety check: parse every lift prescription and
+  // verify percentages and absolute loads against the athlete's known
+  // maxes and human rep-max physiology. Code, not the model's word - a
+  // 200lb 10-rep set for a 100lb-squat athlete can never reach the plan.
+  const loadSafetyViolations = (rows: PlanRow[]): string[] => {
+    const problems: string[] = [];
+    const isTestText = (t: string) => /\b(build to|test|1rm|max attempt|max out|heavy single)\b/i.test(t);
+    rows.forEach(r => {
+      (r.components || []).forEach(c => {
+        if (c.type !== "lift" && c.type !== "wod") return;
+        const text = `${c.title} ${c.description}`;
+        // "NxM @ P%" - percent prescriptions vs rep-max ceiling
+        const pctSets = [...text.matchAll(/(\d+)\s*(?:x|×)\s*(\d+)[^@%\n]*@\s*(\d{2,3})\s*%/gi)];
+        pctSets.forEach(m => {
+          const reps = parseInt(m[2]);
+          const pct = parseInt(m[3]);
+          if (pct > 100) {
+            problems.push(`${r.date} "${c.title}" prescribes ${pct}% - NEVER program above 100% of a max; even test days build to a max, they don't exceed it on paper`);
+          } else if (pct > repMaxCeilingPct(reps)) {
+            problems.push(`${r.date} "${c.title}" prescribes ${reps} reps @ ${pct}% - physiologically unsafe (${reps}-rep ceiling is ~${repMaxCeilingPct(reps)}%); lower the percentage or the reps`);
+          }
+        });
+        // Absolute loads vs the athlete's known 1RM for that lift
+        const lower = text.toLowerCase();
+        Object.entries(athleteMaxRef).forEach(([liftName, oneRm]) => {
+          if (!oneRm || !lower.includes(liftName)) return;
+          const loadSets = [...text.matchAll(/(\d+)\s*(?:x|×)\s*(\d+)[^@\n]*@\s*(\d{2,4})\s*lb/gi)];
+          loadSets.forEach(m => {
+            const reps = parseInt(m[2]);
+            const lb = parseInt(m[3]);
+            const ceilingLb = Math.round(oneRm * repMaxCeilingPct(reps) / 100);
+            if (lb > oneRm && !isTestText(text)) {
+              problems.push(`${r.date} "${c.title}" prescribes ${lb}lb but the athlete's ${liftName} max reference is ${oneRm}lb - never program above their max`);
+            } else if (lb > ceilingLb + 5) {
+              problems.push(`${r.date} "${c.title}" prescribes ${reps} reps at ${lb}lb but their ${liftName} max is ${oneRm}lb (${reps}-rep ceiling ~${ceilingLb}lb) - unsafe, lower the load`);
+            }
+          });
+        });
+        // Max-test days must carry explicit safety instruction
+        if (c.type === "lift" && isTestText(text) && !/\b(stop|crisp|technical breakdown|safeties|spotter|only take|no grinding|form breaks)\b/i.test(text)) {
+          problems.push(`${r.date} "${c.title}" is a max-test/build-to day with NO safety instruction - add explicit guidance (e.g. "only take attempts that move crisply; stop at technical breakdown; set rack safeties")`);
+        }
+      });
+    });
+    return problems.slice(0, 6);
+  };
+
   // Deterministic checks a generated week must pass (rest-day count, class
   // placement, endurance structure when a race is on the calendar)
   const validateWeekRows = (candidate: PlanRow[], weekDates: string[], priorRows: PlanRow[] = []): string[] => {
     const problems: string[] = [];
+
+    // Safety first: unsafe loads reject the week before anything else
+    problems.push(...loadSafetyViolations(candidate));
 
     // Cross-week variety: a WOD that copies an earlier week's workout
     // verbatim - or even reuses its name - is lazy programming and gets
@@ -2100,6 +2182,48 @@ Respond: {"unfixed": []} if every issue was addressed, or {"unfixed": ["the stil
     }
   };
 
+  // Safety review: a dedicated reviewer whose ONLY job is athlete safety.
+  // Deterministic load caps run in code; this catches what regex can't -
+  // injury contraindications, unsafe solo-training setups, reckless
+  // volume jumps, missing test-day safety protocol.
+  const critiqueSafety = async (candidate: PlanRow[], weekNumber: number): Promise<string[]> => {
+    try {
+      const maxLines = Object.entries(athleteMaxRef).map(([n, w]) => `- ${n}: ${w}lb reference max`).join("\n") || "(no lift data yet - all loads must be conservative build-to prescriptions)";
+      const text = await chatCompletion({
+        messages: [
+          { role: "system", content: "You are a safety officer reviewing a training week. Athlete safety overrides every programming goal. Respond with valid JSON only." },
+          { role: "user", content: `${buildPreferencesSection(preferences)}
+ATHLETE'S MAX REFERENCES (1RM):
+${maxLines}
+
+REP-MAX PHYSIOLOGY (percent of 1RM a trained lifter can handle): 1 rep=100%, 2=95%, 3=92%, 5=87%, 8=80%, 10=75%, 12=70%.
+
+WEEK ${weekNumber} DRAFT:
+${serializeWeekForReview(candidate)}
+
+Flag ONLY genuine safety problems:
+- Any load or percentage beyond the athlete's capability per the maxes and rep-max table above (e.g. 10 reps anywhere near 1RM is an injury, not a workout)
+- Movements contraindicated by their stated injuries/limitations, without a modification
+- Unsafe solo home training: heavy barbell bench or heavy squats without rack safeties in their equipment, max attempts with no bail-out plan
+- Reckless week-over-week jumps (running mileage or lifting volume spiking far beyond recent training)
+- Max-test days missing explicit safety protocol (crisp attempts only, stop at technical breakdown, safeties set)
+Do NOT flag normal hard training, scheduling, or coaching style - hard is fine, unsafe is not. A safe week deserves {"problems": []}.
+
+Respond: {"problems": []} or {"problems": ["date + the danger + the fix", ...]} (max 4).` }
+        ],
+        temperature: 0.2,
+        maxTokens: 1500,
+      });
+      const parsed = tryParseJson(text);
+      return parsed && Array.isArray(parsed.problems)
+        ? parsed.problems.map((p: unknown) => String(p)).filter(Boolean).slice(0, 4)
+        : [];
+    } catch (err) {
+      console.error("Safety critique failed (non-fatal):", err);
+      return [];
+    }
+  };
+
   // Whole-plan review after assembly: cross-week judgment (does the
   // progression actually build, do deloads land, does volume wave) that
   // no single-week call can see. Findings go into the chat - the athlete
@@ -2235,7 +2359,7 @@ Respond: {"problems": []} or {"problems": ["which weeks + what's wrong + the fix
               { role: "user", content: buildWeekRowsPrompt(outline, weeks[i], conversationHistory, allRows, correction) }
             ],
             temperature: 0.6,
-            maxTokens: 12000,
+            maxTokens: 8000,
           });
           const parsed = tryParseJson(text);
           const arr = !parsed ? null : Array.isArray(parsed) ? parsed : parsed.rows;
@@ -2253,18 +2377,21 @@ Respond: {"problems": []} or {"problems": ["which weeks + what's wrong + the fix
             // specialist audits gear usage
             if (!critiqued && attempt < 4) {
               critiqued = true;
-              setGenerationProgress({ current: i + 1, total: weeks.length, stage: "coach + equipment review" });
-              const [coachIssues, equipIssues] = await Promise.all([
+              setGenerationProgress({ current: i + 1, total: weeks.length, stage: "safety + coach + equipment review" });
+              const [safetyIssues, coachIssues, equipIssues] = await Promise.all([
+                critiqueSafety(candidate, weeks[i].weekNumber),
                 critiqueWeek(candidate, weeks[i].weekNumber),
                 critiqueEquipment(candidate, weeks[i].weekNumber),
               ]);
-              pendingCritiques = [...coachIssues, ...equipIssues];
+              // Safety findings lead the correction - they are never optional
+              pendingCritiques = [...safetyIssues.map(s => `SAFETY: ${s}`), ...coachIssues, ...equipIssues];
               if (pendingCritiques.length > 0) {
-                correction = `COACHING REVIEW - a head-coach and equipment review of your draft flagged these issues:\n${pendingCritiques.map(c => `- ${c}`).join("\n")}\nRegenerate the ENTIRE week fixing every issue. All schedule rules still apply.`;
+                correction = `COACHING REVIEW - safety, head-coach, and equipment reviews of your draft flagged these issues (SAFETY items are non-negotiable):\n${pendingCritiques.map(c => `- ${c}`).join("\n")}\nRegenerate the ENTIRE week fixing every issue. All schedule rules still apply.`;
                 continue;
               }
-            } else if (pendingCritiques.length > 0 && !verifiedOnce && attempt < 4) {
+            } else if (pendingCritiques.length > 1 && !verifiedOnce && attempt < 4) {
               // The rewrite must actually fix what was flagged - verify it
+              // (single-issue rewrites skip verification to save a round)
               verifiedOnce = true;
               setGenerationProgress({ current: i + 1, total: weeks.length, stage: "verifying fixes" });
               const unfixed = await verifyCritiqueFixes(candidate, weeks[i].weekNumber, pendingCritiques);
@@ -3507,7 +3634,7 @@ Respond: {"matches": [{"key": "...", "weightsLb": [], "variant": ""}], "ambiguou
                         <p className="text-sm font-medium text-gray-700">
                           Week {generationProgress.current} of {generationProgress.total}: {generationProgress.stage || "writing"}...
                         </p>
-                        <p className="text-xs text-gray-400">Each week is written, reviewed by two critics, and verified - hang tight</p>
+                        <p className="text-xs text-gray-400">Each week is written, then safety/coach/equipment reviewed. Progress saves every week - it&apos;s safe to leave and resume later.</p>
                       </div>
                     </div>
                   ) : (
