@@ -1903,6 +1903,24 @@ PATCH RULES:
     // Safety first: unsafe loads reject the week before anything else
     problems.push(...loadSafetyViolations(candidate));
 
+    // Full date coverage: every date in the week gets EXACTLY one row -
+    // rest days are rows too. A sparse week (classes and key days only)
+    // is a broken week, not a finished one.
+    const rowDates = candidate.map(r => r.date);
+    weekDates.forEach(ds => {
+      const n = rowDates.filter(d => d === ds).length;
+      if (n === 0) {
+        problems.push(`${ds} (${dayNameForDate(ds)}) has NO row - every date gets exactly one row, including rest days (session "Rest")`);
+      } else if (n > 1) {
+        problems.push(`${ds} has ${n} rows - exactly one row per date`);
+      }
+    });
+    candidate.forEach(r => {
+      if (r.date && !weekDates.includes(r.date)) {
+        problems.push(`${r.date} is outside this week's dates (${weekDates[0]} to ${weekDates[weekDates.length - 1]}) - generate ONLY this week's dates`);
+      }
+    });
+
     // Reasons must describe the table as ACTUALLY written: a reason citing
     // a "Saturday chipper" while Saturday is an easy run means a rewrite
     // changed the day but kept the old story
