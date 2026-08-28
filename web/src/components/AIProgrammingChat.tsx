@@ -2044,6 +2044,20 @@ PATCH RULES:
       problems.push(`these WOD titles are descriptions, not names: ${namedWods.join(", ")} - every original WOD gets a short, fun, memorable NAME with seasonal/topical flavor from its calendar date (like "Heat Wave" or "Turkey Burner"), never a label built from the movements or format in it`);
     }
 
+    // Mistyped components: an EMOM/AMRAP/for-time piece is a "wod" no
+    // matter what it trains - typed "lift" it gets the wrong logging UI
+    // (a lift logs as weight x reps, not a timed/scored piece). Timed
+    // format phrasing only, so "5x5, last set AMRAP" straight-sets work
+    // doesn't false-positive.
+    const timedFormatInLift = /\bemom\b|\be\dmom\b|every (other )?(\d+ ?)?(min|minute)|\bfor time\b|rounds for time|\brft\b|\d+\s*-?\s*min(ute)? amrap|amrap\s*\d+|\btabata\b/i;
+    candidate.forEach(r => (r.components || []).forEach(c => {
+      if (c.type !== "lift") return;
+      const m = `${c.title} ${c.description}`.match(timedFormatInLift);
+      if (m) {
+        problems.push(`${r.date} "${c.title}" is typed "lift" but prescribes a timed piece ("${m[0]}") - EMOMs, AMRAPs, for-time, and interval pieces are type "wod" no matter what they train (with a real workout NAME, not a description); a "lift" is straight sets x reps @ load on one named lift, titled with the lift name`);
+      }
+    }));
+
     // Format monotony: a week where every WOD is the same format (all
     // AMRAPs, all EMOMs...) is not variety no matter how the movements rotate
     const detectWodFormat = (text: string): string | null => {
