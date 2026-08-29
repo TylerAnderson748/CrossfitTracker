@@ -1759,7 +1759,7 @@ Respond with valid JSON in this exact format:
 RULES:
 - ONE row per date listed above - no other dates, no skipped dates, day names copied exactly from the list.
 - "components" is the day's prescription broken into typed pieces: "warmup", "wod" (mixed-modal metcons), "lift", "skill", "run"/"swim"/"bike_mtb"/"bike_road"/"row" (pure aerobic work - steady-state or intervals; only program swim/bike/row if the athlete does those or has the equipment), "class" (coached classes the athlete attends elsewhere), "cooldown". Each component's description is COMPLETE: exact distances, paces, movements, reps, and loads (use the athlete's PRs for percentage work) - specific enough to train from with no other information.
-- Component typing is strict: "lift" is dedicated strength work on a single named lift (sets x reps @ load, e.g. "Back Squat 5x5 @ 75%"). A strength day with SEVERAL lifts done as sequential straight sets (e.g. bench, then rows, then accessories) is MULTIPLE "lift" components - one per named movement, in order, each titled with the lift name - NEVER one text blob and never a "wod". Only circuits, rounds-based pieces, EMOMs, and AMRAPs are "wod" - even when strength-biased. "wod" says nothing about session length - a 15-minute piece is still a wod.
+- Component typing is strict: "lift" is dedicated strength work on a single named lift (sets x reps @ load, e.g. "Back Squat 5x5 @ 75%"). A strength day with SEVERAL lifts done as sequential straight sets (e.g. bench, then rows, then accessories) is MULTIPLE "lift" components - one per named movement, in order, each titled with the lift name - NEVER one text blob and never a "wod". Only circuits, rounds-based pieces, EMOMs, and AMRAPs are "wod" - even when strength-biased. "wod" says nothing about session length - a 15-minute piece is still a wod. "skill" is UNLOADED technique/gymnastics practice only (double-unders, handstand work, pistols, muscle-ups, toes-to-bar, rope climbs, kipping) - an EMOM of skill practice is still "skill", but the moment a loaded implement appears (wall balls, DBs, KBs, sandbags) the piece is a "wod" or "lift", never a "skill".
 - Baseline days especially: every tested movement is its OWN "lift" component (title = the lift name, description = the test, e.g. "Build to a hard but crisp set of 5 - log it as your baseline; then 3x8 @ 70% of that weight"). The athlete logs each lift from its component - a baseline buried in a paragraph can't be logged.
 - "reason" (1-2 sentences): WHY this day is programmed this way given the phase, the surrounding days, and the athlete's goals. Every non-rest day gets one. The reason speaks to the ATHLETE about training intent - NEVER write rule bookkeeping ("to maintain exactly 2 rest days", "to satisfy the weekly cap") as a reason.
 - COACH THE PERSON, not the textbook: this plan is for ONE specific athlete whose data is above. Every week, several reasons and prescriptions must reference THEIR actual specifics - their PR numbers, their recent check-ins ("last week's squats felt very hard, so..."), their injuries, their goal race date, their class schedule. A reason that could appear in anyone's plan ("builds aerobic base", "maintains lifting skill") is filler - replace it with what this day does for THIS athlete right now.
@@ -2057,6 +2057,19 @@ PATCH RULES:
       const m = `${c.title} ${c.description}`.match(timedFormatInLift);
       if (m) {
         problems.push(`${r.date} "${c.title}" is typed "lift" but prescribes a timed piece ("${m[0]}") - EMOMs, AMRAPs, for-time, and interval pieces are type "wod" no matter what they train (with a real workout NAME, not a description); a "lift" is straight sets x reps @ load on one named lift, titled with the lift name`);
+      }
+    }));
+
+    // Skill components are unloaded technique practice (double-unders,
+    // handstand work, pistols, muscle-ups, rope climbs...). Loaded
+    // implement work inside a "skill" is conditioning wearing a skill tag
+    // - an EMOM structure is fine for skills, wall balls are not.
+    const loadedImplementRe = /wall.?ball|med(?:icine)?.?ball|slam ball|kettlebell|\bkbs?\b|dumbbell|\bdbs?\b|sandbag|barbell|\bsled\b|farmer|yoke|\bkeg\b|thruster|floor press|push press/i;
+    candidate.forEach(r => (r.components || []).forEach(c => {
+      if (c.type !== "skill") return;
+      const m = `${c.title} ${c.description}`.match(loadedImplementRe);
+      if (m) {
+        problems.push(`${r.date} "${c.title}" is typed "skill" but uses a loaded implement ("${m[0]}") - skill work is unloaded technique/gymnastics practice (double-unders, handstand work, pistols, muscle-ups, toes-to-bar, rope climbs, kipping); loaded conditioning belongs in a "wod" (with a real name) and loaded strength work in a "lift"`);
       }
     }));
 
