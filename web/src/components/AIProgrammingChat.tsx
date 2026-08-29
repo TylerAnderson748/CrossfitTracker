@@ -1768,6 +1768,7 @@ RULES:
 - WOD NAMES ARE PART OF THE FUN: give every original WOD a short, memorable NAME with seasonal or topical flavor drawn from its actual calendar date - playoff and bowl season, March brackets, marathon season, the CrossFit Open, holidays, summer heat, first snow (e.g. "Bracket Buster" in March, "Turkey Burner" late November, "Dog Days" in August). A title built from the movements, format, or body parts in the workout ("Wall Ball Prep", "DB Upper Circuit", "Leg Conditioning") is a DESCRIPTION, not a name, and gets the week rejected. NEVER a classic benchmark's name (Fran, Cindy, Murph, ...) on an original workout - benchmark names are reserved for the real prescriptions.
 - ROTATE SCORING FORMATS - across weeks, not just within one: a WOD must never use the same format as the most recent WOD already in the table (listed above), even when that was last week. Mix AMRAPs, EMOMs, for-time pieces, intervals, and chippers. Back-to-back same-format WODs get the week rejected.
 - A benchmark day is a clean TEST day: warm-up, the benchmark, optional easy cooldown - never stack lift components or other hard training on it.
+- SKILL WORK EVERY WEEK: at least one "skill" component per week - a short (5-12 min) unloaded technique piece (double-unders, handstand work, pistols, toes-to-bar, muscle-up progressions, kipping practice) chosen from the athlete's equipment and logged weaknesses, on an easy or moderate day. Skill practice structured as an EMOM is still type "skill" as long as it stays unloaded.
 - EQUIPMENT IS A HARD WALL: an athlete with NO barbell gets NO barbell movements (no back/front squats, barbell deadlifts, bench press) - build strength from what they own (dumbbells, kettlebells, sandbags: goblet squats, sandbag bear-hug squats, DB deadlifts), and NEVER prescribe any load heavier than their heaviest ownable setup.${benchmarkRule}
 - SAFETY IS NON-NEGOTIABLE: never prescribe above 100% of a known max, and respect rep-max physiology (1 rep=100%, 2=95%, 3=92%, 5=87%, 8=80%, 10=75%, 12=70% of 1RM - a 10-rep set near max is an injury, not training). A goal like "improve my back squat" NEVER means loading beyond the current max - it means building submaximal volume until a scheduled RE-TEST day establishes a new max. Every max-test day includes explicit safety protocol in its description ("only take attempts that move crisply; stop at technical breakdown; set rack safeties"). Injuries/limitations above get modifications, never the aggravating movement. Solo home training: no heavy barbell bench or near-max squats without rack safeties in their equipment - substitute dumbbells or cap the load.
 ${IMPLEMENT_KNOWLEDGE}
@@ -2166,6 +2167,16 @@ PATCH RULES:
 
     // Weeks containing a competition/race get looser structural rules
     const isEventWeek = candidate.some(r => /competition|marathon|race/i.test(r.session));
+
+    // Skill work is required, not optional: banning loaded "skills" must
+    // not mean NO skills - every full non-event week for a CrossFit-style
+    // athlete carries at least one real (unloaded) skill component
+    if ((preferences.trainingStyle || "crossfit") !== "general" && weekDates.length >= 7 && !isEventWeek) {
+      const skillCount = candidate.reduce((n, r) => n + (r.components || []).filter(c => c.type === "skill").length, 0);
+      if (skillCount === 0) {
+        problems.push(`no "skill" component anywhere this week - every week includes at least one short (5-12 min) unloaded technique piece (double-unders, handstand work, pistols, toes-to-bar, muscle-up progressions, kipping...) matched to the athlete's equipment and logged weaknesses, attached to an easy or moderate day (never the benchmark test day)`);
+      }
+    }
 
     const restTarget = preferences.restDaysPerWeek || 0;
     if (restTarget > 0 && weekDates.length >= 7) {
