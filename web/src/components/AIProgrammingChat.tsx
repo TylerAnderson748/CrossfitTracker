@@ -241,7 +241,66 @@ function sanitizePlanRow(r: Partial<PlanRow>, fallbackWeek: number, fallbackPhas
       row.detail = row.components.map(c => `${c.title}: ${c.description}`).join(" • ");
     }
   }
+  // Session time is arithmetic, not a model guess: sets x (work + rest)
+  // plus warmup/cardio/transitions. The model's estMinutes routinely ran
+  // 50-100% high, so a computable estimate always wins.
+  const computed = estimateSessionMinutes(row);
+  if (computed !== null) row.estMinutes = computed;
   return row;
+}
+
+// Deterministic per-day time estimate from the actual prescriptions.
+// Returns null when nothing is parseable (then the model's number stands).
+function estimateSessionMinutes(row: PlanRow): number | null {
+  const comps = row.components || [];
+  if (comps.length === 0) return null;
+  let total = 0;
+  let parsedAny = false;
+  comps.forEach(c => {
+    const text = `${c.title} ${c.description}`;
+    const explicitMin = text.match(/(\d+)\s*(?:-\s*\d+\s*)?min(?:ute)?s?\b/i);
+    if (c.type === "warmup") {
+      total += explicitMin ? Math.min(15, parseInt(explicitMin[1]) + 3) : 8;
+      parsedAny = true;
+    } else if (c.type === "cooldown") {
+      total += explicitMin ? Math.min(12, parseInt(explicitMin[1])) : 5;
+      parsedAny = true;
+    } else if (["run", "swim", "bike_mtb", "bike_road", "row"].includes(c.type)) {
+      const mi = row.runMiles || parseFloat((text.match(/(\d+(?:\.\d+)?)\s*mi\b/i) || [])[1] || "0");
+      if (mi > 0) { total += Math.round(mi * 11) + 4; parsedAny = true; }
+      else if (explicitMin) { total += parseInt(explicitMin[1]); parsedAny = true; }
+      else total += 20;
+    } else if (c.type === "wod") {
+      const timed = text.match(/(\d+)\s*-?\s*min(?:ute)?\s*(?:amrap|emom|cap)/i);
+      total += timed ? parseInt(timed[1]) + 4 : 16;
+      parsedAny = true;
+    } else if (c.type === "skill") {
+      total += explicitMin ? Math.min(20, parseInt(explicitMin[1])) : 10;
+      parsedAny = true;
+    } else if (c.type === "lift") {
+      const sr = text.match(/(\d+)\s*(?:x|×)\s*(\d+)/);
+      const restSecMatch = text.match(/rest\s*(\d+)(?:\s*-\s*(\d+))?\s*sec/i);
+      const restMinMatch = text.match(/rest\s*(\d+)(?:\s*-\s*(\d+))?\s*min/i) || text.match(/(\d+)(?:\s*-\s*(\d+))?\s*min\s*rest/i);
+      const restSec = restSecMatch
+        ? parseInt(restSecMatch[2] || restSecMatch[1])
+        : restMinMatch
+          ? parseInt(restMinMatch[2] || restMinMatch[1]) * 60
+          : 90;
+      const sets = sr ? parseInt(sr[1]) : 3;
+      const reps = sr ? Math.min(20, parseInt(sr[2])) : 8;
+      const workSec = 20 + reps * 4; // setup + ~4 sec/rep
+      let minutes = (sets * (workSec + restSec) - restSec) / 60;
+      // Ramp/build-up lifts spend extra time finding the working weight
+      if (/start light|empty bar|lightest|build to|work up/i.test(text)) minutes += 6;
+      total += Math.max(4, Math.round(minutes));
+      parsedAny = true;
+    } else if (c.type === "class") {
+      total += 60;
+    }
+  });
+  if (!parsedAny) return null;
+  total += Math.max(0, comps.length - 1) * 2; // transitions between pieces
+  return Math.max(10, Math.round(total));
 }
 
 // Compact text form of the plan table for prompts
