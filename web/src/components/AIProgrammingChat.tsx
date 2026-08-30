@@ -510,77 +510,7 @@ UPCOMING DATES FOR EACH DAY OF THE WEEK (use these EXACT dates):
 When the user asks for a specific day (e.g., "Wednesday"), use the corresponding date from above.
 When generating multiple days, use the correct date for each day requested.
 
-When generating workouts, you MUST respond with valid JSON in this exact format:
-{
-  "message": "Your conversational response here explaining the program",
-  "workouts": [
-    {
-      "date": "${todayStr}",
-      "dayOfWeek": "${dayOfWeek}",
-      "isRestDay": false,
-      "components": [
-        {
-          "type": "warmup",
-          "title": "General Warm-up",
-          "description": "3 rounds:\\n10 air squats\\n10 push-ups\\n200m run",
-          "notes": "Focus on mobility and increasing heart rate gradually. No rest between movements."
-        },
-        {
-          "type": "lift",
-          "title": "Back Squat",
-          "description": "Build to a heavy set of 5, then:\\n3 x 5 @ 80-85% of today's heavy set\\nRest 2-3 min between sets",
-          "notes": "STIMULUS: Build strength with moderate-heavy load. Should feel challenging but controlled.\\n\\nGOAL: Improve 5-rep max capacity. Focus on depth, bracing, and bar speed.\\n\\nSCALED: Reduce weight 10-20% if form breaks down or if newer to back squatting.\\n\\nFOUNDATIONS: Goblet squat with dumbbell/kettlebell. Focus on depth and core stability. 3 x 8-10 reps."
-        },
-        {
-          "type": "skill",
-          "title": "Toes-to-Bar",
-          "description": "Every 90 sec for 6 rounds:\\n5-8 Toes-to-Bar (or progression)\\n\\nDrill Work (before sets):\\n- 10 kip swings (hollow to arch)\\n- 5 slow knees-to-chest\\n- 5 controlled leg raises",
-          "notes": "STIMULUS: Skill development - focus on rhythm, timing, and efficiency, not fatigue.\\n\\nGOAL: Build capacity and consistency in the kipping pattern. Quality over quantity.\\n\\nSCALED: Knees-to-Elbows (same rep scheme). Focus on full extension at bottom.\\n\\nFOUNDATIONS: Hanging knee raises or V-ups on floor. 6 rounds of 8-10 reps.\\n\\nPROGRESSION TIP: Master the kip swing timing before adding leg lift."
-        },
-        {
-          "type": "wod",
-          "title": "Fran",
-          "description": "21-15-9 For Time:\\nThrusters\\nPull-ups\\n\\nTime Cap: 10 minutes",
-          "scoringType": "fortime",
-          "notes": "STIMULUS: Sprint effort. This should feel intense from the first rep. Heart rate high, breathing hard.\\n\\nGOAL: Sub-5 elite, sub-7 competitive, sub-10 fitness. Aim for large sets or unbroken if possible.\\n\\nRx: Thrusters 95/65 lb, Kipping Pull-ups\\n\\nSCALED: Thrusters 65/45 lb, Banded Pull-ups or Jumping Pull-ups\\n- For athletes who can do pull-ups but not 45 total\\n- For athletes building toward Rx weights\\n\\nFOUNDATIONS: Thrusters 45/35 lb (or dumbbells 20/15), Ring Rows\\n- For newer athletes still building capacity\\n- Focus on moving well, not moving fast\\n\\nSCORING: Record time and note Rx/Scaled/Foundations. If you modified further, note in comments."
-        },
-        {
-          "type": "cooldown",
-          "title": "Recovery",
-          "description": "2 rounds:\\n1 min couch stretch each leg\\n1 min pigeon pose each side\\n10 slow cat-cows",
-          "notes": "Take your time. Breathe deeply. This is recovery, not a workout."
-        }
-      ]
-    }
-  ]
-}
-
-Component types: "warmup", "lift", "wod", "skill", "run", "swim", "bike_mtb", "bike_road", "row", "class", "cooldown"
-Scoring types for WODs: "fortime", "amrap", "emom"
-Use the specific cardio types for pure aerobic work - "run" (also jogging/rucking), "swim", "bike_mtb" (mountain biking), "bike_road" (road/stationary/fan bike), "row" (rowing erg) - steady-state or intervals, with exact distance/time and pace or % effort. Only program swimming, biking, or rowing when the athlete has said they do those or has the equipment. Mixed-modal conditioning pieces (AMRAPs, EMOMs, For Time) stay "wod". Cardio components are exempt from the preset-name rule.
-Use "class" when the athlete attends a coached class elsewhere (e.g., "Olympic Lifting Class", "CrossFit Class"). The CLASS COACH decides the content and the athlete scans the whiteboard in afterward, so a class component is ONLY the name: title = the class name, description = "Follow the coach's programming." NOTHING else - no movement suggestions, no focus/technique notes, no effort or intensity guidance, no invented workouts. Class components are exempt from the preset-name rule.
-
-IMPORTANT - PRESET WORKOUTS:
-For SKILL components, you MUST ONLY use these preset skill names (do not make up new skills):
-${skillNames.join(", ")}
-
-For LIFT components, you MUST ONLY use these preset lift names (do not make up new lifts):
-${liftNames.join(", ")}
-
-For WOD components, these are the existing benchmark WODs - you may use these OR create custom themed WODs:
-${wodNames.join(", ")}
-
-CREATIVE WOD NAMING:
-When creating custom WODs (not benchmarks), be CREATIVE and FUN with names! Use themes based on:
-- Current season (${season}): e.g., "Snowstorm", "Summer Sizzle", "Autumn Assault", "Spring Awakening"
-- Holidays/events: e.g., "Turkey Burner", "Independence Day Grind", "New Year's Resolution"
-- Weather/nature: e.g., "Thunderstorm", "Avalanche", "Heat Wave", "Blizzard"
-- Action/intensity: e.g., "The Gauntlet", "Relentless", "Dark Horse", "Redemption"
-- Fun themes: e.g., "Monday Mayhem", "Hump Day Hustle", "Friday Finisher", "Weekend Warrior"
-- User-requested themes: If the user mentions a theme, event, or preference, incorporate it!
-
-Examples of creative names: "December Destroyer", "Frostbite", "Firebreather", "The Crucible", "Midnight Oil", "Iron Will", "Beast Mode", "No Mercy Monday"
-
+PROGRAMMING OUTPUT: you NEVER generate day-by-day workouts directly in chat. EVERY request to program training - a single day, a few days, a week, or months - is answered with the training plan OUTLINE format defined below, covering exactly the requested dates (a short request is simply a short outline). The app builds the day-by-day table from your outline through its full validation and safety pipeline; there is no other path to programmed workouts.
 Guidelines:
 - Create varied, balanced programming
 - EVERY day gets ONE definitive prescription: a workout, a class, or rest. NEVER program "optional" sessions or attend-or-skip choices - decide for the athlete
@@ -602,80 +532,19 @@ Guidelines:
 ${IMPLEMENT_KNOWLEDGE}
 EQUIPMENT TRUTH:
 - When asked what equipment they own or what you'll program with, QUOTE their saved equipment list VERBATIM - never paraphrase, shorten, or recite from memory, so they can spot anything missing or wrong.
-- If the athlete mentions gear that is NOT in their saved list, include "equipmentAdditions": ["item", ...] in your JSON response (alongside message/workouts) - the app saves those to their preferences - then program with them.
+- If the athlete mentions gear that is NOT in their saved list, include "equipmentAdditions": ["item", ...] in your JSON response - the app saves those to their preferences - then program with them.
 - Use standard CrossFit movements and terminology
 - Keep descriptions clear and concise
 - Use newlines (\\n) for formatting within descriptions
 - ALWAYS use real dates starting from ${todayStr} and going forward
 
-IMPORTANT - SKILL WORK REQUIREMENTS:
-For SKILL components, NEVER just say "10 minutes of practice" or generic time domains. Instead, ALWAYS include:
-1. Specific sets/reps (e.g., "3 sets of 8-10 reps")
-2. Drill work with clear exercises (e.g., "10 kip swings, 10 knees-to-chest")
-3. Rest periods between sets
-4. The description should teach HOW to develop the skill, not just tell them to practice
-
-The notes field for skills MUST include:
-- Scaling: 2-3 progressions for different ability levels
-- Progression: The path from beginner to mastery
-- Intent: What athletes should focus on (quality, rhythm, efficiency, etc.)
-
-- ALWAYS include a "notes" field for each component with:
-  * Stimulus: The intended feel/intensity (e.g., "fast and light", "heavy grind")
-  * Scaling: Options for different fitness levels
-  * Intent: What athletes should focus on or aim for
-  * Any other coaching cues or tips
-- For skills and lifts, ONLY use the preset names listed above
-- For WODs, use benchmark WODs when appropriate, but get CREATIVE with custom WOD names using themes!
-- Pay attention to any themes, preferences, or special requests from the user
-- If the athlete attends a class elsewhere on fixed days (e.g., an Olympic lifting class at their gym), do NOT program a workout for that day - include ONE component describing the class (type "class", title e.g. "Olympic Lifting Class") with brief notes; class components are exempt from the preset-name rule
-
-IMPORTANT - STIMULUS, GOALS, AND SCALING:
-Every workout component MUST have detailed notes with:
-
-1. STIMULUS: What should this feel like? (sprint effort, grinding pace, controlled movement, etc.)
-   - Be specific: "Heart rate should stay elevated", "Should feel heavy but controlled", "Breathing hard but recoverable"
-
-2. GOAL: What is this workout trying to achieve?
-   - Time targets for For Time workouts (elite/competitive/fitness ranges)
-   - Rep targets for AMRAPs
-   - Intensity expectations
-   - What the athlete should focus on (unbroken sets, pacing, technique, etc.)
-
-3. THREE SCALING LEVELS with clear guidance:
-   a) Rx (prescribed): Standard weights and movements with specific expectations
-   b) SCALED: Lighter weights OR easier movement variations
-      - Include WHO should scale: "For athletes building toward Rx" or "If you can't do 15+ unbroken"
-      - Be specific about modifications: exact weights, band colors, etc.
-   c) FOUNDATIONS (Beginner): Most accessible option
-      - For newer athletes or those with limitations
-      - Focus should be on movement quality, not intensity
-      - Include alternative equipment if needed (dumbbells instead of barbell)
-
-SCALING WEIGHT EXAMPLES:
-- Barbell Clean/Snatch: "Rx: 135/95, Scaled: 95/65, Foundations: 65/45 or PVC/empty bar"
-- Thrusters: "Rx: 95/65, Scaled: 65/45, Foundations: 45/35 or DB 20/15"
-- Deadlift: "Rx: 225/155, Scaled: 155/105, Foundations: 95/65"
-- Kettlebell Swings: "Rx: 53/35, Scaled: 35/26, Foundations: 26/18"
-- Wall Balls: "Rx: 20/14 to 10/9ft, Scaled: 14/10 to 9ft, Foundations: 10/6 to 9ft"
-
-SCALING MOVEMENT EXAMPLES:
-- Pull-ups: "Rx: Kipping, Scaled: Banded (green/blue) or Jumping, Foundations: Ring Rows"
-- Muscle-ups: "Rx: Bar/Ring MU, Scaled: C2B + Dips, Foundations: Pull-ups + Push-ups"
-- Handstand Push-ups: "Rx: Strict/Kipping, Scaled: Pike Push-ups (box), Foundations: DB Strict Press"
-- Box Jumps: "Rx: 24/20 jump, Scaled: 20/16 jump, Foundations: Step-ups any height"
-- Double-Unders: "Rx: DUs, Scaled: 2:1 Singles, Foundations: 3:1 Singles or Penguin Jumps"
-- Toes-to-Bar: "Rx: TTB, Scaled: Knees-to-Elbows, Foundations: Hanging Knee Raises or V-ups"
-
-LONG-RANGE PROGRAMS (more than 2 weeks):
 HOW LONG TO PROGRAM (deterministic - never guess the horizon):
 1. The athlete named a length ("program my next week", "give me 3 weeks") -> exactly that length.
 2. No length named, but they have SAVED EVENTS (competition, race): any request for programming ("make me a program", "get me ready") means a plan outline from TODAY through their FURTHEST future event, with recovery after it when space allows. An athlete with a marathon on file NEVER gets a bare week - they get the block that gets them to the start line.
 3. No length named and no events: default to a 4-week outline.
 4. startDate is ALWAYS today (${todayStr}) unless the athlete EXPLICITLY asks to start later. NEVER continue from where an earlier draft or plan ended - a new program request replaces the draft and starts today.
-Direct day-by-day generation without an outline is ONLY for explicit requests of 14 days or fewer - everything else goes through the outline below.
 
-If the programming spans MORE than 14 days, DO NOT generate the days directly. Instead respond with a week-by-week training plan outline in this exact JSON format:
+For EVERY programming request - any length, even a single day - respond with a week-by-week training plan outline in this exact JSON format (a partial week is still one outline week covering just those dates):
 {
   "message": "Explain the overall plan: the phases, the standard weekly structure, how you're building toward their events, and where the rest days are",
   "outline": {
@@ -707,8 +576,7 @@ Keep each week's details under 40 words - day-level detail comes later, week by 
 
 If the user is just chatting or asking questions (not requesting workouts), respond with just:
 {
-  "message": "Your response here",
-  "workouts": []
+  "message": "Your response here"
 }
 
 IMPORTANT: Always respond with valid JSON only. No markdown, no code blocks, just pure JSON.`;
@@ -1510,26 +1378,18 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
           }
         }
 
-        // Backstop: an athlete with a distant saved event asked for
-        // programming and got a bare handful of days with no outline.
-        // Unless they named a short horizon themselves, demand the full
-        // block - the horizon is a rule, not a model mood.
-        if (!plan && Array.isArray(parsed.workouts) && parsed.workouts.length > 0 && !parsed.outline) {
-          const lastUserText = String([...updatedMessages].reverse().find(m => m.role === "user")?.content || "");
-          const askedShort = /\b(\d+\s*(?:day|days)|(?:a|one|1|this|next)\s*week|week of)\b/i.test(lastUserText);
-          const furthestEvent = (freshPrefs.events || [])
-            .map((ev: TrainingEvent) => ev.date || "")
-            .filter((d: string) => d && d > new Date().toISOString().split("T")[0])
-            .sort()
-            .pop();
-          const eventFarOut = furthestEvent && (new Date(furthestEvent).getTime() - Date.now()) / 86400000 > 21;
-          if (!askedShort && eventFarOut) {
+        // Backstop: the direct "workouts" format is RETIRED - every
+        // programming request goes through the outline + validated
+        // plan-table pipeline. If the model emits workouts anyway, one
+        // redo demands the outline; failing that, nothing gets built.
+        if (Array.isArray(parsed.workouts) && parsed.workouts.length > 0 && !parsed.outline) {
+          try {
             const redoText = await chatCompletion({
               messages: [
                 { role: "system", content: "You are Oddo, an expert CrossFit and endurance programming coach. Always respond with valid JSON only." },
                 { role: "user", content: prompt },
                 { role: "assistant", content: text },
-                { role: "user", content: `You returned only ${parsed.workouts.length} days, but this athlete has an event on ${furthestEvent} and did not ask for a short horizon. Per the HOW LONG TO PROGRAM rules, respond NOW with the full week-by-week "outline" (with "phases") from today through that event. No direct "workouts" array.` }
+                { role: "user", content: `You returned a direct "workouts" array, but that format is retired - ALL programming goes through the week-by-week "outline" format (with "phases"), covering exactly the dates you were programming (a short request is simply a short outline). Respond NOW with the outline JSON only - no "workouts" array.` }
               ],
               temperature: 0.5,
               maxTokens: 16000,
@@ -1538,8 +1398,13 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
             if (redo?.outline && Array.isArray(redo.outline.weeks) && redo.outline.weeks.length > 0) {
               parsed.outline = redo.outline;
               parsed.message = redo.message || parsed.message;
-              parsed.workouts = undefined;
             }
+          } catch (redoErr) {
+            console.error("Outline redo failed:", redoErr);
+          }
+          parsed.workouts = undefined;
+          if (!parsed.outline) {
+            parsed.message = "I drafted that in an outdated format, so I didn't keep it. Ask me again (e.g. \"program my next week\") and I'll build it properly as a plan table.";
           }
         }
 
@@ -1588,16 +1453,10 @@ export default function AIProgrammingChat({ userId, userEmail, onPublish, subscr
 
         // Handle different response formats from AI
         if (Array.isArray(parsed)) {
-          // AI returned just an array of workouts
+          // Raw workout array = the retired direct format; never keep it
           parsedResponse = {
-            message: `I've generated ${parsed.length} days of programming for you. Click "Preview & Publish" to review and add them to your calendar.`,
-            workouts: parsed
-          };
-        } else if (parsed.workouts && Array.isArray(parsed.workouts)) {
-          // Expected format with message and workouts
-          parsedResponse = {
-            message: parsed.message || `Here's your ${parsed.workouts.length}-day program! Review the workouts below and click "Preview & Publish" when ready.`,
-            workouts: parsed.workouts
+            message: "I drafted that in an outdated format, so I didn't keep it. Ask me again and I'll build it properly as a plan table.",
+            workouts: []
           };
         } else if (parsed.message) {
           // Just a message, no workouts
