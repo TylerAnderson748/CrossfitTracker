@@ -522,7 +522,7 @@ Guidelines:
 - FATIGUE MANAGEMENT: wave the intensity deliberately. Never stack more than 2 hard days in a row - follow them with an easy day, skill day, or rest, and add an extra rest day after an especially demanding stretch rather than forcing volume. Across weeks, alternate harder and easier weeks within a block and make every 3rd-4th week a genuine deload (volume AND intensity down 30-40%, named as such in the phase). If recent check-ins say sessions felt "very hard", pull the next week's intensity down; if "too easy", nudge it up.
 - REST PLACEMENT is anchored to the week's biggest sessions: rest or easy movement goes immediately before AND after the long run / heaviest day whenever the fixed class schedule allows - never a hard metcon or heavy lifting adjacent to a 8+ mile run. A rest day's reason must describe its ACTUAL neighbors: never claim it protects a session when a hard day sits in between - if fixed classes force that layout, say so honestly (e.g., "Thursday is the last open day to rest before Sunday's 17-miler since Saturday's class is fixed").
 - Blocks of 6+ weeks: re-test 1-2 of the athlete's baselines most relevant to the block's goal in the final or penultimate week (never race week) so progress is measured, not assumed.
-- THIN DATA = NO FAKE PRECISION: prescribe %-of-1RM ONLY for lifts with solid logged data. For lifts marked [ROUGH] or with no data at all, NEVER invent derived rep-maxes or precise adjustments ("~11RM", "8-9% intensity increase"). ANY movement with no logged load data - in a lift, a wod, an accessory, anywhere - NEVER gets a fixed working weight. Strength work gets the RAMP PROTOCOL verbatim: "${RAMP_PROTOCOL}" Conditioning pieces get the lightest sensible option with form-first framing ("light enough for smooth unbroken sets - note what you used"). Make the block's FIRST week establish those baselines explicitly, with later weeks anchored to what gets logged.
+- THIN DATA = NO FAKE PRECISION: prescribe %-of-1RM ONLY for lifts with solid logged data. For lifts marked [ROUGH] or with no data at all, NEVER invent derived rep-maxes or precise adjustments ("~11RM", "8-9% intensity increase"). ANY movement with no logged load data - in a lift, a wod, an accessory, anywhere - NEVER gets a fixed working weight, "moderate weight", or a bare rep scheme. Main strength lifts get the RAMP PROTOCOL verbatim: "${RAMP_PROTOCOL}" Unknown accessory lifts get at least the short form: "start light, add weight only while form stays solid; log what you use." Conditioning pieces get the lightest sensible option with form-first framing ("light enough for smooth unbroken sets - note what you used"). Make the block's FIRST week establish those baselines explicitly, with later weeks anchored to what gets logged.
 - SAFETY IS NON-NEGOTIABLE: never above 100% of a known max; respect rep-max physiology (2 reps=95%, 3=92%, 5=87%, 8=80%, 10=75%, 12=70% of 1RM). Improving a lift means submaximal volume until a scheduled RE-TEST day - never loading past the current max. Max-test days carry explicit safety instruction in the tested component ("start light, build gradually; stop the moment form slips - 100% effort, never 110%; spotter if possible, otherwise rack safeties or the DB version") and the snapshot-we-build-from-here reassurance ONCE in the day's reason; injuries get modifications; no heavy bench or near-max squats alone at home without rack safeties.
 - UNKNOWNS: if a movement is central to this plan and you have no data for it, either ask the athlete for a rough number in your ONE clarifying message before generating, or schedule its baseline in week 1 and say so in that day's reason.
 - If the athlete is training for a running race: 3-4 run days per week (one long run + easy midweek runs). The long run is its OWN session on its own day - never stacked after a class or metcon
@@ -1622,7 +1622,7 @@ RULES:
 - Baseline days especially: every tested movement is its OWN "lift" component (title = the lift name, description = the test, kept PRACTICAL, e.g. "Start light and work up to a hard set of 5 - stop if form starts to slip; 100% effort, not 110%; spotter if possible. Log it as your baseline, then 3x8 @ 70% of that weight"). The reassurance framing - "today is just a snapshot of where you're at, good or bad; we build from here, safely" - belongs ONCE in the baseline day's "reason", NEVER pasted into component descriptions. The athlete logs each lift from its component - a baseline buried in a paragraph can't be logged.
 - "reason" (1-2 sentences): WHY this day is programmed this way given the phase, the surrounding days, and the athlete's goals. Every non-rest day gets one. The reason speaks to the ATHLETE about training intent - NEVER write rule bookkeeping ("to maintain exactly 2 rest days", "to satisfy the weekly cap") as a reason.
 - COACH THE PERSON, not the textbook: this plan is for ONE specific athlete whose data is above. Every week, several reasons and prescriptions must reference THEIR actual specifics - their PR numbers, their recent check-ins ("last week's squats felt very hard, so..."), their injuries, their goal race date, their class schedule. A reason that could appear in anyone's plan ("builds aerobic base", "maintains lifting skill") is filler - replace it with what this day does for THIS athlete right now.
-- THIN DATA = NO FAKE PRECISION: %-of-1RM prescriptions ONLY for lifts with solid logged data. For lifts marked [ROUGH] or unlogged, never invent derived rep-maxes or fabricated adjustments. ANY movement with no logged load data - lift, wod, accessory, anywhere - NEVER gets a fixed working weight: strength work gets the RAMP PROTOCOL verbatim ("${RAMP_PROTOCOL}"), conditioning pieces get the lightest sensible option with form-first framing. Establish the baseline early in the block and anchor later weeks to what the athlete actually logs.
+- THIN DATA = NO FAKE PRECISION: %-of-1RM prescriptions ONLY for lifts with solid logged data. For lifts marked [ROUGH] or unlogged, never invent derived rep-maxes or fabricated adjustments. ANY movement with no logged load data - lift, wod, accessory, anywhere - NEVER gets a fixed working weight, "moderate weight", or a bare rep scheme: main strength lifts get the RAMP PROTOCOL verbatim ("${RAMP_PROTOCOL}"), unknown accessory lifts get at least "start light, add weight only while form stays solid; log what you use", conditioning pieces get the lightest sensible option with form-first framing. Establish the baseline early in the block and anchor later weeks to what the athlete actually logs.
 - VARIETY IS MANDATORY week to week: the previously-programmed days listed above are what already exists - NEVER copy an earlier workout or reuse its name. A recurring slot (e.g. Wednesday conditioning) keeps its GOAL but rotates movements, formats (EMOM / AMRAP / intervals / rounds / chipper), and rep schemes every week. Same goal, fresh workout.
 - WOD NAMES ARE PART OF THE FUN: give every original WOD a short, memorable NAME with seasonal or topical flavor drawn from its actual calendar date - playoff and bowl season, March brackets, marathon season, the CrossFit Open, holidays, summer heat, first snow (e.g. "Bracket Buster" in March, "Turkey Burner" late November, "Dog Days" in August). A title built from the movements, format, or body parts in the workout ("Wall Ball Prep", "DB Upper Circuit", "Leg Conditioning") is a DESCRIPTION, not a name, and gets the week rejected. NEVER a classic benchmark's name (Fran, Cindy, Murph, ...) on an original workout - benchmark names are reserved for the real prescriptions.
 - ROTATE SCORING FORMATS - across weeks, not just within one: a WOD must never use the same format as the most recent WOD already in the table (listed above), even when that was last week. Mix AMRAPs, EMOMs, for-time pieces, intervals, and chippers. Back-to-back same-format WODs get the week rejected.
@@ -1652,7 +1652,10 @@ ${IMPLEMENT_KNOWLEDGE}
   // Build the prompt for revising an existing plan table conversationally
   const buildRevisionPrompt = (currentPlan: TrainingPlan, conversationHistory: string, prefs = preferences): string => {
     const violations = planWeekViolations(currentPlan.rows);
+    const nowR = new Date();
+    const todayR = `${nowR.getFullYear()}-${String(nowR.getMonth() + 1).padStart(2, "0")}-${String(nowR.getDate()).padStart(2, "0")}`;
     return `You are Oddo, the athlete's coach, maintaining their day-by-day training plan TABLE.
+TODAY is ${todayR} (${nowR.toLocaleDateString("en-US", { weekday: "long" })}) - never ask the athlete what today's date is; "today"/"tomorrow" resolve from this.
 ${buildPreferencesSection(prefs)}${athleteBlock}
 CURRENT PLAN TABLE (${currentPlan.startDate} to ${currentPlan.endDate}, ${currentPlan.rows.length} days).
 Format: date|day|week|phase|session|runMiles|effort%|minutes|detail
@@ -1795,6 +1798,16 @@ PATCH RULES:
         if (c.type === "lift" && isTestText(text) && !/\b(stop|crisp|technical breakdown|safeties|spotter|only take|no grinding|form breaks|form slips|form starts|start light|100% effort)\b/i.test(text)) {
           problems.push(`${r.date} "${c.title}" is a max-test/build-to day with NO safety instruction - add explicit guidance (e.g. "start light and build gradually; stop the moment form starts to slip - 100% effort, never 110%; set rack safeties")`);
         }
+        // EVERY lift with no logged data ramps - not just the day's
+        // designated baseline test. "Moderate weight" or a bare rep
+        // scheme on an unknown movement is a guess about a stranger.
+        if (c.type === "lift") {
+          const titleLower = String(c.title || "").toLowerCase();
+          const known = Object.keys(athleteMaxRef).some(k => titleLower.includes(k) || k.includes(titleLower));
+          if (!known && titleLower && !/start light|empty bar|lightest/i.test(text)) {
+            problems.push(`${r.date} "${c.title}" - the athlete has NO logged data for this movement, but its prescription doesn't start light ("${String(c.description || "").slice(0, 60)}..."). EVERY unknown lift ramps: main lifts get the full ramp protocol; accessories at minimum "start light, add weight only while form stays solid, and log what you use". NEVER "moderate weight" or a bare rep scheme on an unknown movement`);
+          }
+        }
       });
     });
     return problems.slice(0, 6);
@@ -1856,6 +1869,16 @@ PATCH RULES:
         }
       });
     });
+
+    // Someone who just asked to be trained does not get told to rest
+    // first: day 1 of a brand-new plan is a training day (there is no
+    // programmed fatigue to recover from yet)
+    if (priorRows.length === 0 && weekDates.length > 0) {
+      const firstRow = candidate.find(r => r.date === weekDates[0]);
+      if (firstRow && firstRow.session.toLowerCase().includes("rest")) {
+        problems.push(`${firstRow.date} (day 1 of a brand-new plan) is a Rest day - the athlete just asked to start training and has no programmed fatigue to recover from; day 1 is a training session (start the baselines), with rest placed later in the week`);
+      }
+    }
 
     // A brand-new plan has no "last week": week-1 reasons citing previous
     // programmed training are fabricated history. Real logged sessions are
