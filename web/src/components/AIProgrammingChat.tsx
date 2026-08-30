@@ -522,7 +522,7 @@ Guidelines:
 - FATIGUE MANAGEMENT: wave the intensity deliberately. Never stack more than 2 hard days in a row - follow them with an easy day, skill day, or rest, and add an extra rest day after an especially demanding stretch rather than forcing volume. Across weeks, alternate harder and easier weeks within a block and make every 3rd-4th week a genuine deload (volume AND intensity down 30-40%, named as such in the phase). If recent check-ins say sessions felt "very hard", pull the next week's intensity down; if "too easy", nudge it up.
 - REST PLACEMENT is anchored to the week's biggest sessions: rest or easy movement goes immediately before AND after the long run / heaviest day whenever the fixed class schedule allows - never a hard metcon or heavy lifting adjacent to a 8+ mile run. A rest day's reason must describe its ACTUAL neighbors: never claim it protects a session when a hard day sits in between - if fixed classes force that layout, say so honestly (e.g., "Thursday is the last open day to rest before Sunday's 17-miler since Saturday's class is fixed").
 - Blocks of 6+ weeks: re-test 1-2 of the athlete's baselines most relevant to the block's goal in the final or penultimate week (never race week) so progress is measured, not assumed.
-- THIN DATA = NO FAKE PRECISION: prescribe %-of-1RM ONLY for lifts with solid logged data. For lifts marked [ROUGH] or with no data at all, NEVER invent derived rep-maxes or precise adjustments ("~11RM", "8-9% intensity increase"). ANY movement with no logged load data - in a lift, a wod, an accessory, anywhere - NEVER gets a fixed working weight, "moderate weight", or a bare rep scheme. Main strength lifts get the RAMP PROTOCOL verbatim: "${RAMP_PROTOCOL}" Unknown accessory lifts get at least the short form: "start light, add weight only while form stays solid; stop the set the moment form starts to slip - never grind a rep; log what you use." Conditioning pieces get the lightest sensible option with form-first framing ("light enough for smooth unbroken sets - note what you used"). Make the block's FIRST week establish those baselines explicitly, with later weeks anchored to what gets logged.
+- THIN DATA = NO FAKE PRECISION: prescribe %-of-1RM ONLY for lifts with solid logged data. For lifts marked [ROUGH] or with no data at all, NEVER invent derived rep-maxes or precise adjustments ("~11RM", "8-9% intensity increase"). ANY movement with no logged load data - in a lift, a wod, an accessory, anywhere - NEVER gets a fixed working weight, "moderate weight", or a bare rep scheme. Main strength lifts get the RAMP PROTOCOL verbatim: "${RAMP_PROTOCOL}" Unknown accessory lifts get at least the short form: "start light, add weight only while form stays solid; stop the set the moment form starts to slip - never grind a rep; log what you use." Conditioning pieces get the lightest sensible option with form-first framing ("light enough for smooth unbroken sets - note what you used"). The ramp is ONLY for movements with NO data: a lift the athlete HAS numbers for is anchored to those numbers (% of max or effort) with just the brief safety cue - never re-ramped from empty. Make the block's FIRST week establish those baselines explicitly, with later weeks anchored to what gets logged.
 - SAFETY IS NON-NEGOTIABLE: never above 100% of a known max; respect rep-max physiology (2 reps=95%, 3=92%, 5=87%, 8=80%, 10=75%, 12=70% of 1RM). Improving a lift means submaximal volume until a scheduled RE-TEST day - never loading past the current max. Max-test days carry explicit safety instruction in the tested component ("start light, build gradually; stop the moment form slips - 100% effort, never 110%; spotter if possible, otherwise rack safeties or the DB version") and the snapshot-we-build-from-here reassurance ONCE in the day's reason; injuries get modifications; no heavy bench or near-max squats alone at home without rack safeties.
 - UNKNOWNS: if a movement is central to this plan and you have no data for it, either ask the athlete for a rough number in your ONE clarifying message before generating, or schedule its baseline in week 1 and say so in that day's reason.
 - If the athlete is training for a running race: 3-4 run days per week (one long run + easy midweek runs). The long run is its OWN session on its own day - never stacked after a class or metcon
@@ -1622,7 +1622,7 @@ RULES:
 - Baseline days especially: every tested movement is its OWN "lift" component (title = the lift name, description = the test, kept PRACTICAL, e.g. "Start light and work up to a hard set of 5 - stop if form starts to slip; 100% effort, not 110%; spotter if possible. Log it as your baseline, then 3x8 @ 70% of that weight"). The reassurance framing - "today is just a snapshot of where you're at, good or bad; we build from here, safely" - belongs ONCE in the baseline day's "reason", NEVER pasted into component descriptions. The athlete logs each lift from its component - a baseline buried in a paragraph can't be logged.
 - "reason" (1-2 sentences): WHY this day is programmed this way given the phase, the surrounding days, and the athlete's goals. Every non-rest day gets one. The reason speaks to the ATHLETE about what the day does for THEIR body and goals - the voice of a personal trainer, never the programmer's internals. Banned in reasons: rule bookkeeping ("to maintain exactly 2 rest days"), and shop-talk about your own construction process ("to avoid duplication with later sessions", "varied to satisfy the variety rule", "rotating formats", "keeping baseline testing intact"). The athlete doesn't know or care that programming rules exist.
 - COACH THE PERSON, not the textbook: this plan is for ONE specific athlete whose data is above. Every week, several reasons and prescriptions must reference THEIR actual specifics - their PR numbers, their recent check-ins ("last week's squats felt very hard, so..."), their injuries, their goal race date, their class schedule. A reason that could appear in anyone's plan ("builds aerobic base", "maintains lifting skill") is filler - replace it with what this day does for THIS athlete right now.
-- THIN DATA = NO FAKE PRECISION: %-of-1RM prescriptions ONLY for lifts with solid logged data. For lifts marked [ROUGH] or unlogged, never invent derived rep-maxes or fabricated adjustments. ANY movement with no logged load data - lift, wod, accessory, anywhere - NEVER gets a fixed working weight, "moderate weight", or a bare rep scheme: main strength lifts get the RAMP PROTOCOL verbatim ("${RAMP_PROTOCOL}"), unknown accessory lifts get at least "start light, add weight only while form stays solid; stop the moment form starts to slip - never grind a rep; log what you use", conditioning pieces get the lightest sensible option with form-first framing. Establish the baseline early in the block and anchor later weeks to what the athlete actually logs.
+- THIN DATA = NO FAKE PRECISION: %-of-1RM prescriptions ONLY for lifts with solid logged data. For lifts marked [ROUGH] or unlogged, never invent derived rep-maxes or fabricated adjustments. ANY movement with no logged load data - lift, wod, accessory, anywhere - NEVER gets a fixed working weight, "moderate weight", or a bare rep scheme: main strength lifts get the RAMP PROTOCOL verbatim ("${RAMP_PROTOCOL}"), unknown accessory lifts get at least "start light, add weight only while form stays solid; stop the moment form starts to slip - never grind a rep; log what you use", conditioning pieces get the lightest sensible option with form-first framing. The ramp is ONLY for movements with NO data - a lift the athlete HAS numbers for anchors to those numbers with just the brief safety cue, never a re-ramp from empty. Establish the baseline early in the block and anchor later weeks to what the athlete actually logs.
 - VARIETY IS MANDATORY week to week: the previously-programmed days listed above are what already exists - NEVER copy an earlier workout or reuse its name. A recurring slot (e.g. Wednesday conditioning) keeps its GOAL but rotates movements, formats (EMOM / AMRAP / intervals / rounds / chipper), and rep schemes every week. Same goal, fresh workout.
 - WOD NAMES ARE PART OF THE FUN: give every original WOD a short, memorable NAME with seasonal or topical flavor drawn from its actual calendar date - playoff and bowl season, March brackets, marathon season, the CrossFit Open, holidays, summer heat, first snow (e.g. "Bracket Buster" in March, "Turkey Burner" late November, "Dog Days" in August). A title built from the movements, format, or body parts in the workout ("Wall Ball Prep", "DB Upper Circuit", "Leg Conditioning") is a DESCRIPTION, not a name, and gets the week rejected. NEVER a classic benchmark's name (Fran, Cindy, Murph, ...) on an original workout - benchmark names are reserved for the real prescriptions.
 - ROTATE SCORING FORMATS - across weeks, not just within one: a WOD must never use the same format as the most recent WOD already in the table (listed above), even when that was last week. Mix AMRAPs, EMOMs, for-time pieces, intervals, and chippers. Back-to-back same-format WODs get the week rejected.
@@ -1801,7 +1801,7 @@ PATCH RULES:
         // EVERY lift with no logged data ramps - not just the day's
         // designated baseline test. "Moderate weight" or a bare rep
         // scheme on an unknown movement is a guess about a stranger.
-        if (c.type === "lift") {
+        if (c.type === "lift" && !/\b(unloaded|bodyweight only|no weight|mobility|stretch)\b/i.test(text)) {
           const titleLower = String(c.title || "").toLowerCase();
           const known = Object.keys(athleteMaxRef).some(k => titleLower.includes(k) || k.includes(titleLower));
           if (!known && titleLower && !/start light|empty bar|lightest/i.test(text)) {
@@ -1812,6 +1812,16 @@ PATCH RULES:
         // and machines included, known max or not
         if (c.type === "lift" && !/\b(form|stop|grind|controll?ed|smooth|safeties|spotter|in the tank|crisp)\b/i.test(text)) {
           problems.push(`${r.date} "${c.title}" has NO safety cue - every lift ends with one, whatever the implement ("stop the moment form starts to slip - never grind a rep"; heavy compounds add spotter/rack safeties, percentage work adds "leave a rep in the tank")`);
+        }
+        // The inverse of the unknown-lift ramp: a lift the athlete HAS
+        // data for never re-ramps from empty - that erases their anchor
+        // (a 325lb squatter doesn't "find their baseline" at 45lb)
+        if (c.type === "lift" && !isTestText(text)) {
+          const tl = String(c.title || "").toLowerCase();
+          const knownMax = Object.entries(athleteMaxRef).find(([k]) => tl.includes(k) || k.includes(tl));
+          if (knownMax && /empty bar|lightest (?:implement|cable|setting|weight)|becomes your baseline/i.test(text)) {
+            problems.push(`${r.date} "${c.title}" prescribes the from-scratch ramp, but the athlete HAS logged data for this lift (${knownMax[1]}lb reference) - anchor the prescription to their numbers (% of max or effort) with a brief safety cue; the ramp protocol is ONLY for movements with NO data`);
+          }
         }
       });
     });
@@ -2233,8 +2243,13 @@ PATCH RULES:
     const dupes: string[] = [];
     rows.forEach(r => {
       (r.components || []).forEach(c => {
-        if (c.type !== "wod" && c.type !== "lift") return;
-        if (c.type === "wod" && benchmarkByTitle(c.title)) return; // benchmark repeats are re-tests
+        // WODs only: repeating a lift across the week (bench 2x/week, a
+        // deload echoing earlier sessions) is legitimate programming, and
+        // the mandated ramp boilerplate makes unknown-lift descriptions
+        // near-identical by construction - flagging those spun the
+        // auto-corrector in circles
+        if (c.type !== "wod") return;
+        if (benchmarkByTitle(c.title)) return; // benchmark repeats are re-tests
         const norm = c.description.toLowerCase().replace(/\s+/g, " ").trim();
         if (norm.length < 60) return;
         const prevDate = seenDescriptions.get(norm);
@@ -2737,6 +2752,14 @@ Respond: {"problems": []} or {"problems": ["which weeks + what's wrong + the fix
           current.updatedPlan
         );
         if (!next) break;
+        // Bail when a round doesn't strictly reduce the violation count -
+        // whack-a-mole rounds burn AI calls without converging, and the
+        // remaining issues are already visible in the chat for the athlete
+        // to address directly
+        if (next.violations.length >= current.violations.length) {
+          current = next;
+          break;
+        }
         current = next;
       } catch (fixErr) {
         console.error("Auto-correction round failed:", fixErr);
