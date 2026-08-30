@@ -1687,6 +1687,7 @@ RULES:
 - ROTATE SCORING FORMATS - across weeks, not just within one: a WOD must never use the same format as the most recent WOD already in the table (listed above), even when that was last week. Mix AMRAPs, EMOMs, for-time pieces, intervals, and chippers. Back-to-back same-format WODs get the week rejected.
 - A benchmark day is a clean TEST day: warm-up, the benchmark, optional easy cooldown - never stack lift components or other hard training on it.
 - SKILL WORK EVERY WEEK: at least one "skill" component per week - a short (5-12 min) unloaded technique piece (double-unders, handstand work, pistols, toes-to-bar, muscle-up progressions, kipping practice) chosen from the athlete's equipment and logged weaknesses, on an easy or moderate day. Skill practice structured as an EMOM is still type "skill" as long as it stays unloaded.
+- EVERY training day starts with a "warmup" component - no exceptions for simple days; a short one is fine (3-5 min easy movement + light prep for the day's first movement, e.g. empty-bar or light-weight rehearsal sets). Only rest days and pure class days skip it.
 - EQUIPMENT IS A HARD WALL: an athlete with NO barbell gets NO barbell movements (no back/front squats, barbell deadlifts, bench press) - build strength from what they own (dumbbells, kettlebells, sandbags: goblet squats, sandbag bear-hug squats, DB deadlifts), and NEVER prescribe any load heavier than their heaviest ownable setup.${benchmarkRule}
 - SAFETY IS NON-NEGOTIABLE: never prescribe above 100% of a known max, and respect rep-max physiology (1 rep=100%, 2=95%, 3=92%, 5=87%, 8=80%, 10=75%, 12=70% of 1RM - a 10-rep set near max is an injury, not training). A goal like "improve my back squat" NEVER means loading beyond the current max - it means building submaximal volume until a scheduled RE-TEST day establishes a new max. Every max-test and baseline day includes explicit safety instruction in the tested component's description: start light and build gradually; stop the moment form starts to slip - a test is 100% effort, never 110%; have a spotter if at all possible, and with no spotter set rack safeties or use the dumbbell version and stay shy of failure. The positive framing - this is just a snapshot of where they are today, good or bad; Oddo builds them up from here, safely - goes ONCE in that day's "reason", not inside component descriptions. And beyond test days: EVERY lift component - barbell, dumbbell, cable, or machine, known max or not - ends with a movement-appropriate safety cue: heavy compounds "stop the moment form slips; spotter if possible / rack safeties", accessories and machines "stop when form starts to slip - never grind a rep", percentage work "leave a rep in the tank". Injuries/limitations above get modifications, never the aggravating movement. Solo home training: no heavy barbell bench or near-max squats without rack safeties in their equipment - substitute dumbbells or cap the load.
 ${IMPLEMENT_KNOWLEDGE}
@@ -2136,6 +2137,20 @@ PATCH RULES:
 
     // Weeks containing a competition/race get looser structural rules
     const isEventWeek = candidate.some(r => /competition|marathon|race/i.test(r.session));
+
+    // Every training day opens with a warm-up - even simple days. Rest
+    // days, pure class days (the class coach warms them up), and event
+    // days are exempt.
+    candidate.forEach(r => {
+      const comps = r.components || [];
+      if (comps.length === 0) return;
+      if (/\brest\b/i.test(r.session)) return;
+      if (/competition|marathon|race/i.test(r.session)) return;
+      if (comps.every(c => c.type === "class" || c.type === "cooldown")) return;
+      if (!comps.some(c => c.type === "warmup")) {
+        problems.push(`${r.date} (${r.session}) has NO warm-up component - EVERY training day starts with one, even a simple "3-5 min easy movement + light prep for the day's first movement"`);
+      }
+    });
 
     // Skill work is required, not optional: banning loaded "skills" must
     // not mean NO skills - every full non-event week for a CrossFit-style
