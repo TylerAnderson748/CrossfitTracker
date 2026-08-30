@@ -361,7 +361,7 @@ export default function PersonalAITrainer({ userId, todayPersonalWorkouts, userP
         if (!known && !noDataLifts.includes(comp.title)) noDataLifts.push(comp.title);
       }));
       const noDataBlock = noDataLifts.length > 0
-        ? `\n\nMOVEMENTS IN TODAY'S WORKOUT WITH ZERO LOGGED DATA: ${noDataLifts.join(", ")}. For each of these you have NO 1RM and NO estimate - numbers from OTHER lifts are NOT evidence for these movements. Give a conservative, easily-completed starting weight, tell the athlete to log what they hit as their baseline, and NEVER print a percentage or an "estimated 1RM" for them.`
+        ? `\n\nMOVEMENTS IN TODAY'S WORKOUT WITH ZERO LOGGED DATA: ${noDataLifts.join(", ")}. For each of these you have NO 1RM, NO estimate, and you may NOT name a working weight - you know nothing about this athlete's strength on these movements, and any number you pick could injure a beginner. The ONLY safe prescription is a RAMP: barbell movements start with the EMPTY BAR (45lb, or a lighter bar if they own one), dumbbell/kettlebell movements with the lightest they own, machines and cables on the lightest setting. Add small jumps ONLY while reps stay easy and crisp, stop for the day at "challenging but clean", and log the weight they end at - that IS their baseline. Numbers from OTHER lifts are NOT evidence for these movements, and no number above 45lb may appear in their prescription.`
         : "";
 
       // Build user preferences/goals section
@@ -396,7 +396,7 @@ You MUST provide advice in this EXACT format with these sections:
 ONLY if today's workout is a WOD/benchmark with actual Rx/Scaled variants (prescribed Rx weights or standard scaling options): recommend Rx, Scaled, or Foundations and explain WHY based on their numbers. If today is percentage-based strength work, class programming, or anything WITHOUT an Rx option, there is NOTHING to scale - SKIP this section entirely (do not print the header) and let the weights section do the talking. Never tell them to "do Rx" on a workout that has no Rx.
 
 **SPECIFIC WEIGHTS/LOADS:**
-List each movement that requires loading and give them an EXACT number based on their lift PRs. Example: "Deadlifts: Use 185lb (that's 65% of your 285lb 1RM - perfect for this workout style)." If you don't have data for a lift, give a conservative recommendation and tell them to track it.
+List each movement that requires loading and give them an EXACT number based on their lift PRs. Example: "Deadlifts: Use 185lb (that's 65% of your 285lb 1RM - perfect for this workout style)." If a movement is in the ZERO LOGGED DATA list above, prescribe the ramp protocol (empty bar / lightest implement, small jumps while crisp) - never a fixed working weight.
 
 **PACING & REP SCHEME STRATEGY:**
 Give them a specific pacing target. For AMRAP: target rounds/hour and how to break up reps (e.g., "Break the wall balls into sets of 10 from the start"). For For Time: target finish time and when to push/rest. For EMOMs: work-to-rest ratio goals. Be SPECIFIC with numbers.
@@ -445,7 +445,42 @@ Respond in a confident, direct coach tone. This advice will be saved and shown e
         throw new Error("No response from AI");
       }
 
-      setAiAdvice(text);
+      // Safety net behind the ramp rule: if the advice still names a
+      // working weight above the empty bar for a zero-data movement, one
+      // corrective retry. Checked in code because a wrong "conservative"
+      // guess (135lb bench for an unknown beginner) is an injury, not a
+      // style problem.
+      let finalText = text;
+      const heavyNoDataLift = (advice: string): string | null => {
+        for (const line of advice.split("\n")) {
+          const ln = normLift(line);
+          const hit = noDataLifts.find(nl => {
+            const tail = normLift(nl).split(" ").slice(-2).join(" ");
+            return tail && ln.includes(tail);
+          });
+          if (!hit) continue;
+          const nums = [...line.matchAll(/(\d{2,4})\s*lbs?\b/gi)].map(mm => parseInt(mm[1], 10));
+          if (nums.some(n => n > 55)) return hit;
+        }
+        return null;
+      };
+      const offender = heavyNoDataLift(finalText);
+      if (offender) {
+        const retryText = await chatCompletion({
+          messages: [
+            { role: "system", content: "You are an experienced CrossFit coach providing personalized workout advice. You only coach the workout you are given - you never invent extra movements or change the programmed rep scheme, and your percentage/weight math is always correct." },
+            { role: "user", content: `${prompt}\n\nYOUR PREVIOUS DRAFT NAMED A WORKING WEIGHT FOR "${offender}", which has ZERO logged data - that is unsafe and forbidden. Rewrite the full advice now: every zero-data movement gets ONLY the ramp protocol (empty bar / lightest implement, small jumps while reps stay crisp, log where you land) with no number above 45lb anywhere in its prescription.` }
+          ],
+          temperature: 0.2,
+          onDelta: (textSoFar) => {
+            setIsStreaming(true);
+            setAiAdvice(textSoFar);
+          },
+        });
+        if (retryText) finalText = retryText;
+      }
+
+      setAiAdvice(finalText);
 
       // Save the advice to Firestore so it persists
       try {
@@ -454,7 +489,7 @@ Respond in a confident, direct coach tone. This advice will be saved and shown e
 
         await setDoc(doc(db, "aiCoachAdvice", adviceDocId), {
           userId,
-          advice: text,
+          advice: finalText,
           personalWorkoutIds: personalWorkoutIds || null,
           createdAt: Timestamp.now(),
           date: new Date().toISOString().split('T')[0],
