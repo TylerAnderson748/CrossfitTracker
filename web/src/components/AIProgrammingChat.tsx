@@ -288,11 +288,13 @@ function estimateSessionMinutes(row: PlanRow): number | null {
           : 90;
       const sets = sr ? parseInt(sr[1]) : 3;
       const reps = sr ? Math.min(20, parseInt(sr[2])) : 8;
-      const workSec = 20 + reps * 4; // setup + ~4 sec/rep
+      const workSec = 15 + Math.round(reps * 3.5); // setup + ~3.5 sec/rep
       let minutes = (sets * (workSec + restSec) - restSec) / 60;
-      // Ramp/build-up lifts spend extra time finding the working weight
-      if (/start light|empty bar|lightest|build to|work up/i.test(text)) minutes += 6;
-      total += Math.max(4, Math.round(minutes));
+      // Only the FULL ramp protocol (dedicated build-up sets to find a
+      // baseline) costs extra time - short-form "start light" accessories
+      // ramp inside their work sets
+      if (/empty bar|lightest (?:implement|cable|setting|weight)|becomes your baseline|build to|work up to/i.test(text)) minutes += 6;
+      total += Math.max(3, Math.round(minutes));
       parsedAny = true;
     } else if (c.type === "class") {
       total += 60;
