@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { collection, query, where, getDocs, Timestamp, limit, doc, setDoc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { computeBaselineStatus } from "@/lib/baselines";
+import { computeBaselineStatus, RAMP_PROTOCOL } from "@/lib/baselines";
 import { AICoachPreferences, WorkoutComponent } from "@/lib/types";
 import { chatCompletion } from "@/lib/ai";
 
@@ -374,7 +374,7 @@ export default function PersonalAITrainer({ userId, todayPersonalWorkouts, userP
         if (!known && !noDataLifts.includes(comp.title)) noDataLifts.push(comp.title);
       }));
       const noDataBlock = noDataLifts.length > 0
-        ? `\n\nMOVEMENTS IN TODAY'S WORKOUT WITH ZERO LOGGED DATA: ${noDataLifts.join(", ")}. For each of these you have NO 1RM, NO estimate, and you may NOT name a working weight - you know nothing about this athlete's strength on these movements, and any number you pick could injure a beginner. The ONLY safe prescription is a RAMP: barbell movements start with the EMPTY BAR (45lb, or a lighter bar if they own one), dumbbell/kettlebell movements with the lightest they own, machines and cables on the lightest setting. Add small jumps ONLY while form stays solid, stop the moment form starts to slip - 100% effort, never 110% - and log the weight they end at; that IS their baseline. ALWAYS tell them to play it safe on these unknowns: have a spotter if at all possible, and with no spotter use rack safeties or the dumbbell version and stay well shy of failure (this matters most on pressing movements like bench, where a failed rep with no spotter is dangerous). Frame it positively: this is just a snapshot of where they're at today, good or bad, and Coach Oddo builds them up from here, safely. Numbers from OTHER lifts are NOT evidence for these movements, and no number above 45lb may appear in their prescription.`
+        ? `\n\nMOVEMENTS IN TODAY'S WORKOUT WITH ZERO LOGGED DATA: ${noDataLifts.join(", ")}. For each of these you have NO 1RM, NO estimate, and you may NOT name a working weight - you know nothing about this athlete's strength on these movements, and any number you pick could injure a beginner. The ONLY safe prescription is the RAMP PROTOCOL, given verbatim for EVERY such movement: "${RAMP_PROTOCOL}" (This matters most on pressing movements like bench, where a failed rep with no spotter is dangerous.) Frame it positively: this is just a snapshot of where they're at today, good or bad, and Coach Oddo builds them up from here, safely. Numbers from OTHER lifts are NOT evidence for these movements, and no number above 45lb may appear in their prescription.`
         : "";
 
       // Build user preferences/goals section

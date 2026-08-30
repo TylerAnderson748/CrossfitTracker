@@ -4,6 +4,12 @@
 
 export type BaselineCategory = "lift" | "wod" | "cardio" | "skill" | "bodyweight";
 
+// The universal prescription for ANY movement with no logged load data.
+// Safe for a beginner, correct for a strong athlete - their ramp just ends
+// higher. The programmer and the daily coach both speak this verbatim, so
+// the athlete hears one consistent protocol everywhere.
+export const RAMP_PROTOCOL = "Start with the empty bar (45lb - or a lighter bar), the lightest implement you own, or the machine's lightest setting. Add small jumps only while form stays solid; stop the moment form starts to slip - 100% effort, never 110%. Have a spotter if possible; with no spotter, use rack safeties or the dumbbell version and stay well shy of failure. Log the weight you end at - that becomes your baseline.";
+
 export interface BaselineItem {
   key: string;
   name: string;
