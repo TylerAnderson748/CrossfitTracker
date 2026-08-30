@@ -45,7 +45,7 @@ export const BENCHMARK_WODS: BenchmarkWod[] = [
   },
   {
     name: "Grace",
-    description: "30 clean & jerks for time (135/95 lb barbell; scale load or use DBs). Move crisply - drop to singles before form breaks. Log total time and load.",
+    description: "30 clean & jerks for time (135/95 lb barbell; scale load or use DBs). Drop to singles before form breaks. Log total time and load.",
     scoringType: "fortime",
     signature: [/clean/i, /jerk/i],
     needs: "barbell (or dumbbells)",
@@ -101,7 +101,7 @@ export const BENCHMARK_WODS: BenchmarkWod[] = [
   },
   {
     name: "Nancy",
-    description: "5 rounds for time: 400m run, 15 overhead squats (95/65 lb; scale load to keep positions crisp). Log total time.",
+    description: "5 rounds for time: 400m run, 15 overhead squats (95/65 lb; scale load to keep positions solid). Log total time.",
     scoringType: "fortime",
     signature: [/run/i, /overhead squat/i],
     needs: "barbell + running space",
