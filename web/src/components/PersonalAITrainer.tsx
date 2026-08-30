@@ -234,6 +234,7 @@ export default function PersonalAITrainer({ userId, todayPersonalWorkouts, userP
 
       // Build user history summary
       let historySummary = "";
+      const loggedLiftNames: string[] = [];
       if (userHistory.lifts.length > 0) {
         // Best TESTED result per lift per rep count (working sets are
         // programmed submaximal training, not PRs - they only contribute a
@@ -249,6 +250,7 @@ export default function PersonalAITrainer({ userId, todayPersonalWorkouts, userP
           group.e1rmFloor = Math.max(group.e1rmFloor, epley(lift.weight, lift.reps));
           liftGroups.set(lift.liftTitle, group);
         });
+        loggedLiftNames.push(...liftGroups.keys());
 
         historySummary += "Lift PRs:\n" + Array.from(liftGroups.entries())
           .map(([liftName, group]) => {
@@ -344,6 +346,24 @@ export default function PersonalAITrainer({ userId, todayPersonalWorkouts, userP
           .join("\n");
       }
 
+      // Which of today's lift movements have ZERO logged history - computed
+      // in code so "no data" is a stated fact, not a judgment the model can
+      // wiggle out of (it once invented an "estimated bench 1RM" for a lift
+      // with no bench data at all)
+      const normLift = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+      const loggedNorm = loggedLiftNames.map(normLift).filter(Boolean);
+      const noDataLifts: string[] = [];
+      (todayPersonalWorkouts || []).forEach(pw => (pw.components || []).forEach(comp => {
+        if (comp.type !== "lift") return;
+        const t = normLift(comp.title || "");
+        if (!t) return;
+        const known = loggedNorm.some(l => l.includes(t) || t.includes(l));
+        if (!known && !noDataLifts.includes(comp.title)) noDataLifts.push(comp.title);
+      }));
+      const noDataBlock = noDataLifts.length > 0
+        ? `\n\nMOVEMENTS IN TODAY'S WORKOUT WITH ZERO LOGGED DATA: ${noDataLifts.join(", ")}. For each of these you have NO 1RM and NO estimate - numbers from OTHER lifts are NOT evidence for these movements. Give a conservative, easily-completed starting weight, tell the athlete to log what they hit as their baseline, and NEVER print a percentage or an "estimated 1RM" for them.`
+        : "";
+
       // Build user preferences/goals section
       let userGoalsInfo = "";
       if (userPreferences) {
@@ -366,7 +386,7 @@ export default function PersonalAITrainer({ userId, todayPersonalWorkouts, userP
 ${workoutDescription}
 
 ATHLETE'S WORKOUT HISTORY:
-${historySummary || "No workout history available yet - treat them as an intermediate athlete."}${recentLoad}
+${historySummary || "No workout history available yet - start every load conservative and have them log results."}${noDataBlock}${recentLoad}
 ${baselineData?.equipment ? `\nEQUIPMENT THE ATHLETE OWNS (home/garage): ${baselineData.equipment}` : ""}
 ${userGoalsInfo ? `\nATHLETE'S PROFILE & GOALS:${userGoalsInfo}` : `\nNO GOALS SET - Focus advice on improving their weaknesses and building well-rounded fitness.`}
 
@@ -395,6 +415,7 @@ CRITICAL RULES:
 - Follow the written rep scheme EXACTLY as programmed. If it says "E2MOM - 3 reps", that means 3 reps every 2 minutes - never change the interval, sets, or rep count. (EMOM = every minute on the minute; E2MOM = every 2 minutes on the minute.)
 - PERCENTAGE MATH: "@ 65%" means 65% of the athlete's 1RM for THAT SAME lift. Apply the percentage exactly ONCE to the correct 1RM, show the math (e.g. "115lb - that's 65% of your 175lb snatch 1RM"), and round to the nearest 5lb. Never apply a percentage to a weight that was already reduced by a percentage.
 - A lift's TESTED 1RM (marked in the history above) IS the athlete's 1RM. Use it EXACTLY for all % math - never quote a different or Epley-estimated number for that lift. Estimates exist only for lifts with no tested single and must be written as estimates ("~180lb estimated").
+- The ONLY 1RMs and estimates that exist are the ones printed in the history above. A movement not in that list has NO number - inventing an "estimated 1RM" for it (from a related lift, a strength ratio, or anything else) is a coaching failure.
 - SAFETY OVERRIDES EVERYTHING: never recommend above 100% of their max, and respect rep-max physiology (2 reps=95%, 3=92%, 5=87%, 8=80%, 10=75%, 12=70% of 1RM). If the programmed load exceeds what their numbers support, SAY SO and give the safe load instead. On any max attempt: only crisp attempts, stop at technical breakdown, set safeties - they train alone.
 - If you have NO data for a movement, say so and give a conservative starting weight with a note to log it. NEVER derive it from an unrelated lift (e.g. do not base RDL weight on strict press).
 - When the workout is at home, recommend ONLY loads and implements from the EQUIPMENT list above (their exact bells/bags/bars - don't invent a 53lb kettlebell they don't own). If a movement needs equipment they lack, give the closest substitution using what they have. Heavy soft sandbags can't be back-racked or pressed overhead - bear-hug squats/carries, single-shoulder cleans, and over-shoulder tosses are the sandbag moves. Workouts at a gym/class can assume full gym equipment.
