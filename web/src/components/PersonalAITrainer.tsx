@@ -94,6 +94,9 @@ export default function PersonalAITrainer({ userId, todayPersonalWorkouts, userP
   const [isExpanded, setIsExpanded] = useState(false);
   const [hasLoadedHistory, setHasLoadedHistory] = useState(false);
   const [hasCheckedSavedAdvice, setHasCheckedSavedAdvice] = useState(false);
+  // Next scheduled workout after today - so an empty day explains itself
+  // instead of the coach card silently losing its advice section
+  const [nextWorkout, setNextWorkout] = useState<{ dateString: string; titles: string } | null>(null);
 
   // Check for existing saved advice on mount
   useEffect(() => {
@@ -187,6 +190,16 @@ export default function PersonalAITrainer({ userId, todayPersonalWorkouts, userP
             rating: d.sessionFeedback.rating,
             note: d.sessionFeedback.note || undefined,
           }));
+        const nowD = new Date();
+        const todayDs = `${nowD.getFullYear()}-${String(nowD.getMonth() + 1).padStart(2, "0")}-${String(nowD.getDate()).padStart(2, "0")}`;
+        const upcoming = pwSnap.docs
+          .map(d => d.data())
+          .filter(d => String(d.dateString || "") > todayDs)
+          .sort((a, b) => String(a.dateString).localeCompare(String(b.dateString)))[0];
+        setNextWorkout(upcoming ? {
+          dateString: String(upcoming.dateString),
+          titles: ((upcoming.components || []) as WorkoutComponent[]).map(c => c.title).filter(t => t && t !== "Warm-up").slice(0, 3).join(", "),
+        } : null);
         setSessionFeedbacks(feedbacks);
         setBaselineData({
           skillNames: Array.from(new Set(skillSnap.docs.map(d => String(d.data().skillTitle || d.data().skillName || "")).filter(Boolean))),
@@ -510,6 +523,18 @@ Respond in a confident, direct coach tone. This advice will be saved and shown e
 
   // Get lift PRs summary for display: the tested 1RM when one exists,
   // otherwise the heaviest tested set (working sets never shown as PRs)
+  // "tomorrow" or "on Tuesday, Sep 1" - local-noon parse so evening
+  // timezones don't shift the day
+  const describeWorkoutDate = (ds: string) => {
+    const [y, m, d] = ds.split("-").map(Number);
+    if (!y || !m || !d) return "";
+    const t = new Date();
+    t.setDate(t.getDate() + 1);
+    const tomorrowDs = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
+    if (ds === tomorrowDs) return "tomorrow";
+    return `on ${new Date(y, m - 1, d, 12).toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}`;
+  };
+
   const getLiftPRsSummary = () => {
     if (userHistory.lifts.length === 0) return null;
 
@@ -665,6 +690,26 @@ Respond in a confident, direct coach tone. This advice will be saved and shown e
                 <div className="bg-white/10 rounded-lg p-3">
                   <p className="text-xs font-medium text-white/70 mb-1">Your Stats (AI uses these):</p>
                   <p className="text-sm text-white/90">{getLiftPRsSummary()}</p>
+                </div>
+              )}
+
+              {/* Empty day: say so and point at the next session instead of
+                  silently dropping the advice section */}
+              {!hasWorkoutToAnalyze && (
+                <div className="bg-white/10 rounded-lg p-4 text-sm">
+                  {nextWorkout ? (
+                    <>
+                      <p className="font-medium mb-1">😌 Nothing scheduled today - recovery counts too.</p>
+                      <p className="text-white/80">
+                        Next up: <span className="font-semibold text-white">{nextWorkout.titles || "your next session"}</span>{" "}
+                        {describeWorkoutDate(nextWorkout.dateString)}. Coaching advice for it unlocks that day.
+                      </p>
+                    </>
+                  ) : (
+                    <p className="text-white/80">
+                      No workouts scheduled. Build a plan with AI Programming above (or scan one in) and Oddo will coach every training day.
+                    </p>
+                  )}
                 </div>
               )}
 
