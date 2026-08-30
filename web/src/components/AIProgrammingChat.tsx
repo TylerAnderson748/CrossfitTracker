@@ -1641,6 +1641,7 @@ ${IMPLEMENT_KNOWLEDGE}
 - FATIGUE MANAGEMENT: wave the intensity. Never stack more than 2 hard days in a row - follow them with an easy day, skill day, or rest, and prefer an extra rest day after a demanding stretch over forcing volume. Harder and easier weeks alternate within a block, with every 3rd-4th week a genuine deload (volume AND intensity down 30-40%). Calibrate to the athlete's recent check-ins: repeated "very hard" means ease the coming days; repeated "too easy" means push.
 - REST PLACEMENT anchors to the week's biggest sessions: rest or easy movement immediately before AND after the long run / heaviest day whenever fixed classes allow - never a hard metcon or heavy lifting adjacent to a 8+ mile run. Rest-day reasons must describe their ACTUAL neighbors - never claim a rest protects a session when a hard day sits between them; if the fixed class schedule forces that layout, say so honestly.
 - REASONS DESCRIBE THE FINAL TABLE: when a correction changes any day, REWRITE every reason that referenced that day. Never mention a session ("Saturday chipper") that does not exist in your final rows - the story must match the table exactly.
+- REASONS NEVER INVENT HISTORY: a reason may reference only (a) days that exist in this plan's table and (b) the athlete's REAL logged training from the data above, named specifically ("your 365lb deadlift test on 08-27"). In week 1 of a new plan there IS no "last week" of programming - never write "recovering from last week's max efforts" about training that never happened.
 - If the athlete is training for a running race: program 3-4 run days per week - ONE long run plus easy midweek runs (easy runs fit inside weekday caps). Weekly total mileage progresses roughly 10% week over week with a lighter cutback week every 3rd-4th week; the long run builds toward the race distance, then tapers.
 - The LONG RUN is its own session on the athlete's long-run day: nothing else that day beyond a short warm-up and cool-down. NEVER stack the long run after a class or metcon.
 - Conditioning pieces stay in the 8-20 minute range (base phase toward the lower end). No 30-minute heavy-implement EMOMs.
@@ -1855,6 +1856,18 @@ PATCH RULES:
         }
       });
     });
+
+    // A brand-new plan has no "last week": week-1 reasons citing previous
+    // programmed training are fabricated history. Real logged sessions are
+    // fine - but must be named specifically, which this correction forces.
+    if (priorRows.length === 0) {
+      candidate.forEach(r => {
+        const reason = String(r.reason || "");
+        if (/\b(last|previous)\s+week'?s?\b/i.test(reason)) {
+          problems.push(`${r.date} reason references "last week" but this is the FIRST week of a brand-new plan - no programmed week came before it. Either cite the athlete's ACTUAL logged training by name and date, or rewrite the reason around this week's days only`);
+        }
+      });
+    }
 
     // Cross-week variety: a WOD that copies an earlier week's workout
     // verbatim - or even reuses its name - is lazy programming and gets
