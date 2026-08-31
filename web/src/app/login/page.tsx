@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { sendPasswordResetEmail } from "firebase/auth";
+import { auth } from "@/lib/firebase";
 import { useAuth } from "@/lib/AuthContext";
 import { Gender } from "@/lib/types";
 
@@ -15,8 +17,38 @@ export default function LoginPage() {
   const [gender, setGender] = useState<Gender>("Male");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [resetSent, setResetSent] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
   const { signIn, signUp } = useAuth();
   const router = useRouter();
+
+  const handleForgotPassword = async () => {
+    setError("");
+    setResetSent(false);
+    if (!email.trim()) {
+      setError("Enter your email above first, then tap \"Forgot password?\" again.");
+      return;
+    }
+    setResetLoading(true);
+    try {
+      await sendPasswordResetEmail(auth, email.trim());
+      setResetSent(true);
+    } catch (err: unknown) {
+      const code = (err as { code?: string })?.code || "";
+      // Don't reveal whether an account exists - show the same message
+      if (code === "auth/user-not-found") {
+        setResetSent(true);
+      } else if (code === "auth/invalid-email") {
+        setError("That doesn't look like a valid email address.");
+      } else if (code === "auth/too-many-requests") {
+        setError("Too many attempts - wait a few minutes and try again.");
+      } else {
+        setError("Couldn't send the reset email. Check your connection and try again.");
+      }
+    } finally {
+      setResetLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -65,6 +97,12 @@ export default function LoginPage() {
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg text-sm">
               {error}
+            </div>
+          )}
+
+          {resetSent && (
+            <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg text-sm">
+              If an account exists for {email.trim()}, a password-reset email is on its way. Check your inbox (and spam folder), then log in with your new password.
             </div>
           )}
 
@@ -152,6 +190,18 @@ export default function LoginPage() {
               placeholder="Enter your password"
               required
             />
+            {!isSignUp && (
+              <div className="text-right mt-1">
+                <button
+                  type="button"
+                  onClick={handleForgotPassword}
+                  disabled={resetLoading}
+                  className="text-sm text-blue-600 hover:text-blue-700 font-medium disabled:opacity-50"
+                >
+                  {resetLoading ? "Sending..." : "Forgot password?"}
+                </button>
+              </div>
+            )}
           </div>
 
           <button
