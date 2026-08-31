@@ -36,6 +36,14 @@ interface SkillRecord {
   date: Timestamp;
 }
 
+interface CardioRecord {
+  id: string;
+  activity: string;
+  miles?: number;
+  timeInSeconds?: number;
+  date: Timestamp;
+}
+
 // Calculated stats
 interface LiftStats {
   liftName: string;
@@ -63,6 +71,19 @@ interface SkillStats {
   trend: "up" | "down" | "stable";
 }
 
+interface CardioStats {
+  totalSessions: number;
+  totalMiles: number;
+  weeklyMilesChange: number; // % change, first half vs second half of range
+  byActivity: { activity: string; sessions: number; miles: number; bestPaceSecPerMi?: number }[];
+}
+
+interface VolumeStats {
+  workingSets: number;
+  totalTonnage: number; // sum of weight x reps across ALL sets (max + working)
+  percentChange: number; // tonnage trend, first half vs second half
+}
+
 interface OverallProgress {
   strengthScore: number; // 0-100
   conditioningScore: number; // 0-100
@@ -80,6 +101,8 @@ export default function ProgressPage() {
   const [liftStats, setLiftStats] = useState<LiftStats[]>([]);
   const [skillStats, setSkillStats] = useState<SkillStats[]>([]);
   const [wodStats, setWodStats] = useState<WodStats | null>(null);
+  const [cardioStats, setCardioStats] = useState<CardioStats | null>(null);
+  const [volumeStats, setVolumeStats] = useState<VolumeStats | null>(null);
   const [overallProgress, setOverallProgress] = useState<OverallProgress | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
@@ -119,17 +142,29 @@ export default function ProgressPage() {
         limit(500)
       );
       const liftSnapshot = await getDocs(liftQuery);
-      // Working sets are programmed submaximal training, not PRs - exclude
-      // them so progress scores/maxes reflect tested strength only
+      // ALL sets (max + working) feed volume and consistency; only max
+      // attempts feed PR/max stats - working sets are programmed
+      // submaximal training, not records
       // (legacy entries without setType count as max attempts)
-      const liftData = (liftSnapshot.docs.map(doc => ({
+      const allLiftData = liftSnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
-      })) as (LiftRecord & { setType?: string })[])
-        .filter(l => (l.setType || "max") !== "working");
-      // Sort by date descending in JavaScript
-      liftData.sort((a, b) => (b.date?.toMillis() || 0) - (a.date?.toMillis() || 0));
+      })) as (LiftRecord & { setType?: string })[];
+      allLiftData.sort((a, b) => (b.date?.toMillis() || 0) - (a.date?.toMillis() || 0));
+      const liftData = allLiftData.filter(l => (l.setType || "max") !== "working");
       setLifts(liftData);
+
+      // Cardio logs - runs, rows, rides, swims
+      const cardioSnapshot = await getDocs(query(
+        collection(db, "cardioLogs"),
+        where("userId", "==", user.id),
+        limit(300)
+      ));
+      const cardioData = cardioSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as CardioRecord[];
+      cardioData.sort((a, b) => (b.date?.toMillis() || 0) - (a.date?.toMillis() || 0));
 
       // Fetch WOD logs (sort in JS to avoid needing composite index)
       const wodQuery = query(
@@ -165,7 +200,9 @@ export default function ProgressPage() {
       calculateLiftStats(liftData, startTimestamp);
       calculateSkillStats(skillData, startTimestamp);
       calculateWodStats(wodData, startTimestamp);
-      calculateOverallProgress(liftData, wodData, skillData, startTimestamp);
+      calculateCardioStats(cardioData, startTimestamp);
+      calculateVolumeStats(allLiftData, startTimestamp);
+      calculateOverallProgress(liftData, wodData, skillData, startTimestamp, allLiftData, cardioData);
 
     } catch (err) {
       console.error("Error loading progress data:", err);
@@ -361,15 +398,63 @@ export default function ProgressPage() {
     });
   };
 
+  const calculateCardioStats = (cardioData: CardioRecord[], startDate: Timestamp) => {
+    const recent = cardioData.filter(c => (c.date?.toMillis() || 0) >= startDate.toMillis());
+    if (recent.length === 0) { setCardioStats(null); return; }
+    const byActivityMap = new Map<string, { sessions: number; miles: number; bestPaceSecPerMi?: number }>();
+    recent.forEach(c => {
+      const g = byActivityMap.get(c.activity) || { sessions: 0, miles: 0 };
+      g.sessions += 1;
+      g.miles += c.miles || 0;
+      if ((c.miles || 0) > 0 && (c.timeInSeconds || 0) > 0) {
+        const pace = (c.timeInSeconds || 0) / (c.miles || 1);
+        if (!g.bestPaceSecPerMi || pace < g.bestPaceSecPerMi) g.bestPaceSecPerMi = pace;
+      }
+      byActivityMap.set(c.activity, g);
+    });
+    // Weekly-miles trend: first half of the range vs second half
+    const sorted = [...recent].sort((a, b) => (a.date?.toMillis() || 0) - (b.date?.toMillis() || 0));
+    const midMs = (startDate.toMillis() + Date.now()) / 2;
+    const firstMiles = sorted.filter(c => (c.date?.toMillis() || 0) < midMs).reduce((s, c) => s + (c.miles || 0), 0);
+    const secondMiles = sorted.filter(c => (c.date?.toMillis() || 0) >= midMs).reduce((s, c) => s + (c.miles || 0), 0);
+    const weeklyMilesChange = firstMiles > 0 ? ((secondMiles - firstMiles) / firstMiles) * 100 : 0;
+    setCardioStats({
+      totalSessions: recent.length,
+      totalMiles: Math.round(recent.reduce((s, c) => s + (c.miles || 0), 0) * 10) / 10,
+      weeklyMilesChange,
+      byActivity: Array.from(byActivityMap.entries())
+        .map(([activity, g]) => ({ activity, sessions: g.sessions, miles: Math.round(g.miles * 10) / 10, bestPaceSecPerMi: g.bestPaceSecPerMi }))
+        .sort((a, b) => b.sessions - a.sessions),
+    });
+  };
+
+  const calculateVolumeStats = (allLiftData: (LiftRecord & { setType?: string })[], startDate: Timestamp) => {
+    const recent = allLiftData.filter(l => (l.date?.toMillis() || 0) >= startDate.toMillis());
+    if (recent.length === 0) { setVolumeStats(null); return; }
+    const tonnage = (rows: typeof recent) => rows.reduce((s, l) => s + (l.weight || 0) * (l.reps || 0), 0);
+    const midMs = (startDate.toMillis() + Date.now()) / 2;
+    const firstT = tonnage(recent.filter(l => (l.date?.toMillis() || 0) < midMs));
+    const secondT = tonnage(recent.filter(l => (l.date?.toMillis() || 0) >= midMs));
+    setVolumeStats({
+      workingSets: recent.filter(l => l.setType === "working").length,
+      totalTonnage: Math.round(tonnage(recent)),
+      percentChange: firstT > 0 ? ((secondT - firstT) / firstT) * 100 : 0,
+    });
+  };
+
   const calculateOverallProgress = (
     liftData: LiftRecord[],
     wodData: WodRecord[],
     skillData: SkillRecord[],
-    startDate: Timestamp
+    startDate: Timestamp,
+    allLiftData: (LiftRecord & { setType?: string })[] = liftData,
+    cardioData: CardioRecord[] = []
   ) => {
     const recentLifts = liftData.filter(l => l.date?.toMillis() >= startDate.toMillis());
     const recentWods = wodData.filter(w => w.completedDate?.toMillis() >= startDate.toMillis());
     const recentSkills = skillData.filter(s => s.date?.toMillis() >= startDate.toMillis());
+    const recentCardio = cardioData.filter(c => (c.date?.toMillis() || 0) >= startDate.toMillis());
+    const recentWorking = allLiftData.filter(l => l.setType === "working" && (l.date?.toMillis() || 0) >= startDate.toMillis());
     const days = parseInt(selectedTimeRange);
     const weeks = days / 7;
 
@@ -482,6 +567,10 @@ export default function ProgressPage() {
     const uniqueWods = new Set(recentWods.map(w => w.wodTitle)).size;
     conditioningScore += Math.min(20, uniqueWods * 2);
 
+    // 4. Cardio Volume (20 pts max) - runs/rows/rides count as conditioning
+    // too, so a runner without WODs isn't scored as if they never condition
+    conditioningScore += Math.min(20, Math.round((recentCardio.length / weeks) * 10));
+
     conditioningScore = Math.min(100, Math.round(conditioningScore));
 
     // ========== SKILLS SCORE (0-100) ==========
@@ -548,15 +637,18 @@ export default function ProgressPage() {
 
     let consistencyScore = 0;
 
-    // Get all activity dates
+    // Get all activity dates - cardio sessions and working sets are
+    // training too; consistency counts everything the athlete logs
     const allActivityDates = [
       ...recentLifts.map(l => l.date?.toMillis() || 0),
       ...recentWods.map(w => w.completedDate?.toMillis() || 0),
-      ...recentSkills.map(s => s.date?.toMillis() || 0)
+      ...recentSkills.map(s => s.date?.toMillis() || 0),
+      ...recentCardio.map(c => c.date?.toMillis() || 0),
+      ...recentWorking.map(l => l.date?.toMillis() || 0)
     ].filter(d => d > 0).sort((a, b) => a - b);
 
     // 1. Weekly Attendance (40 pts max) - based on activities per week
-    const totalActivities = recentLifts.length + recentWods.length + recentSkills.length;
+    const totalActivities = recentLifts.length + recentWods.length + recentSkills.length + recentCardio.length + recentWorking.length;
     const activitiesPerWeek = totalActivities / weeks;
     // 4-6 activities/week is ideal (80-100%), scale down from there
     if (activitiesPerWeek >= 4) {
@@ -676,6 +768,21 @@ export default function ProgressPage() {
         summary += "\n";
       }
 
+      if (cardioStats) {
+        summary += `CARDIO (${cardioStats.totalSessions} sessions, ${cardioStats.totalMiles} total miles, weekly mileage ${cardioStats.weeklyMilesChange > 0 ? '+' : ''}${cardioStats.weeklyMilesChange.toFixed(0)}% first half vs second half):\n`;
+        cardioStats.byActivity.forEach(a => {
+          const pace = a.bestPaceSecPerMi ? ` - best pace ${Math.floor(a.bestPaceSecPerMi / 60)}:${String(Math.round(a.bestPaceSecPerMi % 60)).padStart(2, "0")}/mi` : "";
+          summary += `- ${a.activity}: ${a.sessions} sessions, ${a.miles} mi${pace}\n`;
+        });
+        summary += "\n";
+      }
+
+      if (volumeStats) {
+        summary += `LIFTING VOLUME (all sets including programmed working sets - this is the training that drives the maxes):\n`;
+        summary += `- ${volumeStats.totalTonnage.toLocaleString()}lb total tonnage across the period, ${volumeStats.workingSets} working sets logged\n`;
+        summary += `- Tonnage trend: ${volumeStats.percentChange > 0 ? '+' : ''}${volumeStats.percentChange.toFixed(0)}% (first half vs second half of period)\n\n`;
+      }
+
       if (user?.aiCoachPreferences?.goals) {
         summary += `ATHLETE'S GOALS: ${user.aiCoachPreferences.goals}\n\n`;
       }
@@ -694,10 +801,10 @@ Provide a comprehensive analysis in this EXACT format:
 A 2-3 sentence overview of their overall progress and what stands out.
 
 **STRENGTHS:**
-- List 2-3 specific things they're doing well based on the data (include lifts, WODs, and skills)
+- List 2-3 specific things they're doing well based on the data - look across EVERYTHING above: lifts, working-set volume, WODs, cardio, and skills
 
 **AREAS FOR IMPROVEMENT:**
-- List 2-3 specific areas where they could improve (strength, conditioning, skills, consistency), with actionable advice
+- List 2-3 specific areas where they could improve (strength, volume, conditioning, cardio, skills, consistency), with actionable advice. A dimension with no data at all is worth naming once (e.g. no cardio logged)
 
 **RECOMMENDATIONS:**
 Based on the data, give 3 specific recommendations for the next ${selectedTimeRange === "7" ? "week" : selectedTimeRange === "30" ? "month" : selectedTimeRange === "90" ? "3 months" : selectedTimeRange === "180" ? "6 months" : "year"}:
@@ -874,6 +981,50 @@ Be specific, use their actual numbers, and be encouraging but honest. Keep it co
                     label="Time Improvement"
                     value={`${wodStats.avgTimeImprovement > 0 ? "+" : ""}${wodStats.avgTimeImprovement.toFixed(1)}%`}
                     highlight={wodStats.avgTimeImprovement > 0}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Cardio */}
+            {cardioStats && (
+              <div className="bg-white rounded-xl shadow-sm p-6">
+                <h2 className="text-lg font-semibold text-gray-900 mb-4">Cardio</h2>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4">
+                  <StatCard label="Sessions" value={cardioStats.totalSessions.toString()} />
+                  <StatCard label="Total Miles" value={cardioStats.totalMiles.toString()} />
+                  <StatCard
+                    label="Mileage Trend"
+                    value={`${cardioStats.weeklyMilesChange > 0 ? "+" : ""}${cardioStats.weeklyMilesChange.toFixed(0)}%`}
+                    highlight={cardioStats.weeklyMilesChange > 0}
+                  />
+                </div>
+                <div className="space-y-1">
+                  {cardioStats.byActivity.map(a => (
+                    <div key={a.activity} className="flex justify-between text-sm text-gray-600">
+                      <span className="capitalize">{a.activity.replace("_", " ")}</span>
+                      <span>
+                        {a.sessions} session{a.sessions > 1 ? "s" : ""} • {a.miles} mi
+                        {a.bestPaceSecPerMi ? ` • best ${Math.floor(a.bestPaceSecPerMi / 60)}:${String(Math.round(a.bestPaceSecPerMi % 60)).padStart(2, "0")}/mi` : ""}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Lifting volume - all sets, including programmed working sets */}
+            {volumeStats && (
+              <div className="bg-white rounded-xl shadow-sm p-6">
+                <h2 className="text-lg font-semibold text-gray-900 mb-1">Training Volume</h2>
+                <p className="text-xs text-gray-400 mb-4">Every set counts here - max attempts and programmed working sets alike</p>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  <StatCard label="Total Tonnage" value={`${volumeStats.totalTonnage.toLocaleString()}lb`} />
+                  <StatCard label="Working Sets" value={volumeStats.workingSets.toString()} />
+                  <StatCard
+                    label="Tonnage Trend"
+                    value={`${volumeStats.percentChange > 0 ? "+" : ""}${volumeStats.percentChange.toFixed(0)}%`}
+                    highlight={volumeStats.percentChange > 0}
                   />
                 </div>
               </div>
