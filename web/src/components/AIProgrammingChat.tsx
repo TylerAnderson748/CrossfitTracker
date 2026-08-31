@@ -342,7 +342,9 @@ function buildPreferencesSection(preferences?: Omit<AIProgrammingPreferences, "u
     const prefParts: string[] = [];
 
     if ((preferences.trainingStyle || "crossfit") === "general") {
-      prefParts.push(`TRAINING STYLE: GENERAL GYM TRAINING - this athlete does NOT do CrossFit. Program conventional strength training and cardio: structured sessions (e.g., upper/lower or push/pull/legs splits), straight sets x reps with prescribed rest, dumbbell/barbell/machine/cable work as available, plus cardio matched to their goals. Do NOT program CrossFit-style WODs, benchmark workouts (Fran etc.), AMRAPs/EMOMs, Olympic-lift complexes, or CrossFit jargon unless the athlete explicitly asks. Simple conditioning finishers/circuits are fine when they fit the athlete's goals. Ignore any CrossFit-specific conventions elsewhere in these instructions (benchmark lists, creative WOD naming).`);
+      prefParts.push(`TRAINING STYLE: GENERAL GYM TRAINING - this athlete does NOT do CrossFit. Program conventional strength training and cardio: structured sessions (e.g., upper/lower or push/pull/legs splits), straight sets x reps with prescribed rest, dumbbell/barbell/machine/cable work as available, plus cardio matched to their goals. Do NOT program CrossFit-style WODs, benchmark workouts (Fran etc.), AMRAPs/EMOMs, Olympic-lift complexes, or CrossFit jargon unless the athlete explicitly asks. Simple conditioning finishers/circuits are fine when they fit the athlete's goals. Ignore any CrossFit-specific conventions elsewhere in these instructions (benchmark lists, creative WOD naming).
+ROUTINE BEATS NOVELTY for this athlete - the variety mandate does NOT apply to their strength work: build ONE stable weekly split and REPEAT it every week with the same core lifts in the same slots. Progress comes from small load and rep increases week over week (progressive overload), never from novelty for its own sake - repeating last week's session with a little more weight is CORRECT programming, and many gym athletes find comfort and confidence in a familiar routine. If the athlete describes a routine they already like, program THAT routine and just manage the loads. Rotate an accessory only when there's a concrete reason (plateau, boredom they voiced, equipment conflict).
+Every strength day is a FULL gym session: 3-6 lift components per training day (a main lift plus accessories), like a normal gym routine - never a single lonely lift on a day.`);
     }
 
     if (preferences.philosophy) {
@@ -1969,6 +1971,11 @@ PATCH RULES:
       });
     }
 
+    // Variety rules are CrossFit culture - a general-gym athlete's
+    // repeated weekly finisher or familiar circuit is routine, not
+    // laziness, so every wod-variety check below is skipped for them
+    const isGeneralStyle = (preferences.trainingStyle || "crossfit") === "general";
+
     // Cross-week variety: a WOD that copies an earlier week's workout
     // verbatim - or even reuses its name - is lazy programming and gets
     // the week rejected before the athlete ever sees it
@@ -1982,7 +1989,7 @@ PATCH RULES:
       if (nt) priorWodTitles.set(nt, r.date);
     }));
     candidate.forEach(r => (r.components || []).forEach(c => {
-      if (c.type !== "wod") return;
+      if (c.type !== "wod" || isGeneralStyle) return;
       // Canonical benchmarks repeat by design - a repeat is a progress
       // re-test feeding the shared leaderboard, not lazy programming. But a
       // workout WEARING a benchmark name must actually BE that benchmark, or
@@ -2059,7 +2066,7 @@ PATCH RULES:
       .filter(c => c.type === "wod")
       .map(c => detectWodFormat(`${c.title} ${c.description}`))
       .filter((f): f is string => f !== null));
-    if (weekWodFormats.length >= 2 && new Set(weekWodFormats).size === 1) {
+    if (!isGeneralStyle && weekWodFormats.length >= 2 && new Set(weekWodFormats).size === 1) {
       problems.push(`all ${weekWodFormats.length} WODs this week are ${weekWodFormats[0]}s - rotate scoring formats across the week (EMOM / AMRAP / for-time / intervals / chipper); at least two different formats when a week has multiple WODs`);
     }
 
@@ -2077,7 +2084,7 @@ PATCH RULES:
         isBenchmark: !!benchmarkByTitle(c.title),
       }))
     ).filter(w => w.fmt !== null);
-    for (let wi = 1; wi < chronoWods.length; wi++) {
+    for (let wi = 1; wi < chronoWods.length && !isGeneralStyle; wi++) {
       const prev = chronoWods[wi - 1];
       const cur = chronoWods[wi];
       if (cur.isCandidate && !cur.isBenchmark && cur.fmt === prev.fmt) {
@@ -2153,6 +2160,19 @@ PATCH RULES:
         problems.push(`${r.date} (${r.session}) has NO warm-up component - EVERY training day starts with one, even a simple "3-5 min easy movement + light prep for the day's first movement"`);
       }
     });
+
+    // A general-gym strength day is a FULL session - one lonely lift is
+    // not what a gym routine looks like
+    if (isGeneralStyle) {
+      candidate.forEach(r => {
+        const comps = r.components || [];
+        const liftCount = comps.filter(c => c.type === "lift").length;
+        const otherTraining = comps.some(c => ["wod", "run", "swim", "bike_mtb", "bike_road", "row", "skill", "class"].includes(c.type));
+        if (liftCount === 1 && !otherTraining) {
+          problems.push(`${r.date} (${r.session}) has only ONE lift and nothing else - a general-gym strength day is a full session: 3-6 lift components (main lift + accessories), like a normal gym routine`);
+        }
+      });
+    }
 
     // Skill work is required, not optional: banning loaded "skills" must
     // not mean NO skills - every full non-event week for a CrossFit-style
@@ -2323,8 +2343,9 @@ PATCH RULES:
         // deload echoing earlier sessions) is legitimate programming, and
         // the mandated ramp boilerplate makes unknown-lift descriptions
         // near-identical by construction - flagging those spun the
-        // auto-corrector in circles
-        if (c.type !== "wod") return;
+        // auto-corrector in circles. General-gym athletes repeat their
+        // routine by design - no dup check at all for them.
+        if (c.type !== "wod" || (preferences.trainingStyle || "crossfit") === "general") return;
         if (benchmarkByTitle(c.title)) return; // benchmark repeats are re-tests
         const norm = c.description.toLowerCase().replace(/\s+/g, " ").trim();
         if (norm.length < 60) return;
