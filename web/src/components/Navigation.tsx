@@ -20,6 +20,7 @@ export default function Navigation() {
     { href: "/programming", label: "Oddo", icon: "🤖" },
     { href: "/workouts", label: "Records", icon: "📖" },
     { href: "/progress", label: "Progress", icon: "📈" },
+    { href: "/devin", label: "Devin's Tab", icon: "🎱" },
     { href: "/profile", label: "Profile", icon: "👤" },
     ...(!hasAISubscription ? [{ href: "/subscribe", label: "Get Oddo", icon: "⚡" }] : []),
   ];
